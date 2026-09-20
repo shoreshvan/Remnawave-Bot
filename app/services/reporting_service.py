@@ -14,6 +14,7 @@ from sqlalchemy.sql import false, true
 
 from app.config import settings
 from app.database.crud.subscription import get_subscriptions_statistics
+from app.localization.texts import get_texts
 from app.database.crud.transaction import REAL_PAYMENT_METHODS
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
@@ -168,7 +169,9 @@ class ReportingService:
         try:
             from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
 
-            rich_html = classic_admin_html_to_rich(report_text, footer_label='Отчёт')
+            rich_html = classic_admin_html_to_rich(
+                report_text, footer_label=get_texts(settings.DEFAULT_LANGUAGE).t('REPORT_FOOTER_LABEL', 'Отчёт')
+            )
             if await try_send_rich_admin_message(self.bot, chat_id, rich_html, thread_id=topic_id):
                 logger.info('Rich-отчёт отправлен в чат', chat_id=chat_id)
                 return
@@ -257,75 +260,90 @@ class ReportingService:
             (stats['trial_to_paid_conversions'] / stats['new_trials'] * 100) if stats['new_trials'] > 0 else 0.0
         )
 
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         lines: list[str] = []
         header = (
-            f'📊 <b>Отчет за {period_range.label}</b>'
+            texts.t('REPORT_HEADER_DAILY', '📊 <b>Отчет за {label}</b>').format(label=period_range.label)
             if period == ReportPeriod.DAILY
-            else f'📊 <b>Отчет за период {period_range.label}</b>'
+            else texts.t('REPORT_HEADER_PERIOD', '📊 <b>Отчет за период {label}</b>').format(label=period_range.label)
         )
         lines += [header, '']
 
         # TL;DR
         lines += [
-            '🧭 <b>Итог по периоду</b>',
-            f'• Новых пользователей: <b>{stats["new_users"]}</b>',
-            f'• Новых триалов: <b>{stats["new_trials"]}</b>',
-            (
-                f'• Конверсий триал → платная: <b>{stats["trial_to_paid_conversions"]}</b> '
-                f'(<i>{conversion_rate:.1f}%</i>)'
+            texts.t('REPORT_SECTION_SUMMARY', '🧭 <b>Итог по периоду</b>'),
+            texts.t('REPORT_NEW_USERS', '• Новых пользователей: <b>{count}</b>').format(count=stats['new_users']),
+            texts.t('REPORT_NEW_TRIALS', '• Новых триалов: <b>{count}</b>').format(count=stats['new_trials']),
+            texts.t(
+                'REPORT_CONVERSIONS', '• Конверсий триал → платная: <b>{count}</b> (<i>{rate}%</i>)'
+            ).format(count=stats['trial_to_paid_conversions'], rate=f'{conversion_rate:.1f}'),
+            texts.t('REPORT_NEW_PAID', '• Новых платных (всего): <b>{count}</b>').format(
+                count=stats['new_paid_subscriptions']
             ),
-            f'• Новых платных (всего): <b>{stats["new_paid_subscriptions"]}</b>',
-            f'• Поступления всего (только пополнения): <b>{self._format_amount(stats["deposits_amount"])}</b>',
+            texts.t(
+                'REPORT_TOTAL_DEPOSITS', '• Поступления всего (только пополнения): <b>{amount}</b>'
+            ).format(amount=self._format_amount(stats['deposits_amount'])),
             '',
         ]
 
         # Подписки
         lines += [
-            '💎 <b>Подписки</b>',
-            f'• Активные триалы сейчас: {totals["active_trials"]}',
-            f'• Активные платные сейчас: {totals["active_paid"]}',
+            texts.t('REPORT_SECTION_SUBSCRIPTIONS', '💎 <b>Подписки</b>'),
+            texts.t('REPORT_ACTIVE_TRIALS', '• Активные триалы сейчас: {count}').format(count=totals['active_trials']),
+            texts.t('REPORT_ACTIVE_PAID', '• Активные платные сейчас: {count}').format(count=totals['active_paid']),
             '',
         ]
 
         # Финансы
         lines += [
-            '💰 <b>Финансы</b>',
-            (
-                '• Оплаты подписок: '
-                f'{stats["subscription_payments_count"]} на сумму {self._format_amount(stats["subscription_payments_amount"])}'
+            texts.t('REPORT_SECTION_FINANCE', '💰 <b>Финансы</b>'),
+            texts.t('REPORT_SUBSCRIPTION_PAYMENTS', '• Оплаты подписок: {count} на сумму {amount}').format(
+                count=stats['subscription_payments_count'],
+                amount=self._format_amount(stats['subscription_payments_amount']),
             ),
-            (f'• Пополнения: {stats["deposits_count"]} на сумму {self._format_amount(stats["deposits_amount"])}'),
-            (
+            texts.t('REPORT_DEPOSITS', '• Пополнения: {count} на сумму {amount}').format(
+                count=stats['deposits_count'], amount=self._format_amount(stats['deposits_amount'])
+            ),
+            texts.t(
+                'REPORT_DEPOSITS_NOTE',
                 '<i>Примечание: «Поступления всего» учитывают только пополнения; покупки подписок и реферальные бонусы '
-                'исключены.</i>'
+                'исключены.</i>',
             ),
             '',
         ]
 
         # Поддержка
         lines += [
-            '🎟️ <b>Поддержка</b>',
-            f'• Новых тикетов: {stats["new_tickets"]}',
-            f'• Активных тикетов сейчас: {totals["open_tickets"]}',
+            texts.t('REPORT_SECTION_SUPPORT', '🎟️ <b>Поддержка</b>'),
+            texts.t('REPORT_NEW_TICKETS', '• Новых тикетов: {count}').format(count=stats['new_tickets']),
+            texts.t('REPORT_OPEN_TICKETS', '• Активных тикетов сейчас: {count}').format(count=totals['open_tickets']),
             '',
         ]
 
         # Активность пользователей
         lines += [
-            '👤 <b>Активность пользователей</b>',
-            f'• Пользователей с активной платной подпиской: {usage["active_paid_users"]}',
-            f'• Пользователей, ни разу не подключившихся: {usage["never_connected_users"]}',
+            texts.t('REPORT_SECTION_USER_ACTIVITY', '👤 <b>Активность пользователей</b>'),
+            texts.t('REPORT_ACTIVE_PAID_USERS', '• Пользователей с активной платной подпиской: {count}').format(
+                count=usage['active_paid_users']
+            ),
+            texts.t('REPORT_NEVER_CONNECTED', '• Пользователей, ни разу не подключившихся: {count}').format(
+                count=usage['never_connected_users']
+            ),
             '',
         ]
 
         # Топ по рефералам
-        lines += ['🤝 <b>Топ по рефералам (за период)</b>']
+        lines += [texts.t('REPORT_SECTION_TOP_REFERRERS', '🤝 <b>Топ по рефералам (за период)</b>')]
         if top_referrers:
             for index, row in enumerate(top_referrers, 1):
                 referrer_label = escape(row['referrer_label'], quote=False)
-                lines.append(f'{index}. {referrer_label}: {row["count"]} приглашений')
+                lines.append(
+                    texts.t('REPORT_REFERRER_LINE', '{index}. {label}: {count} приглашений').format(
+                        index=index, label=referrer_label, count=row['count']
+                    )
+                )
         else:
-            lines.append('— данных нет')
+            lines.append(texts.t('REPORT_NO_DATA', '— данных нет'))
 
         return '\n'.join(lines)
 

@@ -129,7 +129,11 @@ class MenuLayoutService:
                 if btn_id not in new_config['buttons']:
                     new_config['buttons'][btn_id] = btn_config
                 else:
-                    warnings.append(f"Button '{btn_id}' already exists, skipped")
+                    warnings.append(
+                        get_texts()
+                        .t('MENU_LAYOUT_IMPORT_BUTTON_SKIPPED', "Button '{button_id}' already exists, skipped")
+                        .format(button_id=btn_id)
+                    )
 
             # Добавляем новые строки
             existing_row_ids = {row['id'] for row in new_config.get('rows', [])}
@@ -137,7 +141,11 @@ class MenuLayoutService:
                 if row['id'] not in existing_row_ids:
                     new_config['rows'].append(row)
                 else:
-                    warnings.append(f"Row '{row['id']}' already exists, skipped")
+                    warnings.append(
+                        get_texts()
+                        .t('MENU_LAYOUT_IMPORT_ROW_SKIPPED', "Row '{row_id}' already exists, skipped")
+                        .format(row_id=row['id'])
+                    )
 
         await cls.save_config(db, new_config)
 
@@ -166,7 +174,9 @@ class MenuLayoutService:
             errors.append(
                 {
                     'field': 'rows',
-                    'message': f'Duplicate row IDs: {set(duplicate_rows)}',
+                    'message': get_texts()
+                    .t('MENU_VALIDATION_DUPLICATE_ROW_IDS', 'Duplicate row IDs: {row_ids}')
+                    .format(row_ids=set(duplicate_rows)),
                     'severity': 'error',
                 }
             )
@@ -178,7 +188,9 @@ class MenuLayoutService:
                     errors.append(
                         {
                             'field': f'rows.{row.get("id")}.buttons',
-                            'message': f"Button '{btn_id}' not found",
+                            'message': get_texts()
+                            .t('MENU_BUTTON_NOT_FOUND', "Button '{button_id}' not found")
+                            .format(button_id=btn_id),
                             'severity': 'error',
                         }
                     )
@@ -189,7 +201,7 @@ class MenuLayoutService:
                 warnings.append(
                     {
                         'field': f'rows.{row.get("id")}',
-                        'message': 'Row has no buttons',
+                        'message': get_texts().t('MENU_VALIDATION_ROW_HAS_NO_BUTTONS', 'Row has no buttons'),
                         'severity': 'warning',
                     }
                 )
@@ -200,7 +212,9 @@ class MenuLayoutService:
             warnings.append(
                 {
                     'field': 'buttons',
-                    'message': f'{disabled_count} buttons are disabled',
+                    'message': get_texts()
+                    .t('MENU_VALIDATION_BUTTONS_DISABLED', '{count} buttons are disabled')
+                    .format(count=disabled_count),
                     'severity': 'warning',
                 }
             )
@@ -308,10 +322,18 @@ class MenuLayoutService:
                             )
                             break
                     else:
-                        raise KeyError(f"Button '{button_id}' not found")
+                        raise KeyError(
+                            get_texts()
+                            .t('MENU_BUTTON_NOT_FOUND', "Button '{button_id}' not found")
+                            .format(button_id=button_id)
+                        )
 
         if actual_button_id not in buttons:
-            raise KeyError(f"Button '{actual_button_id}' not found")
+            raise KeyError(
+                get_texts()
+                .t('MENU_BUTTON_NOT_FOUND', "Button '{button_id}' not found")
+                .format(button_id=actual_button_id)
+            )
 
         button = buttons[actual_button_id].copy()
 
@@ -380,7 +402,9 @@ class MenuLayoutService:
         # Проверяем что все ID существуют
         for row_id in ordered_ids:
             if row_id not in rows_map:
-                raise KeyError(f"Row '{row_id}' not found")
+                raise KeyError(
+                get_texts().t('MENU_ROW_NOT_FOUND', "Row '{row_id}' not found").format(row_id=row_id)
+            )
 
         # Переупорядочиваем
         new_rows = [rows_map[row_id] for row_id in ordered_ids]
@@ -409,7 +433,11 @@ class MenuLayoutService:
         # Проверяем уникальность ID
         existing_ids = {row['id'] for row in rows}
         if row_config['id'] in existing_ids:
-            raise ValueError(f"Row with id '{row_config['id']}' already exists")
+            raise ValueError(
+                get_texts()
+                .t('MENU_ROW_ALREADY_EXISTS', "Row with id '{row_id}' already exists")
+                .format(row_id=row_config['id'])
+            )
 
         new_row = {
             'id': row_config['id'],
@@ -436,7 +464,9 @@ class MenuLayoutService:
 
         new_rows = [row for row in rows if row['id'] != row_id]
         if len(new_rows) == len(rows):
-            raise KeyError(f"Row '{row_id}' not found")
+            raise KeyError(
+                get_texts().t('MENU_ROW_NOT_FOUND', "Row '{row_id}' not found").format(row_id=row_id)
+            )
 
         config['rows'] = new_rows
         await cls.save_config(db, config)
@@ -457,12 +487,20 @@ class MenuLayoutService:
         buttons = config.get('buttons', {})
 
         if button_id in buttons:
-            raise ValueError(f"Button with id '{button_id}' already exists")
+            raise ValueError(
+                get_texts()
+                .t('MENU_BUTTON_ALREADY_EXISTS', "Button with id '{button_id}' already exists")
+                .format(button_id=button_id)
+            )
 
         # URL, MiniApp и callback кнопки могут быть добавлены
         allowed_types = ('url', 'mini_app', 'callback')
         if button_config.get('type') not in allowed_types:
-            raise ValueError(f'Only {allowed_types} buttons can be added')
+            raise ValueError(
+                get_texts()
+                .t('MENU_BUTTON_TYPE_NOT_ALLOWED', 'Only {allowed_types} buttons can be added')
+                .format(allowed_types=allowed_types)
+            )
 
         buttons[button_id] = {
             'type': button_config['type'],
@@ -498,11 +536,13 @@ class MenuLayoutService:
         buttons = config.get('buttons', {})
 
         if button_id not in buttons:
-            raise KeyError(f"Button '{button_id}' not found")
+            raise KeyError(
+                get_texts().t('MENU_BUTTON_NOT_FOUND', "Button '{button_id}' not found").format(button_id=button_id)
+            )
 
         # Нельзя удалять встроенные кнопки
         if buttons[button_id].get('type') == 'builtin':
-            raise ValueError('Cannot delete builtin buttons')
+            raise ValueError(get_texts().t('MENU_BUTTON_CANNOT_DELETE_BUILTIN', 'Cannot delete builtin buttons'))
 
         del buttons[button_id]
         config['buttons'] = buttons
@@ -535,10 +575,14 @@ class MenuLayoutService:
 
         current_row_idx = cls._find_button_row(config, button_id)
         if current_row_idx is None:
-            raise KeyError(f"Button '{button_id}' not found in any row")
+            raise KeyError(
+                get_texts()
+                .t('MENU_BUTTON_NOT_FOUND_IN_ANY_ROW', "Button '{button_id}' not found in any row")
+                .format(button_id=button_id)
+            )
 
         if current_row_idx == 0:
-            raise ValueError('Button is already in the top row')
+            raise ValueError(get_texts().t('MENU_BUTTON_ALREADY_TOP_ROW', 'Button is already in the top row'))
 
         # Удаляем из текущей строки
         rows[current_row_idx]['buttons'].remove(button_id)
@@ -561,10 +605,14 @@ class MenuLayoutService:
 
         current_row_idx = cls._find_button_row(config, button_id)
         if current_row_idx is None:
-            raise KeyError(f"Button '{button_id}' not found in any row")
+            raise KeyError(
+                get_texts()
+                .t('MENU_BUTTON_NOT_FOUND_IN_ANY_ROW', "Button '{button_id}' not found in any row")
+                .format(button_id=button_id)
+            )
 
         if current_row_idx >= len(rows) - 1:
-            raise ValueError('Button is already in the bottom row')
+            raise ValueError(get_texts().t('MENU_BUTTON_ALREADY_BOTTOM_ROW', 'Button is already in the bottom row'))
 
         # Удаляем из текущей строки
         rows[current_row_idx]['buttons'].remove(button_id)
@@ -599,7 +647,9 @@ class MenuLayoutService:
                 break
 
         if target_row_idx is None:
-            raise KeyError(f"Row '{target_row_id}' not found")
+            raise KeyError(
+                get_texts().t('MENU_ROW_NOT_FOUND', "Row '{row_id}' not found").format(row_id=target_row_id)
+            )
 
         # Удаляем кнопку из текущей строки
         current_row_idx = cls._find_button_row(config, button_id)
@@ -639,7 +689,9 @@ class MenuLayoutService:
                 break
 
         if target_row is None:
-            raise KeyError(f"Row '{row_id}' not found")
+            raise KeyError(
+                get_texts().t('MENU_ROW_NOT_FOUND', "Row '{row_id}' not found").format(row_id=row_id)
+            )
 
         # Проверяем что все кнопки принадлежат строке
         current_buttons = set(target_row['buttons'])
@@ -650,10 +702,16 @@ class MenuLayoutService:
             extra = ordered_buttons - current_buttons
             errors = []
             if missing:
-                errors.append(f'missing: {missing}')
+                errors.append(
+                    get_texts().t('MENU_BUTTON_MISMATCH_MISSING', 'missing: {missing}').format(missing=missing)
+                )
             if extra:
-                errors.append(f'extra: {extra}')
-            raise ValueError(f'Button mismatch: {", ".join(errors)}')
+                errors.append(get_texts().t('MENU_BUTTON_MISMATCH_EXTRA', 'extra: {extra}').format(extra=extra))
+            raise ValueError(
+                get_texts()
+                .t('MENU_BUTTON_MISMATCH', 'Button mismatch: {errors}')
+                .format(errors=', '.join(errors))
+            )
 
         target_row['buttons'] = ordered_button_ids
 
@@ -685,9 +743,13 @@ class MenuLayoutService:
                     pos2 = (row_idx, btn_idx)
 
         if pos1 is None:
-            raise KeyError(f"Button '{button_id_1}' not found")
+            raise KeyError(
+                get_texts().t('MENU_BUTTON_NOT_FOUND', "Button '{button_id}' not found").format(button_id=button_id_1)
+            )
         if pos2 is None:
-            raise KeyError(f"Button '{button_id_2}' not found")
+            raise KeyError(
+                get_texts().t('MENU_BUTTON_NOT_FOUND', "Button '{button_id}' not found").format(button_id=button_id_2)
+            )
 
         # Меняем местами
         rows[pos1[0]]['buttons'][pos1[1]] = button_id_2
@@ -958,7 +1020,8 @@ class MenuLayoutService:
 
         # Имя пользователя
         if '{username}' in text:
-            text = text.replace('{username}', context.username or 'User')
+            fallback_username = texts.t('MENU_PLACEHOLDER_USERNAME_FALLBACK', 'User')
+            text = text.replace('{username}', context.username or fallback_username)
 
         # Дней до окончания подписки
         if '{subscription_days}' in text:
@@ -966,12 +1029,16 @@ class MenuLayoutService:
 
         # Использованный трафик
         if '{traffic_used}' in text:
-            traffic = f'{context.traffic_used_gb:.1f} GB'
+            traffic = texts.t('MENU_PLACEHOLDER_TRAFFIC_GB', '{value} GB').format(
+                value=f'{context.traffic_used_gb:.1f}'
+            )
             text = text.replace('{traffic_used}', traffic)
 
         # Оставшийся трафик
         if '{traffic_left}' in text:
-            traffic = f'{context.traffic_left_gb:.1f} GB'
+            traffic = texts.t('MENU_PLACEHOLDER_TRAFFIC_GB', '{value} GB').format(
+                value=f'{context.traffic_left_gb:.1f}'
+            )
             text = text.replace('{traffic_left}', traffic)
 
         # Количество рефералов

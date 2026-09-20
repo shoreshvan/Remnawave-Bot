@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.external.cryptobot import CryptoBotService
+from app.localization.texts import get_texts
 from app.external.heleket import HeleketService
 from app.external.telegram_stars import TelegramStarsService
 from app.services.cloudpayments_service import CloudPaymentsService
@@ -1452,13 +1453,19 @@ class PaymentService(
             payload = f'guest_purchase_{purchase_token}'
 
             try:
+                stars_texts = get_texts(settings.DEFAULT_LANGUAGE)
                 invoice_url = await self.bot.create_invoice_link(
-                    title='Подарочная подписка VPN',
+                    title=stars_texts.t('PAYMENT_STARS_GIFT_INVOICE_TITLE', 'Подарочная подписка VPN'),
                     description=f'{description} ({stars_amount} ⭐)',
                     payload=payload,
                     provider_token='',
                     currency='XTR',
-                    prices=[LabeledPrice(label='Подарочная подписка', amount=stars_amount)],
+                    prices=[
+                        LabeledPrice(
+                            label=stars_texts.t('PAYMENT_STARS_GIFT_INVOICE_LABEL', 'Подарочная подписка'),
+                            amount=stars_amount,
+                        )
+                    ],
                 )
 
                 logger.info(

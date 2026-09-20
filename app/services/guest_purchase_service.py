@@ -1124,31 +1124,46 @@ async def _send_telegram_gift_notification(
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
         from app.bot_factory import create_bot
+        from app.localization.texts import get_texts
+
+        texts = get_texts(user.language)
 
         gift_from = ''
         if purchase.contact_value:
             safe_name = html_mod.escape(purchase.contact_value)
-            gift_from = f'\nОт: {safe_name}'
+            gift_from = texts.t('GUEST_GIFT_TG_FROM_LINE', '\nОт: {name}').format(name=safe_name)
 
         gift_msg = ''
         if purchase.gift_message:
             safe_msg = html_mod.escape(purchase.gift_message)
-            gift_msg = f'\n\n"{safe_msg}"'
+            gift_msg = texts.t('GUEST_GIFT_TG_MESSAGE', '\n\n"{message}"').format(message=safe_msg)
 
         safe_tariff = html_mod.escape(tariff_name) if tariff_name else ''
-        period_text = f'{purchase.period_days} дн.' if purchase.period_days else ''
-        tariff_text = f'{safe_tariff} — {period_text}' if safe_tariff else period_text
+        period_text = (
+            texts.t('GUEST_GIFT_TG_PERIOD_DAYS', '{days} дн.').format(days=purchase.period_days)
+            if purchase.period_days
+            else ''
+        )
+        tariff_text = (
+            texts.t('GUEST_GIFT_TG_TARIFF_LINE', '{tariff} — {period}').format(tariff=safe_tariff, period=period_text)
+            if safe_tariff
+            else period_text
+        )
 
-        text = f'🎁 <b>Вам подарили VPN подписку!</b>\n{tariff_text}{gift_from}{gift_msg}'
+        title = texts.t('GUEST_GIFT_TG_TITLE', '🎁 <b>Вам подарили VPN подписку!</b>')
+        text = f'{title}\n{tariff_text}{gift_from}{gift_msg}'
 
         keyboard = None
         if is_pending_activation:
-            text += '\n\nУ вас уже есть активная подписка. Нажмите кнопку ниже, чтобы активировать подарок (текущая подписка будет заменена).'
+            text += texts.t(
+                'GUEST_GIFT_TG_PENDING_HINT',
+                '\n\nУ вас уже есть активная подписка. Нажмите кнопку ниже, чтобы активировать подарок (текущая подписка будет заменена).',
+            )
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text='Активировать подарок',
+                            text=texts.t('GUEST_GIFT_TG_ACTIVATE_BUTTON', 'Активировать подарок'),
                             callback_data=f'gift_activate:{purchase.id}',
                         )
                     ]

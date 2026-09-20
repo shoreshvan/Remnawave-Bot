@@ -551,7 +551,9 @@ def _build_cabinet_main_menu_keyboard(
                         )
                     ]
                     if section_cfg.get('enabled', True):
-                        admin_web_text = section_cfg.get('labels', {}).get(language, '') or '🖥 Веб-Админка'
+                        admin_web_text = section_cfg.get('labels', {}).get(language, '') or texts.t(
+                            'MENU_ADMIN_WEB', '🖥 Веб-Админка'
+                        )
                         admin_row.append(_cabinet_button(admin_web_text, '/admin', 'admin_panel'))
                     keyboard_rows.append(admin_row)
                     continue  # bypass max_per_row chunking
@@ -563,7 +565,14 @@ def _build_cabinet_main_menu_keyboard(
 
     # -- Moderator panel (only when not admin — admin row handled above) --
     if is_moderator and not is_admin:
-        keyboard_rows.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
+        keyboard_rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('MENU_MODERATOR', '🧑‍⚖️ Модерация'),
+                    callback_data='moderator_panel',
+                )
+            ]
+        )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
@@ -804,7 +813,14 @@ def get_main_menu_keyboard(
         logger.debug('DEBUG KEYBOARD: Админ кнопка НЕ добавлена')
     # Moderator access (limited support panel)
     if (not is_admin) and is_moderator:
-        keyboard.append([InlineKeyboardButton(text='🧑‍⚖️ Модерация', callback_data='moderator_panel')])
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('MENU_MODERATOR', '🧑‍⚖️ Модерация'),
+                    callback_data='moderator_panel',
+                )
+            ]
+        )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -1317,7 +1333,12 @@ def get_payment_methods_keyboard_with_cart(
 
     # Добавляем кнопку "Очистить корзину"
     keyboard.inline_keyboard.append(
-        [InlineKeyboardButton(text='🗑️ Очистить корзину и вернуться', callback_data='clear_saved_cart')]
+        [
+            InlineKeyboardButton(
+                text=texts.t('CLEAR_CART_AND_RETURN_BUTTON', '🗑️ Очистить корзину и вернуться'),
+                callback_data='clear_saved_cart',
+            )
+        ]
     )
 
     # Добавляем кнопку возврата к оформлению подписки
@@ -1335,8 +1356,18 @@ def get_subscription_confirm_keyboard_with_cart(language: str = 'ru') -> InlineK
     texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text='✅ Подтвердить покупку', callback_data='subscription_confirm')],
-            [InlineKeyboardButton(text='🗑️ Очистить корзину', callback_data='clear_saved_cart')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CART_CONFIRM_PURCHASE_BUTTON', '✅ Подтвердить покупку'),
+                    callback_data='subscription_confirm',
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('CLEAR_CART_BUTTON', '🗑️ Очистить корзину'),
+                    callback_data='clear_saved_cart',
+                )
+            ],
             [
                 InlineKeyboardButton(
                     text=texts.BACK,
@@ -1363,11 +1394,12 @@ def get_insufficient_balance_keyboard_with_cart(
     )
 
     # Добавляем кнопку очистки корзины в начало
+    texts = get_texts(language)
     keyboard.inline_keyboard.insert(
         0,
         [
             InlineKeyboardButton(
-                text='🗑️ Очистить корзину и вернуться',
+                text=texts.t('CLEAR_CART_AND_RETURN_BUTTON', '🗑️ Очистить корзину и вернуться'),
                 callback_data='clear_saved_cart',
             )
         ],
@@ -1472,9 +1504,13 @@ def get_traffic_packages_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKey
             continue
 
         if gb == 0:
-            text = f'♾️ Безлимит - {settings.format_price(package["price"])}'
+            text = texts.t('TRAFFIC_PACKAGE_UNLIMITED', '♾️ Безлимит - {price}').format(
+                price=settings.format_price(package['price'])
+            )
         else:
-            text = f'📊 {gb} ГБ - {settings.format_price(package["price"])}'
+            text = texts.t('TRAFFIC_PACKAGE_GB', '📊 {gb} ГБ - {price}').format(
+                gb=gb, price=settings.format_price(package['price'])
+            )
 
         keyboard.append([InlineKeyboardButton(text=text, callback_data=f'traffic_{gb}')])
 
@@ -1508,7 +1544,7 @@ def get_countries_keyboard(
         if country['price_kopeks'] > 0:
             price_text = f' (+{texts.format_price(country["price_kopeks"])})'
         else:
-            price_text = ' (Бесплатно)'
+            price_text = texts.t('COUNTRY_PRICE_FREE', ' (Бесплатно)')
 
         keyboard.append(
             [
@@ -1553,7 +1589,9 @@ def get_devices_keyboard(current: int, language: str = DEFAULT_LANGUAGE) -> Inli
 
     for devices in range(start_devices, end_devices):
         price = max(0, devices - settings.DEFAULT_DEVICE_LIMIT) * settings.PRICE_PER_DEVICE
-        price_text = f' (+{texts.format_price(price)})' if price > 0 else ' (вкл.)'
+        price_text = (
+            f' (+{texts.format_price(price)})' if price > 0 else texts.t('DEVICE_PRICE_INCLUDED', ' (вкл.)')
+        )
         emoji = '✅' if devices == current else '⚪'
 
         button_text = f'{emoji} {devices}{price_text}'
@@ -2527,7 +2565,14 @@ def get_autopay_days_keyboard(language: str = DEFAULT_LANGUAGE) -> InlineKeyboar
 
     for days in [1, 3, 7, 14]:
         keyboard.append(
-            [InlineKeyboardButton(text=f'{days} {_get_days_word(days)}', callback_data=f'autopay_days_{days}')]
+            [
+                InlineKeyboardButton(
+                    text=texts.t('DAYS_COUNT_LABEL', '{days} {days_word}').format(
+                        days=days, days_word=_get_days_word(days)
+                    ),
+                    callback_data=f'autopay_days_{days}',
+                )
+            ]
         )
 
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='subscription_autopay')])
@@ -2550,7 +2595,7 @@ def get_autopay_period_keyboard(
     keyboard.append([InlineKeyboardButton(text=default_label, callback_data='autopay_period_default')])
 
     for days in sorted(available_periods):
-        label = f'{days} {_get_days_word(days)}'
+        label = texts.t('DAYS_COUNT_LABEL', '{days} {days_word}').format(days=days, days_word=_get_days_word(days))
         if current_period == days:
             label = f'✅ {label}'
         keyboard.append([InlineKeyboardButton(text=label, callback_data=f'autopay_period_{days}')])
@@ -2590,7 +2635,11 @@ def get_add_traffic_keyboard(
         now = datetime.now(UTC)
         days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
-        period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
+        period_text = (
+            texts.t('PERIOD_FOR_DAYS', ' (за {days} дн.)').format(days=days_left)
+            if days_left > 1
+            else texts.t('PERIOD_FOR_ONE_DAY', ' (за 1 день)')
+        )
     else:
         price_multiplier = 1
         period_text = ''
@@ -2626,17 +2675,23 @@ def get_add_traffic_keyboard(
 
         if gb == 0:
             if use_russian_fallback:
-                text = f'♾️ Безлимитный трафик - {total_price // 100} ₽{period_text}'
+                text = texts.t('ADD_TRAFFIC_UNLIMITED', '♾️ Безлимитный трафик - {price} ₽{period}').format(
+                    price=total_price // 100, period=period_text
+                )
             else:
                 text = f'♾️ Unlimited traffic - {total_price // 100} ₽{period_text}'
         elif use_russian_fallback:
-            text = f'📊 +{gb} ГБ трафика - {total_price // 100} ₽{period_text}'
+            text = texts.t('ADD_TRAFFIC_GB', '📊 +{gb} ГБ трафика - {price} ₽{period}').format(
+                gb=gb, price=total_price // 100, period=period_text
+            )
         else:
             text = f'📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and total_discount > 0:
             if use_russian_fallback:
-                text += f' (скидка {discount_percent}%: -{total_discount // 100}₽)'
+                text += texts.t('TRAFFIC_DISCOUNT_INFO', ' (скидка {percent}%: -{amount}₽)').format(
+                    percent=discount_percent, amount=total_discount // 100
+                )
             else:
                 text += f' (discount {discount_percent}%: -{total_discount // 100}₽)'
 
@@ -2695,16 +2750,20 @@ def get_add_traffic_keyboard_from_tariff(
             discount_percent,
         )
 
-        period_text = ' /мес' if use_russian_fallback else ' /mo'
+        period_text = texts.t('TRAFFIC_PERIOD_PER_MONTH', ' /мес') if use_russian_fallback else ' /mo'
 
         if use_russian_fallback:
-            text = f'📊 +{gb} ГБ трафика - {discounted_price // 100} ₽{period_text}'
+            text = texts.t('ADD_TRAFFIC_GB', '📊 +{gb} ГБ трафика - {price} ₽{period}').format(
+                gb=gb, price=discounted_price // 100, period=period_text
+            )
         else:
             text = f'📊 +{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
 
         if discount_percent > 0 and discount_value > 0:
             if use_russian_fallback:
-                text += f' (скидка {discount_percent}%: -{discount_value // 100}₽)'
+                text += texts.t('TRAFFIC_DISCOUNT_INFO', ' (скидка {percent}%: -{amount}₽)').format(
+                    percent=discount_percent, amount=discount_value // 100
+                )
             else:
                 text += f' (discount {discount_percent}%: -{discount_value // 100}₽)'
 
@@ -2732,7 +2791,11 @@ def get_change_devices_keyboard(
         now = datetime.now(UTC)
         days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
-        period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
+        period_text = (
+            texts.t('PERIOD_FOR_DAYS', ' (за {days} дн.)').format(days=days_left)
+            if days_left > 1
+            else texts.t('PERIOD_FOR_ONE_DAY', ' (за 1 день)')
+        )
     else:
         price_multiplier = 1
         period_text = ''
@@ -2769,7 +2832,7 @@ def get_change_devices_keyboard(
     for devices_count in range(start_range, end_range):
         if devices_count == current_devices:
             emoji = '✅'
-            action_text = ' (текущее)'
+            action_text = texts.t('DEVICE_COUNT_CURRENT', ' (текущее)')
             price_text = ''
         elif devices_count > current_devices:
             emoji = '➕'
@@ -2789,22 +2852,28 @@ def get_change_devices_keyboard(
                 price_text = f' (+{total_price // 100}₽{period_text})'
                 total_discount = int(discount_per_month * price_multiplier)
                 if discount_percent > 0 and total_discount > 0:
-                    price_text += f' (скидка {discount_percent}%: -{total_discount // 100}₽)'
+                    price_text += texts.t('DEVICE_CHANGE_DISCOUNT_INFO', ' (скидка {percent}%: -{amount})').format(
+                        percent=discount_percent, amount=f'{total_discount // 100}₽'
+                    )
                 action_text = ''
             else:
-                price_text = ' (бесплатно)'
+                price_text = texts.t('DEVICE_PRICE_FREE', ' (бесплатно)')
                 action_text = ''
         else:
             emoji = '➖'
             action_text = ''
-            price_text = ' (без возврата)'
+            price_text = texts.t('DEVICE_PRICE_NO_REFUND', ' (без возврата)')
 
-        button_text = f'{emoji} {devices_count} устр.{action_text}{price_text}'
+        button_text = texts.t('DEVICE_COUNT_LABEL', '{emoji} {count} устр.{action}{price}').format(
+            emoji=emoji, count=devices_count, action=action_text, price=price_text
+        )
 
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f'change_devices_{devices_count}')])
 
     if current_devices < start_range or current_devices >= end_range:
-        current_button = f'✅ {current_devices} устр. (текущее)'
+        current_button = texts.t('DEVICE_COUNT_CURRENT_LABEL', '✅ {count} устр. (текущее)').format(
+            count=current_devices
+        )
         buttons.insert(
             0, [InlineKeyboardButton(text=current_button, callback_data=f'change_devices_{current_devices}')]
         )
@@ -2854,7 +2923,10 @@ def get_reset_traffic_confirm_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=f'✅ Сбросить за {settings.format_price(price_kopeks)}', callback_data='confirm_reset_traffic'
+                    text=texts.t('RESET_TRAFFIC_CONFIRM_BUTTON', '✅ Сбросить за {price}').format(
+                        price=settings.format_price(price_kopeks)
+                    ),
+                    callback_data='confirm_reset_traffic',
                 )
             ]
         )
@@ -2938,7 +3010,9 @@ def get_manage_countries_keyboard(
             total_price = int(discounted_per_month * price_multiplier)
             total_price = max(100, total_price) if total_price > 0 else 0
             if days_left > 30:
-                price_text = f' ({discounted_per_month // 100}₽/мес × {days_left} дн. = {total_price // 100}₽)'
+                price_text = texts.t(
+                    'COUNTRY_PRICE_PER_MONTH_TOTAL', ' ({per_month}₽/мес × {days} дн. = {total}₽)'
+                ).format(per_month=discounted_per_month // 100, days=days_left, total=total_price // 100)
                 logger.info(
                     '🔍 Сервер : ₽/мес × дн./30 = ₽ (скидка ₽)',
                     name=name,
@@ -2948,10 +3022,12 @@ def get_manage_countries_keyboard(
                     discount_per_month=int(discount_per_month * price_multiplier) / 100,
                 )
             else:
-                price_text = f' ({total_price // 100}₽)'
+                price_text = texts.t('COUNTRY_PRICE_TOTAL', ' ({total}₽)').format(total=total_price // 100)
             total_discount_for_server = int(discount_per_month * price_multiplier)
             if discount_percent > 0 and total_discount_for_server > 0:
-                price_text += f' (скидка {discount_percent}%: -{total_discount_for_server // 100}₽)'
+                price_text += texts.t('COUNTRY_CHANGES_DISCOUNT_INFO', ' (скидка {percent}%: -{amount})').format(
+                    percent=discount_percent, amount=f'{total_discount_for_server // 100}₽'
+                )
             display_name = f'{icon} {name}{price_text}'
         else:
             display_name = f'{icon} {name}'
@@ -2959,10 +3035,12 @@ def get_manage_countries_keyboard(
         buttons.append([InlineKeyboardButton(text=display_name, callback_data=f'country_manage_{uuid}')])
 
     if total_cost > 0:
-        apply_text = f'✅ Применить изменения ({total_cost // 100} ₽)'
+        apply_text = texts.t('APPLY_CHANGES_WITH_PRICE_BUTTON', '✅ Применить изменения ({price} ₽)').format(
+            price=total_cost // 100
+        )
         logger.info('🔍 Общая стоимость новых серверов: ₽', total_cost=total_cost / 100)
     else:
-        apply_text = '✅ Применить изменения'
+        apply_text = texts.t('APPLY_CHANGES_BUTTON', '✅ Применить изменения')
 
     buttons.append([InlineKeyboardButton(text=apply_text, callback_data='countries_apply')])
 
@@ -3519,7 +3597,7 @@ def get_my_tickets_keyboard(
         # Override status emoji for closed tickets in admin list
         if ticket.get('is_closed', False):
             status_emoji = '✅'
-        title = ticket.get('title', 'Без названия')[:25]
+        title = ticket.get('title', texts.t('FAQ_PAGE_UNTITLED', 'Без названия'))[:25]
         button_text = f'{status_emoji} #{ticket["id"]} {title}'
 
         keyboard.append([InlineKeyboardButton(text=button_text, callback_data=f'view_ticket_{ticket["id"]}')])
@@ -3628,7 +3706,7 @@ def get_admin_tickets_keyboard(
         if contact_parts:
             name_parts.append(f'({" | ".join(contact_parts)})')
         name_display = ' '.join(name_parts)
-        title = ticket.get('title', 'Без названия')[:20]
+        title = ticket.get('title', texts.t('FAQ_PAGE_UNTITLED', 'Без названия'))[:20]
         locked_emoji = ticket.get('locked_emoji', '')
         button_text = f'{status_emoji} #{ticket["id"]} {locked_emoji} {name_display}: {title}'.replace('  ', ' ')
         row = [InlineKeyboardButton(text=button_text, callback_data=f'admin_view_ticket_{ticket["id"]}')]
@@ -3806,9 +3884,15 @@ def get_ticket_notification_keyboard(
     url_row: list[InlineKeyboardButton] = []
     if username:
         safe_username = username.lstrip('@')
-        url_row.append(InlineKeyboardButton(text='✉ ЛС', url=f'tg://resolve?domain={safe_username}'))
+        url_row.append(
+            InlineKeyboardButton(
+                text=texts.t('TICKET_USER_DM_BUTTON', '✉ ЛС'), url=f'tg://resolve?domain={safe_username}'
+            )
+        )
     if (tg_id := _coerce_tg_user_id(telegram_id)) is not None:
-        url_row.append(InlineKeyboardButton(text='👤 Профиль', url=f'tg://user?id={tg_id}'))
+        url_row.append(
+            InlineKeyboardButton(text=texts.t('TICKET_USER_PROFILE_BUTTON', '👤 Профиль'), url=f'tg://user?id={tg_id}')
+        )
     if url_row:
         keyboard.append(url_row)
 
@@ -3817,7 +3901,7 @@ def get_ticket_notification_keyboard(
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    text='👤 К пользователю',
+                    text=texts.t('TICKET_GO_TO_USER_BUTTON', '👤 К пользователю'),
                     callback_data=f'admin_user_manage_{user_id}_from_ticket_{ticket_id}',
                 )
             ]

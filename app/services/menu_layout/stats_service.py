@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import ButtonClickLog
+from app.localization.texts import get_texts
 
 
 class MenuLayoutStatsService:
@@ -317,7 +318,16 @@ class MenuLayoutStatsService:
 
         result = await db.execute(query.group_by(weekday_expr).order_by(weekday_expr))
 
-        weekday_names = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+        texts = get_texts()
+        weekday_names = [
+            texts.t('MENU_WEEKDAY_MONDAY', 'Понедельник'),
+            texts.t('MENU_WEEKDAY_TUESDAY', 'Вторник'),
+            texts.t('MENU_WEEKDAY_WEDNESDAY', 'Среда'),
+            texts.t('MENU_WEEKDAY_THURSDAY', 'Четверг'),
+            texts.t('MENU_WEEKDAY_FRIDAY', 'Пятница'),
+            texts.t('MENU_WEEKDAY_SATURDAY', 'Суббота'),
+            texts.t('MENU_WEEKDAY_SUNDAY', 'Воскресенье'),
+        ]
 
         # Создаем словарь для быстрого доступа по weekday
         stats_dict = {int(row.weekday): row.count for row in result.all()}

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.models import UserStatus
+from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.user_service import UserService
 
@@ -78,14 +79,16 @@ class BulkBanService:
                     # Отправляем уведомление пользователю, если возможно
                     if bot and settings.is_notifications_enabled():
                         try:
+                            texts = get_texts(user.language)
                             await bot.send_message(
                                 chat_id=telegram_id,
-                                text=(
-                                    f'🚫 <b>Ваш аккаунт заблокирован</b>\n\n'
-                                    f'Причина: {reason}\n\n'
-                                    f'Если вы считаете, что блокировка произошла ошибочно, '
-                                    f'обратитесь в поддержку.'
-                                ),
+                                text=texts.t(
+                                    'BULK_BAN_USER_NOTIFICATION',
+                                    '🚫 <b>Ваш аккаунт заблокирован</b>\n\n'
+                                    'Причина: {reason}\n\n'
+                                    'Если вы считаете, что блокировка произошла ошибочно, '
+                                    'обратитесь в поддержку.',
+                                ).format(reason=reason),
                                 parse_mode='HTML',
                             )
                         except Exception as e:

@@ -33,6 +33,7 @@ from app.database.models import (
     Transaction,
     User,
 )
+from app.localization.texts import get_texts
 from app.utils.formatters import format_username_link
 from app.utils.message_patch import caption_exceeds_telegram_limit
 from app.utils.rich_admin import classic_admin_html_to_rich, try_send_rich_admin_message
@@ -136,7 +137,9 @@ class AdminNotificationService:
         try:
             referrer = await get_user_by_id(db, referred_by_id)
             if not referrer:
-                return f'ID {referred_by_id} (не найден)'
+                return get_texts().t('ADMIN_NOTIFY_REFERRER_NOT_FOUND', 'ID {user_id} (не найден)').format(
+                    user_id=referred_by_id
+                )
 
             if referrer.username:
                 return f'{format_username_link(referrer.username)} (ID: {referred_by_id})'
@@ -216,13 +219,14 @@ class AdminNotificationService:
 
     def _get_user_identifier_label(self, user: User) -> str:
         """Get label for user identifier (Telegram ID or Email)."""
+        texts = get_texts()
         telegram_id = getattr(user, 'telegram_id', None)
         if telegram_id:
-            return 'Telegram ID'
+            return texts.t('ADMIN_NOTIFY_LABEL_TELEGRAM_ID', 'Telegram ID')
         email = getattr(user, 'email', None)
         if email:
-            return 'Email'
-        return 'ID'
+            return texts.t('ADMIN_NOTIFY_LABEL_EMAIL', 'Email')
+        return texts.t('ADMIN_NOTIFY_LABEL_ID', 'ID')
 
     async def _record_subscription_event(
         self,
@@ -270,17 +274,31 @@ class AdminNotificationService:
                 )
 
     def _format_promo_group_discounts(self, promo_group: PromoGroup) -> list[str]:
+        texts = get_texts()
         discount_lines: list[str] = []
 
         discount_map = {
-            'servers': ('Серверы', promo_group.server_discount_percent),
-            'traffic': ('Трафик', promo_group.traffic_discount_percent),
-            'devices': ('Устройства', promo_group.device_discount_percent),
+            'servers': (
+                texts.t('ADMIN_NOTIFY_DISCOUNT_SERVERS', 'Серверы'),
+                promo_group.server_discount_percent,
+            ),
+            'traffic': (
+                texts.t('ADMIN_NOTIFY_DISCOUNT_TRAFFIC', 'Трафик'),
+                promo_group.traffic_discount_percent,
+            ),
+            'devices': (
+                texts.t('ADMIN_NOTIFY_DISCOUNT_DEVICES', 'Устройства'),
+                promo_group.device_discount_percent,
+            ),
         }
 
         for title, percent in discount_map.values():
             if percent and percent > 0:
-                discount_lines.append(f'• {title}: -{percent}%')
+                discount_lines.append(
+                    texts.t('ADMIN_NOTIFY_DISCOUNT_LINE', '• {title}: -{percent}%').format(
+                        title=title, percent=percent
+                    )
+                )
 
         period_discounts_raw = promo_group.period_discounts or {}
         period_items: list[tuple[int, int]] = []
@@ -299,13 +317,24 @@ class AdminNotificationService:
         period_items.sort(key=lambda item: item[0])
 
         if period_items:
-            formatted_periods = ', '.join(f'{days} д. — -{percent}%' for days, percent in period_items)
-            discount_lines.append(f'• Периоды: {formatted_periods}')
+            period_template = texts.t('ADMIN_NOTIFY_DISCOUNT_PERIOD_ITEM', '{days} д. — -{percent}%')
+            formatted_periods = ', '.join(
+                period_template.format(days=days, percent=percent) for days, percent in period_items
+            )
+            discount_lines.append(
+                texts.t('ADMIN_NOTIFY_DISCOUNT_PERIODS_LINE', '• Периоды: {periods}').format(
+                    periods=formatted_periods
+                )
+            )
 
         if promo_group.apply_discounts_to_addons:
-            discount_lines.append('• Доп. услуги: ✅ скидка действует')
+            discount_lines.append(
+                texts.t('ADMIN_NOTIFY_DISCOUNT_ADDONS_ON', '• Доп. услуги: ✅ скидка действует')
+            )
         else:
-            discount_lines.append('• Доп. услуги: ❌ без скидки')
+            discount_lines.append(
+                texts.t('ADMIN_NOTIFY_DISCOUNT_ADDONS_OFF', '• Доп. услуги: ❌ без скидки')
+            )
 
         return discount_lines
 
@@ -313,66 +342,103 @@ class AdminNotificationService:
         self,
         promo_group: PromoGroup | None,
         *,
-        title: str = 'Промогруппа',
+        title: str | None = None,
         icon: str = '🏷️',
     ) -> str:
-        if not promo_group:
-            return f'{icon} <b>{title}:</b> —'
+        texts = get_texts()
+        if title is None:
+            title = texts.t('ADMIN_NOTIFY_PROMO_GROUP_TITLE', 'Промогруппа')
 
-        lines = [f'{icon} <b>{title}:</b> {html.escape(promo_group.name)}']
+        if not promo_group:
+            return texts.t('ADMIN_NOTIFY_PROMO_GROUP_EMPTY', '{icon} <b>{title}:</b> —').format(
+                icon=icon, title=title
+            )
+
+        lines = [
+            texts.t('ADMIN_NOTIFY_PROMO_GROUP_HEADER', '{icon} <b>{title}:</b> {name}').format(
+                icon=icon, title=title, name=html.escape(promo_group.name)
+            )
+        ]
 
         discount_lines = self._format_promo_group_discounts(promo_group)
         if discount_lines:
-            lines.append('💸 <b>Скидки:</b>')
+            lines.append(texts.t('ADMIN_NOTIFY_DISCOUNTS_HEADER', '💸 <b>Скидки:</b>'))
             lines.extend(discount_lines)
         else:
-            lines.append('💸 <b>Скидки:</b> отсутствуют')
+            lines.append(
+                texts.t('ADMIN_NOTIFY_DISCOUNTS_NONE', '💸 <b>Скидки:</b> отсутствуют')
+            )
 
         return '\n'.join(lines)
 
     def _get_promocode_type_display(self, promo_type: str | None) -> str:
+        texts = get_texts()
         mapping = {
-            PromoCodeType.BALANCE.value: '💰 Бонус на баланс',
-            PromoCodeType.SUBSCRIPTION_DAYS.value: '⏰ Доп. дни подписки',
-            PromoCodeType.TRIAL_SUBSCRIPTION.value: '🎁 Триал подписка',
-            PromoCodeType.PROMO_GROUP.value: '👥 Промогруппа',
-            PromoCodeType.DISCOUNT.value: '💸 Скидка',
-            PromoCodeType.BALANCE_AND_DAYS.value: '💰📅 Баланс + дни подписки',
+            PromoCodeType.BALANCE.value: texts.t('ADMIN_NOTIFY_PROMO_TYPE_BALANCE', '💰 Бонус на баланс'),
+            PromoCodeType.SUBSCRIPTION_DAYS.value: texts.t(
+                'ADMIN_NOTIFY_PROMO_TYPE_DAYS', '⏰ Доп. дни подписки'
+            ),
+            PromoCodeType.TRIAL_SUBSCRIPTION.value: texts.t(
+                'ADMIN_NOTIFY_PROMO_TYPE_TRIAL', '🎁 Триал подписка'
+            ),
+            PromoCodeType.PROMO_GROUP.value: texts.t('ADMIN_NOTIFY_PROMO_TYPE_GROUP', '👥 Промогруппа'),
+            PromoCodeType.DISCOUNT.value: texts.t('ADMIN_NOTIFY_PROMO_TYPE_DISCOUNT', '💸 Скидка'),
+            PromoCodeType.BALANCE_AND_DAYS.value: texts.t(
+                'ADMIN_NOTIFY_PROMO_TYPE_BALANCE_AND_DAYS', '💰📅 Баланс + дни подписки'
+            ),
         }
 
         if not promo_type:
-            return 'ℹ️ Не указан'
+            return texts.t('ADMIN_NOTIFY_PROMO_TYPE_UNSET', 'ℹ️ Не указан')
 
         return mapping.get(promo_type, f'ℹ️ {promo_type}')
 
     def _format_campaign_bonus(self, campaign: AdvertisingCampaign, *, tariff_name: str | None = None) -> list[str]:
+        texts = get_texts()
         if campaign.is_balance_bonus:
             return [
-                f'💰 Баланс: {settings.format_price(campaign.balance_bonus_kopeks or 0)}',
+                texts.t('ADMIN_NOTIFY_CAMPAIGN_BALANCE', '💰 Баланс: {amount}').format(
+                    amount=settings.format_price(campaign.balance_bonus_kopeks or 0)
+                ),
             ]
 
         if campaign.is_subscription_bonus:
             default_devices = getattr(settings, 'DEFAULT_DEVICE_LIMIT', 1)
             details = [
-                f'📅 {campaign.subscription_duration_days or 0} дн. '
-                f'• 📊 {campaign.subscription_traffic_gb or 0} ГБ '
-                f'• 📱 {campaign.subscription_device_limit or default_devices} устр.',
+                texts.t(
+                    'ADMIN_NOTIFY_CAMPAIGN_SUBSCRIPTION',
+                    '📅 {days} дн. • 📊 {traffic} ГБ • 📱 {devices} устр.',
+                ).format(
+                    days=campaign.subscription_duration_days or 0,
+                    traffic=campaign.subscription_traffic_gb or 0,
+                    devices=campaign.subscription_device_limit or default_devices,
+                ),
             ]
             if campaign.subscription_squads:
-                details.append(f'🌐 Сквады: {len(campaign.subscription_squads)} шт.')
+                details.append(
+                    texts.t('ADMIN_NOTIFY_CAMPAIGN_SQUADS', '🌐 Сквады: {count} шт.').format(
+                        count=len(campaign.subscription_squads)
+                    )
+                )
             return details
 
         if campaign.is_tariff_bonus:
             name = tariff_name or f'ID {campaign.tariff_id}'
-            details = [f'📦 Тариф: <b>{name}</b>']
+            details = [
+                texts.t('ADMIN_NOTIFY_CAMPAIGN_TARIFF', '📦 Тариф: <b>{name}</b>').format(name=name)
+            ]
             if campaign.tariff_duration_days:
-                details.append(f'📅 Период: {campaign.tariff_duration_days} дней')
+                details.append(
+                    texts.t('ADMIN_NOTIFY_CAMPAIGN_TARIFF_PERIOD', '📅 Период: {days} дней').format(
+                        days=campaign.tariff_duration_days
+                    )
+                )
             return details
 
         if campaign.is_none_bonus:
-            return ['🔗 Только отслеживание']
+            return [texts.t('ADMIN_NOTIFY_CAMPAIGN_TRACKING_ONLY', '🔗 Только отслеживание')]
 
-        return ['ℹ️ Бонусы не предусмотрены']
+        return [texts.t('ADMIN_NOTIFY_CAMPAIGN_NO_BONUS', 'ℹ️ Бонусы не предусмотрены')]
 
     async def send_trial_activation_notification(
         self,
@@ -411,7 +477,12 @@ class AdminNotificationService:
             if not self._is_enabled():
                 return False
 
-            user_status = '🆕 Новый' if not user.has_had_paid_subscription else '🔄 Существующий'
+            texts = get_texts()
+            user_status = (
+                texts.t('ADMIN_NOTIFY_USER_STATUS_NEW', '🆕 Новый')
+                if not user.has_had_paid_subscription
+                else texts.t('ADMIN_NOTIFY_USER_STATUS_EXISTING', '🔄 Существующий')
+            )
             promo_group = await self._get_user_promo_group(db, user)
             user_display = self._get_user_display(user)
 
@@ -425,7 +496,9 @@ class AdminNotificationService:
 
             payment_block = ''
             if charged_amount_kopeks and charged_amount_kopeks > 0:
-                payment_block = f'\n💳 <b>Оплата за активацию:</b> {settings.format_price(charged_amount_kopeks)}'
+                payment_block = texts.t(
+                    'ADMIN_NOTIFY_TRIAL_PAYMENT_LINE', '\n💳 <b>Оплата за активацию:</b> {amount}'
+                ).format(amount=settings.format_price(charged_amount_kopeks))
 
             user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
@@ -434,24 +507,39 @@ class AdminNotificationService:
             tariff_name = await self._get_tariff_name(db, subscription)
 
             message_lines = [
-                '🎯 <b>АКТИВАЦИЯ ТРИАЛА</b>',
+                texts.t('ADMIN_NOTIFY_TRIAL_TITLE', '🎯 <b>АКТИВАЦИЯ ТРИАЛА</b>'),
                 '',
-                f'👤 <b>Пользователь:</b> {user_display}',
-                f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
-                f'👥 <b>Статус:</b> {user_status}',
+                texts.t('ADMIN_NOTIFY_USER_LINE', '👤 <b>Пользователь:</b> {user}').format(user=user_display),
+                texts.t('ADMIN_NOTIFY_USER_ID_LINE', '🆔 <b>{label}:</b> {value}').format(
+                    label=user_id_label, value=user_id_display
+                ),
+                texts.t('ADMIN_NOTIFY_USERNAME_LINE', '📱 <b>Username:</b> {username}').format(
+                    username=format_username_link(
+                        getattr(user, 'username', None),
+                        texts.t('ADMIN_NOTIFY_USERNAME_MISSING', 'отсутствует'),
+                    )
+                ),
+                texts.t('ADMIN_NOTIFY_STATUS_LINE', '👥 <b>Статус:</b> {status}').format(status=user_status),
                 '',
             ]
 
             # Промогруппа — только название, без скидок
             if promo_group:
-                message_lines.append(f'🏷️ <b>Промогруппа:</b> {html.escape(promo_group.name)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PROMO_GROUP_LINE', '🏷️ <b>Промогруппа:</b> {name}').format(
+                        name=html.escape(promo_group.name)
+                    )
+                )
             else:
-                message_lines.append('🏷️ <b>Промогруппа:</b> —')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PROMO_GROUP_LINE_EMPTY', '🏷️ <b>Промогруппа:</b> —')
+                )
 
             # Тариф триала (если есть)
             if tariff_name:
-                message_lines.append(f'📦 <b>Тариф:</b> {tariff_name}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_TARIFF_LINE', '📦 <b>Тариф:</b> {name}').format(name=tariff_name)
+                )
 
             message_lines.append('')
 
@@ -469,11 +557,23 @@ class AdminNotificationService:
 
             message_lines.extend(
                 [
-                    '⏰ <b>Параметры триала:</b>',
-                    f'📅 Период: {trial_duration_days} дней',
-                    f'📊 Трафик: {self._format_traffic(trial_traffic_gb)}',
-                    f'📱 Устройства: {trial_device_limit}',
-                    f'🌐 Сервер: {subscription.connected_squads[0] if subscription.connected_squads else "По умолчанию"}',
+                    texts.t('ADMIN_NOTIFY_TRIAL_PARAMS_HEADER', '⏰ <b>Параметры триала:</b>'),
+                    texts.t('ADMIN_NOTIFY_PERIOD_DAYS_LINE', '📅 Период: {days} дней').format(
+                        days=trial_duration_days
+                    ),
+                    texts.t('ADMIN_NOTIFY_TRAFFIC_LINE', '📊 Трафик: {traffic}').format(
+                        traffic=self._format_traffic(trial_traffic_gb)
+                    ),
+                    texts.t('ADMIN_NOTIFY_DEVICES_LINE', '📱 Устройства: {devices}').format(
+                        devices=trial_device_limit
+                    ),
+                    texts.t('ADMIN_NOTIFY_SERVER_LINE', '🌐 Сервер: {server}').format(
+                        server=(
+                            subscription.connected_squads[0]
+                            if subscription.connected_squads
+                            else texts.t('ADMIN_NOTIFY_SERVER_DEFAULT', 'По умолчанию')
+                        )
+                    ),
                 ]
             )
 
@@ -482,17 +582,27 @@ class AdminNotificationService:
 
             message_lines.append('')
             message_lines.append(
-                f'📆 <b>Действует до:</b> {format_local_datetime(subscription.end_date, "%d.%m.%Y %H:%M")}'
+                texts.t('ADMIN_NOTIFY_VALID_UNTIL_LINE', '📆 <b>Действует до:</b> {date}').format(
+                    date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M')
+                )
             )
 
             # Реферер — только если есть
             if user.referred_by_id:
                 referrer_info = await self._get_referrer_info(db, user.referred_by_id)
                 if referrer_info != 'Нет':
-                    message_lines.append(f'🔗 <b>Реферер:</b> {referrer_info}')
+                    message_lines.append(
+                        texts.t('ADMIN_NOTIFY_REFERRER_LINE', '🔗 <b>Реферер:</b> {referrer}').format(
+                            referrer=referrer_info
+                        )
+                    )
 
             message_lines.append('')
-            message_lines.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_lines.append(
+                texts.t('ADMIN_NOTIFY_TIMESTAMP_LINE', '⏰ <i>{timestamp}</i>').format(
+                    timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
+                )
+            )
 
             return await self._send_message('\n'.join(message_lines), category=NotificationCategory.TRIALS)
 
@@ -553,27 +663,32 @@ class AdminNotificationService:
                 return False
 
             # Определяем тип операции и заголовок
+            texts = get_texts()
             if purchase_type == 'tariff_switch':
-                event_title = '🔄 СМЕНА ТАРИФА'
-                user_status = 'Смена тарифа'
+                event_title = texts.t('ADMIN_NOTIFY_PURCHASE_TITLE_TARIFF_SWITCH', '🔄 СМЕНА ТАРИФА')
+                user_status = texts.t('ADMIN_NOTIFY_PURCHASE_STATUS_TARIFF_SWITCH', 'Смена тарифа')
             elif was_trial_conversion:
-                event_title = '🔄 КОНВЕРСИЯ ИЗ ТРИАЛА'
-                user_status = 'Конверсия'
+                event_title = texts.t('ADMIN_NOTIFY_PURCHASE_TITLE_CONVERSION', '🔄 КОНВЕРСИЯ ИЗ ТРИАЛА')
+                user_status = texts.t('ADMIN_NOTIFY_PURCHASE_STATUS_CONVERSION', 'Конверсия')
             elif purchase_type == 'first_purchase':
-                event_title = '💎 ПОКУПКА ПОДПИСКИ'
-                user_status = 'Первая покупка'
+                event_title = texts.t('ADMIN_NOTIFY_PURCHASE_TITLE_PURCHASE', '💎 ПОКУПКА ПОДПИСКИ')
+                user_status = texts.t('ADMIN_NOTIFY_PURCHASE_STATUS_FIRST', 'Первая покупка')
             elif purchase_type == 'renewal' or (purchase_type is None and user.has_had_paid_subscription):
-                event_title = '💎 ПРОДЛЕНИЕ ПОДПИСКИ'
-                user_status = 'Продление'
+                event_title = texts.t('ADMIN_NOTIFY_PURCHASE_TITLE_RENEWAL', '💎 ПРОДЛЕНИЕ ПОДПИСКИ')
+                user_status = texts.t('ADMIN_NOTIFY_PURCHASE_STATUS_RENEWAL', 'Продление')
             else:
-                event_title = '💎 ПОКУПКА ПОДПИСКИ'
-                user_status = 'Первая покупка'
+                event_title = texts.t('ADMIN_NOTIFY_PURCHASE_TITLE_PURCHASE', '💎 ПОКУПКА ПОДПИСКИ')
+                user_status = texts.t('ADMIN_NOTIFY_PURCHASE_STATUS_FIRST', 'Первая покупка')
 
             # Получаем название тарифа
             tariff_name = await self._get_tariff_name(db, subscription)
 
             servers_info = await self._get_servers_info(subscription.connected_squads)
-            payment_method = self._get_payment_method_display(transaction.payment_method) if transaction else 'Баланс'
+            payment_method = (
+                self._get_payment_method_display(transaction.payment_method)
+                if transaction
+                else texts.t('ADMIN_NOTIFY_PAYMENT_BALANCE', 'Баланс')
+            )
             user_display = self._get_user_display(user)
             user_id_display = self._get_user_identifier_display(user)
 
@@ -581,42 +696,73 @@ class AdminNotificationService:
             message_lines = [
                 f'<b>{event_title}</b>',
                 '',
-                f'👤 {user_display} ({user_id_display})',
+                texts.t('ADMIN_NOTIFY_USER_COMPACT_LINE', '👤 {user} ({identifier})').format(
+                    user=user_display, identifier=user_id_display
+                ),
             ]
 
             # Добавляем username только если есть
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'📱 {format_username_link(username)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_USERNAME_COMPACT_LINE', '📱 {username}').format(
+                        username=format_username_link(username)
+                    )
+                )
 
-            message_lines.append(f'📋 {user_status}')
+            message_lines.append(
+                texts.t('ADMIN_NOTIFY_STATUS_COMPACT_LINE', '📋 {status}').format(status=user_status)
+            )
 
             # Тариф (если есть)
             if tariff_name:
-                message_lines.append(f'🏷️ Тариф: <b>{tariff_name}</b>')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_TARIFF_COMPACT_LINE', '🏷️ Тариф: <b>{name}</b>').format(
+                        name=tariff_name
+                    )
+                )
 
             message_lines.extend(
                 [
                     '',
-                    f'💵 <b>{settings.format_price(total_amount)}</b> • {payment_method}',
-                    f'📅 {period_days} дн. • до {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
-                    f'📊 {self._format_traffic(subscription.traffic_limit_gb)} • 📱 {subscription.device_limit} устр.',
-                    f'🌐 {servers_info}',
+                    texts.t('ADMIN_NOTIFY_AMOUNT_METHOD_LINE', '💵 <b>{amount}</b> • {method}').format(
+                        amount=settings.format_price(total_amount), method=payment_method
+                    ),
+                    texts.t('ADMIN_NOTIFY_PERIOD_UNTIL_LINE', '📅 {days} дн. • до {date}').format(
+                        days=period_days, date=format_local_datetime(subscription.end_date, '%d.%m.%Y')
+                    ),
+                    texts.t('ADMIN_NOTIFY_TRAFFIC_DEVICES_LINE', '📊 {traffic} • 📱 {devices} устр.').format(
+                        traffic=self._format_traffic(subscription.traffic_limit_gb),
+                        devices=subscription.device_limit,
+                    ),
+                    texts.t('ADMIN_NOTIFY_SERVERS_COMPACT_LINE', '🌐 {servers}').format(servers=servers_info),
                 ]
             )
 
             # Баланс после покупки
-            message_lines.append(f'💰 Баланс: {settings.format_price(user.balance_kopeks)}')
+            message_lines.append(
+                texts.t('ADMIN_NOTIFY_BALANCE_LINE', '💰 Баланс: {amount}').format(
+                    amount=settings.format_price(user.balance_kopeks)
+                )
+            )
 
             # Реферер (только если есть)
             if user.referred_by_id:
                 referrer_info = await self._get_referrer_info(db, user.referred_by_id)
                 if referrer_info != 'Нет':
-                    message_lines.append(f'🔗 Реф: {referrer_info}')
+                    message_lines.append(
+                        texts.t('ADMIN_NOTIFY_REFERRER_COMPACT_LINE', '🔗 Реф: {referrer}').format(
+                            referrer=referrer_info
+                        )
+                    )
 
             # ID транзакции (только если есть)
             if transaction:
-                message_lines.append(f'🆔 #{transaction.id}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_TRANSACTION_COMPACT_LINE', '🆔 #{transaction_id}').format(
+                        transaction_id=transaction.id
+                    )
+                )
 
             message_lines.extend(
                 [
@@ -652,19 +798,24 @@ class AdminNotificationService:
             repo_url = f'https://github.com/{repo}'
             timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
 
+            texts = get_texts()
             if latest_version.prerelease:
-                header = '🧪 <b>Pre-release</b>'
+                header = texts.t('ADMIN_NOTIFY_VERSION_PRERELEASE', '🧪 <b>Pre-release</b>')
             elif latest_version.is_dev:
-                header = '🔧 <b>Dev build</b>'
+                header = texts.t('ADMIN_NOTIFY_VERSION_DEV_BUILD', '🔧 <b>Dev build</b>')
             else:
-                header = '🆕 <b>Доступно обновление</b>'
+                header = texts.t(
+                    'ADMIN_NOTIFY_VERSION_UPDATE_AVAILABLE', '🆕 <b>Доступно обновление</b>'
+                )
 
             # -- message prefix (everything before blockquote) --
             prefix_lines = [
                 header,
                 '',
                 f'<code>{current_version}</code>  →  <b><a href="{release_url}">{latest_version.tag_name}</a></b>',
-                f'📅 {latest_version.formatted_date}',
+                texts.t('ADMIN_NOTIFY_VERSION_DATE_LINE', '📅 {date}').format(
+                    date=latest_version.formatted_date
+                ),
                 '',
             ]
             message_prefix = '\n'.join(prefix_lines)
@@ -672,10 +823,16 @@ class AdminNotificationService:
             # -- message suffix (everything after blockquote) --
             suffix_lines = ['']
             if total_updates > 1:
-                suffix_lines.append(f'Доступно обновлений: <b>{total_updates}</b>')
+                suffix_lines.append(
+                    texts.t('ADMIN_NOTIFY_VERSION_TOTAL_UPDATES', 'Доступно обновлений: <b>{count}</b>').format(
+                        count=total_updates
+                    )
+                )
             suffix_lines.extend(
                 [
-                    f'<a href="{repo_url}">Репозиторий</a>',
+                    texts.t('ADMIN_NOTIFY_VERSION_REPO_LINK', '<a href="{url}">Репозиторий</a>').format(
+                        url=repo_url
+                    ),
                     '',
                     f'<i>{timestamp}</i>',
                 ]
@@ -707,7 +864,9 @@ class AdminNotificationService:
             return False
 
         try:
-            message = f"""⚠️ <b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>
+            message = get_texts().t(
+                'ADMIN_NOTIFY_VERSION_CHECK_ERROR',
+                """⚠️ <b>ОШИБКА ПРОВЕРКИ ОБНОВЛЕНИЙ</b>
 
     📦 <b>Текущая версия:</b> <code>{current_version}</code>
     ❌ <b>Ошибка:</b> {error_message}
@@ -715,7 +874,12 @@ class AdminNotificationService:
     🔄 Следующая попытка через час.
     ⚙️ Проверьте доступность GitHub API и настройки сети.
 
-    ⚙️ <i>Система автоматических обновлений • {format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+    ⚙️ <i>Система автоматических обновлений • {timestamp}</i>""",
+            ).format(
+                current_version=current_version,
+                error_message=error_message,
+                timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S'),
+            )
 
             return await self._send_message(message, category=NotificationCategory.ERRORS)
 
@@ -734,6 +898,7 @@ class AdminNotificationService:
         subscription: Subscription | None,
         promo_group: PromoGroup | None,
     ) -> str:
+        texts = get_texts()
         payment_method = self._get_payment_method_display(transaction.payment_method)
         balance_change = user.balance_kopeks - old_balance
         subscription_status = self._get_subscription_status(subscription)
@@ -743,63 +908,115 @@ class AdminNotificationService:
 
         # --- Основной блок ---
         message_lines: list[str] = [
-            '💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>',
+            texts.t('ADMIN_NOTIFY_TOPUP_TITLE', '💰 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>'),
             '',
-            f'👤 {user_display} ({user_id_display})',
+            texts.t('ADMIN_NOTIFY_USER_COMPACT_LINE', '👤 {user} ({identifier})').format(
+                user=user_display, identifier=user_id_display
+            ),
         ]
 
         username = getattr(user, 'username', None)
         if username:
-            message_lines.append(f'📱 {format_username_link(username)}')
+            message_lines.append(
+                texts.t('ADMIN_NOTIFY_USERNAME_COMPACT_LINE', '📱 {username}').format(
+                    username=format_username_link(username)
+                )
+            )
 
-        message_lines.append(f'💳 {topup_status}')
+        message_lines.append(
+            texts.t('ADMIN_NOTIFY_TOPUP_STATUS_LINE', '💳 {status}').format(status=topup_status)
+        )
 
         # Промогруппа -- только название
         if promo_group:
-            message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
+            message_lines.append(
+                texts.t('ADMIN_NOTIFY_PROMO_GROUP_PLAIN_LINE', '🏷️ Промогруппа: {name}').format(
+                    name=html.escape(promo_group.name)
+                )
+            )
 
         message_lines.append('')
 
         # --- Детали пополнения ---
         message_lines.extend(
             [
-                f'💵 <b>{settings.format_price(transaction.amount_kopeks)}</b> | {payment_method}',
+                texts.t('ADMIN_NOTIFY_TOPUP_AMOUNT_LINE', '💵 <b>{amount}</b> | {method}').format(
+                    amount=settings.format_price(transaction.amount_kopeks), method=payment_method
+                ),
                 '',
-                f'📉 {settings.format_price(old_balance)} → 📈 {settings.format_price(user.balance_kopeks)}'
-                f' (<b>+{settings.format_price(balance_change)}</b>)',
+                texts.t(
+                    'ADMIN_NOTIFY_TOPUP_BALANCE_CHANGE',
+                    '📉 {old_balance} → 📈 {new_balance} (<b>+{change}</b>)',
+                ).format(
+                    old_balance=settings.format_price(old_balance),
+                    new_balance=settings.format_price(user.balance_kopeks),
+                    change=settings.format_price(balance_change),
+                ),
             ]
         )
 
         # --- Подписка ---
-        message_lines.append(f'📱 Подписка: {subscription_status}')
+        message_lines.append(
+            texts.t('ADMIN_NOTIFY_SUBSCRIPTION_LINE', '📱 Подписка: {status}').format(
+                status=subscription_status
+            )
+        )
 
         # --- Реферер (только если есть) ---
         if referrer_info and referrer_info != 'Нет':
-            message_lines.append(f'🔗 Реферер: {referrer_info}')
+            message_lines.append(
+                texts.t('ADMIN_NOTIFY_REFERRER_PLAIN_LINE', '🔗 Реферер: {referrer}').format(
+                    referrer=referrer_info
+                )
+            )
 
         # --- Expandable blockquote с техническими деталями ---
         detail_lines: list[str] = [
-            f'ID транзакции: {transaction.id}',
-            f'Способ оплаты: {transaction.payment_method or "balance"}',
+            texts.t('ADMIN_NOTIFY_DETAIL_TRANSACTION_ID', 'ID транзакции: {transaction_id}').format(
+                transaction_id=transaction.id
+            ),
+            texts.t('ADMIN_NOTIFY_DETAIL_PAYMENT_METHOD', 'Способ оплаты: {method}').format(
+                method=transaction.payment_method or 'balance'
+            ),
         ]
 
         if transaction.external_id:
-            detail_lines.append(f'Внешний ID: {transaction.external_id}')
+            detail_lines.append(
+                texts.t('ADMIN_NOTIFY_DETAIL_EXTERNAL_ID', 'Внешний ID: {external_id}').format(
+                    external_id=transaction.external_id
+                )
+            )
 
         if transaction.description:
             desc = transaction.description
             if len(desc) > 120:
                 desc = desc[:117] + '...'
-            detail_lines.append(f'Описание: {html.escape(desc)}')
+            detail_lines.append(
+                texts.t('ADMIN_NOTIFY_DETAIL_DESCRIPTION', 'Описание: {description}').format(
+                    description=html.escape(desc)
+                )
+            )
 
         if transaction.created_at:
-            detail_lines.append(f'Создана: {format_local_datetime(transaction.created_at, "%d.%m.%Y %H:%M:%S")}')
+            detail_lines.append(
+                texts.t('ADMIN_NOTIFY_DETAIL_CREATED_AT', 'Создана: {date}').format(
+                    date=format_local_datetime(transaction.created_at, '%d.%m.%Y %H:%M:%S')
+                )
+            )
 
         if transaction.completed_at:
-            detail_lines.append(f'Завершена: {format_local_datetime(transaction.completed_at, "%d.%m.%Y %H:%M:%S")}')
+            detail_lines.append(
+                texts.t('ADMIN_NOTIFY_DETAIL_COMPLETED_AT', 'Завершена: {date}').format(
+                    date=format_local_datetime(transaction.completed_at, '%d.%m.%Y %H:%M:%S')
+                )
+            )
 
         if transaction.receipt_uuid:
-            detail_lines.append(f'Чек UUID: {transaction.receipt_uuid}')
+            detail_lines.append(
+                texts.t('ADMIN_NOTIFY_DETAIL_RECEIPT_UUID', 'Чек UUID: {uuid}').format(
+                    uuid=transaction.receipt_uuid
+                )
+            )
 
         blockquote_body = '\n'.join(detail_lines)
         message_lines.extend(
@@ -997,6 +1214,7 @@ class AdminNotificationService:
             if not self._is_enabled():
                 return False
 
+            texts = get_texts()
             payment_method = self._get_payment_method_display(transaction.payment_method)
             servers_info = await self._get_servers_info(subscription.connected_squads)
             promo_group = await self._get_user_promo_group(db, user)
@@ -1005,32 +1223,55 @@ class AdminNotificationService:
             user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
 
-            message = f"""⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
+            message = texts.t(
+                'ADMIN_NOTIFY_EXTENSION_MESSAGE',
+                """⏰ <b>ПРОДЛЕНИЕ ПОДПИСКИ</b>
 
-👤 <b>Пользователь:</b> {user_display}
-🆔 <b>{user_id_label}:</b> {user_id_display}
-📱 <b>Username:</b> {format_username_link(getattr(user, 'username', None), 'отсутствует')}
+👤 <b>Пользователь:</b> {user}
+🆔 <b>{label}:</b> {identifier}
+📱 <b>Username:</b> {username}
 
 {promo_block}
 
 💰 <b>Платеж:</b>
-💵 Сумма: {settings.format_price(abs(transaction.amount_kopeks))}
-💳 Способ: {payment_method}
-🆔 ID транзакции: {transaction.id}
+💵 Сумма: {amount}
+💳 Способ: {method}
+🆔 ID транзакции: {transaction_id}
 
 📅 <b>Продление:</b>
-➕ Добавлено дней: {extended_days}
-📆 Было до: {format_local_datetime(old_end_date, '%d.%m.%Y %H:%M')}
-📆 Стало до: {format_local_datetime(current_end_date, '%d.%m.%Y %H:%M')}
+➕ Добавлено дней: {days}
+📆 Было до: {old_end_date}
+📆 Стало до: {new_end_date}
 
 📱 <b>Текущие параметры:</b>
-📊 Трафик: {self._format_traffic(subscription.traffic_limit_gb)}
-📱 Устройства: {subscription.device_limit}
-🌐 Серверы: {servers_info}
+📊 Трафик: {traffic}
+📱 Устройства: {devices}
+🌐 Серверы: {servers}
 
-💰 <b>Баланс после операции:</b> {settings.format_price(current_balance)}
+💰 <b>Баланс после операции:</b> {balance}
 
-⏰ <i>{format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')}</i>"""
+⏰ <i>{timestamp}</i>""",
+            ).format(
+                user=user_display,
+                label=user_id_label,
+                identifier=user_id_display,
+                username=format_username_link(
+                    getattr(user, 'username', None),
+                    texts.t('ADMIN_NOTIFY_USERNAME_MISSING', 'отсутствует'),
+                ),
+                promo_block=promo_block,
+                amount=settings.format_price(abs(transaction.amount_kopeks)),
+                method=payment_method,
+                transaction_id=transaction.id,
+                days=extended_days,
+                old_end_date=format_local_datetime(old_end_date, '%d.%m.%Y %H:%M'),
+                new_end_date=format_local_datetime(current_end_date, '%d.%m.%Y %H:%M'),
+                traffic=self._format_traffic(subscription.traffic_limit_gb),
+                devices=subscription.device_limit,
+                servers=servers_info,
+                balance=settings.format_price(current_balance),
+                timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S'),
+            )
 
             return await self._send_message(message, category=NotificationCategory.RENEWALS)
 
@@ -1083,6 +1324,7 @@ class AdminNotificationService:
             return False
 
         try:
+            texts = get_texts()
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group)
             type_display = self._get_promocode_type_display(promocode_data.get('type'))
@@ -1092,18 +1334,29 @@ class AdminNotificationService:
             user_id_display = self._get_user_identifier_display(user)
 
             message_lines = [
-                '🎫 <b>АКТИВАЦИЯ ПРОМОКОДА</b>',
+                texts.t('ADMIN_NOTIFY_PROMOCODE_TITLE', '🎫 <b>АКТИВАЦИЯ ПРОМОКОДА</b>'),
                 '',
-                f'👤 <b>Пользователь:</b> {user_display}',
-                f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
+                texts.t('ADMIN_NOTIFY_USER_LINE', '👤 <b>Пользователь:</b> {user}').format(user=user_display),
+                texts.t('ADMIN_NOTIFY_USER_ID_LINE', '🆔 <b>{label}:</b> {value}').format(
+                    label=user_id_label, value=user_id_display
+                ),
+                texts.t('ADMIN_NOTIFY_USERNAME_LINE', '📱 <b>Username:</b> {username}').format(
+                    username=format_username_link(
+                        getattr(user, 'username', None),
+                        texts.t('ADMIN_NOTIFY_USERNAME_MISSING', 'отсутствует'),
+                    )
+                ),
                 '',
                 promo_block,
                 '',
-                '🎟️ <b>Промокод:</b>',
-                f'🔖 Код: <code>{promocode_data.get("code")}</code>',
-                f'🧾 Тип: {type_display}',
-                f'📊 Использования: {usage_info}',
+                texts.t('ADMIN_NOTIFY_PROMOCODE_HEADER', '🎟️ <b>Промокод:</b>'),
+                texts.t('ADMIN_NOTIFY_PROMOCODE_CODE', '🔖 Код: <code>{code}</code>').format(
+                    code=promocode_data.get('code')
+                ),
+                texts.t('ADMIN_NOTIFY_PROMOCODE_TYPE', '🧾 Тип: {type}').format(type=type_display),
+                texts.t('ADMIN_NOTIFY_PROMOCODE_USES', '📊 Использования: {usage}').format(
+                    usage=usage_info
+                ),
             ]
 
             promo_type = promocode_data.get('type')
@@ -1111,39 +1364,64 @@ class AdminNotificationService:
             subscription_days = promocode_data.get('subscription_days', 0)
 
             if promo_type == PromoCodeType.DISCOUNT.value:
-                message_lines.append(f'💸 Скидка: {balance_bonus}%')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PROMOCODE_DISCOUNT', '💸 Скидка: {percent}%').format(
+                        percent=balance_bonus
+                    )
+                )
                 if subscription_days:
-                    message_lines.append(f'⏳ Срок действия скидки: {subscription_days} ч.')
+                    message_lines.append(
+                        texts.t(
+                            'ADMIN_NOTIFY_PROMOCODE_DISCOUNT_HOURS', '⏳ Срок действия скидки: {hours} ч.'
+                        ).format(hours=subscription_days)
+                    )
                 else:
-                    message_lines.append('⏳ Срок действия скидки: до первой покупки')
+                    message_lines.append(
+                        texts.t(
+                            'ADMIN_NOTIFY_PROMOCODE_DISCOUNT_FIRST_PURCHASE',
+                            '⏳ Срок действия скидки: до первой покупки',
+                        )
+                    )
             else:
                 if balance_bonus:
-                    message_lines.append(f'💰 Бонус на баланс: {settings.format_price(balance_bonus)}')
+                    message_lines.append(
+                        texts.t('ADMIN_NOTIFY_PROMOCODE_BALANCE_BONUS', '💰 Бонус на баланс: {amount}').format(
+                            amount=settings.format_price(balance_bonus)
+                        )
+                    )
                 if subscription_days:
-                    message_lines.append(f'📅 Доп. дни подписки: {subscription_days}')
+                    message_lines.append(
+                        texts.t('ADMIN_NOTIFY_PROMOCODE_EXTRA_DAYS', '📅 Доп. дни подписки: {days}').format(
+                            days=subscription_days
+                        )
+                    )
 
             valid_until = promocode_data.get('valid_until')
             if valid_until:
+                valid_until_template = texts.t('ADMIN_NOTIFY_PROMOCODE_VALID_UNTIL', '⏳ Действует до: {date}')
                 message_lines.append(
-                    f'⏳ Действует до: {format_local_datetime(valid_until, "%d.%m.%Y %H:%M")}'
+                    valid_until_template.format(date=format_local_datetime(valid_until, '%d.%m.%Y %H:%M'))
                     if isinstance(valid_until, datetime)
-                    else f'⏳ Действует до: {valid_until}'
+                    else valid_until_template.format(date=valid_until)
                 )
 
             message_lines.extend(
                 [
                     '',
-                    '💼 <b>Баланс:</b>',
+                    texts.t('ADMIN_NOTIFY_BALANCE_HEADER', '💼 <b>Баланс:</b>'),
                     (
                         f'{settings.format_price(balance_before_kopeks)} → {settings.format_price(balance_after_kopeks)}'
                         if balance_before_kopeks is not None and balance_after_kopeks is not None
-                        else 'ℹ️ Баланс не изменился'
+                        else texts.t('ADMIN_NOTIFY_BALANCE_UNCHANGED', 'ℹ️ Баланс не изменился')
                     ),
                     '',
-                    '📝 <b>Эффект:</b>',
-                    effect_description.strip() or '✅ Промокод активирован',
+                    texts.t('ADMIN_NOTIFY_EFFECT_HEADER', '📝 <b>Эффект:</b>'),
+                    effect_description.strip()
+                    or texts.t('ADMIN_NOTIFY_PROMOCODE_ACTIVATED', '✅ Промокод активирован'),
                     '',
-                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    texts.t('ADMIN_NOTIFY_TIMESTAMP_LINE', '⏰ <i>{timestamp}</i>').format(
+                        timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
+                    ),
                 ]
             )
 
@@ -1209,27 +1487,46 @@ class AdminNotificationService:
             return False
 
         try:
+            texts = get_texts()
             full_name = telegram_user.full_name or telegram_user.username or str(telegram_user.id)
-            user_status = '🆕 Новый' if not user else '👥 Существующий'
+            user_status = (
+                texts.t('ADMIN_NOTIFY_USER_STATUS_NEW', '🆕 Новый')
+                if not user
+                else texts.t('ADMIN_NOTIFY_CAMPAIGN_USER_STATUS_EXISTING', '👥 Существующий')
+            )
 
             message_lines = [
-                '📣 <b>ПЕРЕХОД ПО РК</b>',
+                texts.t('ADMIN_NOTIFY_CAMPAIGN_VISIT_TITLE', '📣 <b>ПЕРЕХОД ПО РК</b>'),
                 '',
-                f'🧾 {html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
+                texts.t('ADMIN_NOTIFY_CAMPAIGN_LINE', '🧾 {name} (<code>{parameter}</code>)').format(
+                    name=html.escape(campaign.name), parameter=html.escape(campaign.start_parameter)
+                ),
                 '',
-                f'👤 {html.escape(full_name)} (<code>{telegram_user.id}</code>)',
+                texts.t('ADMIN_NOTIFY_CAMPAIGN_USER_LINE', '👤 {user} (<code>{identifier}</code>)').format(
+                    user=html.escape(full_name), identifier=telegram_user.id
+                ),
             ]
 
             if telegram_user.username:
-                message_lines.append(f'📱 {format_username_link(telegram_user.username)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_USERNAME_COMPACT_LINE', '📱 {username}').format(
+                        username=format_username_link(telegram_user.username)
+                    )
+                )
 
-            message_lines.append(f'📋 {user_status}')
+            message_lines.append(
+                texts.t('ADMIN_NOTIFY_STATUS_COMPACT_LINE', '📋 {status}').format(status=user_status)
+            )
 
             # Промогруппа — только если есть
             if user:
                 promo_group = await self._get_user_promo_group(db, user)
                 if promo_group:
-                    message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
+                    message_lines.append(
+                        texts.t('ADMIN_NOTIFY_PROMO_GROUP_PLAIN_LINE', '🏷️ Промогруппа: {name}').format(
+                            name=html.escape(promo_group.name)
+                        )
+                    )
 
             message_lines.append('')
 
@@ -1313,19 +1610,32 @@ class AdminNotificationService:
             )
 
         try:
+            texts = get_texts()
             message_lines = [
-                '✅ <b>РЕГИСТРАЦИЯ ПО РК</b>',
+                texts.t('ADMIN_NOTIFY_CAMPAIGN_REGISTRATION_TITLE', '✅ <b>РЕГИСТРАЦИЯ ПО РК</b>'),
                 '',
-                f'🧾 {html.escape(campaign.name)} (<code>{html.escape(campaign.start_parameter)}</code>)',
+                texts.t('ADMIN_NOTIFY_CAMPAIGN_LINE', '🧾 {name} (<code>{parameter}</code>)').format(
+                    name=html.escape(campaign.name), parameter=html.escape(campaign.start_parameter)
+                ),
                 '',
-                f'👤 {html.escape(telegram_user_name)} (<code>{telegram_user_id}</code>)',
+                texts.t('ADMIN_NOTIFY_CAMPAIGN_USER_LINE', '👤 {user} (<code>{identifier}</code>)').format(
+                    user=html.escape(telegram_user_name), identifier=telegram_user_id
+                ),
             ]
             if telegram_username:
-                message_lines.append(f'📱 {format_username_link(telegram_username)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_USERNAME_COMPACT_LINE', '📱 {username}').format(
+                        username=format_username_link(telegram_username)
+                    )
+                )
 
             promo_group = await self._get_user_promo_group(db, user)
             if promo_group:
-                message_lines.append(f'🏷️ Промогруппа: {html.escape(promo_group.name)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PROMO_GROUP_PLAIN_LINE', '🏷️ Промогруппа: {name}').format(
+                        name=html.escape(promo_group.name)
+                    )
+                )
 
             message_lines.append('')
 
@@ -1393,14 +1703,21 @@ class AdminNotificationService:
             return False
 
         try:
-            title = '🤖 АВТОМАТИЧЕСКАЯ СМЕНА ПРОМОГРУППЫ' if automatic else '👥 СМЕНА ПРОМОГРУППЫ'
+            texts = get_texts()
+            title = (
+                texts.t('ADMIN_NOTIFY_PROMO_GROUP_CHANGE_TITLE_AUTO', '🤖 АВТОМАТИЧЕСКАЯ СМЕНА ПРОМОГРУППЫ')
+                if automatic
+                else texts.t('ADMIN_NOTIFY_PROMO_GROUP_CHANGE_TITLE', '👥 СМЕНА ПРОМОГРУППЫ')
+            )
             initiator_line = None
             if initiator:
-                initiator_line = (
-                    f'👮 <b>Инициатор:</b> {html.escape(initiator.full_name)} (ID: {initiator.telegram_id})'
-                )
+                initiator_line = texts.t(
+                    'ADMIN_NOTIFY_INITIATOR_LINE', '👮 <b>Инициатор:</b> {name} (ID: {telegram_id})'
+                ).format(name=html.escape(initiator.full_name), telegram_id=initiator.telegram_id)
             elif automatic:
-                initiator_line = '🤖 Автоматическое назначение'
+                initiator_line = texts.t(
+                    'ADMIN_NOTIFY_INITIATOR_AUTOMATIC', '🤖 Автоматическое назначение'
+                )
             user_display = self._get_user_display(user)
             user_id_label = self._get_user_identifier_label(user)
             user_id_display = self._get_user_identifier_display(user)
@@ -1408,18 +1725,33 @@ class AdminNotificationService:
             message_lines = [
                 f'{title}',
                 '',
-                f'👤 <b>Пользователь:</b> {user_display}',
-                f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), "отсутствует")}',
+                texts.t('ADMIN_NOTIFY_USER_LINE', '👤 <b>Пользователь:</b> {user}').format(user=user_display),
+                texts.t('ADMIN_NOTIFY_USER_ID_LINE', '🆔 <b>{label}:</b> {value}').format(
+                    label=user_id_label, value=user_id_display
+                ),
+                texts.t('ADMIN_NOTIFY_USERNAME_LINE', '📱 <b>Username:</b> {username}').format(
+                    username=format_username_link(
+                        getattr(user, 'username', None),
+                        texts.t('ADMIN_NOTIFY_USERNAME_MISSING', 'отсутствует'),
+                    )
+                ),
                 '',
-                self._format_promo_group_block(new_group, title='Новая промогруппа', icon='🏆'),
+                self._format_promo_group_block(
+                    new_group,
+                    title=texts.t('ADMIN_NOTIFY_PROMO_GROUP_NEW_TITLE', 'Новая промогруппа'),
+                    icon='🏆',
+                ),
             ]
 
             if old_group and old_group.id != new_group.id:
                 message_lines.extend(
                     [
                         '',
-                        self._format_promo_group_block(old_group, title='Предыдущая промогруппа', icon='♻️'),
+                        self._format_promo_group_block(
+                            old_group,
+                            title=texts.t('ADMIN_NOTIFY_PROMO_GROUP_OLD_TITLE', 'Предыдущая промогруппа'),
+                            icon='♻️',
+                        ),
                     ]
                 )
 
@@ -1427,13 +1759,22 @@ class AdminNotificationService:
                 message_lines.extend(['', initiator_line])
 
             if reason:
-                message_lines.extend(['', f'📝 Причина: {reason}'])
+                message_lines.extend(
+                    [
+                        '',
+                        texts.t('ADMIN_NOTIFY_REASON_LINE', '📝 Причина: {reason}').format(reason=reason),
+                    ]
+                )
 
             message_lines.extend(
                 [
                     '',
-                    f'💰 Баланс пользователя: {settings.format_price(user.balance_kopeks)}',
-                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    texts.t('ADMIN_NOTIFY_USER_BALANCE_LINE', '💰 Баланс пользователя: {amount}').format(
+                        amount=settings.format_price(user.balance_kopeks)
+                    ),
+                    texts.t('ADMIN_NOTIFY_TIMESTAMP_LINE', '⏰ <i>{timestamp}</i>').format(
+                        timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
+                    ),
                 ]
             )
 
@@ -1632,17 +1973,22 @@ class AdminNotificationService:
             return False
 
         try:
+            texts = get_texts()
             is_cabinet = purchase.source == 'cabinet'
 
             # Event title
             if is_cabinet and purchase.is_gift:
-                event_title = '🎁 ПОДАРОК ИЗ КАБИНЕТА'
+                event_title = texts.t('ADMIN_NOTIFY_GUEST_TITLE_CABINET_GIFT', '🎁 ПОДАРОК ИЗ КАБИНЕТА')
             elif is_pending_activation:
-                event_title = '⏳ ПОКУПКА С ЛЕНДИНГА (ожидает активации)'
+                event_title = texts.t(
+                    'ADMIN_NOTIFY_GUEST_TITLE_PENDING', '⏳ ПОКУПКА С ЛЕНДИНГА (ожидает активации)'
+                )
             elif purchase.is_gift:
-                event_title = '🎁 ПОКУПКА В ПОДАРОК С ЛЕНДИНГА'
+                event_title = texts.t(
+                    'ADMIN_NOTIFY_GUEST_TITLE_GIFT', '🎁 ПОКУПКА В ПОДАРОК С ЛЕНДИНГА'
+                )
             else:
-                event_title = '🛒 ПОКУПКА С ЛЕНДИНГА'
+                event_title = texts.t('ADMIN_NOTIFY_GUEST_TITLE_LANDING', '🛒 ПОКУПКА С ЛЕНДИНГА')
 
             # Contact info
             contact_display = html.escape(purchase.contact_value or '—')
@@ -1664,9 +2010,17 @@ class AdminNotificationService:
                     else:
                         buyer_name = buyer.email or f'id:{buyer.id}'
                         buyer_display = f'<code>{html.escape(buyer_name)}</code>'
-                    message_lines.append(f'👤 Покупатель: {buyer_display}')
+                    message_lines.append(
+                        texts.t('ADMIN_NOTIFY_GUEST_BUYER_LINE', '👤 Покупатель: {buyer}').format(
+                            buyer=buyer_display
+                        )
+                    )
                 else:
-                    message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
+                    message_lines.append(
+                        texts.t(
+                            'ADMIN_NOTIFY_GUEST_BUYER_CONTACT_LINE', '{icon} Покупатель: <code>{contact}</code>'
+                        ).format(icon=contact_icon, contact=contact_display)
+                    )
             else:
                 # Landing: show page slug and buyer contact
                 landing_slug = '—'
@@ -1679,27 +2033,53 @@ class AdminNotificationService:
                 except Exception:
                     if purchase.landing_id:
                         landing_slug = f'ID:{purchase.landing_id}'
-                message_lines.append(f'🌐 Страница: <b>/buy/{html.escape(landing_slug)}</b>')
-                message_lines.append(f'{contact_icon} Покупатель: <code>{contact_display}</code>')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_GUEST_PAGE_LINE', '🌐 Страница: <b>/buy/{slug}</b>').format(
+                        slug=html.escape(landing_slug)
+                    )
+                )
+                message_lines.append(
+                    texts.t(
+                        'ADMIN_NOTIFY_GUEST_BUYER_CONTACT_LINE', '{icon} Покупатель: <code>{contact}</code>'
+                    ).format(icon=contact_icon, contact=contact_display)
+                )
 
             if purchase.is_gift:
                 if purchase.gift_recipient_value:
                     recipient_icon = '📧' if purchase.gift_recipient_type == 'email' else '📱'
                     recipient_value = html.escape(purchase.gift_recipient_value)
-                    message_lines.append(f'{recipient_icon} Получатель: <code>{recipient_value}</code>')
+                    message_lines.append(
+                        texts.t(
+                            'ADMIN_NOTIFY_GUEST_RECIPIENT_LINE', '{icon} Получатель: <code>{contact}</code>'
+                        ).format(icon=recipient_icon, contact=recipient_value)
+                    )
                 else:
-                    message_lines.append('🔗 Получатель: <i>по коду активации</i>')
+                    message_lines.append(
+                        texts.t(
+                            'ADMIN_NOTIFY_GUEST_RECIPIENT_BY_CODE', '🔗 Получатель: <i>по коду активации</i>'
+                        )
+                    )
                 if purchase.gift_message:
                     raw_msg = purchase.gift_message[:100]
                     suffix = '…' if len(purchase.gift_message) > 100 else ''
-                    message_lines.append(f'💬 <i>{html.escape(raw_msg)}{suffix}</i>')
+                    message_lines.append(
+                        texts.t('ADMIN_NOTIFY_GUEST_GIFT_MESSAGE', '💬 <i>{message}{suffix}</i>').format(
+                            message=html.escape(raw_msg), suffix=suffix
+                        )
+                    )
 
             # Payment details in blockquote
             payment_lines = [
                 '<blockquote>',
-                f'🏷️ Тариф: <b>{html.escape(tariff_name)}</b>',
-                f'📅 Период: {purchase.period_days} дн.',
-                f'💵 <b>{settings.format_price(purchase.amount_kopeks)}</b> • {payment_method}',
+                texts.t('ADMIN_NOTIFY_TARIFF_COMPACT_LINE', '🏷️ Тариф: <b>{name}</b>').format(
+                    name=html.escape(tariff_name)
+                ),
+                texts.t('ADMIN_NOTIFY_PERIOD_SHORT_LINE', '📅 Период: {days} дн.').format(
+                    days=purchase.period_days
+                ),
+                texts.t('ADMIN_NOTIFY_AMOUNT_METHOD_LINE', '💵 <b>{amount}</b> • {method}').format(
+                    amount=settings.format_price(purchase.amount_kopeks), method=payment_method
+                ),
             ]
 
             if purchase.payment_id:
@@ -1727,56 +2107,72 @@ class AdminNotificationService:
         return await self._send_message(text, category=NotificationCategory.INFRASTRUCTURE)
 
     def _get_payment_method_display(self, payment_method: str | None) -> str:
+        texts = get_texts()
         if not payment_method:
-            return '💰 С баланса'
+            return texts.t('ADMIN_NOTIFY_PAYMENT_FROM_BALANCE', '💰 С баланса')
+
+        card_template = texts.t('ADMIN_NOTIFY_PAYMENT_CARD', '💳 {name} (карта)')
+        crypto_template = texts.t('ADMIN_NOTIFY_PAYMENT_CRYPTO', '🪙 {name} (крипто)')
+        provider_template = texts.t('ADMIN_NOTIFY_PAYMENT_PROVIDER', '💳 {name}')
 
         method_names: dict[str, str] = {
-            'telegram_stars': '⭐ Telegram Stars',
-            'yookassa': '💳 YooKassa (карта)',
-            'tribute': '💎 Tribute (карта)',
-            'mulenpay': f'💳 {settings.get_mulenpay_display_name()} (карта)',
-            'pal24': f'🏦 {settings.get_pal24_display_name()} (СБП)',
-            'cryptobot': f'🪙 {settings.get_cryptobot_display_name()} (крипто)',
-            'heleket': f'🪙 {settings.get_heleket_display_name()} (крипто)',
-            'wata': f'💳 {settings.get_wata_display_name()}',
-            'platega': f'💳 {settings.get_platega_display_name()}',
-            'cloudpayments': f'💳 {settings.get_cloudpayments_display_name()}',
-            'freekassa': f'💳 {settings.get_freekassa_display_name()}',
-            'kassa_ai': f'💳 {settings.get_kassa_ai_display_name()}',
-            'cispay': f'💳 {settings.get_cispay_display_name()}',
-            'manual': '🛠️ Вручную (админ)',
-            'balance': '💰 С баланса',
+            'telegram_stars': texts.t('ADMIN_NOTIFY_PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars'),
+            'yookassa': texts.t('ADMIN_NOTIFY_PAYMENT_YOOKASSA', '💳 YooKassa (карта)'),
+            'tribute': texts.t('ADMIN_NOTIFY_PAYMENT_TRIBUTE', '💎 Tribute (карта)'),
+            'mulenpay': card_template.format(name=settings.get_mulenpay_display_name()),
+            'pal24': texts.t('ADMIN_NOTIFY_PAYMENT_SBP', '🏦 {name} (СБП)').format(
+                name=settings.get_pal24_display_name()
+            ),
+            'cryptobot': crypto_template.format(name=settings.get_cryptobot_display_name()),
+            'heleket': crypto_template.format(name=settings.get_heleket_display_name()),
+            'wata': provider_template.format(name=settings.get_wata_display_name()),
+            'platega': provider_template.format(name=settings.get_platega_display_name()),
+            'cloudpayments': provider_template.format(name=settings.get_cloudpayments_display_name()),
+            'freekassa': provider_template.format(name=settings.get_freekassa_display_name()),
+            'kassa_ai': provider_template.format(name=settings.get_kassa_ai_display_name()),
+            'cispay': provider_template.format(name=settings.get_cispay_display_name()),
+            'manual': texts.t('ADMIN_NOTIFY_PAYMENT_MANUAL', '🛠️ Вручную (админ)'),
+            'balance': texts.t('ADMIN_NOTIFY_PAYMENT_FROM_BALANCE', '💰 С баланса'),
         }
 
-        return method_names.get(payment_method, f'💳 {html.escape(payment_method)}')
+        return method_names.get(payment_method, provider_template.format(name=html.escape(payment_method)))
 
     def _format_traffic(self, traffic_gb: int) -> str:
+        texts = get_texts()
         if traffic_gb == 0:
-            return '∞ Безлимит'
-        return f'{traffic_gb} ГБ'
+            return texts.t('ADMIN_NOTIFY_TRAFFIC_UNLIMITED', '∞ Безлимит')
+        return texts.t('ADMIN_NOTIFY_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
 
     def _get_subscription_status(self, subscription: Subscription | None) -> str:
+        texts = get_texts()
         if not subscription:
-            return '❌ Нет подписки'
+            return texts.t('ADMIN_NOTIFY_SUB_STATUS_NONE', '❌ Нет подписки')
 
         if subscription.is_trial:
-            return f'🎯 Триал (до {format_local_datetime(subscription.end_date, "%d.%m")})'
+            return texts.t('ADMIN_NOTIFY_SUB_STATUS_TRIAL', '🎯 Триал (до {date})').format(
+                date=format_local_datetime(subscription.end_date, '%d.%m')
+            )
         if subscription.is_active:
-            return f'✅ Активна (до {format_local_datetime(subscription.end_date, "%d.%m")})'
-        return '❌ Неактивна'
+            return texts.t('ADMIN_NOTIFY_SUB_STATUS_ACTIVE', '✅ Активна (до {date})').format(
+                date=format_local_datetime(subscription.end_date, '%d.%m')
+            )
+        return texts.t('ADMIN_USER_SUBSCRIPTION_STATUS_INACTIVE', '❌ Неактивна')
 
     async def _get_servers_info(self, squad_uuids: list) -> str:
+        texts = get_texts()
         if not squad_uuids:
-            return '❌ Нет серверов'
+            return texts.t('ADMIN_NOTIFY_SERVERS_NONE', '❌ Нет серверов')
 
         try:
             from app.handlers.subscription import get_servers_display_names
 
             servers_names = await get_servers_display_names(squad_uuids)
-            return f'{len(squad_uuids)} шт. ({servers_names})'
+            return texts.t('ADMIN_NOTIFY_SERVERS_COUNT_NAMES', '{count} шт. ({names})').format(
+                count=len(squad_uuids), names=servers_names
+            )
         except Exception as e:
             logger.warning('Не удалось получить названия серверов', error=e)
-            return f'{len(squad_uuids)} шт.'
+            return texts.t('ADMIN_NOTIFY_SERVERS_COUNT', '{count} шт.').format(count=len(squad_uuids))
 
     async def send_maintenance_status_notification(
         self, event_type: str, status: str, details: dict[str, Any] = None
@@ -1785,58 +2181,78 @@ class AdminNotificationService:
             return False
 
         try:
+            texts = get_texts()
             details = details or {}
 
             if event_type == 'enable':
                 if details.get('auto_enabled', False):
                     icon = '⚠️'
-                    title = 'АВТОМАТИЧЕСКОЕ ВКЛЮЧЕНИЕ ТЕХРАБОТ'
+                    title = texts.t(
+                        'ADMIN_NOTIFY_MAINTENANCE_TITLE_AUTO_ENABLE', 'АВТОМАТИЧЕСКОЕ ВКЛЮЧЕНИЕ ТЕХРАБОТ'
+                    )
                 else:
                     icon = '🔧'
-                    title = 'ВКЛЮЧЕНИЕ ТЕХРАБОТ'
+                    title = texts.t('ADMIN_NOTIFY_MAINTENANCE_TITLE_ENABLE', 'ВКЛЮЧЕНИЕ ТЕХРАБОТ')
 
             elif event_type == 'disable':
                 icon = '✅'
-                title = 'ОТКЛЮЧЕНИЕ ТЕХРАБОТ'
+                title = texts.t('ADMIN_NOTIFY_MAINTENANCE_TITLE_DISABLE', 'ОТКЛЮЧЕНИЕ ТЕХРАБОТ')
 
             elif event_type == 'api_status':
                 if status == 'online':
                     icon = '🟢'
-                    title = 'API REMNAWAVE ВОССТАНОВЛЕНО'
+                    title = texts.t('ADMIN_NOTIFY_MAINTENANCE_TITLE_API_ONLINE', 'API REMNAWAVE ВОССТАНОВЛЕНО')
                 else:
                     icon = '🔴'
-                    title = 'API REMNAWAVE НЕДОСТУПНО'
+                    title = texts.t('ADMIN_NOTIFY_MAINTENANCE_TITLE_API_OFFLINE', 'API REMNAWAVE НЕДОСТУПНО')
 
             elif event_type == 'monitoring':
                 if status == 'started':
                     icon = '🔍'
-                    title = 'МОНИТОРИНГ ЗАПУЩЕН'
+                    title = texts.t('ADMIN_NOTIFY_MAINTENANCE_TITLE_MONITORING_ON', 'МОНИТОРИНГ ЗАПУЩЕН')
                 else:
                     icon = '⏹️'
-                    title = 'МОНИТОРИНГ ОСТАНОВЛЕН'
+                    title = texts.t('ADMIN_NOTIFY_MAINTENANCE_TITLE_MONITORING_OFF', 'МОНИТОРИНГ ОСТАНОВЛЕН')
             else:
                 icon = 'ℹ️'
-                title = 'СИСТЕМА ТЕХРАБОТ'
+                title = texts.t('ADMIN_NOTIFY_MAINTENANCE_TITLE_DEFAULT', 'СИСТЕМА ТЕХРАБОТ')
 
             message_parts = [f'{icon} <b>{title}</b>', '']
 
             if event_type == 'enable':
                 if details.get('reason'):
-                    message_parts.append(f'📋 <b>Причина:</b> {details["reason"]}')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_REASON_BLOCK_LINE', '📋 <b>Причина:</b> {reason}').format(
+                            reason=details['reason']
+                        )
+                    )
 
                 if details.get('enabled_at'):
                     enabled_at = details['enabled_at']
                     if isinstance(enabled_at, str):
                         enabled_at = datetime.fromisoformat(enabled_at)
                     message_parts.append(
-                        f'🕐 <b>Время включения:</b> {format_local_datetime(enabled_at, "%d.%m.%Y %H:%M:%S")}'
+                        texts.t('ADMIN_NOTIFY_MAINTENANCE_ENABLED_AT', '🕐 <b>Время включения:</b> {date}').format(
+                            date=format_local_datetime(enabled_at, '%d.%m.%Y %H:%M:%S')
+                        )
                     )
 
                 message_parts.append(
-                    f'🤖 <b>Автоматически:</b> {"Да" if details.get("auto_enabled", False) else "Нет"}'
+                    texts.t('ADMIN_NOTIFY_MAINTENANCE_AUTO', '🤖 <b>Автоматически:</b> {value}').format(
+                        value=(
+                            texts.t('ADMIN_NOTIFY_YES', 'Да')
+                            if details.get('auto_enabled', False)
+                            else texts.t('ADMIN_NOTIFY_NO', 'Нет')
+                        )
+                    )
                 )
                 message_parts.append('')
-                message_parts.append('❗ Обычные пользователи временно не могут использовать бота.')
+                message_parts.append(
+                    texts.t(
+                        'ADMIN_NOTIFY_MAINTENANCE_USERS_BLOCKED',
+                        '❗ Обычные пользователи временно не могут использовать бота.',
+                    )
+                )
 
             elif event_type == 'disable':
                 if details.get('disabled_at'):
@@ -1844,7 +2260,9 @@ class AdminNotificationService:
                     if isinstance(disabled_at, str):
                         disabled_at = datetime.fromisoformat(disabled_at)
                     message_parts.append(
-                        f'🕐 <b>Время отключения:</b> {format_local_datetime(disabled_at, "%d.%m.%Y %H:%M:%S")}'
+                        texts.t('ADMIN_NOTIFY_MAINTENANCE_DISABLED_AT', '🕐 <b>Время отключения:</b> {date}').format(
+                            date=format_local_datetime(disabled_at, '%d.%m.%Y %H:%M:%S')
+                        )
                     )
 
                 if details.get('duration'):
@@ -1853,61 +2271,121 @@ class AdminNotificationService:
                         hours = int(duration // 3600)
                         minutes = int((duration % 3600) // 60)
                         if hours > 0:
-                            duration_str = f'{hours}ч {minutes}мин'
+                            duration_str = texts.t(
+                                'ADMIN_NOTIFY_DURATION_HOURS_MINUTES', '{hours}ч {minutes}мин'
+                            ).format(hours=hours, minutes=minutes)
                         else:
-                            duration_str = f'{minutes}мин'
-                        message_parts.append(f'⏱️ <b>Длительность:</b> {duration_str}')
+                            duration_str = texts.t('ADMIN_NOTIFY_DURATION_MINUTES', '{minutes}мин').format(
+                                minutes=minutes
+                            )
+                        message_parts.append(
+                            texts.t('ADMIN_NOTIFY_DURATION_LINE', '⏱️ <b>Длительность:</b> {duration}').format(
+                                duration=duration_str
+                            )
+                        )
 
                 message_parts.append(
-                    f'🤖 <b>Было автоматическим:</b> {"Да" if details.get("was_auto", False) else "Нет"}'
+                    texts.t('ADMIN_NOTIFY_MAINTENANCE_WAS_AUTO', '🤖 <b>Было автоматическим:</b> {value}').format(
+                        value=(
+                            texts.t('ADMIN_NOTIFY_YES', 'Да')
+                            if details.get('was_auto', False)
+                            else texts.t('ADMIN_NOTIFY_NO', 'Нет')
+                        )
+                    )
                 )
                 message_parts.append('')
-                message_parts.append('✅ Сервис снова доступен для пользователей.')
+                message_parts.append(
+                    texts.t('ADMIN_NOTIFY_MAINTENANCE_SERVICE_AVAILABLE', '✅ Сервис снова доступен для пользователей.')
+                )
 
             elif event_type == 'api_status':
-                message_parts.append(f'🔗 <b>API URL:</b> {details.get("api_url", "неизвестно")}')
+                message_parts.append(
+                    texts.t('ADMIN_NOTIFY_API_URL_LINE', '🔗 <b>API URL:</b> {url}').format(
+                        url=details.get('api_url', texts.t('ADMIN_NOTIFY_UNKNOWN', 'неизвестно'))
+                    )
+                )
 
                 if status == 'online':
                     if details.get('response_time'):
-                        message_parts.append(f'⚡ <b>Время отклика:</b> {details["response_time"]} сек')
+                        message_parts.append(
+                            texts.t('ADMIN_NOTIFY_RESPONSE_TIME_LINE', '⚡ <b>Время отклика:</b> {value} сек').format(
+                                value=details['response_time']
+                            )
+                        )
 
                     if details.get('consecutive_failures', 0) > 0:
-                        message_parts.append(f'🔄 <b>Неудачных попыток было:</b> {details["consecutive_failures"]}')
+                        message_parts.append(
+                            texts.t(
+                                'ADMIN_NOTIFY_FAILURES_WERE_LINE', '🔄 <b>Неудачных попыток было:</b> {count}'
+                            ).format(count=details['consecutive_failures'])
+                        )
 
                     message_parts.append('')
-                    message_parts.append('API снова отвечает на запросы.')
+                    message_parts.append(texts.t('ADMIN_NOTIFY_API_RESPONDING', 'API снова отвечает на запросы.'))
 
                 else:
                     if details.get('consecutive_failures'):
-                        message_parts.append(f'🔄 <b>Попытка №:</b> {details["consecutive_failures"]}')
+                        message_parts.append(
+                            texts.t('ADMIN_NOTIFY_ATTEMPT_NUMBER_LINE', '🔄 <b>Попытка №:</b> {count}').format(
+                                count=details['consecutive_failures']
+                            )
+                        )
 
                     if details.get('error'):
                         error_msg = str(details['error'])[:100]
-                        message_parts.append(f'❌ <b>Ошибка:</b> {error_msg}')
+                        message_parts.append(
+                            texts.t('ADMIN_NOTIFY_ERROR_LINE', '❌ <b>Ошибка:</b> {error}').format(error=error_msg)
+                        )
 
                     message_parts.append('')
-                    message_parts.append('⚠️ Началась серия неудачных проверок API.')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_API_FAILURES_STARTED', '⚠️ Началась серия неудачных проверок API.')
+                    )
 
             elif event_type == 'monitoring':
                 if status == 'started':
                     if details.get('check_interval'):
-                        message_parts.append(f'🔄 <b>Интервал проверки:</b> {details["check_interval"]} сек')
+                        message_parts.append(
+                            texts.t(
+                                'ADMIN_NOTIFY_CHECK_INTERVAL_LINE', '🔄 <b>Интервал проверки:</b> {value} сек'
+                            ).format(value=details['check_interval'])
+                        )
 
                     if details.get('auto_enable_configured') is not None:
-                        auto_enable = 'Включено' if details['auto_enable_configured'] else 'Отключено'
-                        message_parts.append(f'🤖 <b>Автовключение:</b> {auto_enable}')
+                        auto_enable = (
+                            texts.t('ADMIN_NOTIFY_ENABLED', 'Включено')
+                            if details['auto_enable_configured']
+                            else texts.t('ADMIN_NOTIFY_DISABLED', 'Отключено')
+                        )
+                        message_parts.append(
+                            texts.t('ADMIN_NOTIFY_AUTO_ENABLE_LINE', '🤖 <b>Автовключение:</b> {value}').format(
+                                value=auto_enable
+                            )
+                        )
 
                     if details.get('max_failures'):
-                        message_parts.append(f'🎯 <b>Порог ошибок:</b> {details["max_failures"]}')
+                        message_parts.append(
+                            texts.t('ADMIN_NOTIFY_MAX_FAILURES_LINE', '🎯 <b>Порог ошибок:</b> {count}').format(
+                                count=details['max_failures']
+                            )
+                        )
 
                     message_parts.append('')
-                    message_parts.append('Система будет следить за доступностью API.')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_MONITORING_WATCHING', 'Система будет следить за доступностью API.')
+                    )
 
                 else:
-                    message_parts.append('Автоматический мониторинг API остановлен.')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_MONITORING_STOPPED', 'Автоматический мониторинг API остановлен.')
+                    )
 
             message_parts.append('')
-            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_parts.append(
+                texts.t('ADMIN_NOTIFY_TIMESTAMP_LINE', '⏰ <i>{timestamp}</i>').format(
+                    timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
+                )
+            )
 
             message = '\n'.join(message_parts)
 
@@ -1922,13 +2400,30 @@ class AdminNotificationService:
             return False
 
         try:
+            texts = get_texts()
             details = details or {}
 
             status_config = {
-                'online': {'icon': '🟢', 'title': 'ПАНЕЛЬ REMNAWAVE ДОСТУПНА', 'alert_type': 'success'},
-                'offline': {'icon': '🔴', 'title': 'ПАНЕЛЬ REMNAWAVE НЕДОСТУПНА', 'alert_type': 'error'},
-                'degraded': {'icon': '🟡', 'title': 'ПАНЕЛЬ REMNAWAVE РАБОТАЕТ СО СБОЯМИ', 'alert_type': 'warning'},
-                'maintenance': {'icon': '🔧', 'title': 'ПАНЕЛЬ REMNAWAVE НА ОБСЛУЖИВАНИИ', 'alert_type': 'info'},
+                'online': {
+                    'icon': '🟢',
+                    'title': texts.t('ADMIN_NOTIFY_PANEL_TITLE_ONLINE', 'ПАНЕЛЬ REMNAWAVE ДОСТУПНА'),
+                    'alert_type': 'success',
+                },
+                'offline': {
+                    'icon': '🔴',
+                    'title': texts.t('ADMIN_NOTIFY_PANEL_TITLE_OFFLINE', 'ПАНЕЛЬ REMNAWAVE НЕДОСТУПНА'),
+                    'alert_type': 'error',
+                },
+                'degraded': {
+                    'icon': '🟡',
+                    'title': texts.t('ADMIN_NOTIFY_PANEL_TITLE_DEGRADED', 'ПАНЕЛЬ REMNAWAVE РАБОТАЕТ СО СБОЯМИ'),
+                    'alert_type': 'warning',
+                },
+                'maintenance': {
+                    'icon': '🔧',
+                    'title': texts.t('ADMIN_NOTIFY_PANEL_TITLE_MAINTENANCE', 'ПАНЕЛЬ REMNAWAVE НА ОБСЛУЖИВАНИИ'),
+                    'alert_type': 'info',
+                },
             }
 
             config = status_config.get(status, status_config['offline'])
@@ -1936,63 +2431,115 @@ class AdminNotificationService:
             message_parts = [f'{config["icon"]} <b>{config["title"]}</b>', '']
 
             if details.get('api_url'):
-                message_parts.append(f'🔗 <b>URL:</b> {details["api_url"]}')
+                message_parts.append(
+                    texts.t('ADMIN_NOTIFY_URL_LINE', '🔗 <b>URL:</b> {url}').format(url=details['api_url'])
+                )
 
             if details.get('response_time'):
-                message_parts.append(f'⚡ <b>Время отклика:</b> {details["response_time"]} сек')
+                message_parts.append(
+                    texts.t('ADMIN_NOTIFY_RESPONSE_TIME_LINE', '⚡ <b>Время отклика:</b> {value} сек').format(
+                        value=details['response_time']
+                    )
+                )
 
             if details.get('last_check'):
                 last_check = details['last_check']
                 if isinstance(last_check, str):
                     last_check = datetime.fromisoformat(last_check)
-                message_parts.append(f'🕐 <b>Последняя проверка:</b> {format_local_datetime(last_check, "%H:%M:%S")}')
+                message_parts.append(
+                    texts.t('ADMIN_NOTIFY_LAST_CHECK_LINE', '🕐 <b>Последняя проверка:</b> {time}').format(
+                        time=format_local_datetime(last_check, '%H:%M:%S')
+                    )
+                )
 
             if status == 'online':
                 if details.get('uptime'):
-                    message_parts.append(f'⏱️ <b>Время работы:</b> {details["uptime"]}')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_UPTIME_LINE', '⏱️ <b>Время работы:</b> {uptime}').format(
+                            uptime=details['uptime']
+                        )
+                    )
 
                 if details.get('users_online'):
-                    message_parts.append(f'👥 <b>Пользователей онлайн:</b> {details["users_online"]}')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_USERS_ONLINE_LINE', '👥 <b>Пользователей онлайн:</b> {count}').format(
+                            count=details['users_online']
+                        )
+                    )
 
                 message_parts.append('')
-                message_parts.append('✅ Все системы работают нормально.')
+                message_parts.append(texts.t('ADMIN_NOTIFY_PANEL_ALL_OK', '✅ Все системы работают нормально.'))
 
             elif status == 'offline':
                 if details.get('error'):
                     error_msg = str(details['error'])[:150]
-                    message_parts.append(f'❌ <b>Ошибка:</b> {error_msg}')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_ERROR_LINE', '❌ <b>Ошибка:</b> {error}').format(error=error_msg)
+                    )
 
                 if details.get('consecutive_failures'):
-                    message_parts.append(f'🔄 <b>Неудачных попыток:</b> {details["consecutive_failures"]}')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_FAILURES_LINE', '🔄 <b>Неудачных попыток:</b> {count}').format(
+                            count=details['consecutive_failures']
+                        )
+                    )
 
                 message_parts.append('')
-                message_parts.append('⚠️ Панель недоступна. Проверьте соединение и статус сервера.')
+                message_parts.append(
+                    texts.t(
+                        'ADMIN_NOTIFY_PANEL_OFFLINE_HINT',
+                        '⚠️ Панель недоступна. Проверьте соединение и статус сервера.',
+                    )
+                )
 
             elif status == 'degraded':
                 if details.get('issues'):
                     issues = details['issues']
                     if isinstance(issues, list):
-                        message_parts.append('⚠️ <b>Обнаруженные проблемы:</b>')
+                        message_parts.append(
+                            texts.t('ADMIN_NOTIFY_PANEL_ISSUES_HEADER', '⚠️ <b>Обнаруженные проблемы:</b>')
+                        )
+                        issue_template = texts.t('ADMIN_NOTIFY_PANEL_ISSUE_ITEM', '   • {issue}')
                         for issue in issues[:3]:
-                            message_parts.append(f'   • {issue}')
+                            message_parts.append(issue_template.format(issue=issue))
                     else:
-                        message_parts.append(f'⚠️ <b>Проблема:</b> {issues}')
+                        message_parts.append(
+                            texts.t('ADMIN_NOTIFY_PANEL_ISSUE_LINE', '⚠️ <b>Проблема:</b> {issue}').format(
+                                issue=issues
+                            )
+                        )
 
                 message_parts.append('')
-                message_parts.append('Панель работает, но возможны задержки или сбои.')
+                message_parts.append(
+                    texts.t('ADMIN_NOTIFY_PANEL_DEGRADED_HINT', 'Панель работает, но возможны задержки или сбои.')
+                )
 
             elif status == 'maintenance':
                 if details.get('maintenance_reason'):
-                    message_parts.append(f'🔧 <b>Причина:</b> {html.escape(details["maintenance_reason"])}')
+                    message_parts.append(
+                        texts.t('ADMIN_NOTIFY_MAINTENANCE_REASON_LINE', '🔧 <b>Причина:</b> {reason}').format(
+                            reason=html.escape(details['maintenance_reason'])
+                        )
+                    )
 
                 if details.get('estimated_duration'):
-                    message_parts.append(f'⏰ <b>Ожидаемая длительность:</b> {details["estimated_duration"]}')
+                    message_parts.append(
+                        texts.t(
+                            'ADMIN_NOTIFY_ESTIMATED_DURATION_LINE', '⏰ <b>Ожидаемая длительность:</b> {duration}'
+                        ).format(duration=details['estimated_duration'])
+                    )
 
                 message_parts.append('')
-                message_parts.append('Панель временно недоступна для обслуживания.')
+                message_parts.append(
+                    texts.t('ADMIN_NOTIFY_PANEL_MAINTENANCE_HINT', 'Панель временно недоступна для обслуживания.')
+                )
 
             message_parts.append('')
-            message_parts.append(f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>')
+            message_parts.append(
+                texts.t('ADMIN_NOTIFY_TIMESTAMP_LINE', '⏰ <i>{timestamp}</i>').format(
+                    timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
+                )
+            )
 
             message = '\n'.join(message_parts)
 
@@ -2019,13 +2566,16 @@ class AdminNotificationService:
             user_display = self._get_user_display(user)
             user_id_display = self._get_user_identifier_display(user)
 
+            texts = get_texts()
             # Определяем заголовок по типу операции
             update_titles = {
-                'traffic': '📊 ДОКУПКА ТРАФИКА',
-                'devices': '📱 ДОКУПКА УСТРОЙСТВ',
-                'servers': '🌐 СМЕНА СЕРВЕРОВ',
+                'traffic': texts.t('ADMIN_NOTIFY_UPDATE_TITLE_TRAFFIC', '📊 ДОКУПКА ТРАФИКА'),
+                'devices': texts.t('ADMIN_NOTIFY_UPDATE_TITLE_DEVICES', '📱 ДОКУПКА УСТРОЙСТВ'),
+                'servers': texts.t('ADMIN_NOTIFY_UPDATE_TITLE_SERVERS', '🌐 СМЕНА СЕРВЕРОВ'),
             }
-            title = update_titles.get(update_type, '⚙️ ИЗМЕНЕНИЕ ПОДПИСКИ')
+            title = update_titles.get(
+                update_type, texts.t('ADMIN_NOTIFY_UPDATE_TITLE_DEFAULT', '⚙️ ИЗМЕНЕНИЕ ПОДПИСКИ')
+            )
 
             # Получаем название тарифа
             tariff_name = await self._get_tariff_name(db, subscription)
@@ -2034,45 +2584,66 @@ class AdminNotificationService:
             message_lines = [
                 f'<b>{title}</b>',
                 '',
-                f'👤 {user_display} ({user_id_display})',
+                texts.t('ADMIN_NOTIFY_USER_COMPACT_LINE', '👤 {user} ({identifier})').format(
+                    user=user_display, identifier=user_id_display
+                ),
             ]
 
             # Добавляем username только если есть
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'📱 {format_username_link(username)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_USERNAME_COMPACT_LINE', '📱 {username}').format(
+                        username=format_username_link(username)
+                    )
+                )
 
             # Тариф (если есть)
             if tariff_name:
-                message_lines.append(f'🏷️ Тариф: <b>{tariff_name}</b>')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_TARIFF_COMPACT_LINE', '🏷️ Тариф: <b>{name}</b>').format(name=tariff_name)
+                )
 
             message_lines.append('')
 
             # Форматируем изменение в зависимости от типа
+            change_template = texts.t('ADMIN_NOTIFY_UPDATE_CHANGE_LINE', '🔄 {old} → {new}')
             if update_type == 'servers':
                 old_servers_info = await self._format_servers_detailed(old_value)
                 new_servers_info = await self._format_servers_detailed(new_value)
-                message_lines.append(f'🔄 {old_servers_info} → {new_servers_info}')
+                message_lines.append(change_template.format(old=old_servers_info, new=new_servers_info))
             elif update_type == 'traffic':
                 old_formatted = self._format_update_value(old_value, update_type)
                 new_formatted = self._format_update_value(new_value, update_type)
-                message_lines.append(f'🔄 {old_formatted} → {new_formatted}')
+                message_lines.append(change_template.format(old=old_formatted, new=new_formatted))
             elif update_type == 'devices':
-                message_lines.append(f'🔄 {old_value} → {new_value} устр.')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_UPDATE_CHANGE_DEVICES', '🔄 {old} → {new} устр.').format(
+                        old=old_value, new=new_value
+                    )
+                )
             else:
-                message_lines.append(f'🔄 {old_value} → {new_value}')
+                message_lines.append(change_template.format(old=old_value, new=new_value))
 
             # Стоимость операции
             if price_paid > 0:
-                message_lines.append(f'💵 <b>{settings.format_price(price_paid)}</b>')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_UPDATE_PRICE_LINE', '💵 <b>{amount}</b>').format(
+                        amount=settings.format_price(price_paid)
+                    )
+                )
             else:
-                message_lines.append('💸 Бесплатно')
+                message_lines.append(texts.t('ADMIN_NOTIFY_UPDATE_FREE', '💸 Бесплатно'))
 
             message_lines.extend(
                 [
                     '',
-                    f'📅 До {format_local_datetime(subscription.end_date, "%d.%m.%Y")}',
-                    f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
+                    texts.t('ADMIN_NOTIFY_UPDATE_UNTIL_LINE', '📅 До {date}').format(
+                        date=format_local_datetime(subscription.end_date, '%d.%m.%Y')
+                    ),
+                    texts.t('ADMIN_NOTIFY_BALANCE_LINE', '💰 Баланс: {amount}').format(
+                        amount=settings.format_price(user.balance_kopeks)
+                    ),
                 ]
             )
 
@@ -2080,7 +2651,11 @@ class AdminNotificationService:
             if user.referred_by_id:
                 referrer_info = await self._get_referrer_info(db, user.referred_by_id)
                 if referrer_info != 'Нет':
-                    message_lines.append(f'🔗 Реф: {referrer_info}')
+                    message_lines.append(
+                        texts.t('ADMIN_NOTIFY_REFERRER_COMPACT_LINE', '🔗 Реф: {referrer}').format(
+                            referrer=referrer_info
+                        )
+                    )
 
             message_lines.extend(
                 [
@@ -2096,8 +2671,9 @@ class AdminNotificationService:
             return False
 
     async def _format_servers_detailed(self, server_uuids: list[str]) -> str:
+        texts = get_texts()
         if not server_uuids:
-            return 'Нет серверов'
+            return texts.t('ADMIN_NOTIFY_SERVERS_DETAILED_NONE', 'Нет серверов')
 
         try:
             from app.handlers.subscription import get_servers_display_names
@@ -2105,23 +2681,26 @@ class AdminNotificationService:
             servers_names = await get_servers_display_names(server_uuids)
 
             if servers_names and servers_names != 'Нет серверов':
-                return f'{len(server_uuids)} серверов ({servers_names})'
-            return f'{len(server_uuids)} серверов'
+                return texts.t('ADMIN_NOTIFY_SERVERS_DETAILED_COUNT_NAMES', '{count} серверов ({names})').format(
+                    count=len(server_uuids), names=servers_names
+                )
+            return texts.t('ADMIN_NOTIFY_SERVERS_DETAILED_COUNT', '{count} серверов').format(count=len(server_uuids))
 
         except Exception as e:
             logger.warning('Ошибка получения названий серверов для уведомления', error=e)
-            return f'{len(server_uuids)} серверов'
+            return texts.t('ADMIN_NOTIFY_SERVERS_DETAILED_COUNT', '{count} серверов').format(count=len(server_uuids))
 
     def _format_update_value(self, value: Any, update_type: str) -> str:
+        texts = get_texts()
         if update_type == 'traffic':
             if value == 0:
-                return '♾ Безлимитный'
-            return f'{value} ГБ'
+                return texts.t('ADMIN_NOTIFY_UPDATE_VALUE_UNLIMITED', '♾ Безлимитный')
+            return texts.t('ADMIN_NOTIFY_TRAFFIC_GB', '{traffic} ГБ').format(traffic=value)
         if update_type == 'devices':
-            return f'{value} устройств'
+            return texts.t('ADMIN_NOTIFY_UPDATE_VALUE_DEVICES', '{value} устройств').format(value=value)
         if update_type == 'servers':
             if isinstance(value, list):
-                return f'{len(value)} серверов'
+                return texts.t('ADMIN_NOTIFY_SERVERS_DETAILED_COUNT', '{count} серверов').format(count=len(value))
             return str(value)
         return str(value)
 
@@ -2135,41 +2714,74 @@ class AdminNotificationService:
             return False
 
         try:
+            texts = get_texts()
             user_display = self._get_user_display(user)
             user_id_display = self._get_user_identifier_display(user)
 
             message_lines = [
-                '🤝 <b>ЗАЯВКА НА ПАРТНЁРКУ</b>',
+                texts.t('ADMIN_NOTIFY_PARTNER_TITLE', '🤝 <b>ЗАЯВКА НА ПАРТНЁРКУ</b>'),
                 '',
-                f'👤 {user_display} ({user_id_display})',
+                texts.t('ADMIN_NOTIFY_USER_COMPACT_LINE', '👤 {user} ({identifier})').format(
+                    user=user_display, identifier=user_id_display
+                ),
             ]
 
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'📱 {format_username_link(username)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_USERNAME_COMPACT_LINE', '📱 {username}').format(
+                        username=format_username_link(username)
+                    )
+                )
 
             message_lines.append('')
 
             if application_data.get('company_name'):
-                message_lines.append(f'🏢 Компания: {html.escape(str(application_data["company_name"]))}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PARTNER_COMPANY', '🏢 Компания: {company}').format(
+                        company=html.escape(str(application_data['company_name']))
+                    )
+                )
             if application_data.get('telegram_channel'):
-                message_lines.append(f'📢 Канал: {html.escape(str(application_data["telegram_channel"]))}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PARTNER_CHANNEL', '📢 Канал: {channel}').format(
+                        channel=html.escape(str(application_data['telegram_channel']))
+                    )
+                )
             if application_data.get('website_url'):
-                message_lines.append(f'🌐 Сайт: {html.escape(str(application_data["website_url"]))}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PARTNER_WEBSITE', '🌐 Сайт: {website}').format(
+                        website=html.escape(str(application_data['website_url']))
+                    )
+                )
             if application_data.get('description'):
                 desc = str(application_data['description'])
                 if len(desc) > 200:
                     desc = desc[:197] + '...'
-                message_lines.append(f'📝 {html.escape(desc)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PARTNER_DESCRIPTION', '📝 {description}').format(
+                        description=html.escape(desc)
+                    )
+                )
             if application_data.get('expected_monthly_referrals'):
-                message_lines.append(f'👥 Ожидаемых рефералов: {application_data["expected_monthly_referrals"]}/мес')
+                message_lines.append(
+                    texts.t(
+                        'ADMIN_NOTIFY_PARTNER_EXPECTED_REFERRALS', '👥 Ожидаемых рефералов: {count}/мес'
+                    ).format(count=application_data['expected_monthly_referrals'])
+                )
             if application_data.get('desired_commission_percent'):
-                message_lines.append(f'💰 Желаемая комиссия: {application_data["desired_commission_percent"]}%')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_PARTNER_COMMISSION', '💰 Желаемая комиссия: {percent}%').format(
+                        percent=application_data['desired_commission_percent']
+                    )
+                )
 
             message_lines.extend(
                 [
                     '',
-                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    texts.t('ADMIN_NOTIFY_TIMESTAMP_LINE', '⏰ <i>{timestamp}</i>').format(
+                        timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
+                    ),
                 ]
             )
 
@@ -2190,24 +2802,35 @@ class AdminNotificationService:
             return False
 
         try:
+            texts = get_texts()
             user_display = self._get_user_display(user)
             user_id_display = self._get_user_identifier_display(user)
 
             message_lines = [
-                '💸 <b>ЗАПРОС НА ВЫВОД СРЕДСТВ</b>',
+                texts.t('ADMIN_NOTIFY_WITHDRAWAL_TITLE', '💸 <b>ЗАПРОС НА ВЫВОД СРЕДСТВ</b>'),
                 '',
-                f'👤 {user_display} ({user_id_display})',
+                texts.t('ADMIN_NOTIFY_USER_COMPACT_LINE', '👤 {user} ({identifier})').format(
+                    user=user_display, identifier=user_id_display
+                ),
             ]
 
             username = getattr(user, 'username', None)
             if username:
-                message_lines.append(f'📱 {format_username_link(username)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_USERNAME_COMPACT_LINE', '📱 {username}').format(
+                        username=format_username_link(username)
+                    )
+                )
 
             message_lines.extend(
                 [
                     '',
-                    f'💵 <b>Сумма: {settings.format_price(amount_kopeks)}</b>',
-                    f'💰 Баланс: {settings.format_price(user.balance_kopeks)}',
+                    texts.t('ADMIN_NOTIFY_WITHDRAWAL_AMOUNT', '💵 <b>Сумма: {amount}</b>').format(
+                        amount=settings.format_price(amount_kopeks)
+                    ),
+                    texts.t('ADMIN_NOTIFY_BALANCE_LINE', '💰 Баланс: {amount}').format(
+                        amount=settings.format_price(user.balance_kopeks)
+                    ),
                 ]
             )
 
@@ -2215,12 +2838,21 @@ class AdminNotificationService:
                 details = str(payment_details)
                 if len(details) > 200:
                     details = details[:197] + '...'
-                message_lines.extend(['', f'💳 Реквизиты: {html.escape(details)}'])
+                message_lines.extend(
+                    [
+                        '',
+                        texts.t('ADMIN_NOTIFY_WITHDRAWAL_DETAILS', '💳 Реквизиты: {details}').format(
+                            details=html.escape(details)
+                        ),
+                    ]
+                )
 
             message_lines.extend(
                 [
                     '',
-                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    texts.t('ADMIN_NOTIFY_TIMESTAMP_LINE', '⏰ <i>{timestamp}</i>').format(
+                        timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
+                    ),
                 ]
             )
 
@@ -2243,27 +2875,40 @@ class AdminNotificationService:
             return False
 
         try:
+            texts = get_texts()
             message_lines = [
-                '🛑 <b>МАССОВАЯ БЛОКИРОВКА ПОЛЬЗОВАТЕЛЕЙ</b>',
+                texts.t('ADMIN_NOTIFY_BULK_BAN_TITLE', '🛑 <b>МАССОВАЯ БЛОКИРОВКА ПОЛЬЗОВАТЕЛЕЙ</b>'),
                 '',
-                f'👮 <b>Администратор:</b> {html.escape(admin_name)}',
-                f'🆔 <b>ID администратора:</b> {admin_user_id}',
+                texts.t('ADMIN_NOTIFY_BULK_BAN_ADMIN', '👮 <b>Администратор:</b> {name}').format(
+                    name=html.escape(admin_name)
+                ),
+                texts.t('ADMIN_NOTIFY_BULK_BAN_ADMIN_ID', '🆔 <b>ID администратора:</b> {id}').format(
+                    id=admin_user_id
+                ),
                 '',
-                '📊 <b>Результаты:</b>',
-                f'✅ Успешно заблокировано: {successfully_banned}',
-                f'❌ Не найдено: {not_found}',
-                f'💥 Ошибок: {errors}',
+                texts.t('ADMIN_NOTIFY_BULK_BAN_RESULTS_HEADER', '📊 <b>Результаты:</b>'),
+                texts.t('ADMIN_NOTIFY_BULK_BAN_SUCCESS', '✅ Успешно заблокировано: {count}').format(
+                    count=successfully_banned
+                ),
+                texts.t('ADMIN_NOTIFY_BULK_BAN_NOT_FOUND', '❌ Не найдено: {count}').format(count=not_found),
+                texts.t('ADMIN_NOTIFY_BULK_BAN_ERRORS', '💥 Ошибок: {count}').format(count=errors),
             ]
 
             total_processed = successfully_banned + not_found + errors
             if total_processed > 0:
                 success_rate = (successfully_banned / total_processed) * 100
-                message_lines.append(f'📈 Успешность: {success_rate:.1f}%')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_BULK_BAN_SUCCESS_RATE', '📈 Успешность: {rate:.1f}%').format(
+                        rate=success_rate
+                    )
+                )
 
             message_lines.extend(
                 [
                     '',
-                    f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>',
+                    texts.t('ADMIN_NOTIFY_TIMESTAMP_LINE', '⏰ <i>{timestamp}</i>').format(
+                        timestamp=format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
+                    ),
                 ]
             )
 

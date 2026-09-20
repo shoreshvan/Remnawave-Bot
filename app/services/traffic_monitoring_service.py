@@ -15,6 +15,7 @@ from app.config import settings
 from app.database.crud.user import get_user_by_remnawave_id
 from app.database.database import AsyncSessionLocal
 from app.external.remnawave_api import RemnaWaveUser, UserStatus
+from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.remnawave_service import RemnaWaveService
 from app.utils.cache import cache, cache_key
@@ -750,6 +751,7 @@ class TrafficMonitoringServiceV2:
         if not violations or not bot:
             return
 
+        texts = get_texts()
         admin_service = AdminNotificationService(bot)
         topic_id = settings.SUSPICIOUS_NOTIFICATIONS_TOPIC_ID
 
@@ -779,40 +781,64 @@ class TrafficMonitoringServiceV2:
                     db_user = await get_user_by_remnawave_id(db, violation.user_id)
                     if db_user:
                         user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-                        user_info = f'👤 <b>{html.escape(db_user.full_name or "Без имени")}</b>\n🆔 ID: <code>{user_id_display}</code>\n'
+                        user_info = texts.t(
+                            'TRAFFIC_VIOLATION_USER_INFO',
+                            '👤 <b>{full_name}</b>\n🆔 ID: <code>{user_id_display}</code>\n',
+                        ).format(
+                            full_name=html.escape(
+                                db_user.full_name or texts.t('TRAFFIC_VIOLATION_NO_NAME', 'Без имени')
+                            ),
+                            user_id_display=user_id_display,
+                        )
                         if db_user.username:
-                            user_info += f'📱 Username: @{html.escape(db_user.username)}\n'
+                            user_info += texts.t('TRAFFIC_VIOLATION_USERNAME', '📱 Username: @{username}\n').format(
+                                username=html.escape(db_user.username),
+                            )
 
                 if violation.check_type == 'fast':
                     check_type_emoji = '⚡'
-                    check_type_name = 'Быстрая проверка'
-                    traffic_label = 'За интервал'
+                    check_type_name = texts.t('TRAFFIC_VIOLATION_CHECK_FAST', 'Быстрая проверка')
+                    traffic_label = texts.t('TRAFFIC_VIOLATION_LABEL_INTERVAL', 'За интервал')
                 elif violation.check_type == 'daily':
                     check_type_emoji = '📅'
-                    check_type_name = 'Суточная проверка'
-                    traffic_label = 'За 24 часа'
+                    check_type_name = texts.t('TRAFFIC_VIOLATION_CHECK_DAILY', 'Суточная проверка')
+                    traffic_label = texts.t('TRAFFIC_VIOLATION_LABEL_24H', 'За 24 часа')
                 else:
                     check_type_emoji = '🔍'
-                    check_type_name = 'Ручная проверка'
-                    traffic_label = 'Использовано'
+                    check_type_name = texts.t('TRAFFIC_VIOLATION_CHECK_MANUAL', 'Ручная проверка')
+                    traffic_label = texts.t('TRAFFIC_VIOLATION_LABEL_USED', 'Использовано')
 
-                message = (
-                    f'⚠️ <b>Превышение трафика</b>\n\n'
-                    f'{user_info}'
-                    f'🔑 ID в панели: <code>{violation.user_id}</code>\n\n'
-                    f'{check_type_emoji} <b>{check_type_name}</b>\n'
-                    f'📊 {traffic_label}: <b>{violation.used_traffic_gb} ГБ</b>\n'
-                    f'📈 Порог: <b>{violation.threshold_gb} ГБ</b>\n'
-                    f'🚨 Превышение: <b>{violation.used_traffic_gb - violation.threshold_gb:.2f} ГБ</b>\n'
+                message = texts.t(
+                    'TRAFFIC_VIOLATION_MESSAGE',
+                    '⚠️ <b>Превышение трафика</b>\n\n'
+                    '{user_info}'
+                    '🔑 ID в панели: <code>{user_id}</code>\n\n'
+                    '{check_type_emoji} <b>{check_type_name}</b>\n'
+                    '📊 {traffic_label}: <b>{used_traffic_gb} ГБ</b>\n'
+                    '📈 Порог: <b>{threshold_gb} ГБ</b>\n'
+                    '🚨 Превышение: <b>{excess:.2f} ГБ</b>\n',
+                ).format(
+                    user_info=user_info,
+                    user_id=violation.user_id,
+                    check_type_emoji=check_type_emoji,
+                    check_type_name=check_type_name,
+                    traffic_label=traffic_label,
+                    used_traffic_gb=violation.used_traffic_gb,
+                    threshold_gb=violation.threshold_gb,
+                    excess=violation.used_traffic_gb - violation.threshold_gb,
                 )
 
                 # Показываем название ноды и UUID
                 if violation.last_node_name:
-                    message += f'\n🖥 Сервер: <b>{violation.last_node_name}</b>'
+                    message += texts.t('TRAFFIC_VIOLATION_SERVER_NAME', '\n🖥 Сервер: <b>{node_name}</b>').format(
+                        node_name=violation.last_node_name,
+                    )
                     if violation.last_node_uuid:
                         message += f'\n   <code>{violation.last_node_uuid}</code>'
                 elif violation.last_node_uuid:
-                    message += f'\n🖥 Сервер: <code>{violation.last_node_uuid}</code>'
+                    message += texts.t('TRAFFIC_VIOLATION_SERVER_UUID', '\n🖥 Сервер: <code>{node_uuid}</code>').format(
+                        node_uuid=violation.last_node_uuid,
+                    )
 
                 message += f'\n\n⏰ {datetime.now(UTC).strftime("%d.%m.%Y %H:%M:%S")} UTC'
 
@@ -1049,17 +1075,26 @@ class TrafficMonitoringScheduler:
 
     def get_status_info(self) -> str:
         """Возвращает информацию о статусе мониторинга"""
+        texts = get_texts()
         info = []
         if self._v2_service.is_fast_check_enabled():
             interval_min = self._v2_service.get_fast_check_interval_seconds() // 60
             threshold = self._v2_service.get_fast_check_threshold_gb()
-            info.append(f'Быстрая: каждые {interval_min} мин, порог {threshold} ГБ')
+            info.append(
+                texts.t('TRAFFIC_STATUS_FAST', 'Быстрая: каждые {interval_min} мин, порог {threshold} ГБ').format(
+                    interval_min=interval_min, threshold=threshold
+                )
+            )
         if self._v2_service.is_daily_check_enabled():
             check_time = self._v2_service.get_daily_check_time()
             threshold = self._v2_service.get_daily_threshold_gb()
             time_str = check_time.strftime('%H:%M') if check_time else '00:00'
-            info.append(f'Суточная: в {time_str}, порог {threshold} ГБ')
-        return '; '.join(info) if info else 'Отключен'
+            info.append(
+                texts.t('TRAFFIC_STATUS_DAILY', 'Суточная: в {time_str}, порог {threshold} ГБ').format(
+                    time_str=time_str, threshold=threshold
+                )
+            )
+        return '; '.join(info) if info else texts.t('TRAFFIC_STATUS_DISABLED', 'Отключен')
 
     async def _should_send_notification(self, panel_user_id: int) -> bool:
         """Для обратной совместимости"""

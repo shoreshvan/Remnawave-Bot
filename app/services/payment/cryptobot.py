@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
+from app.localization.texts import get_texts
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 from app.services.subscription_renewal_service import (
     RenewalPaymentDescriptor,
@@ -313,7 +314,12 @@ class CryptoBotPaymentMixin:
                 user.updated_at = datetime.now(UTC)
 
                 referrer_info = format_referrer_info(user)
-                topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
+                status_texts = get_texts()
+                topup_status = (
+                    status_texts.t('CRYPTOBOT_TOPUP_STATUS_FIRST', '🆕 Первое пополнение')
+                    if was_first_topup
+                    else status_texts.t('CRYPTOBOT_TOPUP_STATUS_REPEAT', '🔄 Пополнение')
+                )
 
                 await db.commit()
 
@@ -363,13 +369,21 @@ class CryptoBotPaymentMixin:
 
                     try:
                         keyboard = await self.build_topup_success_keyboard(user)
-                        message_text = (
+                        user_texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                        message_text = user_texts.t(
+                            'CRYPTOBOT_TOPUP_SUCCESS',
                             '✅ <b>Пополнение успешно!</b>\n\n'
-                            f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                            f'🪙 Платеж: {updated_payment.amount} {updated_payment.asset}\n'
-                            f'💱 Курс: 1 USD = {conversion_rate:.2f}₽\n'
-                            f'🆔 Транзакция: {invoice_id[:8]}...\n\n'
-                            'Баланс пополнен автоматически!'
+                            '💰 Сумма: {amount}\n'
+                            '🪙 Платеж: {paid_amount} {asset}\n'
+                            '💱 Курс: 1 USD = {rate}₽\n'
+                            '🆔 Транзакция: {invoice_id}...\n\n'
+                            'Баланс пополнен автоматически!',
+                        ).format(
+                            amount=settings.format_price(amount_kopeks),
+                            paid_amount=updated_payment.amount,
+                            asset=updated_payment.asset,
+                            rate=f'{conversion_rate:.2f}',
+                            invoice_id=invoice_id[:8],
                         )
                         if settings.is_notifications_enabled():
                             user_notification = _UserNotificationPayload(

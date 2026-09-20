@@ -1752,21 +1752,29 @@ def legacy_percent_for_import() -> tuple[int, list[str]]:
       рефералов. Одним уровнем она невыразима вовсе, поэтому о ней сообщается
       прямо: молча потерять ступени хуже, чем не перенести их с предупреждением.
     """
+    from app.localization.texts import get_texts
+
     notes: list[str] = []
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
 
     percent = settings.REFERRAL_COMMISSION_PERCENT
     first_payment = settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT
     if first_payment is not None:
         percent = first_payment
         notes.append(
-            f'Взят процент первого платежа ({first_payment}%), а не общий '
-            f'({settings.REFERRAL_COMMISSION_PERCENT}%) — повод уровня «первое пополнение».'
+            texts.t(
+                'REFERRAL_LEGACY_FIRST_PAYMENT_PERCENT',
+                'Взят процент первого платежа ({first}%), а не общий ({total}%) — повод уровня «первое пополнение».',
+            ).format(first=first_payment, total=settings.REFERRAL_COMMISSION_PERCENT)
         )
 
     if (settings.REFERRAL_RECURRING_COMMISSION_TIERS or '').strip():
         notes.append(
-            'Ступени комиссии (REFERRAL_RECURRING_COMMISSION_TIERS) НЕ перенесены: '
-            'у уровня одна ставка, лестницы по числу рефералов в нём нет.'
+            texts.t(
+                'REFERRAL_LEGACY_TIERS_NOT_MIGRATED',
+                'Ступени комиссии (REFERRAL_RECURRING_COMMISSION_TIERS) НЕ перенесены: '
+                'у уровня одна ставка, лестницы по числу рефералов в нём нет.',
+            )
         )
 
     return max(0, min(100, int(percent or 0))), notes

@@ -12,6 +12,7 @@ from aiogram import Bot
 from dateutil.parser import isoparse
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.services.nalogo_service import NaloGoService
 from app.utils.cache import cache
 
@@ -141,7 +142,9 @@ class NalogoQueueService:
             receipt_uuid=receipt_uuid,
             amount_kopeks=int(round(amount * 100)),
             telegram_user_id=telegram_user_id,
-            context_label='Источник: отложенная очередь NaloGO',
+            context_label=get_texts(settings.DEFAULT_LANGUAGE).t(
+                'NALOGO_QUEUE_CONTEXT_LABEL', 'Источник: отложенная очередь NaloGO'
+            ),
             user_email=user_email,
         )
 
@@ -306,40 +309,43 @@ class NalogoQueueService:
                 queued = await self._nalogo_service.get_queued_receipts()
                 total_queued_amount = sum(r.get('amount', 0) for r in queued)
 
-                message = (
-                    f'<b>⚠️ Проблема с отправкой чеков NaloGO</b>\n\n'
-                    f'Сервис nalog.ru временно недоступен.\n\n'
-                    f'📋 <b>В очереди:</b> {remaining} чек(ов)\n'
-                    f'💰 <b>На сумму:</b> {total_queued_amount:,.2f} ₽\n\n'
-                    f'Чеки будут отправлены автоматически когда сервис восстановится.'
-                )
+                message = get_texts(settings.DEFAULT_LANGUAGE).t(
+                    'NALOGO_QUEUE_PROBLEM_MSG',
+                    '<b>⚠️ Проблема с отправкой чеков NaloGO</b>\n\n'
+                    'Сервис nalog.ru временно недоступен.\n\n'
+                    '📋 <b>В очереди:</b> {count} чек(ов)\n'
+                    '💰 <b>На сумму:</b> {amount:,.2f} ₽\n\n'
+                    'Чеки будут отправлены автоматически когда сервис восстановится.',
+                ).format(count=remaining, amount=total_queued_amount)
                 await self._send_admin_notification(message)
 
         # Уведомление об успешной разгрузке очереди
         elif remaining == 0 and self._had_pending_receipts and processed > 0:
             self._had_pending_receipts = False
-            message = (
-                f'<b>✅ Очередь чеков NaloGO разгружена</b>\n\n'
-                f'Все отложенные чеки успешно отправлены!\n\n'
-                f'📋 <b>Отправлено:</b> {processed} чек(ов)\n'
-                f'💰 <b>На сумму:</b> {total_processed_amount:,.2f} ₽'
-            )
+            message = get_texts(settings.DEFAULT_LANGUAGE).t(
+                'NALOGO_QUEUE_CLEARED_MSG',
+                '<b>✅ Очередь чеков NaloGO разгружена</b>\n\n'
+                'Все отложенные чеки успешно отправлены!\n\n'
+                '📋 <b>Отправлено:</b> {count} чек(ов)\n'
+                '💰 <b>На сумму:</b> {amount:,.2f} ₽',
+            ).format(count=processed, amount=total_processed_amount)
             await self._send_admin_notification(message, skip_cooldown=True)
 
     async def force_process(self) -> dict:
         """Принудительно обработать очередь (для ручного запуска)."""
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         if not self._nalogo_service:
-            return {'error': 'NaloGO сервис не настроен'}
+            return {'error': texts.t('NALOGO_QUEUE_NOT_CONFIGURED', 'NaloGO сервис не настроен')}
 
         queue_length = await self._nalogo_service.get_queue_length()
         if queue_length == 0:
-            return {'message': 'Очередь пуста', 'processed': 0}
+            return {'message': texts.t('NALOGO_QUEUE_EMPTY', 'Очередь пуста'), 'processed': 0}
 
         await self._process_pending_receipts()
         new_length = await self._nalogo_service.get_queue_length()
 
         return {
-            'message': 'Обработка завершена',
+            'message': texts.t('NALOGO_QUEUE_PROCESSED', 'Обработка завершена'),
             'was_in_queue': queue_length,
             'remaining': new_length,
             'processed': queue_length - new_length,
