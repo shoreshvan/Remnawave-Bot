@@ -103,42 +103,68 @@ _EXPIRATION_HOURS_TO_TEXT_KEY: dict[int, str] = {
 
 # Admin event display names for notification messages
 _ADMIN_NODE_EVENTS: dict[str, str] = {
-    'node.created': '🟢 Нода создана',
-    'node.modified': '🔧 Нода изменена',
-    'node.disabled': '🔴 Нода отключена',
-    'node.enabled': '🟢 Нода включена',
-    'node.deleted': '🗑️ Нода удалена',
-    'node.connection_lost': '🚨 Потеряно соединение с нодой',
-    'node.connection_restored': '✅ Соединение с нодой восстановлено',
-    'node.traffic_notify': '📊 Уведомление о трафике ноды',
+    'node.created': get_texts().t('WEBHOOK_ADMIN_NODE_CREATED', '🟢 Нода создана'),
+    'node.modified': get_texts().t('WEBHOOK_ADMIN_NODE_MODIFIED', '🔧 Нода изменена'),
+    'node.disabled': get_texts().t('WEBHOOK_ADMIN_NODE_DISABLED', '🔴 Нода отключена'),
+    'node.enabled': get_texts().t('WEBHOOK_ADMIN_NODE_ENABLED', '🟢 Нода включена'),
+    'node.deleted': get_texts().t('WEBHOOK_ADMIN_NODE_DELETED', '🗑️ Нода удалена'),
+    'node.connection_lost': get_texts().t(
+        'WEBHOOK_ADMIN_NODE_CONNECTION_LOST', '🚨 Потеряно соединение с нодой'
+    ),
+    'node.connection_restored': get_texts().t(
+        'WEBHOOK_ADMIN_NODE_CONNECTION_RESTORED', '✅ Соединение с нодой восстановлено'
+    ),
+    'node.traffic_notify': get_texts().t('WEBHOOK_ADMIN_NODE_TRAFFIC_NOTIFY', '📊 Уведомление о трафике ноды'),
 }
 
 _ADMIN_SERVICE_EVENTS: dict[str, str] = {
-    'service.panel_started': '🚀 Панель RemnaWave запущена',
-    'service.login_attempt_failed': '🔐 Неудачная попытка входа в панель',
-    'service.login_attempt_success': '🔓 Успешный вход в панель',
-    'service.subpage_config_changed': '📄 Конфиг страницы подписки изменён',
+    'service.panel_started': get_texts().t('WEBHOOK_ADMIN_PANEL_STARTED', '🚀 Панель RemnaWave запущена'),
+    'service.login_attempt_failed': get_texts().t(
+        'WEBHOOK_ADMIN_LOGIN_FAILED', '🔐 Неудачная попытка входа в панель'
+    ),
+    'service.login_attempt_success': get_texts().t('WEBHOOK_ADMIN_LOGIN_SUCCESS', '🔓 Успешный вход в панель'),
+    'service.subpage_config_changed': get_texts().t(
+        'WEBHOOK_ADMIN_SUBPAGE_CONFIG_CHANGED', '📄 Конфиг страницы подписки изменён'
+    ),
     # 2.8.0: новые события жизненного цикла API-токена панели (security-релевантно)
-    'service.api_token_created': '🔑 Создан API-токен панели',
-    'service.api_token_deleted': '🗝️ Удалён API-токен панели',
+    'service.api_token_created': get_texts().t('WEBHOOK_ADMIN_API_TOKEN_CREATED', '🔑 Создан API-токен панели'),
+    'service.api_token_deleted': get_texts().t('WEBHOOK_ADMIN_API_TOKEN_DELETED', '🗝️ Удалён API-токен панели'),
 }
 
 _ADMIN_CRM_EVENTS: dict[str, str] = {
-    'crm.infra_billing_node_payment_in_7_days': '💳 Оплата ноды через 7 дней',
-    'crm.infra_billing_node_payment_in_48hrs': '💳 Оплата ноды через 48 часов',
-    'crm.infra_billing_node_payment_in_24hrs': '⚠️ Оплата ноды через 24 часа',
-    'crm.infra_billing_node_payment_due_today': '🔴 Оплата ноды сегодня',
-    'crm.infra_billing_node_payment_overdue_24hrs': '❗ Просрочка оплаты ноды: 24 часа',
-    'crm.infra_billing_node_payment_overdue_48hrs': '❗ Просрочка оплаты ноды: 48 часов',
-    'crm.infra_billing_node_payment_overdue_7_days': '🚨 Просрочка оплаты ноды: 7 дней',
+    'crm.infra_billing_node_payment_in_7_days': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_PAYMENT_IN_7_DAYS', '💳 Оплата ноды через 7 дней'
+    ),
+    'crm.infra_billing_node_payment_in_48hrs': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_PAYMENT_IN_48H', '💳 Оплата ноды через 48 часов'
+    ),
+    'crm.infra_billing_node_payment_in_24hrs': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_PAYMENT_IN_24H', '⚠️ Оплата ноды через 24 часа'
+    ),
+    'crm.infra_billing_node_payment_due_today': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_PAYMENT_DUE_TODAY', '🔴 Оплата ноды сегодня'
+    ),
+    'crm.infra_billing_node_payment_overdue_24hrs': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_OVERDUE_24H', '❗ Просрочка оплаты ноды: 24 часа'
+    ),
+    'crm.infra_billing_node_payment_overdue_48hrs': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_OVERDUE_48H', '❗ Просрочка оплаты ноды: 48 часов'
+    ),
+    'crm.infra_billing_node_payment_overdue_7_days': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_OVERDUE_7_DAYS', '🚨 Просрочка оплаты ноды: 7 дней'
+    ),
 }
 
 _ADMIN_ERROR_EVENTS: dict[str, str] = {
-    'errors.bandwidth_usage_threshold_reached_max_notifications': '⚠️ Достигнут лимит уведомлений о трафике',
+    'errors.bandwidth_usage_threshold_reached_max_notifications': get_texts().t(
+        'WEBHOOK_ADMIN_BANDWIDTH_MAX_NOTIFICATIONS', '⚠️ Достигнут лимит уведомлений о трафике'
+    ),
 }
 
 _ADMIN_TORRENT_BLOCKER_EVENTS: dict[str, str] = {
-    'torrent_blocker.report': '🚫 Торрент-блокировщик: обнаружен торрент',
+    'torrent_blocker.report': get_texts().t(
+        'WEBHOOK_ADMIN_TORRENT_REPORT', '🚫 Торрент-блокировщик: обнаружен торрент'
+    ),
 }
 
 _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connection_restored'})
@@ -449,6 +475,7 @@ class RemnaWaveWebhookService:
             return await self._enqueue_node_event(event_name, data)
 
         title = self._admin_handlers.get(event_name, event_name)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
 
         # Build message from event data (escape all untrusted values to prevent HTML injection)
         lines = [f'<b>{title}</b>']
@@ -460,70 +487,92 @@ class RemnaWaveWebhookService:
             data.get('name') or data.get('nodeName') or data.get('username') or api_token.get('name') or ''
         )
         if name:
-            lines.append(f'Имя: <code>{name}</code>')
+            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_NAME', 'Имя: <code>{value}</code>').format(value=name))
 
         address = html.escape(data.get('address') or data.get('ip') or '')
         if address:
-            lines.append(f'Адрес: <code>{address}</code>')
+            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_ADDRESS', 'Адрес: <code>{value}</code>').format(value=address))
 
         port = data.get('port')
         if port:
-            lines.append(f'Порт: <code>{html.escape(str(port))}</code>')
+            lines.append(
+                texts.t('WEBHOOK_ADMIN_FIELD_PORT', 'Порт: <code>{value}</code>').format(value=html.escape(str(port)))
+            )
 
         version = html.escape(data.get('version') or data.get('panelVersion') or '')
         if version:
-            lines.append(f'Версия: <code>{version}</code>')
+            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_VERSION', 'Версия: <code>{value}</code>').format(value=version))
 
         # CRM billing fields
         provider_name = html.escape(data.get('providerName') or '')
         if provider_name:
-            lines.append(f'Провайдер: <code>{provider_name}</code>')
+            lines.append(
+                texts.t('WEBHOOK_ADMIN_FIELD_PROVIDER', 'Провайдер: <code>{value}</code>').format(value=provider_name)
+            )
 
         amount = html.escape(str(data.get('amount') or data.get('price') or ''))
         if amount:
-            lines.append(f'Сумма: <code>{amount}</code>')
+            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_AMOUNT', 'Сумма: <code>{value}</code>').format(value=amount))
 
         due_date = html.escape(data.get('dueDate') or data.get('paymentDate') or data.get('nextBillingAt') or '')
         if due_date:
-            lines.append(f'Дата: <code>{due_date}</code>')
+            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_DATE', 'Дата: <code>{value}</code>').format(value=due_date))
 
         login_url = data.get('loginUrl') or ''
         if login_url and self._is_valid_url(login_url):
-            lines.append(f'Панель: {html.escape(login_url)}')
+            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_PANEL', 'Панель: {value}').format(value=html.escape(login_url)))
 
         # Login attempt fields
         login_data = data.get('loginAttempt')
         if isinstance(login_data, dict):
             login_user = html.escape(login_data.get('username') or '')
             if login_user:
-                lines.append(f'Пользователь: <code>{login_user}</code>')
+                lines.append(
+                    texts.t('WEBHOOK_ADMIN_FIELD_USER', 'Пользователь: <code>{value}</code>').format(value=login_user)
+                )
             login_ip = html.escape(login_data.get('ip') or '')
             if login_ip:
-                lines.append(f'IP: <code>{login_ip}</code>')
+                lines.append(texts.t('WEBHOOK_ADMIN_FIELD_IP', 'IP: <code>{value}</code>').format(value=login_ip))
             login_ua = html.escape(login_data.get('userAgent') or '')
             if login_ua:
-                lines.append(f'User-Agent: <code>{login_ua[:100]}</code>')
+                lines.append(
+                    texts.t('WEBHOOK_ADMIN_FIELD_USER_AGENT', 'User-Agent: <code>{value}</code>').format(
+                        value=login_ua[:100]
+                    )
+                )
             login_desc = html.escape(login_data.get('description') or '')
             if login_desc:
-                lines.append(f'Описание: {login_desc}')
+                lines.append(texts.t('WEBHOOK_ADMIN_FIELD_DESCRIPTION', 'Описание: {value}').format(value=login_desc))
         else:
             ip_addr = html.escape(data.get('ipAddress') or data.get('ip') or '')
             if ip_addr and not address:
-                lines.append(f'IP: <code>{ip_addr}</code>')
+                lines.append(texts.t('WEBHOOK_ADMIN_FIELD_IP', 'IP: <code>{value}</code>').format(value=ip_addr))
 
         message = html.escape(data.get('message') or data.get('description') or '')
         if message:
-            lines.append(f'Сообщение: {message}')
+            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_MESSAGE', 'Сообщение: {value}').format(value=message))
 
         # Subpage config fields
         subpage = data.get('subpageConfig')
         if isinstance(subpage, dict):
             action = subpage.get('action', '')
-            action_labels = {'CREATED': 'Создан', 'UPDATED': 'Обновлён', 'DELETED': 'Удалён'}
-            lines.append(f'Действие: {action_labels.get(action, html.escape(str(action)))}')
+            action_labels = {
+                'CREATED': texts.t('WEBHOOK_ADMIN_ACTION_CREATED', 'Создан'),
+                'UPDATED': texts.t('WEBHOOK_ADMIN_ACTION_UPDATED', 'Обновлён'),
+                'DELETED': texts.t('WEBHOOK_ADMIN_ACTION_DELETED', 'Удалён'),
+            }
+            lines.append(
+                texts.t('WEBHOOK_ADMIN_FIELD_ACTION', 'Действие: {value}').format(
+                    value=action_labels.get(action, html.escape(str(action)))
+                )
+            )
             sub_uuid = subpage.get('uuid', '')
             if sub_uuid:
-                lines.append(f'UUID: <code>{html.escape(str(sub_uuid))}</code>')
+                lines.append(
+                    texts.t('WEBHOOK_ADMIN_FIELD_UUID', 'UUID: <code>{value}</code>').format(
+                        value=html.escape(str(sub_uuid))
+                    )
+                )
 
         # Torrent blocker fields
         if event_name == 'torrent_blocker.report':
@@ -532,17 +581,25 @@ class RemnaWaveWebhookService:
             if isinstance(node_data, dict):
                 node_name = html.escape(node_data.get('name') or '')
                 if node_name:
-                    lines.append(f'Нода: <code>{node_name}</code>')
+                    lines.append(
+                        texts.t('WEBHOOK_ADMIN_FIELD_NODE', 'Нода: <code>{value}</code>').format(value=node_name)
+                    )
                 node_addr = html.escape(node_data.get('address') or '')
                 if node_addr:
-                    lines.append(f'Адрес: <code>{node_addr}</code>')
+                    lines.append(
+                        texts.t('WEBHOOK_ADMIN_FIELD_ADDRESS', 'Адрес: <code>{value}</code>').format(value=node_addr)
+                    )
             if isinstance(user_data, dict):
                 username = html.escape(user_data.get('username') or '')
                 if username:
-                    lines.append(f'Пользователь: <code>{username}</code>')
+                    lines.append(
+                        texts.t('WEBHOOK_ADMIN_FIELD_USER', 'Пользователь: <code>{value}</code>').format(value=username)
+                    )
                 user_status = html.escape(user_data.get('status') or '')
                 if user_status:
-                    lines.append(f'Статус: <code>{user_status}</code>')
+                    lines.append(
+                        texts.t('WEBHOOK_ADMIN_FIELD_STATUS', 'Статус: <code>{value}</code>').format(value=user_status)
+                    )
 
         try:
             await self._admin_service.send_webhook_notification('\n'.join(lines))
@@ -614,6 +671,7 @@ class RemnaWaveWebhookService:
     ) -> None:
         """Build a single summary message for N node events of the same type."""
         title = self._admin_handlers.get(event_name, event_name)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         max_lines = self._NODE_EVENT_SUMMARY_MAX_LINES
 
         # Dedupe by (name, address) — RemnaWave иногда ретраит один и тот же
@@ -634,7 +692,11 @@ class RemnaWaveWebhookService:
                 # лимит 4096 символов у Telegram, длинные списки уйдут в /dev/null.
                 continue
 
-            descr = f'<code>{html.escape(name)}</code>' if name else '<i>без имени</i>'
+            descr = (
+                f'<code>{html.escape(name)}</code>'
+                if name
+                else texts.t('WEBHOOK_ADMIN_NODE_NO_NAME', '<i>без имени</i>')
+            )
             if address:
                 descr += f' (<code>{html.escape(address)}</code>)'
             node_lines.append(f'• {descr}')
@@ -645,9 +707,17 @@ class RemnaWaveWebhookService:
         unique_count = len(seen)
         truncated = unique_count - len(node_lines)
         if truncated > 0:
-            node_lines.append(f'• <i>… ещё {truncated} нод(ы) (truncated)</i>')
+            node_lines.append(
+                texts.t('WEBHOOK_ADMIN_NODE_MORE_TRUNCATED', '• <i>… ещё {count} нод(ы) (truncated)</i>').format(
+                    count=truncated
+                )
+            )
         if overflow_count > 0:
-            node_lines.append(f'• <i>… ещё {overflow_count} событий отброшено (buffer overflow)</i>')
+            node_lines.append(
+                texts.t(
+                    'WEBHOOK_ADMIN_NODE_OVERFLOW', '• <i>… ещё {count} событий отброшено (buffer overflow)</i>'
+                ).format(count=overflow_count)
+            )
 
         total = unique_count + overflow_count
         header = f'<b>{title}</b>' if total <= 1 else f'<b>{title} × {total}</b>'

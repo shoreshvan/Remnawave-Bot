@@ -32,6 +32,7 @@ from app.database.models import (
     WheelPrizeType,
     WheelSpinPaymentType,
 )
+from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 
 
@@ -315,7 +316,9 @@ class FortuneWheelService:
         user = await lock_user_for_update(db, user)
 
         if user.balance_kopeks < kopeks:
-            raise ValueError('Недостаточно средств на балансе')
+            raise ValueError(
+                get_texts(user.language).t('WHEEL_ERROR_INSUFFICIENT_BALANCE', 'Недостаточно средств на балансе')
+            )
 
         # Списываем с баланса
         user.balance_kopeks -= kopeks
@@ -337,14 +340,19 @@ class FortuneWheelService:
         """
         if not subscription:
             if settings.is_multi_tariff_enabled():
-                raise ValueError('Необходимо указать подписку для оплаты днями (мульти-тариф)')
+                raise ValueError(
+                    get_texts(user.language).t(
+                        'WHEEL_ERROR_SUBSCRIPTION_REQUIRED_MULTI',
+                        'Необходимо указать подписку для оплаты днями (мульти-тариф)',
+                    )
+                )
             subscription = await get_subscription_by_user_id(db, user.id)
 
         if not subscription or not subscription.is_active:
-            raise ValueError('Нет активной подписки')
+            raise ValueError(get_texts(user.language).t('WHEEL_ERROR_NO_ACTIVE_SUBSCRIPTION', 'Нет активной подписки'))
 
         if subscription.days_left < config.min_subscription_days_for_day_payment + config.spin_cost_days:
-            raise ValueError('Недостаточно дней подписки')
+            raise ValueError(get_texts(user.language).t('WHEEL_ERROR_INSUFFICIENT_DAYS', 'Недостаточно дней подписки'))
 
         # Уменьшаем end_date
         subscription.end_date -= timedelta(days=config.spin_cost_days)
@@ -386,6 +394,7 @@ class FortuneWheelService:
         Возвращает промокод (если приз - промокод), иначе None.
         """
         prize_type = prize.prize_type
+        texts = get_texts(user.language)
 
         if prize_type == WheelPrizeType.NOTHING.value:
             logger.info('🎰 Пустой приз для user_id', user_id=user.id)
@@ -397,7 +406,9 @@ class FortuneWheelService:
                 db,
                 user,
                 prize.prize_value,
-                description=f'Выигрыш в колесе удачи: {prize.prize_value / 100:.2f}₽',
+                description=texts.t('WHEEL_PRIZE_TX_BALANCE', 'Выигрыш в колесе удачи: {amount}₽').format(
+                    amount=f'{prize.prize_value / 100:.2f}'
+                ),
                 create_transaction=True,
                 commit=False,
             )
@@ -415,7 +426,10 @@ class FortuneWheelService:
                         db,
                         user,
                         prize.prize_value_kopeks,
-                        description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс, мульти-тариф)',
+                        description=texts.t(
+                            'WHEEL_PRIZE_TX_DAYS_TO_BALANCE_MULTI',
+                            'Выигрыш в колесе удачи: {days} дней (на баланс, мульти-тариф)',
+                        ).format(days=prize.prize_value),
                         create_transaction=True,
                         commit=False,
                     )
@@ -444,7 +458,10 @@ class FortuneWheelService:
                             db,
                             user,
                             balance_bonus,
-                            description=f'Выигрыш в колесе удачи: {prize.prize_value} дней → {balance_bonus / 100:.2f}₽',
+                            description=texts.t(
+                                'WHEEL_PRIZE_TX_DAYS_TO_BALANCE_DAILY',
+                                'Выигрыш в колесе удачи: {days} дней → {amount}₽',
+                            ).format(days=prize.prize_value, amount=f'{balance_bonus / 100:.2f}'),
                             create_transaction=True,
                             commit=False,
                         )
@@ -460,7 +477,10 @@ class FortuneWheelService:
                             db,
                             user,
                             prize.prize_value_kopeks,
-                            description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)',
+                            description=texts.t(
+                                'WHEEL_PRIZE_TX_DAYS_TO_BALANCE',
+                                'Выигрыш в колесе удачи: {days} дней (на баланс)',
+                            ).format(days=prize.prize_value),
                             create_transaction=True,
                             commit=False,
                         )
@@ -484,7 +504,9 @@ class FortuneWheelService:
                     db,
                     user,
                     prize.prize_value_kopeks,
-                    description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)',
+                    description=texts.t(
+                        'WHEEL_PRIZE_TX_DAYS_TO_BALANCE', 'Выигрыш в колесе удачи: {days} дней (на баланс)'
+                    ).format(days=prize.prize_value),
                     create_transaction=True,
                     commit=False,
                 )
@@ -500,7 +522,10 @@ class FortuneWheelService:
                         db,
                         user,
                         prize.prize_value_kopeks,
-                        description=f'Выигрыш в колесе удачи: {prize.prize_value}GB (на баланс, мульти-тариф)',
+                        description=texts.t(
+                            'WHEEL_PRIZE_TX_TRAFFIC_TO_BALANCE_MULTI',
+                            'Выигрыш в колесе удачи: {gb}GB (на баланс, мульти-тариф)',
+                        ).format(gb=prize.prize_value),
                         create_transaction=True,
                         commit=False,
                     )
@@ -529,7 +554,9 @@ class FortuneWheelService:
                     db,
                     user,
                     prize.prize_value_kopeks,
-                    description=f'Выигрыш в колесе удачи: {prize.prize_value}GB (на баланс)',
+                    description=texts.t(
+                        'WHEEL_PRIZE_TX_TRAFFIC_TO_BALANCE', 'Выигрыш в колесе удачи: {gb}GB (на баланс)'
+                    ).format(gb=prize.prize_value),
                     create_transaction=True,
                     commit=False,
                 )
@@ -586,6 +613,7 @@ class FortuneWheelService:
         5. Создать запись WheelSpin
         6. Вернуть результат
         """
+        texts = get_texts(user.language)
         try:
             # 1. Проверяем доступность
             availability = await self.check_availability(db, user)
@@ -603,7 +631,7 @@ class FortuneWheelService:
                 return SpinResult(
                     success=False,
                     error='no_prizes',
-                    message='Призы не настроены',
+                    message=texts.t('WHEEL_ERROR_PRIZES_NOT_CONFIGURED', 'Призы не настроены'),
                 )
 
             # Serialize all of this user's spins on the user row and re-check the
@@ -637,7 +665,7 @@ class FortuneWheelService:
                     return SpinResult(
                         success=False,
                         error='invalid_subscription',
-                        message='Подписка не найдена или неактивна',
+                        message=texts.t('WHEEL_ERROR_SUBSCRIPTION_NOT_FOUND', 'Подписка не найдена или неактивна'),
                     )
             elif not settings.is_multi_tariff_enabled():
                 # Single-tariff: auto-resolve
@@ -652,7 +680,7 @@ class FortuneWheelService:
                 return SpinResult(
                     success=False,
                     error='subscription_required',
-                    message='Выберите подписку для оплаты днями',
+                    message=texts.t('WHEEL_ERROR_SELECT_SUBSCRIPTION_DAYS', 'Выберите подписку для оплаты днями'),
                 )
 
             # 2. Обрабатываем оплату
@@ -661,7 +689,7 @@ class FortuneWheelService:
                     return SpinResult(
                         success=False,
                         error='cannot_pay_stars',
-                        message='Оплата Stars недоступна',
+                        message=texts.t('WHEEL_ERROR_STARS_UNAVAILABLE', 'Оплата Stars недоступна'),
                     )
                 payment_amount = config.spin_cost_stars
                 payment_value_kopeks = await self._process_stars_payment(db, user, config)
@@ -670,7 +698,7 @@ class FortuneWheelService:
                     return SpinResult(
                         success=False,
                         error='cannot_pay_days',
-                        message='Оплата днями подписки недоступна',
+                        message=texts.t('WHEEL_ERROR_DAYS_UNAVAILABLE', 'Оплата днями подписки недоступна'),
                     )
                 payment_amount = config.spin_cost_days
                 payment_value_kopeks = await self._process_days_payment(db, user, config, target_subscription)
@@ -678,7 +706,7 @@ class FortuneWheelService:
                 return SpinResult(
                     success=False,
                     error='invalid_payment_type',
-                    message='Неверный способ оплаты',
+                    message=texts.t('WHEEL_ERROR_INVALID_PAYMENT_TYPE', 'Неверный способ оплаты'),
                 )
 
             # 3. Рассчитываем вероятности и выбираем приз
@@ -749,7 +777,7 @@ class FortuneWheelService:
             return SpinResult(
                 success=False,
                 error='internal_error',
-                message='Произошла ошибка, попробуйте позже',
+                message=texts.t('WHEEL_ERROR_INTERNAL', 'Произошла ошибка, попробуйте позже'),
             )
 
     def _get_error_message(self, reason: str | None) -> str:

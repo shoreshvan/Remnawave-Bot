@@ -2,6 +2,8 @@
 
 import html
 
+from app.localization.texts import get_texts
+
 
 def safe_html_name(name: str | None) -> str:
     """HTML-escape a display name for Telegram HTML messages."""
@@ -18,9 +20,10 @@ def user_html_link(user) -> str:
 
 def format_traffic(gb: int) -> str:
     """Форматирует трафик."""
+    texts = get_texts()
     if gb == 0:
-        return 'Безлимит'
-    return f'{gb} ГБ'
+        return texts.t('TRAFFIC_UNLIMITED_SHORT', 'Безлимит')
+    return texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=gb)
 
 
 def format_price_kopeks(kopeks: int, compact: bool = False) -> str:
@@ -36,14 +39,15 @@ def format_price_kopeks(kopeks: int, compact: bool = False) -> str:
 
 def format_period(days: int) -> str:
     """Форматирует период."""
+    texts = get_texts()
     mod100 = days % 100
     mod10 = days % 10
     if 11 <= mod100 <= 19:
-        word = 'дней'
+        key, default = 'DAYS_DECLENSION_MANY', '{days} дней'
     elif mod10 == 1:
-        word = 'день'
+        key, default = 'DAYS_DECLENSION_ONE', '{days} день'
     elif 2 <= mod10 <= 4:
-        word = 'дня'
+        key, default = 'DAYS_DECLENSION_FEW', '{days} дня'
     else:
-        word = 'дней'
-    return f'{days} {word}'
+        key, default = 'DAYS_DECLENSION_MANY', '{days} дней'
+    return texts.t(key, default).format(days=days)

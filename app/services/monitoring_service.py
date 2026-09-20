@@ -546,12 +546,16 @@ class MonitoringService:
                 user, user.balance_kopeks, charge_amount, subscription=subscription, is_final=is_final
             )
         elif not user.telegram_id:
+            texts = get_texts(user.language)
             if is_final:
-                reason_text = 'Последнее напоминание: подписка скоро отключится — недостаточно средств'
+                reason_text = texts.t(
+                    'MONITORING_AUTOPAY_FAIL_FINAL_REASON',
+                    'Последнее напоминание: подписка скоро отключится — недостаточно средств',
+                )
             elif cause == 'charge_error':
-                reason_text = 'Ошибка списания средств'
+                reason_text = texts.t('MONITORING_AUTOPAY_FAIL_CHARGE_ERROR', 'Ошибка списания средств')
             else:
-                reason_text = 'Недостаточно средств на балансе'
+                reason_text = texts.t('MONITORING_AUTOPAY_FAIL_INSUFFICIENT', 'Недостаточно средств на балансе')
             await notification_delivery_service.notify_autopay_failed(user=user, reason=reason_text)
 
         apply_autopay_fail_notification(state, reason, now_ts)
@@ -1483,11 +1487,12 @@ class MonitoringService:
                             ):
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
-                                    text=(
+                                    text=get_texts(user.language).t(
+                                        'MONITORING_AUTOPAY_LEGACY_PAUSED',
                                         '⚠️ <b>Автоплатёж приостановлен</b>\n\n'
                                         'Ваша подписка была создана до введения тарифов. '
                                         'Для работы автоплатежа необходимо выбрать тариф.\n\n'
-                                        'Перейдите в раздел «Моя подписка» → «Продлить», чтобы выбрать тариф.'
+                                        'Перейдите в раздел «Моя подписка» → «Продлить», чтобы выбрать тариф.',
                                     ),
                                     parse_mode='HTML',
                                 )
@@ -1828,20 +1833,28 @@ class MonitoringService:
                     tariff_label = f' «{tariff_name}»'
                 elif hasattr(subscription, 'tariff') and subscription.tariff:
                     tariff_label = f' «{subscription.tariff.name}»'
-            message = f"""
-⛔ <b>Подписка{tariff_label} истекла</b>
-
-Ваша подписка истекла. Для восстановления доступа продлите подписку.
-
-🔧 Доступ к серверам заблокирован до продления.
-"""
+            texts = get_texts(user.language)
+            message = texts.t(
+                'MONITORING_SUB_EXPIRED_MSG',
+                '\n⛔ <b>Подписка{tariff_label} истекла</b>\n\n'
+                'Ваша подписка истекла. Для восстановления доступа продлите подписку.\n\n'
+                '🔧 Доступ к серверам заблокирован до продления.\n',
+            ).format(tariff_label=tariff_label)
 
             from aiogram.types import InlineKeyboardMarkup
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_subscription_extend_button('💎 Продлить подписку', subscription.id)],
-                    [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
+                    [
+                        build_subscription_extend_button(
+                            texts.t('MONITORING_SUB_EXPIRED_EXTEND_BUTTON', '💎 Продлить подписку'), subscription.id
+                        )
+                    ],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup'
+                        )
+                    ],
                 ]
             )
 
@@ -1993,28 +2006,34 @@ class MonitoringService:
                     notification_type=NotificationType.WINBACK_TRIAL_ENDING,
                     context={},
                 )
-            get_texts(user.language)
+            texts = get_texts(user.language)
 
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and hasattr(subscription, 'tariff') and subscription.tariff:
                 tariff_label = f' «{subscription.tariff.name}»'
-            message = f"""
-🎁 <b>Тестовая подписка{tariff_label} скоро закончится!</b>
-
-Ваша тестовая подписка истекает через 2 часа.
-
-💎 <b>Не хотите остаться без VPN?</b>
-Переходите на полную подписку!
-
-⚡️ Успейте оформить до окончания тестового периода!
-"""
+            message = texts.t(
+                'MONITORING_TRIAL_ENDING_MSG',
+                '\n🎁 <b>Тестовая подписка{tariff_label} скоро закончится!</b>\n\n'
+                'Ваша тестовая подписка истекает через 2 часа.\n\n'
+                '💎 <b>Не хотите остаться без VPN?</b>\nПереходите на полную подписку!\n\n'
+                '⚡️ Успейте оформить до окончания тестового периода!\n',
+            ).format(tariff_label=tariff_label)
 
             from aiogram.types import InlineKeyboardMarkup
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💎 Купить подписку', callback_data='menu_buy')],
-                    [build_miniapp_or_callback_button(text='💰 Пополнить баланс', callback_data='balance_topup')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('MONITORING_TRIAL_BUY_BUTTON', '💎 Купить подписку'), callback_data='menu_buy'
+                        )
+                    ],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('MONITORING_TRIAL_TOPUP_BUTTON', '💰 Пополнить баланс'),
+                            callback_data='balance_topup',
+                        )
+                    ],
                 ]
             )
 
@@ -2275,7 +2294,8 @@ class MonitoringService:
                 inline_keyboard=[
                     [
                         build_miniapp_or_callback_button(
-                            text='🎁 Получить скидку', callback_data=f'claim_discount_{offer_id}'
+                            text=texts.t('MONITORING_DISCOUNT_CLAIM_BUTTON', '🎁 Получить скидку'),
+                            callback_data=f'claim_discount_{offer_id}',
                         )
                     ],
                     [
@@ -2337,7 +2357,9 @@ class MonitoringService:
                 tariff_label = f' «{subscription.tariff.name}»'
             message = texts.AUTOPAY_SUCCESS.format(days=days, amount=settings.format_price(amount))
             if tariff_label:
-                message += f'\n📦 Тариф:{tariff_label}'
+                message += texts.t('MONITORING_TARIFF_LABEL_LINE', '\n📦 Тариф:{tariff_label}').format(
+                    tariff_label=tariff_label
+                )
             await self._send_message_with_logo(
                 chat_id=user.telegram_id,
                 text=message,
@@ -2385,14 +2407,24 @@ class MonitoringService:
                 and hasattr(subscription, 'tariff')
                 and subscription.tariff
             ):
-                message += f'\n📦 Тариф: «{subscription.tariff.name}»'
+                message += texts.t('MONITORING_TARIFF_QUOTED_LINE', '\n📦 Тариф: «{tariff_name}»').format(
+                    tariff_name=subscription.tariff.name
+                )
 
             from aiogram.types import InlineKeyboardMarkup
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [build_miniapp_or_callback_button(text='💳 Пополнить баланс', callback_data='balance_topup')],
-                    [build_miniapp_or_callback_button(text='📱 Моя подписка', callback_data='menu_subscription')],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BALANCE_TOPUP', '💳 Пополнить баланс'), callback_data='balance_topup'
+                        )
+                    ],
+                    [
+                        build_miniapp_or_callback_button(
+                            text=texts.t('BTN_MY_SUBSCRIPTION', '📱 Моя подписка'), callback_data='menu_subscription'
+                        )
+                    ],
                 ]
             )
 
@@ -3046,21 +3078,35 @@ class MonitoringService:
                         title = title[:57] + '...'
 
                     # Детали пользователя: имя, Telegram ID и username
-                    full_name = html.escape(ticket.user.full_name or '') if ticket.user else 'Unknown'
+                    texts = get_texts(settings.DEFAULT_LANGUAGE)
+                    full_name = (
+                        html.escape(ticket.user.full_name or '')
+                        if ticket.user
+                        else texts.t('MONITORING_TICKET_USER_UNKNOWN', 'Unknown')
+                    )
                     telegram_id_display = ticket.user.telegram_id if ticket.user else '—'
                     username_display = format_username_link(
-                        ticket.user.username if ticket.user else None, 'отсутствует'
+                        ticket.user.username if ticket.user else None,
+                        texts.t('MONITORING_TICKET_USERNAME_MISSING', 'отсутствует'),
                     )
                     safe_title = html.escape(title) if title else '—'
 
-                    text = (
-                        f'⏰ <b>Ожидание ответа на тикет превышено</b>\n\n'
-                        f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
-                        f'👤 <b>Пользователь:</b> {full_name}\n'
-                        f'🆔 <b>Telegram ID:</b> <code>{telegram_id_display}</code>\n'
-                        f'📱 <b>Username:</b> {username_display}\n'
-                        f'📝 <b>Заголовок:</b> {safe_title}\n'
-                        f'⏱️ <b>Ожидает ответа:</b> {waited_minutes} мин\n'
+                    text = texts.t(
+                        'MONITORING_TICKET_SLA_MSG',
+                        '⏰ <b>Ожидание ответа на тикет превышено</b>\n\n'
+                        '🆔 <b>ID:</b> <code>{ticket_id}</code>\n'
+                        '👤 <b>Пользователь:</b> {full_name}\n'
+                        '🆔 <b>Telegram ID:</b> <code>{telegram_id}</code>\n'
+                        '📱 <b>Username:</b> {username}\n'
+                        '📝 <b>Заголовок:</b> {title}\n'
+                        '⏱️ <b>Ожидает ответа:</b> {minutes} мин\n',
+                    ).format(
+                        ticket_id=ticket.id,
+                        full_name=full_name,
+                        telegram_id=telegram_id_display,
+                        username=username_display,
+                        title=safe_title,
+                        minutes=waited_minutes,
                     )
 
                     sent = await service.send_ticket_event_notification(text)

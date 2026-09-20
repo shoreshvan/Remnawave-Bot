@@ -754,7 +754,9 @@ async def _auto_extend_subscription(
                 '✅ Subscription automatically extended for {period}.',
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and prepared.tariff_name:
-                auto_message += f'\n📦 Тариф: «{prepared.tariff_name}»'
+                auto_message += texts.t('RECURRENT_TOPUP_TARIFF_LINE', '\n📦 Тариф: «{name}»').format(
+                    name=prepared.tariff_name
+                )
             details_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
                 'New expiration date: {date}.',
@@ -1131,7 +1133,9 @@ async def _auto_purchase_tariff(
                 '✅ Подписка на {period} автоматически оформлена после пополнения баланса.',
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and tariff_name_for_label:
-                message += f'\n📦 Тариф: «{tariff_name_for_label}»'
+                message += texts.t('RECURRENT_TOPUP_TARIFF_LINE', '\n📦 Тариф: «{name}»').format(
+                    name=tariff_name_for_label
+                )
 
             hint = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_HINT',
@@ -1488,12 +1492,13 @@ async def _auto_purchase_daily_tariff(
         try:
             texts = get_texts(getattr(user, 'language', 'ru'))
 
-            message = (
-                f'✅ <b>Суточный тариф «{html.escape(tariff.name)}» активирован!</b>\n\n'
-                f'💰 Списано: {final_price / 100:.0f} ₽ за первый день\n'
-                f'🔄 Средства будут списываться автоматически раз в сутки.\n\n'
-                f'ℹ️ Вы можете приостановить подписку в любой момент.'
-            )
+            message = texts.t(
+                'AUTO_PURCHASE_DAILY_ACTIVATED',
+                '✅ <b>Суточный тариф «{name}» активирован!</b>\n\n'
+                '💰 Списано: {price} ₽ за первый день\n'
+                '🔄 Средства будут списываться автоматически раз в сутки.\n\n'
+                'ℹ️ Вы можете приостановить подписку в любой момент.',
+            ).format(name=html.escape(tariff.name), price=f'{final_price / 100:.0f}')
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -2576,7 +2581,9 @@ async def try_auto_extend_expired_after_topup(
                 '✅ Subscription automatically extended for {period}.',
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and tariff_name_for_label:
-                auto_message += f'\n📦 Тариф: «{tariff_name_for_label}»'
+                auto_message += texts.t('RECURRENT_TOPUP_TARIFF_LINE', '\n📦 Тариф: «{name}»').format(
+                    name=tariff_name_for_label
+                )
             details_message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_EXTENDED_DETAILS',
                 'New expiration date: {date}.',
@@ -3662,7 +3669,9 @@ async def _process_legacy_generic_cart(
 
                         _t = await _get_tariff_label(db, subscription.tariff_id)
                         if _t:
-                            auto_message += f'\n📦 Тариф: «{_t.name}»'
+                            auto_message += texts.t('RECURRENT_TOPUP_TARIFF_LINE', '\n📦 Тариф: «{name}»').format(
+                                name=_t.name
+                            )
                     except Exception:
                         pass
 

@@ -23,6 +23,7 @@ from app.database.crud.system_setting import (
 )
 from app.database.database import AsyncSessionLocal
 from app.database.models import SystemSetting
+from app.localization.texts import get_texts
 from app.services.web_api_token_service import ensure_default_web_api_token
 
 
@@ -129,14 +130,14 @@ class BotConfigurationService:
         return value
 
     CATEGORY_TITLES: dict[str, str] = {
-        'CORE': '🤖 Основные настройки',
-        'SUPPORT': '💬 Поддержка и тикеты',
-        'REGISTRATION_ACCESS': '🔐 Регистрация и доступ',
-        'LOCALIZATION': '🌍 Языки интерфейса',
-        'CHANNEL': '📣 Обязательная подписка',
+        'CORE': get_texts().t('SETTINGS_CATEGORY_TITLE_CORE', '🤖 Основные настройки'),
+        'SUPPORT': get_texts().t('SETTINGS_CATEGORY_TITLE_SUPPORT', '💬 Поддержка и тикеты'),
+        'REGISTRATION_ACCESS': get_texts().t('SETTINGS_CATEGORY_TITLE_REGISTRATION_ACCESS', '🔐 Регистрация и доступ'),
+        'LOCALIZATION': get_texts().t('SETTINGS_CATEGORY_TITLE_LOCALIZATION', '🌍 Языки интерфейса'),
+        'CHANNEL': get_texts().t('SETTINGS_CATEGORY_TITLE_CHANNEL', '📣 Обязательная подписка'),
         'TIMEZONE': '🗂 Timezone',
-        'PAYMENT': '💳 Общие платежные настройки',
-        'PAYMENT_VERIFICATION': '🕵️ Проверка платежей',
+        'PAYMENT': get_texts().t('SETTINGS_CATEGORY_TITLE_PAYMENT', '💳 Общие платежные настройки'),
+        'PAYMENT_VERIFICATION': get_texts().t('SETTINGS_CATEGORY_TITLE_PAYMENT_VERIFICATION', '🕵️ Проверка платежей'),
         'TELEGRAM': '⭐ Telegram Stars',
         'TELEGRAM_WIDGET': '🔐 Telegram Login Widget',
         'TELEGRAM_OIDC': '🔑 Telegram Login (OIDC)',
@@ -163,123 +164,123 @@ class BotConfigurationService:
         'MULENPAY': '💰 {mulenpay_name}',
         'PAL24': '🏦 PAL24 / PayPalych',
         'WATA': '💠 Wata',
-        'SUBSCRIPTIONS_CORE': '📅 Подписки и лимиты',
-        'SIMPLE_SUBSCRIPTION': '⚡ Простая покупка',
-        'PERIODS': '📆 Периоды подписок',
-        'SUBSCRIPTION_PRICES': '💵 Стоимость тарифов',
-        'TRAFFIC': '📊 Трафик',
-        'TRAFFIC_PACKAGES': '📦 Пакеты трафика',
-        'TRIAL': '🎁 Пробный период',
-        'REFERRAL': '👥 Реферальная программа',
-        'AUTOPAY': '🔄 Автопродление',
-        'NOTIFICATIONS': '🔔 Уведомления пользователям',
-        'ADMIN_NOTIFICATIONS': '📣 Оповещения администраторам',
-        'ADMIN_REPORTS': '🗂 Автоматические отчеты',
-        'INTERFACE': '🎨 Интерфейс и брендинг',
-        'INTERFACE_BRANDING': '🖼️ Брендинг',
-        'INTERFACE_SUBSCRIPTION': '🔗 Ссылка на подписку',
-        'CONNECT_BUTTON': '🚀 Кнопка подключения',
+        'SUBSCRIPTIONS_CORE': get_texts().t('SETTINGS_CATEGORY_TITLE_SUBSCRIPTIONS_CORE', '📅 Подписки и лимиты'),
+        'SIMPLE_SUBSCRIPTION': get_texts().t('SETTINGS_CATEGORY_TITLE_SIMPLE_SUBSCRIPTION', '⚡ Простая покупка'),
+        'PERIODS': get_texts().t('SETTINGS_CATEGORY_TITLE_PERIODS', '📆 Периоды подписок'),
+        'SUBSCRIPTION_PRICES': get_texts().t('SETTINGS_CATEGORY_TITLE_SUBSCRIPTION_PRICES', '💵 Стоимость тарифов'),
+        'TRAFFIC': get_texts().t('SETTINGS_CATEGORY_TITLE_TRAFFIC', '📊 Трафик'),
+        'TRAFFIC_PACKAGES': get_texts().t('SETTINGS_CATEGORY_TITLE_TRAFFIC_PACKAGES', '📦 Пакеты трафика'),
+        'TRIAL': get_texts().t('SETTINGS_CATEGORY_TITLE_TRIAL', '🎁 Пробный период'),
+        'REFERRAL': get_texts().t('SETTINGS_CATEGORY_TITLE_REFERRAL', '👥 Реферальная программа'),
+        'AUTOPAY': get_texts().t('SETTINGS_CATEGORY_TITLE_AUTOPAY', '🔄 Автопродление'),
+        'NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_TITLE_NOTIFICATIONS', '🔔 Уведомления пользователям'),
+        'ADMIN_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_TITLE_ADMIN_NOTIFICATIONS', '📣 Оповещения администраторам'),
+        'ADMIN_REPORTS': get_texts().t('SETTINGS_CATEGORY_TITLE_ADMIN_REPORTS', '🗂 Автоматические отчеты'),
+        'INTERFACE': get_texts().t('SETTINGS_CATEGORY_TITLE_INTERFACE', '🎨 Интерфейс и брендинг'),
+        'INTERFACE_BRANDING': get_texts().t('SETTINGS_CATEGORY_TITLE_INTERFACE_BRANDING', '🖼️ Брендинг'),
+        'INTERFACE_SUBSCRIPTION': get_texts().t('SETTINGS_CATEGORY_TITLE_INTERFACE_SUBSCRIPTION', '🔗 Ссылка на подписку'),
+        'CONNECT_BUTTON': get_texts().t('SETTINGS_CATEGORY_TITLE_CONNECT_BUTTON', '🚀 Кнопка подключения'),
         'MINIAPP': '📱 Mini App',
         'HAPP': '🅷 Happ',
-        'SKIP': '⚡ Быстрый старт',
-        'ADDITIONAL': '📱 Дополнительные приложения',
-        'DATABASE': '💾 База данных',
+        'SKIP': get_texts().t('SETTINGS_CATEGORY_TITLE_SKIP', '⚡ Быстрый старт'),
+        'ADDITIONAL': get_texts().t('SETTINGS_CATEGORY_TITLE_ADDITIONAL', '📱 Дополнительные приложения'),
+        'DATABASE': get_texts().t('SETTINGS_CATEGORY_TITLE_DATABASE', '💾 База данных'),
         'POSTGRES': '🐘 PostgreSQL',
         'SQLITE': '🧱 SQLite',
         'REDIS': '🧠 Redis',
         'REMNAWAVE': '🌐 RemnaWave API',
-        'SERVER_STATUS': '📊 Статус серверов',
-        'MONITORING': '📈 Мониторинг',
-        'MAINTENANCE': '🔧 Обслуживание',
-        'BACKUP': '💾 Резервные копии',
-        'VERSION': '🔄 Проверка версий',
+        'SERVER_STATUS': get_texts().t('SETTINGS_CATEGORY_TITLE_SERVER_STATUS', '📊 Статус серверов'),
+        'MONITORING': get_texts().t('SETTINGS_CATEGORY_TITLE_MONITORING', '📈 Мониторинг'),
+        'MAINTENANCE': get_texts().t('SETTINGS_CATEGORY_TITLE_MAINTENANCE', '🔧 Обслуживание'),
+        'BACKUP': get_texts().t('SETTINGS_CATEGORY_TITLE_BACKUP', '💾 Резервные копии'),
+        'VERSION': get_texts().t('SETTINGS_CATEGORY_TITLE_VERSION', '🔄 Проверка версий'),
         'WEB_API': '⚡ Web API',
         'WEBHOOK': '🌐 Webhook',
-        'WEBHOOK_NOTIFICATIONS': '📢 Уведомления от вебхуков',
-        'LOG': '📝 Логирование',
-        'DEBUG': '🧪 Режим разработки',
-        'MODERATION': '🛡️ Модерация и фильтры',
-        'BAN_NOTIFICATIONS': '🚫 Тексты уведомлений о блокировках',
-        'INFO_PAGES': '📄 Инфо-страницы',
-        'GRACE_ACCESS': '🛟 Grace-доступ',
+        'WEBHOOK_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_TITLE_WEBHOOK_NOTIFICATIONS', '📢 Уведомления от вебхуков'),
+        'LOG': get_texts().t('SETTINGS_CATEGORY_TITLE_LOG', '📝 Логирование'),
+        'DEBUG': get_texts().t('SETTINGS_CATEGORY_TITLE_DEBUG', '🧪 Режим разработки'),
+        'MODERATION': get_texts().t('SETTINGS_CATEGORY_TITLE_MODERATION', '🛡️ Модерация и фильтры'),
+        'BAN_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_TITLE_BAN_NOTIFICATIONS', '🚫 Тексты уведомлений о блокировках'),
+        'INFO_PAGES': get_texts().t('SETTINGS_CATEGORY_TITLE_INFO_PAGES', '📄 Инфо-страницы'),
+        'GRACE_ACCESS': get_texts().t('SETTINGS_CATEGORY_TITLE_GRACE_ACCESS', '🛟 Grace-доступ'),
     }
 
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
-        'CORE': 'Базовые параметры работы бота и обязательные ссылки.',
-        'SUPPORT': 'Контакты поддержки, SLA и режимы обработки обращений.',
-        'REGISTRATION_ACCESS': 'Закрытая регистрация и допустимые способы приглашения новых пользователей.',
-        'LOCALIZATION': 'Доступные языки, локализация интерфейса и выбор языка.',
-        'CHANNEL': 'Настройки обязательной подписки на канал или группу.',
-        'TIMEZONE': 'Часовой пояс панели и отображение времени.',
-        'PAYMENT': 'Общие тексты платежей, описания чеков и шаблоны.',
-        'PAYMENT_VERIFICATION': 'Автоматическая проверка пополнений и интервал выполнения.',
-        'YOOKASSA': 'Интеграция с YooKassa: идентификаторы магазина и вебхуки.',
-        'CRYPTOBOT': 'CryptoBot и криптоплатежи через Telegram.',
-        'HELEKET': 'Heleket: криптоплатежи, ключи мерчанта и вебхуки.',
-        'CLOUDPAYMENTS': 'CloudPayments: оплата банковскими картами, Public ID, API Secret и вебхуки.',
-        'FREEKASSA': 'Freekassa: ID магазина, API ключ, секретные слова и вебхуки.',
-        'KASSA_AI': 'KassaAI: отдельная платёжка api.fk.life с СБП, картами и SberPay.',
-        'RIOPAY': 'RioPay: платёжная система api.riopay.online с поддержкой карт и СБП.',
-        'PAYPEAR': 'PayPear: платёжная система api.paypear.ru с поддержкой карт, СБП, SberPay и T-Pay.',
-        'ROLLYPAY': 'RollyPay: платёжный шлюз rollypay.io с СБП, картами и криптовалютой.',
-        'OVERPAY': 'Overpay: платёжный шлюз pay.overpay.io с mTLS и поддержкой карт и СБП.',
-        'AURAPAY': 'AuraPay: платёжный шлюз aurapay.tech с поддержкой карт и СБП.',
-        'ANTILOPAY': 'Antilopay: lk.antilopay.com, оплата картой, СБП и SberPay.',
-        'ETOPLATEZHI': 'Etoplatezhi: paymentpage.etoplatezhi.ru, оплата картой и через СБП.',
-        'JUPITER': 'Jupiter (FPGate P2P v2.1): app.juppiter.tech, эквайринг СБП с HMAC-SHA256.',
-        'CISPAY': 'cisPay: api.cispay.app, H2H-оплата картой и СБП на хостинговой странице, вебхуки с HMAC-SHA256.',
-        'DONUT': 'Donut P2P: gw.donut.business, P2P-оплата картой, СБП по телефону и QR.',
-        'LAVA': 'Lava Business: gate.lava.ru, оплата картой и СБП с HMAC-SHA256 и подтверждением через webhook.',
-        'PLATEGA': '{platega_name}: merchant ID, секрет, ссылки возврата и методы оплаты.',
-        'MULENPAY': 'Платежи {mulenpay_name} и параметры магазина.',
-        'PAL24': 'PAL24 / PayPalych подключения и лимиты.',
-        'TRIBUTE': 'Tribute и донат-сервисы.',
-        'TELEGRAM': 'Telegram Stars и их стоимость.',
-        'TELEGRAM_WIDGET': 'Внешний вид виджета авторизации Telegram на странице входа в кабинет.',
-        'TELEGRAM_OIDC': 'OpenID Connect авторизация через Telegram (новая система). Требует настройки в BotFather > Bot Settings > Web Login.',
-        'WATA': 'Wata: токен доступа, тип платежа и пределы сумм.',
-        'SUBSCRIPTIONS_CORE': 'Лимиты устройств, трафика и базовые цены подписок.',
-        'SIMPLE_SUBSCRIPTION': 'Параметры упрощённой покупки: период, трафик, устройства и сквады.',
-        'PERIODS': 'Доступные периоды подписок и продлений.',
-        'SUBSCRIPTION_PRICES': 'Стоимость подписок по периодам в копейках.',
-        'TRAFFIC': 'Лимиты трафика и стратегии сброса.',
-        'TRAFFIC_PACKAGES': 'Цены пакетов трафика и конфигурация предложений.',
-        'TRIAL': 'Длительность и ограничения пробного периода.',
-        'REFERRAL': 'Бонусы и пороги реферальной программы.',
-        'AUTOPAY': 'Настройки автопродления и минимальный баланс.',
-        'NOTIFICATIONS': 'Пользовательские уведомления и кэширование сообщений.',
-        'ADMIN_NOTIFICATIONS': 'Оповещения админам о событиях и тикетах.',
-        'ADMIN_REPORTS': 'Автоматические отчеты для команды.',
-        'INTERFACE': 'Глобальные параметры интерфейса и брендирования.',
-        'INTERFACE_BRANDING': 'Логотип и фирменный стиль.',
-        'INTERFACE_SUBSCRIPTION': 'Отображение ссылок и кнопок подписок.',
-        'CONNECT_BUTTON': 'Поведение кнопки «Подключиться» и miniapp.',
-        'MINIAPP': 'Mini App и кастомные ссылки.',
-        'HAPP': 'Интеграция Happ и связанные ссылки.',
-        'SKIP': 'Настройки быстрого старта и гайд по подключению.',
-        'ADDITIONAL': 'Конфигурация deep links и кеша.',
-        'DATABASE': 'Режим работы базы данных и пути до файлов.',
-        'POSTGRES': 'Параметры подключения к PostgreSQL.',
-        'SQLITE': 'Файл SQLite и резервные параметры.',
-        'REDIS': 'Подключение к Redis для кэша.',
-        'REMNAWAVE': 'Параметры авторизации и интеграция с RemnaWave API.',
-        'SERVER_STATUS': 'Отображение статуса серверов и external URL.',
-        'MONITORING': 'Интервалы мониторинга и хранение логов.',
-        'MAINTENANCE': 'Режим обслуживания, сообщения и интервалы.',
-        'BACKUP': 'Резервное копирование и расписание.',
-        'VERSION': 'Отслеживание обновлений репозитория.',
-        'WEB_API': 'Web API, токены и права доступа.',
-        'WEBHOOK': 'Пути и секреты вебхуков.',
-        'WEBHOOK_NOTIFICATIONS': 'Управление уведомлениями, которые получают пользователи при событиях RemnaWave (отключение/активация подписки, устройства, трафик и т.д.).',
-        'LOG': 'Уровни логирования и ротация.',
-        'DEBUG': 'Отладочные функции и безопасный режим.',
-        'MODERATION': 'Настройки фильтров отображаемых имен и защиты от фишинга.',
-        'BAN_NOTIFICATIONS': 'Тексты уведомлений о блокировках, которые отправляются пользователям.',
-        'INFO_PAGES': 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.',
+        'CORE': get_texts().t('SETTINGS_CATEGORY_DESC_CORE', 'Базовые параметры работы бота и обязательные ссылки.'),
+        'SUPPORT': get_texts().t('SETTINGS_CATEGORY_DESC_SUPPORT', 'Контакты поддержки, SLA и режимы обработки обращений.'),
+        'REGISTRATION_ACCESS': get_texts().t('SETTINGS_CATEGORY_DESC_REGISTRATION_ACCESS', 'Закрытая регистрация и допустимые способы приглашения новых пользователей.'),
+        'LOCALIZATION': get_texts().t('SETTINGS_CATEGORY_DESC_LOCALIZATION', 'Доступные языки, локализация интерфейса и выбор языка.'),
+        'CHANNEL': get_texts().t('SETTINGS_CATEGORY_DESC_CHANNEL', 'Настройки обязательной подписки на канал или группу.'),
+        'TIMEZONE': get_texts().t('SETTINGS_CATEGORY_DESC_TIMEZONE', 'Часовой пояс панели и отображение времени.'),
+        'PAYMENT': get_texts().t('SETTINGS_CATEGORY_DESC_PAYMENT', 'Общие тексты платежей, описания чеков и шаблоны.'),
+        'PAYMENT_VERIFICATION': get_texts().t('SETTINGS_CATEGORY_DESC_PAYMENT_VERIFICATION', 'Автоматическая проверка пополнений и интервал выполнения.'),
+        'YOOKASSA': get_texts().t('SETTINGS_CATEGORY_DESC_YOOKASSA', 'Интеграция с YooKassa: идентификаторы магазина и вебхуки.'),
+        'CRYPTOBOT': get_texts().t('SETTINGS_CATEGORY_DESC_CRYPTOBOT', 'CryptoBot и криптоплатежи через Telegram.'),
+        'HELEKET': get_texts().t('SETTINGS_CATEGORY_DESC_HELEKET', 'Heleket: криптоплатежи, ключи мерчанта и вебхуки.'),
+        'CLOUDPAYMENTS': get_texts().t('SETTINGS_CATEGORY_DESC_CLOUDPAYMENTS', 'CloudPayments: оплата банковскими картами, Public ID, API Secret и вебхуки.'),
+        'FREEKASSA': get_texts().t('SETTINGS_CATEGORY_DESC_FREEKASSA', 'Freekassa: ID магазина, API ключ, секретные слова и вебхуки.'),
+        'KASSA_AI': get_texts().t('SETTINGS_CATEGORY_DESC_KASSA_AI', 'KassaAI: отдельная платёжка api.fk.life с СБП, картами и SberPay.'),
+        'RIOPAY': get_texts().t('SETTINGS_CATEGORY_DESC_RIOPAY', 'RioPay: платёжная система api.riopay.online с поддержкой карт и СБП.'),
+        'PAYPEAR': get_texts().t('SETTINGS_CATEGORY_DESC_PAYPEAR', 'PayPear: платёжная система api.paypear.ru с поддержкой карт, СБП, SberPay и T-Pay.'),
+        'ROLLYPAY': get_texts().t('SETTINGS_CATEGORY_DESC_ROLLYPAY', 'RollyPay: платёжный шлюз rollypay.io с СБП, картами и криптовалютой.'),
+        'OVERPAY': get_texts().t('SETTINGS_CATEGORY_DESC_OVERPAY', 'Overpay: платёжный шлюз pay.overpay.io с mTLS и поддержкой карт и СБП.'),
+        'AURAPAY': get_texts().t('SETTINGS_CATEGORY_DESC_AURAPAY', 'AuraPay: платёжный шлюз aurapay.tech с поддержкой карт и СБП.'),
+        'ANTILOPAY': get_texts().t('SETTINGS_CATEGORY_DESC_ANTILOPAY', 'Antilopay: lk.antilopay.com, оплата картой, СБП и SberPay.'),
+        'ETOPLATEZHI': get_texts().t('SETTINGS_CATEGORY_DESC_ETOPLATEZHI', 'Etoplatezhi: paymentpage.etoplatezhi.ru, оплата картой и через СБП.'),
+        'JUPITER': get_texts().t('SETTINGS_CATEGORY_DESC_JUPITER', 'Jupiter (FPGate P2P v2.1): app.juppiter.tech, эквайринг СБП с HMAC-SHA256.'),
+        'CISPAY': get_texts().t('SETTINGS_CATEGORY_DESC_CISPAY', 'cisPay: api.cispay.app, H2H-оплата картой и СБП на хостинговой странице, вебхуки с HMAC-SHA256.'),
+        'DONUT': get_texts().t('SETTINGS_CATEGORY_DESC_DONUT', 'Donut P2P: gw.donut.business, P2P-оплата картой, СБП по телефону и QR.'),
+        'LAVA': get_texts().t('SETTINGS_CATEGORY_DESC_LAVA', 'Lava Business: gate.lava.ru, оплата картой и СБП с HMAC-SHA256 и подтверждением через webhook.'),
+        'PLATEGA': get_texts().t('SETTINGS_CATEGORY_DESC_PLATEGA', '{platega_name}: merchant ID, секрет, ссылки возврата и методы оплаты.'),
+        'MULENPAY': get_texts().t('SETTINGS_CATEGORY_DESC_MULENPAY', 'Платежи {mulenpay_name} и параметры магазина.'),
+        'PAL24': get_texts().t('SETTINGS_CATEGORY_DESC_PAL24', 'PAL24 / PayPalych подключения и лимиты.'),
+        'TRIBUTE': get_texts().t('SETTINGS_CATEGORY_DESC_TRIBUTE', 'Tribute и донат-сервисы.'),
+        'TELEGRAM': get_texts().t('SETTINGS_CATEGORY_DESC_TELEGRAM', 'Telegram Stars и их стоимость.'),
+        'TELEGRAM_WIDGET': get_texts().t('SETTINGS_CATEGORY_DESC_TELEGRAM_WIDGET', 'Внешний вид виджета авторизации Telegram на странице входа в кабинет.'),
+        'TELEGRAM_OIDC': get_texts().t('SETTINGS_CATEGORY_DESC_TELEGRAM_OIDC', 'OpenID Connect авторизация через Telegram (новая система). Требует настройки в BotFather > Bot Settings > Web Login.'),
+        'WATA': get_texts().t('SETTINGS_CATEGORY_DESC_WATA', 'Wata: токен доступа, тип платежа и пределы сумм.'),
+        'SUBSCRIPTIONS_CORE': get_texts().t('SETTINGS_CATEGORY_DESC_SUBSCRIPTIONS_CORE', 'Лимиты устройств, трафика и базовые цены подписок.'),
+        'SIMPLE_SUBSCRIPTION': get_texts().t('SETTINGS_CATEGORY_DESC_SIMPLE_SUBSCRIPTION', 'Параметры упрощённой покупки: период, трафик, устройства и сквады.'),
+        'PERIODS': get_texts().t('SETTINGS_CATEGORY_DESC_PERIODS', 'Доступные периоды подписок и продлений.'),
+        'SUBSCRIPTION_PRICES': get_texts().t('SETTINGS_CATEGORY_DESC_SUBSCRIPTION_PRICES', 'Стоимость подписок по периодам в копейках.'),
+        'TRAFFIC': get_texts().t('SETTINGS_CATEGORY_DESC_TRAFFIC', 'Лимиты трафика и стратегии сброса.'),
+        'TRAFFIC_PACKAGES': get_texts().t('SETTINGS_CATEGORY_DESC_TRAFFIC_PACKAGES', 'Цены пакетов трафика и конфигурация предложений.'),
+        'TRIAL': get_texts().t('SETTINGS_CATEGORY_DESC_TRIAL', 'Длительность и ограничения пробного периода.'),
+        'REFERRAL': get_texts().t('SETTINGS_CATEGORY_DESC_REFERRAL', 'Бонусы и пороги реферальной программы.'),
+        'AUTOPAY': get_texts().t('SETTINGS_CATEGORY_DESC_AUTOPAY', 'Настройки автопродления и минимальный баланс.'),
+        'NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_DESC_NOTIFICATIONS', 'Пользовательские уведомления и кэширование сообщений.'),
+        'ADMIN_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_DESC_ADMIN_NOTIFICATIONS', 'Оповещения админам о событиях и тикетах.'),
+        'ADMIN_REPORTS': get_texts().t('SETTINGS_CATEGORY_DESC_ADMIN_REPORTS', 'Автоматические отчеты для команды.'),
+        'INTERFACE': get_texts().t('SETTINGS_CATEGORY_DESC_INTERFACE', 'Глобальные параметры интерфейса и брендирования.'),
+        'INTERFACE_BRANDING': get_texts().t('SETTINGS_CATEGORY_DESC_INTERFACE_BRANDING', 'Логотип и фирменный стиль.'),
+        'INTERFACE_SUBSCRIPTION': get_texts().t('SETTINGS_CATEGORY_DESC_INTERFACE_SUBSCRIPTION', 'Отображение ссылок и кнопок подписок.'),
+        'CONNECT_BUTTON': get_texts().t('SETTINGS_CATEGORY_DESC_CONNECT_BUTTON', 'Поведение кнопки «Подключиться» и miniapp.'),
+        'MINIAPP': get_texts().t('SETTINGS_CATEGORY_DESC_MINIAPP', 'Mini App и кастомные ссылки.'),
+        'HAPP': get_texts().t('SETTINGS_CATEGORY_DESC_HAPP', 'Интеграция Happ и связанные ссылки.'),
+        'SKIP': get_texts().t('SETTINGS_CATEGORY_DESC_SKIP', 'Настройки быстрого старта и гайд по подключению.'),
+        'ADDITIONAL': get_texts().t('SETTINGS_CATEGORY_DESC_ADDITIONAL', 'Конфигурация deep links и кеша.'),
+        'DATABASE': get_texts().t('SETTINGS_CATEGORY_DESC_DATABASE', 'Режим работы базы данных и пути до файлов.'),
+        'POSTGRES': get_texts().t('SETTINGS_CATEGORY_DESC_POSTGRES', 'Параметры подключения к PostgreSQL.'),
+        'SQLITE': get_texts().t('SETTINGS_CATEGORY_DESC_SQLITE', 'Файл SQLite и резервные параметры.'),
+        'REDIS': get_texts().t('SETTINGS_CATEGORY_DESC_REDIS', 'Подключение к Redis для кэша.'),
+        'REMNAWAVE': get_texts().t('SETTINGS_CATEGORY_DESC_REMNAWAVE', 'Параметры авторизации и интеграция с RemnaWave API.'),
+        'SERVER_STATUS': get_texts().t('SETTINGS_CATEGORY_DESC_SERVER_STATUS', 'Отображение статуса серверов и external URL.'),
+        'MONITORING': get_texts().t('SETTINGS_CATEGORY_DESC_MONITORING', 'Интервалы мониторинга и хранение логов.'),
+        'MAINTENANCE': get_texts().t('SETTINGS_CATEGORY_DESC_MAINTENANCE', 'Режим обслуживания, сообщения и интервалы.'),
+        'BACKUP': get_texts().t('SETTINGS_CATEGORY_DESC_BACKUP', 'Резервное копирование и расписание.'),
+        'VERSION': get_texts().t('SETTINGS_CATEGORY_DESC_VERSION', 'Отслеживание обновлений репозитория.'),
+        'WEB_API': get_texts().t('SETTINGS_CATEGORY_DESC_WEB_API', 'Web API, токены и права доступа.'),
+        'WEBHOOK': get_texts().t('SETTINGS_CATEGORY_DESC_WEBHOOK', 'Пути и секреты вебхуков.'),
+        'WEBHOOK_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_DESC_WEBHOOK_NOTIFICATIONS', 'Управление уведомлениями, которые получают пользователи при событиях RemnaWave (отключение/активация подписки, устройства, трафик и т.д.).'),
+        'LOG': get_texts().t('SETTINGS_CATEGORY_DESC_LOG', 'Уровни логирования и ротация.'),
+        'DEBUG': get_texts().t('SETTINGS_CATEGORY_DESC_DEBUG', 'Отладочные функции и безопасный режим.'),
+        'MODERATION': get_texts().t('SETTINGS_CATEGORY_DESC_MODERATION', 'Настройки фильтров отображаемых имен и защиты от фишинга.'),
+        'BAN_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_DESC_BAN_NOTIFICATIONS', 'Тексты уведомлений о блокировках, которые отправляются пользователям.'),
+        'INFO_PAGES': get_texts().t('SETTINGS_CATEGORY_DESC_INFO_PAGES', 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.'),
         'GRACE_ACCESS': (
-            'Временный ограниченный доступ для истёкших и лимитных подписок. '
+            get_texts().t('SETTINGS_CATEGORY_DESC_GRACE_ACCESS', 'Временный ограниченный доступ для истёкших и лимитных подписок. '
             'Здесь ключи лежат по отдельности; связанный экран с проверкой конфигурации и состоянием '
-            'сессий — в админке кабинета, раздел «Grace-доступ».'
+            'сессий — в админке кабинета, раздел «Grace-доступ».')
         ),
     }
 
@@ -520,29 +521,29 @@ class BotConfigurationService:
 
     CHOICES: dict[str, list[ChoiceOption]] = {
         'GRACE_ACCESS_MODE': [
-            ChoiceOption('false', '⛔️ Выключен', 'Grace-сессии не выдаются и не завершаются'),
-            ChoiceOption('observe', '👀 Наблюдение', 'Кандидаты только логируются, панель не меняется'),
-            ChoiceOption('true', '🛟 Включён', 'Выдаёт и завершает grace-доступ'),
-            ChoiceOption('drain', '🚰 Слив', 'Новых сессий нет, открытые доводятся до конца'),
+            ChoiceOption('false', get_texts().t('SETTINGS_CHOICE_0001', '⛔️ Выключен'), get_texts().t('SETTINGS_CHOICE_0002', 'Grace-сессии не выдаются и не завершаются')),
+            ChoiceOption('observe', get_texts().t('SETTINGS_CHOICE_0003', '👀 Наблюдение'), get_texts().t('SETTINGS_CHOICE_0004', 'Кандидаты только логируются, панель не меняется')),
+            ChoiceOption('true', get_texts().t('SETTINGS_CHOICE_0005', '🛟 Включён'), get_texts().t('SETTINGS_CHOICE_0006', 'Выдаёт и завершает grace-доступ')),
+            ChoiceOption('drain', get_texts().t('SETTINGS_CHOICE_0007', '🚰 Слив'), get_texts().t('SETTINGS_CHOICE_0008', 'Новых сессий нет, открытые доводятся до конца')),
         ],
         'REFERRAL_REWARD_SCHEME': [
-            ChoiceOption('legacy', '💰 Классическая', 'Проценты и фиксированные бонусы из настроек REFERRAL_*'),
-            ChoiceOption('levels', '🪜 Многоуровневая', 'Уровни с деньгами и/или днями подписки'),
+            ChoiceOption('legacy', get_texts().t('SETTINGS_CHOICE_0009', '💰 Классическая'), get_texts().t('SETTINGS_CHOICE_0010', 'Проценты и фиксированные бонусы из настроек REFERRAL_*')),
+            ChoiceOption('levels', get_texts().t('SETTINGS_CHOICE_0011', '🪜 Многоуровневая'), get_texts().t('SETTINGS_CHOICE_0012', 'Уровни с деньгами и/или днями подписки')),
         ],
         'REFERRAL_ALLOW_DAYS_TARGET_CHOICE': [
-            ChoiceOption('true', '✅ Разрешено', 'Пользователь сам выбирает подписку для дней награды'),
-            ChoiceOption('false', '⛔️ Запрещено', 'Подписку подбирает бот — платную с самым поздним сроком'),
+            ChoiceOption('true', get_texts().t('SETTINGS_CHOICE_0013', '✅ Разрешено'), get_texts().t('SETTINGS_CHOICE_0014', 'Пользователь сам выбирает подписку для дней награды')),
+            ChoiceOption('false', get_texts().t('SETTINGS_CHOICE_0015', '⛔️ Запрещено'), get_texts().t('SETTINGS_CHOICE_0016', 'Подписку подбирает бот — платную с самым поздним сроком')),
         ],
         'REFERRAL_ALLOW_REWARD_KIND_CHOICE': [
-            ChoiceOption('true', '✅ Разрешено', 'Пользователь выбирает: деньги или дни, когда правило даёт оба'),
-            ChoiceOption('false', '⛔️ Запрещено', 'Выдаётся всё, что настроено правилом'),
+            ChoiceOption('true', get_texts().t('SETTINGS_CHOICE_0013', '✅ Разрешено'), get_texts().t('SETTINGS_CHOICE_0017', 'Пользователь выбирает: деньги или дни, когда правило даёт оба')),
+            ChoiceOption('false', get_texts().t('SETTINGS_CHOICE_0015', '⛔️ Запрещено'), get_texts().t('SETTINGS_CHOICE_0018', 'Выдаётся всё, что настроено правилом')),
         ],
         'REFERRAL_LEVELS_MODE': [
-            ChoiceOption('chain', '🔗 Цепочка', 'Уровень = глубина: платят и пригласившему, и тем, кто выше'),
-            ChoiceOption('tiers', '🏅 Ранги', 'Уровень = ранг за число рефералов: платят только прямому пригласившему'),
+            ChoiceOption('chain', get_texts().t('SETTINGS_CHOICE_0019', '🔗 Цепочка'), get_texts().t('SETTINGS_CHOICE_0020', 'Уровень = глубина: платят и пригласившему, и тем, кто выше')),
+            ChoiceOption('tiers', get_texts().t('SETTINGS_CHOICE_0021', '🏅 Ранги'), get_texts().t('SETTINGS_CHOICE_0022', 'Уровень = ранг за число рефералов: платят только прямому пригласившему')),
         ],
         'DATABASE_MODE': [
-            ChoiceOption('auto', '🤖 Авто'),
+            ChoiceOption('auto', get_texts().t('SETTINGS_CHOICE_0023', '🤖 Авто')),
             ChoiceOption('postgresql', '🐘 PostgreSQL'),
             ChoiceOption('sqlite', '💾 SQLite'),
         ],
@@ -551,93 +552,93 @@ class BotConfigurationService:
             ChoiceOption('basic_auth', '🧾 Basic Auth'),
         ],
         'REMNAWAVE_USER_DELETE_MODE': [
-            ChoiceOption('delete', '🗑 Удалять'),
-            ChoiceOption('disable', '🚫 Деактивировать'),
+            ChoiceOption('delete', get_texts().t('SETTINGS_CHOICE_0024', '🗑 Удалять')),
+            ChoiceOption('disable', get_texts().t('SETTINGS_CHOICE_0025', '🚫 Деактивировать')),
         ],
         'TRAFFIC_SELECTION_MODE': [
-            ChoiceOption('selectable', '📦 Выбор пакетов'),
-            ChoiceOption('fixed', '📏 Фиксированный лимит'),
-            ChoiceOption('fixed_with_topup', '📏 Фикс. лимит + докупка'),
+            ChoiceOption('selectable', get_texts().t('SETTINGS_CHOICE_0026', '📦 Выбор пакетов')),
+            ChoiceOption('fixed', get_texts().t('SETTINGS_CHOICE_0027', '📏 Фиксированный лимит')),
+            ChoiceOption('fixed_with_topup', get_texts().t('SETTINGS_CHOICE_0028', '📏 Фикс. лимит + докупка')),
         ],
         'DEFAULT_TRAFFIC_RESET_STRATEGY': [
-            ChoiceOption('NO_RESET', '♾️ Без сброса'),
-            ChoiceOption('DAY', '📅 Ежедневно'),
-            ChoiceOption('WEEK', '🗓 Еженедельно'),
-            ChoiceOption('MONTH', '📆 Ежемесячно'),
+            ChoiceOption('NO_RESET', get_texts().t('SETTINGS_CHOICE_0029', '♾️ Без сброса')),
+            ChoiceOption('DAY', get_texts().t('SETTINGS_CHOICE_0030', '📅 Ежедневно')),
+            ChoiceOption('WEEK', get_texts().t('SETTINGS_CHOICE_0031', '🗓 Еженедельно')),
+            ChoiceOption('MONTH', get_texts().t('SETTINGS_CHOICE_0032', '📆 Ежемесячно')),
         ],
         'SUPPORT_SYSTEM_MODE': [
-            ChoiceOption('tickets', '🎫 Только тикеты'),
-            ChoiceOption('contact', '💬 Только контакт'),
-            ChoiceOption('both', '🔁 Оба варианта'),
+            ChoiceOption('tickets', get_texts().t('SETTINGS_CHOICE_0033', '🎫 Только тикеты')),
+            ChoiceOption('contact', get_texts().t('SETTINGS_CHOICE_0034', '💬 Только контакт')),
+            ChoiceOption('both', get_texts().t('SETTINGS_CHOICE_0035', '🔁 Оба варианта')),
         ],
         'CONNECT_BUTTON_MODE': [
-            ChoiceOption('guide', '📘 Гайд'),
-            ChoiceOption('miniapp_subscription', '🧾 Mini App подписка'),
-            ChoiceOption('miniapp_custom', '🧩 Mini App (ссылка)'),
-            ChoiceOption('link', '🔗 Прямая ссылка'),
+            ChoiceOption('guide', get_texts().t('SETTINGS_CHOICE_0036', '📘 Гайд')),
+            ChoiceOption('miniapp_subscription', get_texts().t('SETTINGS_CHOICE_0037', '🧾 Mini App подписка')),
+            ChoiceOption('miniapp_custom', get_texts().t('SETTINGS_CHOICE_0038', '🧩 Mini App (ссылка)')),
+            ChoiceOption('link', get_texts().t('SETTINGS_CHOICE_0039', '🔗 Прямая ссылка')),
             ChoiceOption('happ_cryptolink', '🪙 Happ CryptoLink'),
         ],
         'MAIN_MENU_MODE': [
-            ChoiceOption('default', '📋 Полное меню'),
-            ChoiceOption('cabinet', '🏠 Cabinet (МиниАпп)'),
+            ChoiceOption('default', get_texts().t('SETTINGS_CHOICE_0040', '📋 Полное меню')),
+            ChoiceOption('cabinet', get_texts().t('SETTINGS_CHOICE_0041', '🏠 Cabinet (МиниАпп)')),
         ],
         'CABINET_BUTTON_STYLE': [
-            ChoiceOption('', '🎨 По секциям (авто)'),
-            ChoiceOption('primary', '🔵 Синий'),
-            ChoiceOption('success', '🟢 Зелёный'),
-            ChoiceOption('danger', '🔴 Красный'),
+            ChoiceOption('', get_texts().t('SETTINGS_CHOICE_0042', '🎨 По секциям (авто)')),
+            ChoiceOption('primary', get_texts().t('SETTINGS_CHOICE_0043', '🔵 Синий')),
+            ChoiceOption('success', get_texts().t('SETTINGS_CHOICE_0044', '🟢 Зелёный')),
+            ChoiceOption('danger', get_texts().t('SETTINGS_CHOICE_0045', '🔴 Красный')),
         ],
         'SALES_MODE': [
-            ChoiceOption('classic', '📋 Классический (периоды из .env)'),
-            ChoiceOption('tariffs', '📦 Тарифы (из кабинета)'),
+            ChoiceOption('classic', get_texts().t('SETTINGS_CHOICE_0046', '📋 Классический (периоды из .env)')),
+            ChoiceOption('tariffs', get_texts().t('SETTINGS_CHOICE_0047', '📦 Тарифы (из кабинета)')),
         ],
         'SERVER_STATUS_MODE': [
-            ChoiceOption('disabled', '🚫 Отключено'),
-            ChoiceOption('external_link', '🌐 Внешняя ссылка'),
-            ChoiceOption('external_link_miniapp', '🧭 Mini App ссылка'),
+            ChoiceOption('disabled', get_texts().t('SETTINGS_CHOICE_0048', '🚫 Отключено')),
+            ChoiceOption('external_link', get_texts().t('SETTINGS_CHOICE_0049', '🌐 Внешняя ссылка')),
+            ChoiceOption('external_link_miniapp', get_texts().t('SETTINGS_CHOICE_0050', '🧭 Mini App ссылка')),
             ChoiceOption('xray', '📊 XRay Checker'),
         ],
         'YOOKASSA_PAYMENT_MODE': [
-            ChoiceOption('full_payment', '💳 Полная оплата'),
-            ChoiceOption('partial_payment', '🪙 Частичная оплата'),
-            ChoiceOption('advance', '💼 Аванс'),
-            ChoiceOption('full_prepayment', '📦 Полная предоплата'),
-            ChoiceOption('partial_prepayment', '📦 Частичная предоплата'),
-            ChoiceOption('credit', '💰 Кредит'),
-            ChoiceOption('credit_payment', '💸 Погашение кредита'),
+            ChoiceOption('full_payment', get_texts().t('SETTINGS_CHOICE_0051', '💳 Полная оплата')),
+            ChoiceOption('partial_payment', get_texts().t('SETTINGS_CHOICE_0052', '🪙 Частичная оплата')),
+            ChoiceOption('advance', get_texts().t('SETTINGS_CHOICE_0053', '💼 Аванс')),
+            ChoiceOption('full_prepayment', get_texts().t('SETTINGS_CHOICE_0054', '📦 Полная предоплата')),
+            ChoiceOption('partial_prepayment', get_texts().t('SETTINGS_CHOICE_0055', '📦 Частичная предоплата')),
+            ChoiceOption('credit', get_texts().t('SETTINGS_CHOICE_0056', '💰 Кредит')),
+            ChoiceOption('credit_payment', get_texts().t('SETTINGS_CHOICE_0057', '💸 Погашение кредита')),
         ],
         'YOOKASSA_PAYMENT_SUBJECT': [
-            ChoiceOption('commodity', '📦 Товар'),
-            ChoiceOption('excise', '🥃 Подакцизный товар'),
-            ChoiceOption('job', '🛠 Работа'),
-            ChoiceOption('service', '🧾 Услуга'),
-            ChoiceOption('gambling_bet', '🎲 Ставка'),
-            ChoiceOption('gambling_prize', '🏆 Выигрыш'),
-            ChoiceOption('lottery', '🎫 Лотерея'),
-            ChoiceOption('lottery_prize', '🎁 Приз лотереи'),
-            ChoiceOption('intellectual_activity', '🧠 Интеллектуальная деятельность'),
-            ChoiceOption('payment', '💱 Платеж'),
-            ChoiceOption('agent_commission', '🤝 Комиссия агента'),
-            ChoiceOption('composite', '🧩 Композитный'),
-            ChoiceOption('another', '📄 Другое'),
+            ChoiceOption('commodity', get_texts().t('SETTINGS_CHOICE_0058', '📦 Товар')),
+            ChoiceOption('excise', get_texts().t('SETTINGS_CHOICE_0059', '🥃 Подакцизный товар')),
+            ChoiceOption('job', get_texts().t('SETTINGS_CHOICE_0060', '🛠 Работа')),
+            ChoiceOption('service', get_texts().t('SETTINGS_CHOICE_0061', '🧾 Услуга')),
+            ChoiceOption('gambling_bet', get_texts().t('SETTINGS_CHOICE_0062', '🎲 Ставка')),
+            ChoiceOption('gambling_prize', get_texts().t('SETTINGS_CHOICE_0063', '🏆 Выигрыш')),
+            ChoiceOption('lottery', get_texts().t('SETTINGS_CHOICE_0064', '🎫 Лотерея')),
+            ChoiceOption('lottery_prize', get_texts().t('SETTINGS_CHOICE_0065', '🎁 Приз лотереи')),
+            ChoiceOption('intellectual_activity', get_texts().t('SETTINGS_CHOICE_0066', '🧠 Интеллектуальная деятельность')),
+            ChoiceOption('payment', get_texts().t('SETTINGS_CHOICE_0067', '💱 Платеж')),
+            ChoiceOption('agent_commission', get_texts().t('SETTINGS_CHOICE_0068', '🤝 Комиссия агента')),
+            ChoiceOption('composite', get_texts().t('SETTINGS_CHOICE_0069', '🧩 Композитный')),
+            ChoiceOption('another', get_texts().t('SETTINGS_CHOICE_0070', '📄 Другое')),
         ],
         'YOOKASSA_VAT_CODE': [
-            ChoiceOption(1, '1 — НДС не облагается'),
-            ChoiceOption(2, '2 — НДС 0%'),
-            ChoiceOption(3, '3 — НДС 10%'),
-            ChoiceOption(4, '4 — НДС 20%'),
-            ChoiceOption(5, '5 — НДС 10/110'),
-            ChoiceOption(6, '6 — НДС 20/120'),
-            ChoiceOption(7, '7 — НДС 5%'),
-            ChoiceOption(8, '8 — НДС 7%'),
-            ChoiceOption(9, '9 — НДС 5/105'),
-            ChoiceOption(10, '10 — НДС 7/107'),
-            ChoiceOption(11, '11 — НДС 22%'),
-            ChoiceOption(12, '12 — НДС 22/122'),
+            ChoiceOption(1, get_texts().t('SETTINGS_CHOICE_0071', '1 — НДС не облагается')),
+            ChoiceOption(2, get_texts().t('SETTINGS_CHOICE_0072', '2 — НДС 0%')),
+            ChoiceOption(3, get_texts().t('SETTINGS_CHOICE_0073', '3 — НДС 10%')),
+            ChoiceOption(4, get_texts().t('SETTINGS_CHOICE_0074', '4 — НДС 20%')),
+            ChoiceOption(5, get_texts().t('SETTINGS_CHOICE_0075', '5 — НДС 10/110')),
+            ChoiceOption(6, get_texts().t('SETTINGS_CHOICE_0076', '6 — НДС 20/120')),
+            ChoiceOption(7, get_texts().t('SETTINGS_CHOICE_0077', '7 — НДС 5%')),
+            ChoiceOption(8, get_texts().t('SETTINGS_CHOICE_0078', '8 — НДС 7%')),
+            ChoiceOption(9, get_texts().t('SETTINGS_CHOICE_0079', '9 — НДС 5/105')),
+            ChoiceOption(10, get_texts().t('SETTINGS_CHOICE_0080', '10 — НДС 7/107')),
+            ChoiceOption(11, get_texts().t('SETTINGS_CHOICE_0081', '11 — НДС 22%')),
+            ChoiceOption(12, get_texts().t('SETTINGS_CHOICE_0082', '12 — НДС 22/122')),
         ],
         'MULENPAY_LANGUAGE': [
-            ChoiceOption('ru', '🇷🇺 Русский'),
-            ChoiceOption('en', '🇬🇧 Английский'),
+            ChoiceOption('ru', get_texts().t('SETTINGS_CHOICE_0083', '🇷🇺 Русский')),
+            ChoiceOption('en', get_texts().t('SETTINGS_CHOICE_0084', '🇬🇧 Английский')),
         ],
         'LOG_LEVEL': [
             ChoiceOption('DEBUG', '🐞 Debug'),
@@ -647,10 +648,10 @@ class BotConfigurationService:
             ChoiceOption('CRITICAL', '🔥 Critical'),
         ],
         'TRIAL_DISABLED_FOR': [
-            ChoiceOption('none', '✅ Включён для всех'),
-            ChoiceOption('email', '📧 Отключён для Email'),
-            ChoiceOption('telegram', '📱 Отключён для Telegram'),
-            ChoiceOption('all', '🚫 Отключён для всех'),
+            ChoiceOption('none', get_texts().t('SETTINGS_CHOICE_0085', '✅ Включён для всех')),
+            ChoiceOption('email', get_texts().t('SETTINGS_CHOICE_0086', '📧 Отключён для Email')),
+            ChoiceOption('telegram', get_texts().t('SETTINGS_CHOICE_0087', '📱 Отключён для Telegram')),
+            ChoiceOption('all', get_texts().t('SETTINGS_CHOICE_0088', '🚫 Отключён для всех')),
         ],
         'TELEGRAM_WIDGET_SIZE': [
             ChoiceOption('large', '🔵 Large'),
@@ -658,675 +659,675 @@ class BotConfigurationService:
             ChoiceOption('small', '🟢 Small'),
         ],
         'PRIVACY_POLICY_DISPLAY_MODE': [
-            ChoiceOption('bot', '🤖 Только бот'),
-            ChoiceOption('web', '🌐 Только веб'),
-            ChoiceOption('both', '🔁 Бот и веб'),
+            ChoiceOption('bot', get_texts().t('SETTINGS_CHOICE_0089', '🤖 Только бот')),
+            ChoiceOption('web', get_texts().t('SETTINGS_CHOICE_0090', '🌐 Только веб')),
+            ChoiceOption('both', get_texts().t('SETTINGS_CHOICE_0091', '🔁 Бот и веб')),
         ],
         'PUBLIC_OFFER_DISPLAY_MODE': [
-            ChoiceOption('bot', '🤖 Только бот'),
-            ChoiceOption('web', '🌐 Только веб'),
-            ChoiceOption('both', '🔁 Бот и веб'),
+            ChoiceOption('bot', get_texts().t('SETTINGS_CHOICE_0089', '🤖 Только бот')),
+            ChoiceOption('web', get_texts().t('SETTINGS_CHOICE_0090', '🌐 Только веб')),
+            ChoiceOption('both', get_texts().t('SETTINGS_CHOICE_0091', '🔁 Бот и веб')),
         ],
         'RECURRENT_PAYMENTS_DISPLAY_MODE': [
-            ChoiceOption('bot', '🤖 Только бот'),
-            ChoiceOption('web', '🌐 Только веб'),
-            ChoiceOption('both', '🔁 Бот и веб'),
+            ChoiceOption('bot', get_texts().t('SETTINGS_CHOICE_0089', '🤖 Только бот')),
+            ChoiceOption('web', get_texts().t('SETTINGS_CHOICE_0090', '🌐 Только веб')),
+            ChoiceOption('both', get_texts().t('SETTINGS_CHOICE_0091', '🔁 Бот и веб')),
         ],
         'SERVICE_RULES_DISPLAY_MODE': [
-            ChoiceOption('bot', '🤖 Только бот'),
-            ChoiceOption('web', '🌐 Только веб'),
-            ChoiceOption('both', '🔁 Бот и веб'),
+            ChoiceOption('bot', get_texts().t('SETTINGS_CHOICE_0089', '🤖 Только бот')),
+            ChoiceOption('web', get_texts().t('SETTINGS_CHOICE_0090', '🌐 Только веб')),
+            ChoiceOption('both', get_texts().t('SETTINGS_CHOICE_0091', '🔁 Бот и веб')),
         ],
         'FAQ_DISPLAY_MODE': [
-            ChoiceOption('bot', '🤖 Только бот'),
-            ChoiceOption('web', '🌐 Только веб'),
-            ChoiceOption('both', '🔁 Бот и веб'),
+            ChoiceOption('bot', get_texts().t('SETTINGS_CHOICE_0089', '🤖 Только бот')),
+            ChoiceOption('web', get_texts().t('SETTINGS_CHOICE_0090', '🌐 Только веб')),
+            ChoiceOption('both', get_texts().t('SETTINGS_CHOICE_0091', '🔁 Бот и веб')),
         ],
     }
 
     SETTING_HINTS: dict[str, dict[str, str]] = {
         'GRACE_ACCESS_MODE': {
             'description': (
-                'Режим grace-доступа: временного ограниченного VPN-доступа для истёкшей или упёршейся '
-                'в лимит подписки, чтобы человек успел продлить её.'
+                get_texts().t('SETTINGS_HINT_GRACE_ACCESS_MODE_DESCRIPTION', 'Режим grace-доступа: временного ограниченного VPN-доступа для истёкшей или упёршейся '
+                'в лимит подписки, чтобы человек успел продлить её.')
             ),
-            'format': 'false — выключен, observe — только журнал, true — включён, drain — доводит открытые сессии.',
+            'format': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_MODE_FORMAT', 'false — выключен, observe — только журнал, true — включён, drain — доводит открытые сессии.'),
             'example': 'false',
             'warning': (
-                'Режим читается один раз при старте бота — сохранённое значение начнёт действовать только '
-                'после перезапуска. С true и незаполненными сквадами бот запустится с выключенным grace.'
+                get_texts().t('SETTINGS_HINT_GRACE_ACCESS_MODE_WARNING', 'Режим читается один раз при старте бота — сохранённое значение начнёт действовать только '
+                'после перезапуска. С true и незаполненными сквадами бот запустится с выключенным grace.')
             ),
             'dependencies': 'GRACE_ACCESS_EXPIRED_SQUAD_UUID, GRACE_ACCESS_LIMITED_SQUAD_UUID, GRACE_ACCESS_TRAFFIC_GB',
         },
         'GRACE_ACCESS_EXPIRED_SQUAD_UUID': {
-            'description': 'Сквад, в который переводится пользователь с истёкшей подпиской на время grace-доступа.',
-            'format': 'UUID сквада из панели RemnaWave.',
+            'description': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_EXPIRED_SQUAD_UUID_DESCRIPTION', 'Сквад, в который переводится пользователь с истёкшей подпиской на время grace-доступа.'),
+            'format': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_EXPIRED_SQUAD_UUID_FORMAT', 'UUID сквада из панели RemnaWave.'),
             'example': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-            'warning': 'Обязателен при режиме true. Пустое или некорректное значение отключает grace при старте.',
+            'warning': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_EXPIRED_SQUAD_UUID_WARNING', 'Обязателен при режиме true. Пустое или некорректное значение отключает grace при старте.'),
         },
         'GRACE_ACCESS_LIMITED_SQUAD_UUID': {
-            'description': 'Сквад для подписки, упёршейся в лимит трафика, на время grace-доступа.',
-            'format': 'UUID сквада из панели RemnaWave.',
+            'description': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_LIMITED_SQUAD_UUID_DESCRIPTION', 'Сквад для подписки, упёршейся в лимит трафика, на время grace-доступа.'),
+            'format': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_LIMITED_SQUAD_UUID_FORMAT', 'UUID сквада из панели RemnaWave.'),
             'example': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-            'warning': 'Обязателен при режиме true. Пустое или некорректное значение отключает grace при старте.',
+            'warning': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_LIMITED_SQUAD_UUID_WARNING', 'Обязателен при режиме true. Пустое или некорректное значение отключает grace при старте.'),
         },
         'GRACE_ACCESS_EXTERNAL_SQUAD_UUID': {
-            'description': 'Что делать с внешним сквадом пользователя на время grace-доступа.',
-            'format': 'Пусто — отцепить, keep — оставить как есть, либо UUID аварийного сквада.',
+            'description': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_EXTERNAL_SQUAD_UUID_DESCRIPTION', 'Что делать с внешним сквадом пользователя на время grace-доступа.'),
+            'format': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_EXTERNAL_SQUAD_UUID_FORMAT', 'Пусто — отцепить, keep — оставить как есть, либо UUID аварийного сквада.'),
             'example': 'keep',
-            'warning': 'Исходное состояние сохраняется в снимке сессии и возвращается при завершении grace.',
+            'warning': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_EXTERNAL_SQUAD_UUID_WARNING', 'Исходное состояние сохраняется в снимке сессии и возвращается при завершении grace.'),
         },
         'GRACE_ACCESS_TRAFFIC_GB': {
-            'description': 'Лимит трафика, который выдаётся на время grace-доступа.',
-            'format': 'Целое число гигабайт.',
+            'description': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_TRAFFIC_GB_DESCRIPTION', 'Лимит трафика, который выдаётся на время grace-доступа.'),
+            'format': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_TRAFFIC_GB_FORMAT', 'Целое число гигабайт.'),
             'example': '1',
-            'warning': 'При режиме true должно быть не меньше 1, иначе grace выключится при старте.',
+            'warning': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_TRAFFIC_GB_WARNING', 'При режиме true должно быть не меньше 1, иначе grace выключится при старте.'),
         },
         'GRACE_ACCESS_DURATION_HOURS': {
-            'description': 'Сколько действует grace-доступ, если подписку так и не продлили.',
-            'format': 'Целое число часов.',
+            'description': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_DURATION_HOURS_DESCRIPTION', 'Сколько действует grace-доступ, если подписку так и не продлили.'),
+            'format': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_DURATION_HOURS_FORMAT', 'Целое число часов.'),
             'example': '72',
-            'warning': 'По истечении срока панельное состояние возвращается к исходному из снимка сессии.',
+            'warning': get_texts().t('SETTINGS_HINT_GRACE_ACCESS_DURATION_HOURS_WARNING', 'По истечении срока панельное состояние возвращается к исходному из снимка сессии.'),
         },
         'SALES_MODE': {
             'description': (
-                'Режим продажи подписок. '
+                get_texts().t('SETTINGS_HINT_SALES_MODE_DESCRIPTION', 'Режим продажи подписок. '
                 '«Классический» — выбор периода из .env (PRICE_14_DAYS и т.д.). '
-                '«Тарифы» — готовые тарифные планы из кабинета с серверами и лимитами.'
+                '«Тарифы» — готовые тарифные планы из кабинета с серверами и лимитами.')
             ),
-            'format': 'Выберите один из доступных режимов.',
+            'format': get_texts().t('SETTINGS_HINT_SALES_MODE_FORMAT', 'Выберите один из доступных режимов.'),
             'example': 'tariffs',
             'warning': (
-                'При смене режима логика покупки подписки полностью меняется. '
-                'В режиме «Тарифы» пользователи выбирают готовый тарифный план.'
+                get_texts().t('SETTINGS_HINT_SALES_MODE_WARNING', 'При смене режима логика покупки подписки полностью меняется. '
+                'В режиме «Тарифы» пользователи выбирают готовый тарифный план.')
             ),
         },
         'YOOKASSA_ENABLED': {
             'description': (
-                'Включает оплату через YooKassa. Требует корректных идентификаторов магазина и секретного ключа.'
+                get_texts().t('SETTINGS_HINT_YOOKASSA_ENABLED_DESCRIPTION', 'Включает оплату через YooKassa. Требует корректных идентификаторов магазина и секретного ключа.')
             ),
-            'format': 'Булево значение: выберите "Включить" или "Выключить".',
+            'format': get_texts().t('SETTINGS_HINT_YOOKASSA_ENABLED_FORMAT', 'Булево значение: выберите "Включить" или "Выключить".'),
             'example': 'Включено при полностью настроенной интеграции.',
-            'warning': 'При включении без Shop ID и Secret Key пользователи увидят ошибки при оплате.',
+            'warning': get_texts().t('SETTINGS_HINT_YOOKASSA_ENABLED_WARNING', 'При включении без Shop ID и Secret Key пользователи увидят ошибки при оплате.'),
             'dependencies': 'YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_RETURN_URL',
         },
         'SIMPLE_SUBSCRIPTION_ENABLED': {
-            'description': 'Показывает в меню пункт с быстрой покупкой подписки.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_ENABLED_DESCRIPTION', 'Показывает в меню пункт с быстрой покупкой подписки.'),
+            'format': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': 'Если остались не настроенные параметры, предложение может вести себя некорректно.',
+            'warning': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_ENABLED_WARNING', 'Если остались не настроенные параметры, предложение может вести себя некорректно.'),
         },
         'SIMPLE_SUBSCRIPTION_PERIOD_DAYS': {
-            'description': 'Период подписки, который предлагается при быстрой покупке.',
-            'format': 'Выберите один из доступных периодов.',
+            'description': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_PERIOD_DAYS_DESCRIPTION', 'Период подписки, который предлагается при быстрой покупке.'),
+            'format': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_PERIOD_DAYS_FORMAT', 'Выберите один из доступных периодов.'),
             'example': '30 дн. — 990 ₽',
-            'warning': 'Не забудьте настроить цену периода в блоке «Стоимость тарифов».',
+            'warning': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_PERIOD_DAYS_WARNING', 'Не забудьте настроить цену периода в блоке «Стоимость тарифов».'),
         },
         'SIMPLE_SUBSCRIPTION_DEVICE_LIMIT': {
-            'description': 'Сколько устройств получит пользователь вместе с подпиской по быстрой покупке.',
-            'format': 'Выберите число устройств.',
+            'description': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_DEVICE_LIMIT_DESCRIPTION', 'Сколько устройств получит пользователь вместе с подпиской по быстрой покупке.'),
+            'format': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_DEVICE_LIMIT_FORMAT', 'Выберите число устройств.'),
             'example': '2 устройства',
-            'warning': 'Значение не должно превышать допустимый лимит в настройках подписок.',
+            'warning': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_DEVICE_LIMIT_WARNING', 'Значение не должно превышать допустимый лимит в настройках подписок.'),
         },
         'SIMPLE_SUBSCRIPTION_TRAFFIC_GB': {
-            'description': 'Объём трафика, включённый в простую подписку (0 = безлимит).',
-            'format': 'Выберите пакет трафика.',
+            'description': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_TRAFFIC_GB_DESCRIPTION', 'Объём трафика, включённый в простую подписку (0 = безлимит).'),
+            'format': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_TRAFFIC_GB_FORMAT', 'Выберите пакет трафика.'),
             'example': 'Безлимит',
         },
         'SIMPLE_SUBSCRIPTION_SQUAD_UUID': {
             'description': (
-                'Привязка быстрой подписки к конкретному скваду. Оставьте пустым для любого доступного сервера.'
+                get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_SQUAD_UUID_DESCRIPTION', 'Привязка быстрой подписки к конкретному скваду. Оставьте пустым для любого доступного сервера.')
             ),
-            'format': 'Выберите сквад из списка или очистите значение.',
+            'format': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_SQUAD_UUID_FORMAT', 'Выберите сквад из списка или очистите значение.'),
             'example': 'd4aa2b8c-9a36-4f31-93a2-6f07dad05fba',
-            'warning': 'Убедитесь, что выбранный сквад активен и доступен для подписки.',
+            'warning': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_SQUAD_UUID_WARNING', 'Убедитесь, что выбранный сквад активен и доступен для подписки.'),
         },
         'MAIN_MENU_RICH_ENABLED': {
             'description': (
-                'Rich-меню (Bot API 10.1): главное меню с заголовками, таблицей подписок, '
-                'сворачиваемыми блоками акций и датами в часовом поясе пользователя (tg-time).'
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_ENABLED_DESCRIPTION', 'Rich-меню (Bot API 10.1): главное меню с заголовками, таблицей подписок, '
+                'сворачиваемыми блоками акций и датами в часовом поясе пользователя (tg-time).')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
             'warning': (
-                'Требует telegram-bot-api с поддержкой Bot API 10.1 (официальный сервер поддерживает). '
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_ENABLED_WARNING', 'Требует telegram-bot-api с поддержкой Bot API 10.1 (официальный сервер поддерживает). '
                 'Если сервер не поддерживает rich-сообщения, бот сам вернётся к классическому меню до рестарта. '
                 'В rich-режиме главное меню отображается без логотипа (rich-сообщение не является фото), '
-                'а при включённом ENABLE_LOGO_MODE переходы меню и разделов пересоздают сообщение.'
+                'а при включённом ENABLE_LOGO_MODE переходы меню и разделов пересоздают сообщение.')
             ),
             'dependencies': 'ENABLE_LOGO_MODE',
         },
         'MAIN_MENU_RICH_EFFECT_ID': {
             'description': (
-                'Эффект сообщения (конфетти и т.п.) при отправке rich-меню новым сообщением. '
-                'Работает только в личных чатах и только при MAIN_MENU_RICH_ENABLED.'
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_EFFECT_ID_DESCRIPTION', 'Эффект сообщения (конфетти и т.п.) при отправке rich-меню новым сообщением. '
+                'Работает только в личных чатах и только при MAIN_MENU_RICH_ENABLED.')
             ),
-            'format': 'Идентификатор эффекта Telegram или пустая строка (без эффекта).',
+            'format': get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_EFFECT_ID_FORMAT', 'Идентификатор эффекта Telegram или пустая строка (без эффекта).'),
             'example': '5046509860389126442',
             'warning': (
-                'Известные id: 🎉 5046509860389126442, ❤️ 5044134455711629726, 🔥 5104841245755180586, '
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_EFFECT_ID_WARNING', 'Известные id: 🎉 5046509860389126442, ❤️ 5044134455711629726, 🔥 5104841245755180586, '
                 '👍 5107584321108051014, 👎 5104858069142078462, 💩 5046589136895476101. '
-                'Если сервер отклонит эффект, бот отправит меню без него и отключит эффект до рестарта.'
+                'Если сервер отклонит эффект, бот отправит меню без него и отключит эффект до рестарта.')
             ),
             'dependencies': 'MAIN_MENU_RICH_ENABLED',
         },
         'MAIN_MENU_RICH_LOGO_URL': {
             'description': (
-                'Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. '
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_LOGO_URL_DESCRIPTION', 'Публичный HTTPS-URL картинки-логотипа в шапке rich-меню. '
                 'Пусто — авто-режим: при заданном WEBHOOK_URL и существующем LOGO_FILE '
-                'логотип отдаётся эндпоинтом /cabinet/branding/bot-logo.'
+                'логотип отдаётся эндпоинтом /cabinet/branding/bot-logo.')
             ),
-            'format': 'HTTPS-URL картинки (png/jpg/webp) или пустая строка.',
+            'format': get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_LOGO_URL_FORMAT', 'HTTPS-URL картинки (png/jpg/webp) или пустая строка.'),
             'example': 'https://example.com/logo.png',
             'warning': (
-                'URL должен быть доступен серверам Telegram. Если картинку скачать не удалось, '
-                'бот один раз повторит отправку без логотипа и отключит его до рестарта.'
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_LOGO_URL_WARNING', 'URL должен быть доступен серверам Telegram. Если картинку скачать не удалось, '
+                'бот один раз повторит отправку без логотипа и отключит его до рестарта.')
             ),
             'dependencies': 'MAIN_MENU_RICH_ENABLED, WEBHOOK_URL, LOGO_FILE',
         },
         'ADMIN_NOTIFICATIONS_RICH_ENABLED': {
             'description': (
-                'Rich-вид сообщений админ-чата (Bot API 10.1): заголовки и разделители у уведомлений, '
+                get_texts().t('SETTINGS_HINT_ADMIN_NOTIFICATIONS_RICH_ENABLED_DESCRIPTION', 'Rich-вид сообщений админ-чата (Bot API 10.1): заголовки и разделители у уведомлений, '
                 'таблица показателей в стартовом сообщении и отчётах, сворачиваемые трейсбеки '
-                'в error-отчётах (полный лог инлайн вместо .txt-файла).'
+                'в error-отчётах (полный лог инлайн вместо .txt-файла).')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_ADMIN_NOTIFICATIONS_RICH_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
             'warning': (
-                'Требует telegram-bot-api с Bot API 10.1 (официальный сервер поддерживает). '
-                'При недоступности бот сам вернётся к классическому виду до рестарта.'
+                get_texts().t('SETTINGS_HINT_ADMIN_NOTIFICATIONS_RICH_ENABLED_WARNING', 'Требует telegram-bot-api с Bot API 10.1 (официальный сервер поддерживает). '
+                'При недоступности бот сам вернётся к классическому виду до рестарта.')
             ),
             'dependencies': 'ADMIN_NOTIFICATIONS_ENABLED',
         },
         'MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE': {
             'description': (
-                'Сворачивать таблицу подписок rich-меню в раскрываемый блок, когда у пользователя '
-                'больше одной подписки (мультитарифный режим). Заголовок блока показывает счётчик.'
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE_DESCRIPTION', 'Сворачивать таблицу подписок rich-меню в раскрываемый блок, когда у пользователя '
+                'больше одной подписки (мультитарифный режим). Заголовок блока показывает счётчик.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': 'Действует только при MAIN_MENU_RICH_ENABLED и включённом мультитарифе.',
+            'warning': get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_SUBSCRIPTIONS_COLLAPSIBLE_WARNING', 'Действует только при MAIN_MENU_RICH_ENABLED и включённом мультитарифе.'),
             'dependencies': 'MAIN_MENU_RICH_ENABLED, MULTI_TARIFF_ENABLED',
         },
         'MAIN_MENU_RICH_INLINE_BUTTONS': {
             'description': (
-                'Показывать кнопки ВНУТРИ полотна rich-сообщения (Bot API 10.3), а не отдельной '
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_INLINE_BUTTONS_DESCRIPTION', 'Показывать кнопки ВНУТРИ полотна rich-сообщения (Bot API 10.3), а не отдельной '
                 'клавиатурой под ним. Действует и в главном меню, и в rich-уведомлениях админ-чата. '
-                'Клавиатура не дублируется: кнопки либо внутри, либо под сообщением.'
+                'Клавиатура не дублируется: кнопки либо внутри, либо под сообщением.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_INLINE_BUTTONS_FORMAT', 'Булево значение.'),
             'example': 'false',
             'warning': (
-                'Требует Bot API 10.3 на сервере. Если хотя бы одну кнопку сообщения нельзя '
+                get_texts().t('SETTINGS_HINT_MAIN_MENU_RICH_INLINE_BUTTONS_WARNING', 'Требует Bot API 10.3 на сервере. Если хотя бы одну кнопку сообщения нельзя '
                 'перенести (оплата, игра, а в групповом админ-чате — Mini App), клавиатура этого '
-                'сообщения целиком остаётся под ним: половина кнопок внутри — это потерянные кнопки.'
+                'сообщения целиком остаётся под ним: половина кнопок внутри — это потерянные кнопки.')
             ),
             'dependencies': 'MAIN_MENU_RICH_ENABLED, ADMIN_NOTIFICATIONS_RICH_ENABLED',
         },
         'USER_NOTIFICATIONS_RICH_ENABLED': {
             'description': (
-                'Отправлять пользовательские уведомления (истечение подписки, автоплатёж, баланс, '
+                get_texts().t('SETTINGS_HINT_USER_NOTIFICATIONS_RICH_ENABLED_DESCRIPTION', 'Отправлять пользовательские уведомления (истечение подписки, автоплатёж, баланс, '
                 'рефералы, выплаты) rich-сообщением, как главное меню, а не обычным текстом. '
-                'Кнопки переезжают внутрь полотна, если включено MAIN_MENU_RICH_INLINE_BUTTONS.'
+                'Кнопки переезжают внутрь полотна, если включено MAIN_MENU_RICH_INLINE_BUTTONS.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_USER_NOTIFICATIONS_RICH_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
             'warning': (
-                'Действует только при MAIN_MENU_RICH_ENABLED. Уведомления со сложной разметкой '
+                get_texts().t('SETTINGS_HINT_USER_NOTIFICATIONS_RICH_ENABLED_WARNING', 'Действует только при MAIN_MENU_RICH_ENABLED. Уведомления со сложной разметкой '
                 '(цитаты, списки, блоки кода) и уведомления мониторинга с логотипом уходят '
-                'классическим сообщением: rich-разметка их не воспроизводит дословно.'
+                'классическим сообщением: rich-разметка их не воспроизводит дословно.')
             ),
             'dependencies': 'MAIN_MENU_RICH_ENABLED, MAIN_MENU_RICH_INLINE_BUTTONS',
         },
         'USER_ACTION_LOG_ENABLED': {
             'description': (
-                'Лог действий пользователя: нажатия кнопок в боте и действия в кабинете. '
-                'Показывается на вкладке «Активность» в карточке юзера админ-кабинета.'
+                get_texts().t('SETTINGS_HINT_USER_ACTION_LOG_ENABLED_DESCRIPTION', 'Лог действий пользователя: нажатия кнопок в боте и действия в кабинете. '
+                'Показывается на вкладке «Активность» в карточке юзера админ-кабинета.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_USER_ACTION_LOG_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
             'warning': (
-                'Каждое нажатие кнопки — строка в button_click_logs. '
-                'Старые записи чистятся автоматически (USER_ACTION_LOG_RETENTION_DAYS).'
+                get_texts().t('SETTINGS_HINT_USER_ACTION_LOG_ENABLED_WARNING', 'Каждое нажатие кнопки — строка в button_click_logs. '
+                'Старые записи чистятся автоматически (USER_ACTION_LOG_RETENTION_DAYS).')
             ),
             'dependencies': 'USER_ACTION_LOG_RETENTION_DAYS',
         },
         'USER_ACTION_LOG_RETENTION_DAYS': {
-            'description': 'Сколько дней хранить записи лога действий пользователей (button_click_logs).',
-            'format': 'Целое число дней; 0 — не удалять.',
+            'description': get_texts().t('SETTINGS_HINT_USER_ACTION_LOG_RETENTION_DAYS_DESCRIPTION', 'Сколько дней хранить записи лога действий пользователей (button_click_logs).'),
+            'format': get_texts().t('SETTINGS_HINT_USER_ACTION_LOG_RETENTION_DAYS_FORMAT', 'Целое число дней; 0 — не удалять.'),
             'example': '90',
-            'warning': 'Чистка выполняется раз в сутки циклом мониторинга.',
+            'warning': get_texts().t('SETTINGS_HINT_USER_ACTION_LOG_RETENTION_DAYS_WARNING', 'Чистка выполняется раз в сутки циклом мониторинга.'),
             'dependencies': 'USER_ACTION_LOG_ENABLED',
         },
         'MULTI_TARIFF_ENABLED': {
             'description': (
-                'Разрешает пользователям покупать несколько тарифов одновременно. '
-                'Каждый тариф создаёт отдельную подписку с собственными серверами и лимитами.'
+                get_texts().t('SETTINGS_HINT_MULTI_TARIFF_ENABLED_DESCRIPTION', 'Разрешает пользователям покупать несколько тарифов одновременно. '
+                'Каждый тариф создаёт отдельную подписку с собственными серверами и лимитами.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_MULTI_TARIFF_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
             'warning': (
-                'Работает только в режиме продаж «Тарифы». '
-                'При включении синхронизация с панелью переключается на мультитарифный режим.'
+                get_texts().t('SETTINGS_HINT_MULTI_TARIFF_ENABLED_WARNING', 'Работает только в режиме продаж «Тарифы». '
+                'При включении синхронизация с панелью переключается на мультитарифный режим.')
             ),
             'dependencies': 'SALES_MODE=tariffs, MAX_ACTIVE_SUBSCRIPTIONS',
         },
         'MAX_ACTIVE_SUBSCRIPTIONS': {
             'description': (
-                'Максимальное количество одновременных активных подписок у одного пользователя. '
-                'Применяется только в мультитарифном режиме.'
+                get_texts().t('SETTINGS_HINT_MAX_ACTIVE_SUBSCRIPTIONS_DESCRIPTION', 'Максимальное количество одновременных активных подписок у одного пользователя. '
+                'Применяется только в мультитарифном режиме.')
             ),
-            'format': 'Целое число от 1 и выше.',
+            'format': get_texts().t('SETTINGS_HINT_MAX_ACTIVE_SUBSCRIPTIONS_FORMAT', 'Целое число от 1 и выше.'),
             'example': '10',
-            'warning': 'Большое значение может усложнить управление подписками для пользователя.',
+            'warning': get_texts().t('SETTINGS_HINT_MAX_ACTIVE_SUBSCRIPTIONS_WARNING', 'Большое значение может усложнить управление подписками для пользователя.'),
             'dependencies': 'MULTI_TARIFF_ENABLED',
         },
         'DEVICES_SELECTION_ENABLED': {
-            'description': 'Разрешает пользователям выбирать количество устройств при покупке и продлении подписки.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_DEVICES_SELECTION_ENABLED_DESCRIPTION', 'Разрешает пользователям выбирать количество устройств при покупке и продлении подписки.'),
+            'format': get_texts().t('SETTINGS_HINT_DEVICES_SELECTION_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'false',
-            'warning': 'При отключении пользователи не смогут докупать устройства из интерфейса бота.',
+            'warning': get_texts().t('SETTINGS_HINT_DEVICES_SELECTION_ENABLED_WARNING', 'При отключении пользователи не смогут докупать устройства из интерфейса бота.'),
         },
         'DEVICES_SELECTION_DISABLED_AMOUNT': {
             'description': (
-                'Лимит устройств, который автоматически назначается, когда выбор количества устройств выключен. '
-                'Значение 0 отключает назначение устройств.'
+                get_texts().t('SETTINGS_HINT_DEVICES_SELECTION_DISABLED_AMOUNT_DESCRIPTION', 'Лимит устройств, который автоматически назначается, когда выбор количества устройств выключен. '
+                'Значение 0 отключает назначение устройств.')
             ),
-            'format': 'Целое число от 0 и выше.',
+            'format': get_texts().t('SETTINGS_HINT_DEVICES_SELECTION_DISABLED_AMOUNT_FORMAT', 'Целое число от 0 и выше.'),
             'example': '3',
-            'warning': 'При 0 RemnaWave не получит лимит устройств, пользователям не показываются цифры в интерфейсе.',
+            'warning': get_texts().t('SETTINGS_HINT_DEVICES_SELECTION_DISABLED_AMOUNT_WARNING', 'При 0 RemnaWave не получит лимит устройств, пользователям не показываются цифры в интерфейсе.'),
         },
         'CRYPTOBOT_ENABLED': {
-            'description': 'Разрешает принимать криптоплатежи через CryptoBot.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_CRYPTOBOT_ENABLED_DESCRIPTION', 'Разрешает принимать криптоплатежи через CryptoBot.'),
+            'format': get_texts().t('SETTINGS_HINT_CRYPTOBOT_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'Включите после указания токена API и секрета вебхука.',
-            'warning': 'Пустой токен или неверный вебхук приведут к отказам платежей.',
+            'warning': get_texts().t('SETTINGS_HINT_CRYPTOBOT_ENABLED_WARNING', 'Пустой токен или неверный вебхук приведут к отказам платежей.'),
             'dependencies': 'CRYPTOBOT_API_TOKEN',
         },
         'PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED': {
             'description': (
-                'Запускает фоновую проверку ожидающих пополнений и повторно обращается '
-                'к платёжным провайдерам без участия администратора.'
+                get_texts().t('SETTINGS_HINT_PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED_DESCRIPTION', 'Запускает фоновую проверку ожидающих пополнений и повторно обращается '
+                'к платёжным провайдерам без участия администратора.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'Включено, чтобы автоматически перепроверять зависшие платежи.',
-            'warning': 'Требует активных интеграций YooKassa, {mulenpay_name}, PayPalych, WATA или CryptoBot.',
+            'warning': get_texts().t('SETTINGS_HINT_PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED_WARNING', 'Требует активных интеграций YooKassa, {mulenpay_name}, PayPalych, WATA или CryptoBot.'),
         },
         'PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES': {
-            'description': ('Интервал между автоматическими проверками ожидающих пополнений в минутах.'),
-            'format': 'Целое число не меньше 1.',
+            'description': (get_texts().t('SETTINGS_HINT_PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES_DESCRIPTION', 'Интервал между автоматическими проверками ожидающих пополнений в минутах.')),
+            'format': get_texts().t('SETTINGS_HINT_PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES_FORMAT', 'Целое число не меньше 1.'),
             'example': '10',
-            'warning': 'Слишком малый интервал может привести к частым обращениям к платёжным API.',
+            'warning': get_texts().t('SETTINGS_HINT_PAYMENT_VERIFICATION_AUTO_CHECK_INTERVAL_MINUTES_WARNING', 'Слишком малый интервал может привести к частым обращениям к платёжным API.'),
             'dependencies': 'PAYMENT_VERIFICATION_AUTO_CHECK_ENABLED',
         },
         'BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED': {
-            'description': ('Включает применение базовых скидок на периоды подписок в групповых промо.'),
-            'format': 'Булево значение.',
+            'description': (get_texts().t('SETTINGS_HINT_BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED_DESCRIPTION', 'Включает применение базовых скидок на периоды подписок в групповых промо.')),
+            'format': get_texts().t('SETTINGS_HINT_BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': 'Скидки применяются только если указаны корректные пары периодов и процентов.',
+            'warning': get_texts().t('SETTINGS_HINT_BASE_PROMO_GROUP_PERIOD_DISCOUNTS_ENABLED_WARNING', 'Скидки применяются только если указаны корректные пары периодов и процентов.'),
         },
         'BASE_PROMO_GROUP_PERIOD_DISCOUNTS': {
-            'description': ('Список скидок для групп: каждая пара задаёт дни периода и процент скидки.'),
-            'format': 'Через запятую пары вида &lt;дней&gt;:&lt;скидка&gt;.',
+            'description': (get_texts().t('SETTINGS_HINT_BASE_PROMO_GROUP_PERIOD_DISCOUNTS_DESCRIPTION', 'Список скидок для групп: каждая пара задаёт дни периода и процент скидки.')),
+            'format': get_texts().t('SETTINGS_HINT_BASE_PROMO_GROUP_PERIOD_DISCOUNTS_FORMAT', 'Через запятую пары вида &lt;дней&gt;:&lt;скидка&gt;.'),
             'example': '30:10,60:20,90:30,180:50,360:65',
-            'warning': 'Некорректные записи будут проигнорированы. Процент ограничен 0-100.',
+            'warning': get_texts().t('SETTINGS_HINT_BASE_PROMO_GROUP_PERIOD_DISCOUNTS_WARNING', 'Некорректные записи будут проигнорированы. Процент ограничен 0-100.'),
         },
         'AUTO_PURCHASE_AFTER_TOPUP_ENABLED': {
             'description': (
-                'При достаточном балансе автоматически оформляет сохранённую подписку сразу после пополнения.'
+                get_texts().t('SETTINGS_HINT_AUTO_PURCHASE_AFTER_TOPUP_ENABLED_DESCRIPTION', 'При достаточном балансе автоматически оформляет сохранённую подписку сразу после пополнения.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_AUTO_PURCHASE_AFTER_TOPUP_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': ('Используйте с осторожностью: средства будут списаны мгновенно, если корзина найдена.'),
+            'warning': (get_texts().t('SETTINGS_HINT_AUTO_PURCHASE_AFTER_TOPUP_ENABLED_WARNING', 'Используйте с осторожностью: средства будут списаны мгновенно, если корзина найдена.')),
         },
         'SUPPORT_TICKET_SLA_MINUTES': {
-            'description': 'Лимит времени для ответа модераторов на тикет в минутах.',
-            'format': 'Целое число от 1 до 1440.',
+            'description': get_texts().t('SETTINGS_HINT_SUPPORT_TICKET_SLA_MINUTES_DESCRIPTION', 'Лимит времени для ответа модераторов на тикет в минутах.'),
+            'format': get_texts().t('SETTINGS_HINT_SUPPORT_TICKET_SLA_MINUTES_FORMAT', 'Целое число от 1 до 1440.'),
             'example': '5',
-            'warning': 'Слишком низкое значение может вызвать частые напоминания, слишком высокое — ухудшить SLA.',
+            'warning': get_texts().t('SETTINGS_HINT_SUPPORT_TICKET_SLA_MINUTES_WARNING', 'Слишком низкое значение может вызвать частые напоминания, слишком высокое — ухудшить SLA.'),
             'dependencies': 'SUPPORT_TICKET_SLA_ENABLED, SUPPORT_TICKET_SLA_REMINDER_COOLDOWN_MINUTES',
         },
         'MAINTENANCE_MODE': {
-            'description': 'Переводит бота в режим технического обслуживания и скрывает действия для пользователей.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_MAINTENANCE_MODE_DESCRIPTION', 'Переводит бота в режим технического обслуживания и скрывает действия для пользователей.'),
+            'format': get_texts().t('SETTINGS_HINT_MAINTENANCE_MODE_FORMAT', 'Булево значение.'),
             'example': 'Включено на время плановых работ.',
-            'warning': 'Не забудьте отключить после завершения работ, иначе бот останется недоступен.',
+            'warning': get_texts().t('SETTINGS_HINT_MAINTENANCE_MODE_WARNING', 'Не забудьте отключить после завершения работ, иначе бот останется недоступен.'),
             'dependencies': 'MAINTENANCE_MESSAGE, MAINTENANCE_CHECK_INTERVAL',
         },
         'MAINTENANCE_MONITORING_ENABLED': {
-            'description': ('Управляет автоматическим запуском мониторинга панели Remnawave при старте бота.'),
-            'format': 'Булево значение.',
+            'description': (get_texts().t('SETTINGS_HINT_MAINTENANCE_MONITORING_ENABLED_DESCRIPTION', 'Управляет автоматическим запуском мониторинга панели Remnawave при старте бота.')),
+            'format': get_texts().t('SETTINGS_HINT_MAINTENANCE_MONITORING_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'false',
-            'warning': ('При отключении мониторинг можно запустить вручную из панели администратора.'),
+            'warning': (get_texts().t('SETTINGS_HINT_MAINTENANCE_MONITORING_ENABLED_WARNING', 'При отключении мониторинг можно запустить вручную из панели администратора.')),
             'dependencies': 'MAINTENANCE_CHECK_INTERVAL',
         },
         'MAINTENANCE_RETRY_ATTEMPTS': {
-            'description': ('Сколько раз повторять проверку панели Remnawave перед фиксацией недоступности.'),
-            'format': 'Целое число не меньше 1.',
+            'description': (get_texts().t('SETTINGS_HINT_MAINTENANCE_RETRY_ATTEMPTS_DESCRIPTION', 'Сколько раз повторять проверку панели Remnawave перед фиксацией недоступности.')),
+            'format': get_texts().t('SETTINGS_HINT_MAINTENANCE_RETRY_ATTEMPTS_FORMAT', 'Целое число не меньше 1.'),
             'example': '3',
             'warning': (
-                'Большие значения увеличивают время реакции на реальные сбои, но помогают избежать ложных срабатываний.'
+                get_texts().t('SETTINGS_HINT_MAINTENANCE_RETRY_ATTEMPTS_WARNING', 'Большие значения увеличивают время реакции на реальные сбои, но помогают избежать ложных срабатываний.')
             ),
             'dependencies': 'MAINTENANCE_CHECK_INTERVAL',
         },
         'DISPLAY_NAME_BANNED_KEYWORDS': {
             'description': (
-                'Список слов и фрагментов, при наличии которых в отображаемом имени пользователь будет заблокирован.'
+                get_texts().t('SETTINGS_HINT_DISPLAY_NAME_BANNED_KEYWORDS_DESCRIPTION', 'Список слов и фрагментов, при наличии которых в отображаемом имени пользователь будет заблокирован.')
             ),
-            'format': 'Перечислите ключевые слова через запятую или с новой строки.',
+            'format': get_texts().t('SETTINGS_HINT_DISPLAY_NAME_BANNED_KEYWORDS_FORMAT', 'Перечислите ключевые слова через запятую или с новой строки.'),
             'example': 'support, security, служебн',
-            'warning': 'Слишком агрессивные фильтры могут блокировать добросовестных пользователей.',
-            'dependencies': 'Фильтр отображаемых имен',
+            'warning': get_texts().t('SETTINGS_HINT_DISPLAY_NAME_BANNED_KEYWORDS_WARNING', 'Слишком агрессивные фильтры могут блокировать добросовестных пользователей.'),
+            'dependencies': get_texts().t('SETTINGS_HINT_DISPLAY_NAME_BANNED_KEYWORDS_DEPENDENCIES', 'Фильтр отображаемых имен'),
         },
         'REMNAWAVE_API_URL': {
-            'description': 'Базовый адрес панели RemnaWave, с которой синхронизируется бот.',
-            'format': 'Полный URL вида https://panel.example.com.',
+            'description': get_texts().t('SETTINGS_HINT_REMNAWAVE_API_URL_DESCRIPTION', 'Базовый адрес панели RemnaWave, с которой синхронизируется бот.'),
+            'format': get_texts().t('SETTINGS_HINT_REMNAWAVE_API_URL_FORMAT', 'Полный URL вида https://panel.example.com.'),
             'example': 'https://panel.remnawave.net',
-            'warning': 'Недоступный адрес приведет к ошибкам при управлении VPN-учетками.',
-            'dependencies': 'REMNAWAVE_API_KEY или REMNAWAVE_USERNAME/REMNAWAVE_PASSWORD',
+            'warning': get_texts().t('SETTINGS_HINT_REMNAWAVE_API_URL_WARNING', 'Недоступный адрес приведет к ошибкам при управлении VPN-учетками.'),
+            'dependencies': get_texts().t('SETTINGS_HINT_REMNAWAVE_API_URL_DEPENDENCIES', 'REMNAWAVE_API_KEY или REMNAWAVE_USERNAME/REMNAWAVE_PASSWORD'),
         },
         'REMNAWAVE_AUTO_SYNC_ENABLED': {
-            'description': 'Автоматически запускает синхронизацию пользователей и серверов с панелью RemnaWave.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_REMNAWAVE_AUTO_SYNC_ENABLED_DESCRIPTION', 'Автоматически запускает синхронизацию пользователей и серверов с панелью RemnaWave.'),
+            'format': get_texts().t('SETTINGS_HINT_REMNAWAVE_AUTO_SYNC_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'Включено при корректно настроенных API-ключах.',
-            'warning': 'При включении без расписания синхронизация не будет выполнена.',
+            'warning': get_texts().t('SETTINGS_HINT_REMNAWAVE_AUTO_SYNC_ENABLED_WARNING', 'При включении без расписания синхронизация не будет выполнена.'),
             'dependencies': 'REMNAWAVE_AUTO_SYNC_TIMES',
         },
         'REMNAWAVE_AUTO_SYNC_TIMES': {
-            'description': ('Список времени в формате HH:MM, когда запускается автосинхронизация в течение суток.'),
-            'format': 'Перечислите время через запятую или с новой строки (например, 03:00, 15:00).',
+            'description': (get_texts().t('SETTINGS_HINT_REMNAWAVE_AUTO_SYNC_TIMES_DESCRIPTION', 'Список времени в формате HH:MM, когда запускается автосинхронизация в течение суток.')),
+            'format': get_texts().t('SETTINGS_HINT_REMNAWAVE_AUTO_SYNC_TIMES_FORMAT', 'Перечислите время через запятую или с новой строки (например, 03:00, 15:00).'),
             'example': '03:00, 15:00',
             'warning': (
-                'Минимальный интервал между запусками не ограничен, но слишком частые синхронизации нагружают панель.'
+                get_texts().t('SETTINGS_HINT_REMNAWAVE_AUTO_SYNC_TIMES_WARNING', 'Минимальный интервал между запусками не ограничен, но слишком частые синхронизации нагружают панель.')
             ),
             'dependencies': 'REMNAWAVE_AUTO_SYNC_ENABLED',
         },
         'REMNAWAVE_USER_DESCRIPTION_TEMPLATE': {
             'description': (
-                'Шаблон текста, который бот передает в поле Description при создании '
-                'или обновлении пользователя в панели RemnaWave.'
+                get_texts().t('SETTINGS_HINT_REMNAWAVE_USER_DESCRIPTION_TEMPLATE_DESCRIPTION', 'Шаблон текста, который бот передает в поле Description при создании '
+                'или обновлении пользователя в панели RemnaWave.')
             ),
-            'format': ('Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}.'),
+            'format': (get_texts().t('SETTINGS_HINT_REMNAWAVE_USER_DESCRIPTION_TEMPLATE_FORMAT', 'Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}.')),
             'example': 'Bot user: {full_name} {username}',
-            'warning': 'Плейсхолдер {username} автоматически очищается, если у пользователя нет @username.',
+            'warning': get_texts().t('SETTINGS_HINT_REMNAWAVE_USER_DESCRIPTION_TEMPLATE_WARNING', 'Плейсхолдер {username} автоматически очищается, если у пользователя нет @username.'),
         },
         'REMNAWAVE_USER_USERNAME_TEMPLATE': {
             'description': (
-                'Шаблон имени пользователя, которое создаётся в панели RemnaWave для телеграм-пользователя.'
+                get_texts().t('SETTINGS_HINT_REMNAWAVE_USER_USERNAME_TEMPLATE_DESCRIPTION', 'Шаблон имени пользователя, которое создаётся в панели RemnaWave для телеграм-пользователя.')
             ),
-            'format': ('Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}.'),
+            'format': (get_texts().t('SETTINGS_HINT_REMNAWAVE_USER_USERNAME_TEMPLATE_FORMAT', 'Доступные плейсхолдеры: {full_name}, {username}, {username_clean}, {telegram_id}.')),
             'example': 'vpn_{username_clean}_{telegram_id}',
             'warning': (
-                'Недопустимые символы автоматически заменяются на подчёркивания. '
-                'Если результат пустой, используется user_{telegram_id}.'
+                get_texts().t('SETTINGS_HINT_REMNAWAVE_USER_USERNAME_TEMPLATE_WARNING', 'Недопустимые символы автоматически заменяются на подчёркивания. '
+                'Если результат пустой, используется user_{telegram_id}.')
             ),
         },
         'TRIAL_USER_TAG': {
             'description': (
-                'Тег, который бот передаст пользователю при активации триальной подписки в панели RemnaWave.'
+                get_texts().t('SETTINGS_HINT_TRIAL_USER_TAG_DESCRIPTION', 'Тег, который бот передаст пользователю при активации триальной подписки в панели RemnaWave.')
             ),
-            'format': 'До 16 символов: заглавные A-Z, цифры и подчёркивание.',
+            'format': get_texts().t('SETTINGS_HINT_TRIAL_USER_TAG_FORMAT', 'До 16 символов: заглавные A-Z, цифры и подчёркивание.'),
             'example': 'TRIAL_USER',
-            'warning': 'Неверный формат будет проигнорирован при создании пользователя.',
-            'dependencies': 'Активация триала и включенная интеграция с RemnaWave',
+            'warning': get_texts().t('SETTINGS_HINT_TRIAL_USER_TAG_WARNING', 'Неверный формат будет проигнорирован при создании пользователя.'),
+            'dependencies': get_texts().t('SETTINGS_HINT_TRIAL_USER_TAG_DEPENDENCIES', 'Активация триала и включенная интеграция с RemnaWave'),
         },
         'PAID_SUBSCRIPTION_USER_TAG': {
-            'description': ('Тег, который бот ставит пользователю при покупке платной подписки в панели RemnaWave.'),
-            'format': 'До 16 символов: заглавные A-Z, цифры и подчёркивание.',
+            'description': (get_texts().t('SETTINGS_HINT_PAID_SUBSCRIPTION_USER_TAG_DESCRIPTION', 'Тег, который бот ставит пользователю при покупке платной подписки в панели RemnaWave.')),
+            'format': get_texts().t('SETTINGS_HINT_PAID_SUBSCRIPTION_USER_TAG_FORMAT', 'До 16 символов: заглавные A-Z, цифры и подчёркивание.'),
             'example': 'PAID_USER',
-            'warning': 'Если тег не задан или невалиден, существующий тег не будет изменён.',
-            'dependencies': 'Оплата подписки и интеграция с RemnaWave',
+            'warning': get_texts().t('SETTINGS_HINT_PAID_SUBSCRIPTION_USER_TAG_WARNING', 'Если тег не задан или невалиден, существующий тег не будет изменён.'),
+            'dependencies': get_texts().t('SETTINGS_HINT_PAID_SUBSCRIPTION_USER_TAG_DEPENDENCIES', 'Оплата подписки и интеграция с RemnaWave'),
         },
         'CABINET_REMNA_SUB_CONFIG': {
             'description': (
-                'UUID конфигурации страницы подписки из RemnaWave. '
-                'Позволяет синхронизировать список приложений напрямую из панели.'
+                get_texts().t('SETTINGS_HINT_CABINET_REMNA_SUB_CONFIG_DESCRIPTION', 'UUID конфигурации страницы подписки из RemnaWave. '
+                'Позволяет синхронизировать список приложений напрямую из панели.')
             ),
-            'format': 'UUID конфигурации из раздела Subscription Page Configs в RemnaWave.',
+            'format': get_texts().t('SETTINGS_HINT_CABINET_REMNA_SUB_CONFIG_FORMAT', 'UUID конфигурации из раздела Subscription Page Configs в RemnaWave.'),
             'example': 'd4aa2b8c-9a36-4f31-93a2-6f07dad05fba',
-            'warning': 'Убедитесь, что конфигурация существует в панели и содержит нужные приложения.',
-            'dependencies': 'Настроенное подключение к RemnaWave API',
+            'warning': get_texts().t('SETTINGS_HINT_CABINET_REMNA_SUB_CONFIG_WARNING', 'Убедитесь, что конфигурация существует в панели и содержит нужные приложения.'),
+            'dependencies': get_texts().t('SETTINGS_HINT_CABINET_REMNA_SUB_CONFIG_DEPENDENCIES', 'Настроенное подключение к RemnaWave API'),
         },
         'TRAFFIC_MONITORING_ENABLED': {
             'description': (
-                'Включает автоматический мониторинг трафика пользователей. '
+                get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORING_ENABLED_DESCRIPTION', 'Включает автоматический мониторинг трафика пользователей. '
                 'Система отслеживает изменения трафика (дельту) и сохраняет snapshot в Redis. '
-                'При превышении порогов отправляются уведомления пользователям и админам.'
+                'При превышении порогов отправляются уведомления пользователям и админам.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORING_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
             'warning': (
-                'Требует настроенного подключения к Redis. '
-                'При включении будет запущен фоновый мониторинг трафика по расписанию.'
+                get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORING_ENABLED_WARNING', 'Требует настроенного подключения к Redis. '
+                'При включении будет запущен фоновый мониторинг трафика по расписанию.')
             ),
             'dependencies': 'Redis, TRAFFIC_MONITORING_INTERVAL_HOURS, TRAFFIC_SNAPSHOT_TTL_HOURS',
         },
         'TRAFFIC_MONITORING_INTERVAL_HOURS': {
             'description': (
-                'Интервал проверки трафика в часах. '
-                'Каждые N часов система проверяет трафик всех активных пользователей и сравнивает с предыдущим snapshot.'
+                get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORING_INTERVAL_HOURS_DESCRIPTION', 'Интервал проверки трафика в часах. '
+                'Каждые N часов система проверяет трафик всех активных пользователей и сравнивает с предыдущим snapshot.')
             ),
-            'format': 'Целое число часов (минимум 1).',
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORING_INTERVAL_HOURS_FORMAT', 'Целое число часов (минимум 1).'),
             'example': '24',
             'warning': (
-                'Слишком маленький интервал может создать большую нагрузку на RemnaWave API. '
-                'Рекомендуется 24 часа для ежедневного мониторинга.'
+                get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORING_INTERVAL_HOURS_WARNING', 'Слишком маленький интервал может создать большую нагрузку на RemnaWave API. '
+                'Рекомендуется 24 часа для ежедневного мониторинга.')
             ),
             'dependencies': 'TRAFFIC_MONITORING_ENABLED',
         },
         'TRAFFIC_MONITORED_NODES': {
             'description': (
-                'Список UUID нод для мониторинга трафика через запятую. '
+                get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORED_NODES_DESCRIPTION', 'Список UUID нод для мониторинга трафика через запятую. '
                 'Если пусто - мониторятся все ноды. '
-                'Позволяет ограничить мониторинг только определенными серверами.'
+                'Позволяет ограничить мониторинг только определенными серверами.')
             ),
-            'format': 'UUID через запятую или пусто для всех нод.',
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORED_NODES_FORMAT', 'UUID через запятую или пусто для всех нод.'),
             'example': 'd4aa2b8c-9a36-4f31-93a2-6f07dad05fba, a1b2c3d4-5678-90ab-cdef-1234567890ab',
-            'warning': 'UUID должны существовать в RemnaWave, иначе мониторинг не будет работать.',
+            'warning': get_texts().t('SETTINGS_HINT_TRAFFIC_MONITORED_NODES_WARNING', 'UUID должны существовать в RemnaWave, иначе мониторинг не будет работать.'),
             'dependencies': 'TRAFFIC_MONITORING_ENABLED',
         },
         'TRAFFIC_SNAPSHOT_TTL_HOURS': {
             'description': (
-                'Время жизни (TTL) snapshot трафика в Redis в часах. '
+                get_texts().t('SETTINGS_HINT_TRAFFIC_SNAPSHOT_TTL_HOURS_DESCRIPTION', 'Время жизни (TTL) snapshot трафика в Redis в часах. '
                 'Snapshot используется для вычисления дельты (изменения трафика) между проверками. '
-                'После истечения TTL snapshot удаляется и создается новый.'
+                'После истечения TTL snapshot удаляется и создается новый.')
             ),
-            'format': 'Целое число часов (минимум 1).',
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_SNAPSHOT_TTL_HOURS_FORMAT', 'Целое число часов (минимум 1).'),
             'example': '24',
             'warning': (
-                'TTL должен быть >= интервала мониторинга. '
-                'Если TTL меньше интервала, snapshot будет удален до следующей проверки.'
+                get_texts().t('SETTINGS_HINT_TRAFFIC_SNAPSHOT_TTL_HOURS_WARNING', 'TTL должен быть >= интервала мониторинга. '
+                'Если TTL меньше интервала, snapshot будет удален до следующей проверки.')
             ),
             'dependencies': 'TRAFFIC_MONITORING_ENABLED, Redis',
         },
         'TRAFFIC_FAST_CHECK_ENABLED': {
             'description': (
-                'Включает быструю проверку трафика. '
-                'Система сравнивает текущий трафик со snapshot и уведомляет о превышениях дельты.'
+                get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_ENABLED_DESCRIPTION', 'Включает быструю проверку трафика. '
+                'Система сравнивает текущий трафик со snapshot и уведомляет о превышениях дельты.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': 'Требует Redis для хранения snapshot. При отключении проверки не выполняются.',
+            'warning': get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_ENABLED_WARNING', 'Требует Redis для хранения snapshot. При отключении проверки не выполняются.'),
             'dependencies': 'Redis, TRAFFIC_FAST_CHECK_INTERVAL_MINUTES, TRAFFIC_FAST_CHECK_THRESHOLD_GB',
         },
         'TRAFFIC_FAST_CHECK_INTERVAL_MINUTES': {
-            'description': 'Интервал быстрой проверки трафика в минутах.',
-            'format': 'Целое число минут (минимум 1).',
+            'description': get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_INTERVAL_MINUTES_DESCRIPTION', 'Интервал быстрой проверки трафика в минутах.'),
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_INTERVAL_MINUTES_FORMAT', 'Целое число минут (минимум 1).'),
             'example': '10',
-            'warning': 'Слишком малый интервал создаёт нагрузку на Remnawave API.',
+            'warning': get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_INTERVAL_MINUTES_WARNING', 'Слишком малый интервал создаёт нагрузку на Remnawave API.'),
             'dependencies': 'TRAFFIC_FAST_CHECK_ENABLED',
         },
         'TRAFFIC_FAST_CHECK_THRESHOLD_GB': {
-            'description': 'Порог дельты трафика в ГБ для быстрой проверки. При превышении отправляется уведомление.',
-            'format': 'Число с плавающей точкой.',
+            'description': get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_THRESHOLD_GB_DESCRIPTION', 'Порог дельты трафика в ГБ для быстрой проверки. При превышении отправляется уведомление.'),
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_THRESHOLD_GB_FORMAT', 'Число с плавающей точкой.'),
             'example': '5.0',
-            'warning': 'Слишком низкий порог приведёт к частым уведомлениям.',
+            'warning': get_texts().t('SETTINGS_HINT_TRAFFIC_FAST_CHECK_THRESHOLD_GB_WARNING', 'Слишком низкий порог приведёт к частым уведомлениям.'),
             'dependencies': 'TRAFFIC_FAST_CHECK_ENABLED',
         },
         'TRAFFIC_DAILY_CHECK_ENABLED': {
-            'description': 'Включает суточную проверку трафика через bandwidth-stats API.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_CHECK_ENABLED_DESCRIPTION', 'Включает суточную проверку трафика через bandwidth-stats API.'),
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_CHECK_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': 'Проверка выполняется в указанное время (TRAFFIC_DAILY_CHECK_TIME).',
+            'warning': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_CHECK_ENABLED_WARNING', 'Проверка выполняется в указанное время (TRAFFIC_DAILY_CHECK_TIME).'),
             'dependencies': 'TRAFFIC_DAILY_CHECK_TIME, TRAFFIC_DAILY_THRESHOLD_GB',
         },
         'TRAFFIC_DAILY_CHECK_TIME': {
-            'description': 'Время суточной проверки трафика в формате HH:MM (UTC).',
-            'format': 'Строка времени HH:MM.',
+            'description': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_CHECK_TIME_DESCRIPTION', 'Время суточной проверки трафика в формате HH:MM (UTC).'),
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_CHECK_TIME_FORMAT', 'Строка времени HH:MM.'),
             'example': '00:00',
-            'warning': 'Время указывается в UTC.',
+            'warning': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_CHECK_TIME_WARNING', 'Время указывается в UTC.'),
             'dependencies': 'TRAFFIC_DAILY_CHECK_ENABLED',
         },
         'TRAFFIC_DAILY_THRESHOLD_GB': {
-            'description': 'Порог суточного трафика в ГБ. При превышении за 24 часа отправляется уведомление.',
-            'format': 'Число с плавающей точкой.',
+            'description': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_THRESHOLD_GB_DESCRIPTION', 'Порог суточного трафика в ГБ. При превышении за 24 часа отправляется уведомление.'),
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_THRESHOLD_GB_FORMAT', 'Число с плавающей точкой.'),
             'example': '50.0',
-            'warning': 'Учитывается весь трафик за последние 24 часа.',
+            'warning': get_texts().t('SETTINGS_HINT_TRAFFIC_DAILY_THRESHOLD_GB_WARNING', 'Учитывается весь трафик за последние 24 часа.'),
             'dependencies': 'TRAFFIC_DAILY_CHECK_ENABLED',
         },
         'TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES': {
-            'description': 'Кулдаун уведомлений по одному пользователю в минутах.',
-            'format': 'Целое число минут.',
+            'description': get_texts().t('SETTINGS_HINT_TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES_DESCRIPTION', 'Кулдаун уведомлений по одному пользователю в минутах.'),
+            'format': get_texts().t('SETTINGS_HINT_TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES_FORMAT', 'Целое число минут.'),
             'example': '60',
-            'warning': 'Защита от спама уведомлениями по одному и тому же пользователю.',
+            'warning': get_texts().t('SETTINGS_HINT_TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES_WARNING', 'Защита от спама уведомлениями по одному и тому же пользователю.'),
         },
         'REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS': {
             'description': (
-                'Уведомления администраторам о потере и восстановлении соединения с нодами из webhook-ов RemnaWave.'
+                get_texts().t('SETTINGS_HINT_REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS_DESCRIPTION', 'Уведомления администраторам о потере и восстановлении соединения с нодами из webhook-ов RemnaWave.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS_FORMAT', 'Булево значение.'),
             'example': 'false',
             'warning': (
-                'Отключает только события node.connection_lost и node.connection_restored. '
-                'Остальные инфраструктурные уведомления продолжают отправляться.'
+                get_texts().t('SETTINGS_HINT_REMNAWAVE_WEBHOOK_NOTIFY_NODE_CONNECTION_STATUS_WARNING', 'Отключает только события node.connection_lost и node.connection_restored. '
+                'Остальные инфраструктурные уведомления продолжают отправляться.')
             ),
             'dependencies': 'REMNAWAVE_WEBHOOK_ENABLED, ADMIN_NOTIFICATIONS_ENABLED',
         },
         'WEBHOOK_NOTIFY_USER_ENABLED': {
             'description': (
-                'Глобальный переключатель уведомлений пользователям от вебхуков RemnaWave. '
-                'При выключении ни одно уведомление не отправляется, независимо от остальных настроек.'
+                get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_USER_ENABLED_DESCRIPTION', 'Глобальный переключатель уведомлений пользователям от вебхуков RemnaWave. '
+                'При выключении ни одно уведомление не отправляется, независимо от остальных настроек.')
             ),
-            'format': 'Булево значение.',
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_USER_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_SUB_STATUS': {
-            'description': 'Уведомления об отключении и активации подписки администратором.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_STATUS_DESCRIPTION', 'Уведомления об отключении и активации подписки администратором.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_STATUS_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_SUB_EXPIRED': {
-            'description': 'Уведомления об истечении подписки.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_EXPIRED_DESCRIPTION', 'Уведомления об истечении подписки.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_EXPIRED_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_SUB_EXPIRING': {
-            'description': 'Предупреждения о скором истечении подписки (72ч, 48ч, 24ч до окончания).',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_EXPIRING_DESCRIPTION', 'Предупреждения о скором истечении подписки (72ч, 48ч, 24ч до окончания).'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_EXPIRING_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_SUB_LIMITED': {
-            'description': 'Уведомление при достижении лимита трафика.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_LIMITED_DESCRIPTION', 'Уведомление при достижении лимита трафика.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_LIMITED_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_TRAFFIC_RESET': {
-            'description': 'Уведомление о сбросе счётчика трафика.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_TRAFFIC_RESET_DESCRIPTION', 'Уведомление о сбросе счётчика трафика.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_TRAFFIC_RESET_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_SUB_DELETED': {
-            'description': 'Уведомление при удалении пользователя из панели.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_DELETED_DESCRIPTION', 'Уведомление при удалении пользователя из панели.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_DELETED_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_SUB_REVOKED': {
-            'description': 'Уведомление при обновлении ключей подписки (revoke).',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_REVOKED_DESCRIPTION', 'Уведомление при обновлении ключей подписки (revoke).'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_SUB_REVOKED_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_FIRST_CONNECTED': {
-            'description': 'Уведомление при первом подключении к VPN.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_FIRST_CONNECTED_DESCRIPTION', 'Уведомление при первом подключении к VPN.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_FIRST_CONNECTED_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_NOT_CONNECTED': {
-            'description': 'Напоминание, что пользователь ещё не подключился к VPN.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_NOT_CONNECTED_DESCRIPTION', 'Напоминание, что пользователь ещё не подключился к VPN.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_NOT_CONNECTED_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_BANDWIDTH_THRESHOLD': {
-            'description': 'Предупреждение при приближении к лимиту трафика (порог в %).',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_BANDWIDTH_THRESHOLD_DESCRIPTION', 'Предупреждение при приближении к лимиту трафика (порог в %).'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_BANDWIDTH_THRESHOLD_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_DEVICES': {
-            'description': 'Уведомления о подключении и отключении устройств.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_DEVICES_DESCRIPTION', 'Уведомления о подключении и отключении устройств.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_DEVICES_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'WEBHOOK_NOTIFY_TORRENT_DETECTED': {
-            'description': 'Уведомление пользователю при обнаружении торрент-трафика.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_TORRENT_DETECTED_DESCRIPTION', 'Уведомление пользователю при обнаружении торрент-трафика.'),
+            'format': get_texts().t('SETTINGS_HINT_WEBHOOK_NOTIFY_TORRENT_DETECTED_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'RESET_TRAFFIC_ON_TARIFF_SWITCH': {
             'description': (
-                'Автоматически сбрасывает счётчик использованного трафика '
+                get_texts().t('SETTINGS_HINT_RESET_TRAFFIC_ON_TARIFF_SWITCH_DESCRIPTION', 'Автоматически сбрасывает счётчик использованного трафика '
                 'при переключении пользователя на другой тарифный план. '
-                'Сброс происходит через RemnaWave API.'
+                'Сброс происходит через RemnaWave API.')
             ),
-            'format': 'Булево значение: выберите "Включить" или "Выключить".',
+            'format': get_texts().t('SETTINGS_HINT_RESET_TRAFFIC_ON_TARIFF_SWITCH_FORMAT', 'Булево значение: выберите "Включить" или "Выключить".'),
             'example': 'Включено — трафик обнуляется при каждой смене тарифа.',
-            'warning': 'При отключении использованный трафик сохранится после смены тарифа.',
+            'warning': get_texts().t('SETTINGS_HINT_RESET_TRAFFIC_ON_TARIFF_SWITCH_WARNING', 'При отключении использованный трафик сохранится после смены тарифа.'),
         },
         'RESET_TRAFFIC_ON_PAYMENT': {
             'description': (
-                'Автоматически сбрасывает счётчик использованного трафика при любой оплате или продлении подписки.'
+                get_texts().t('SETTINGS_HINT_RESET_TRAFFIC_ON_PAYMENT_DESCRIPTION', 'Автоматически сбрасывает счётчик использованного трафика при любой оплате или продлении подписки.')
             ),
-            'format': 'Булево значение: выберите "Включить" или "Выключить".',
+            'format': get_texts().t('SETTINGS_HINT_RESET_TRAFFIC_ON_PAYMENT_FORMAT', 'Булево значение: выберите "Включить" или "Выключить".'),
             'example': 'Выключено по умолчанию.',
-            'warning': 'При включении трафик будет обнуляться при каждом продлении подписки.',
+            'warning': get_texts().t('SETTINGS_HINT_RESET_TRAFFIC_ON_PAYMENT_WARNING', 'При включении трафик будет обнуляться при каждом продлении подписки.'),
         },
         'TELEGRAM_WIDGET_SIZE': {
-            'description': 'Размер кнопки виджета Telegram на странице авторизации.',
-            'format': 'Выберите один из доступных размеров.',
+            'description': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_SIZE_DESCRIPTION', 'Размер кнопки виджета Telegram на странице авторизации.'),
+            'format': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_SIZE_FORMAT', 'Выберите один из доступных размеров.'),
             'example': 'large',
         },
         'TELEGRAM_WIDGET_RADIUS': {
-            'description': 'Радиус скругления углов кнопки виджета Telegram (в пикселях).',
-            'format': 'Целое число от 0 до 20.',
+            'description': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_RADIUS_DESCRIPTION', 'Радиус скругления углов кнопки виджета Telegram (в пикселях).'),
+            'format': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_RADIUS_FORMAT', 'Целое число от 0 до 20.'),
             'example': '8',
-            'warning': 'Максимум: 20 для large, 14 для medium, 10 для small.',
+            'warning': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_RADIUS_WARNING', 'Максимум: 20 для large, 14 для medium, 10 для small.'),
         },
         'TELEGRAM_WIDGET_USERPIC': {
-            'description': 'Показывать ли аватар пользователя в виджете Telegram после авторизации.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_USERPIC_DESCRIPTION', 'Показывать ли аватар пользователя в виджете Telegram после авторизации.'),
+            'format': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_USERPIC_FORMAT', 'Булево значение.'),
             'example': 'true',
         },
         'TELEGRAM_WIDGET_REQUEST_ACCESS': {
-            'description': 'Запрашивать ли у пользователя разрешение на отправку сообщений боту.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_REQUEST_ACCESS_DESCRIPTION', 'Запрашивать ли у пользователя разрешение на отправку сообщений боту.'),
+            'format': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_REQUEST_ACCESS_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': 'При отключении бот не сможет писать пользователю первым.',
+            'warning': get_texts().t('SETTINGS_HINT_TELEGRAM_WIDGET_REQUEST_ACCESS_WARNING', 'При отключении бот не сможет писать пользователю первым.'),
         },
         'TELEGRAM_OIDC_ENABLED': {
-            'description': 'Включить авторизацию через новый Telegram Login (OpenID Connect). При включении заменяет legacy виджет.',
-            'format': 'Булево значение.',
+            'description': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_ENABLED_DESCRIPTION', 'Включить авторизацию через новый Telegram Login (OpenID Connect). При включении заменяет legacy виджет.'),
+            'format': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': 'Требует заполнения CLIENT_ID и CLIENT_SECRET из BotFather.',
+            'warning': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_ENABLED_WARNING', 'Требует заполнения CLIENT_ID и CLIENT_SECRET из BotFather.'),
         },
         'TELEGRAM_OIDC_CLIENT_ID': {
-            'description': 'ID бота (числовой) из BotFather > Bot Settings > Web Login.',
-            'format': 'Числовой ID бота.',
+            'description': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_CLIENT_ID_DESCRIPTION', 'ID бота (числовой) из BotFather > Bot Settings > Web Login.'),
+            'format': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_CLIENT_ID_FORMAT', 'Числовой ID бота.'),
             'example': '8521897198',
-            'warning': 'Должен совпадать с ID бота, используемого для авторизации.',
+            'warning': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_CLIENT_ID_WARNING', 'Должен совпадать с ID бота, используемого для авторизации.'),
         },
         'TELEGRAM_OIDC_CLIENT_SECRET': {
-            'description': 'Секрет для OIDC из BotFather > Bot Settings > Web Login.',
-            'format': 'Строка-секрет.',
+            'description': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_CLIENT_SECRET_DESCRIPTION', 'Секрет для OIDC из BotFather > Bot Settings > Web Login.'),
+            'format': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_CLIENT_SECRET_FORMAT', 'Строка-секрет.'),
             'example': 'xxxxxxxxxxxxxxxxxxxxxxxx',
-            'warning': 'НЕ совпадает с BOT_TOKEN. Получается отдельно в BotFather.',
+            'warning': get_texts().t('SETTINGS_HINT_TELEGRAM_OIDC_CLIENT_SECRET_WARNING', 'НЕ совпадает с BOT_TOKEN. Получается отдельно в BotFather.'),
         },
     }
 
@@ -1392,17 +1393,21 @@ class BotConfigurationService:
     def format_value_human(cls, key: str, value: Any) -> str:
         if key == 'SIMPLE_SUBSCRIPTION_SQUAD_UUID':
             if value is None:
-                return 'Любой доступный'
+                return get_texts().t('SIMPLE_SUBSCRIPTION_SERVER_ANY', 'Любой доступный')
             if isinstance(value, str):
                 cleaned_value = value.strip()
                 if not cleaned_value:
-                    return 'Любой доступный'
+                    return get_texts().t('SIMPLE_SUBSCRIPTION_SERVER_ANY', 'Любой доступный')
 
         if value is None:
             return '—'
 
         if isinstance(value, bool):
-            return '✅ ВКЛЮЧЕНО' if value else '❌ ВЫКЛЮЧЕНО'
+            return (
+                get_texts().t('SETTINGS_VALUE_ENABLED', '✅ ВКЛЮЧЕНО')
+                if value
+                else get_texts().t('SETTINGS_VALUE_DISABLED', '❌ ВЫКЛЮЧЕНО')
+            )
 
         if isinstance(value, (int, float)):
             formatted = cls._format_numeric_with_unit(key, value)
@@ -1439,17 +1444,21 @@ class BotConfigurationService:
         type_label = definition.type_label
         hints = dict(cls.SETTING_HINTS.get(key, {}))
 
-        base_description = (
-            hints.get('description')
-            or f'Параметр <b>{definition.display_name}</b> управляет категорией «{definition.category_label}».'
-        )
+        base_description = hints.get('description') or get_texts().t(
+            'SETTINGS_GUIDANCE_DEFAULT_DESCRIPTION',
+            'Параметр <b>{display_name}</b> управляет категорией «{category_label}».',
+        ).format(display_name=definition.display_name, category_label=definition.category_label)
         base_format = hints.get('format') or (
-            'Булево значение (да/нет).'
+            get_texts().t('SETTINGS_GUIDANCE_FORMAT_BOOL', 'Булево значение (да/нет).')
             if definition.python_type is bool
-            else 'Введите значение соответствующего типа (число или строку).'
+            else get_texts().t(
+                'SETTINGS_GUIDANCE_FORMAT_OTHER', 'Введите значение соответствующего типа (число или строку).'
+            )
         )
         example = hints.get('example') or (cls.format_value_human(key, original) if original is not None else '—')
-        warning = hints.get('warning') or ('Неверные значения могут привести к некорректной работе бота.')
+        warning = hints.get('warning') or get_texts().t(
+            'SETTINGS_GUIDANCE_DEFAULT_WARNING', 'Неверные значения могут привести к некорректной работе бота.'
+        )
         dependencies = hints.get('dependencies') or definition.category_label
 
         return {
@@ -1486,7 +1495,7 @@ class BotConfigurationService:
             category_key = cls._resolve_category_key(key)
             category_label = cls.CATEGORY_TITLES.get(
                 category_key,
-                category_key.capitalize() if category_key else 'Прочее',
+                category_key.capitalize() if category_key else get_texts().t('SETTINGS_CATEGORY_OTHER', 'Прочее'),
             )
             category_label = cls._format_dynamic_copy(category_key, category_label)
 
@@ -1607,7 +1616,7 @@ class BotConfigurationService:
         if value is None:
             return '—'
         if isinstance(value, bool):
-            return '✅ Да' if value else '❌ Нет'
+            return get_texts().t('YES', '✅ Да') if value else get_texts().t('NO', '❌ Нет')
         if isinstance(value, (int, float)):
             return str(value)
         if isinstance(value, (list, dict, tuple, set)):
@@ -1745,7 +1754,7 @@ class BotConfigurationService:
         for count in range(1, upper_bound + 1):
             label = f'{count} {cls._pluralize_devices(count)}'
             if count == default_limit:
-                label = f'{label} (по умолчанию)'
+                label = get_texts().t('SETTINGS_DEVICE_DEFAULT_LABEL', '{label} (по умолчанию)').format(label=label)
             options.append(ChoiceOption(count, label))
 
         return options
@@ -1787,7 +1796,7 @@ class BotConfigurationService:
         options: list[ChoiceOption] = []
         for gb in sorted(traffic_values):
             if gb <= 0:
-                label = 'Безлимит'
+                label = get_texts().t('TRAFFIC_UNLIMITED_SHORT', 'Безлимит')
             else:
                 label = f'{gb} ГБ'
 
@@ -2014,7 +2023,7 @@ class BotConfigurationService:
         text = (user_input or '').strip()
 
         if text.lower() in {'отмена', 'cancel'}:
-            raise ValueError('Ввод отменен пользователем')
+            raise ValueError(get_texts().t('SETTINGS_INPUT_CANCELLED', 'Ввод отменен пользователем'))
 
         if definition.is_optional and text.lower() in {'none', 'null', 'пусто', ''}:
             return None
@@ -2027,7 +2036,9 @@ class BotConfigurationService:
                 return True
             if lowered in {'0', 'false', 'off', 'no', 'нет', 'выкл', 'disable', 'disabled'}:
                 return False
-            raise ValueError("Введите 'true' или 'false' (или 'да'/'нет')")
+            raise ValueError(
+                get_texts().t('SETTINGS_INPUT_BOOL_PROMPT', "Введите 'true' или 'false' (или 'да'/'нет')")
+            )
 
         if python_type is int:
             parsed_value: Any = int(text)
@@ -2046,10 +2057,18 @@ class BotConfigurationService:
                     parsed_value = normalized
                 elif parsed_value not in allowed_values:
                     readable = ', '.join(f'{option.label} ({cls.format_value(option.value)})' for option in choices)
-                    raise ValueError(f'Доступные значения: {readable}')
+                    raise ValueError(
+                        get_texts().t('SETTINGS_INPUT_ALLOWED_VALUES', 'Доступные значения: {readable}').format(
+                            readable=readable
+                        )
+                    )
             elif parsed_value not in allowed_values:
                 readable = ', '.join(f'{option.label} ({cls.format_value(option.value)})' for option in choices)
-                raise ValueError(f'Доступные значения: {readable}')
+                raise ValueError(
+                    get_texts().t('SETTINGS_INPUT_ALLOWED_VALUES', 'Доступные значения: {readable}').format(
+                        readable=readable
+                    )
+                )
 
         return parsed_value
 
@@ -2063,7 +2082,9 @@ class BotConfigurationService:
         force: bool = False,
     ) -> None:
         if cls.is_read_only(key) and not force:
-            raise ReadOnlySettingError(f'Setting {key} is read-only')
+            raise ReadOnlySettingError(
+                get_texts().t('SETTINGS_ERROR_READ_ONLY', 'Setting {key} is read-only').format(key=key)
+            )
 
         raw_value = cls.serialize_value(key, value)
         await upsert_system_setting(db, key, raw_value)
@@ -2091,7 +2112,9 @@ class BotConfigurationService:
         force: bool = False,
     ) -> None:
         if cls.is_read_only(key) and not force:
-            raise ReadOnlySettingError(f'Setting {key} is read-only')
+            raise ReadOnlySettingError(
+                get_texts().t('SETTINGS_ERROR_READ_ONLY', 'Setting {key} is read-only').format(key=key)
+            )
 
         await delete_system_setting(db, key)
         cls._overrides_raw.pop(key, None)

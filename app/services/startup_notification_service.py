@@ -19,6 +19,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import Subscription, SubscriptionStatus, Ticket, TicketStatus, User, UserStatus
 from app.external.remnawave_api import RemnaWaveAPI, test_api_connection
+from app.localization.texts import get_texts
 from app.utils.timezone import format_local_datetime
 
 
@@ -156,13 +157,14 @@ class StartupNotificationService:
         Returns:
             Tuple[bool, str]: (is_connected, status_message)
         """
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         try:
             auth_params = settings.get_remnawave_auth_params()
             base_url = (auth_params.get('base_url') or '').strip()
             api_key = (auth_params.get('api_key') or '').strip()
 
             if not base_url or not api_key:
-                return False, 'Не настроен'
+                return False, texts.t('STARTUP_REMNAWAVE_NOT_CONFIGURED', 'Не настроен')
 
             secret_key = (auth_params.get('secret_key') or '').strip() or None
             username = (auth_params.get('username') or '').strip() or None
@@ -183,12 +185,12 @@ class StartupNotificationService:
             async with api:
                 is_connected = await test_api_connection(api)
                 if is_connected:
-                    return True, 'Подключено'
-                return False, 'Недоступна'
+                    return True, texts.t('STARTUP_REMNAWAVE_CONNECTED', 'Подключено')
+                return False, texts.t('STARTUP_REMNAWAVE_UNAVAILABLE', 'Недоступна')
 
         except Exception as e:
             logger.error('Ошибка проверки соединения с Remnawave', e=e)
-            return False, 'Ошибка подключения'
+            return False, texts.t('STARTUP_REMNAWAVE_CONNECTION_ERROR', 'Ошибка подключения')
 
     def _format_balance(self, kopeks: int) -> str:
         """Форматирует баланс в рублях."""
@@ -211,6 +213,7 @@ class StartupNotificationService:
             return False
 
         try:
+            texts = get_texts(settings.DEFAULT_LANGUAGE)
             version = self._get_version()
             users_count = await self._get_users_count()
             total_balance_kopeks = await self._get_total_balance()
@@ -224,13 +227,25 @@ class StartupNotificationService:
 
             # Формируем системную информацию для blockquote
             system_info_lines = [
-                f'Версия: {version}',
-                f'Пользователей: {users_count:,}'.replace(',', ' '),
-                f'Сумма балансов: {self._format_balance(total_balance_kopeks)}',
-                f'Платных подписок: {paid_subscriptions_count:,}'.replace(',', ' '),
-                f'Триальных подписок: {trial_subscriptions_count:,}'.replace(',', ' '),
-                f'Открытых тикетов: {open_tickets_count:,}'.replace(',', ' '),
-                f'{remnawave_icon} Remnawave: {remnawave_status}',
+                texts.t('STARTUP_INFO_VERSION', 'Версия: {value}').format(value=version),
+                texts.t('STARTUP_INFO_USERS', 'Пользователей: {value}').format(
+                    value=f'{users_count:,}'.replace(',', ' ')
+                ),
+                texts.t('STARTUP_INFO_BALANCE', 'Сумма балансов: {value}').format(
+                    value=self._format_balance(total_balance_kopeks)
+                ),
+                texts.t('STARTUP_INFO_PAID_SUBS', 'Платных подписок: {value}').format(
+                    value=f'{paid_subscriptions_count:,}'.replace(',', ' ')
+                ),
+                texts.t('STARTUP_INFO_TRIAL_SUBS', 'Триальных подписок: {value}').format(
+                    value=f'{trial_subscriptions_count:,}'.replace(',', ' ')
+                ),
+                texts.t('STARTUP_INFO_OPEN_TICKETS', 'Открытых тикетов: {value}').format(
+                    value=f'{open_tickets_count:,}'.replace(',', ' ')
+                ),
+                texts.t('STARTUP_INFO_REMNAWAVE', '{icon} Remnawave: {status}').format(
+                    icon=remnawave_icon, status=remnawave_status
+                ),
             ]
             system_info = '\n'.join(system_info_lines)
 
@@ -238,7 +253,7 @@ class StartupNotificationService:
 
             message = (
                 f'<b>Remnawave Bedolaga Bot</b>\n\n'
-                f'✅ Бот успешно запущен\n\n'
+                f'{texts.t("STARTUP_BOT_LAUNCHED", "✅ Бот успешно запущен")}\n\n'
                 f'<blockquote expandable>{system_info}</blockquote>\n\n'
                 f'<i>{timestamp}</i>'
             )
@@ -247,19 +262,19 @@ class StartupNotificationService:
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text='Поставить звезду',
+                            text=texts.t('STARTUP_BUTTON_STAR', 'Поставить звезду'),
                             url=GITHUB_BOT_URL,
                         ),
                     ],
                     [
                         InlineKeyboardButton(
-                            text='Вебкабинет',
+                            text=texts.t('STARTUP_BUTTON_CABINET', 'Вебкабинет'),
                             url=GITHUB_CABINET_URL,
                         ),
                     ],
                     [
                         InlineKeyboardButton(
-                            text='Сообщество',
+                            text=texts.t('STARTUP_BUTTON_COMMUNITY', 'Сообщество'),
                             url=COMMUNITY_URL,
                         ),
                     ],
@@ -273,12 +288,24 @@ class StartupNotificationService:
                 from app.utils.rich_menu import _resolve_rich_logo_url
 
                 stats_rows = [
-                    ('Версия', f'<code>{html.escape(version)}</code>'),
-                    ('Пользователей', f'{users_count:,}'.replace(',', ' ')),
-                    ('Сумма балансов', html.escape(self._format_balance(total_balance_kopeks))),
-                    ('Платных подписок', f'{paid_subscriptions_count:,}'.replace(',', ' ')),
-                    ('Триальных подписок', f'{trial_subscriptions_count:,}'.replace(',', ' ')),
-                    ('Открытых тикетов', f'{open_tickets_count:,}'.replace(',', ' ')),
+                    (texts.t('STARTUP_ROW_VERSION', 'Версия'), f'<code>{html.escape(version)}</code>'),
+                    (texts.t('STARTUP_ROW_USERS', 'Пользователей'), f'{users_count:,}'.replace(',', ' ')),
+                    (
+                        texts.t('STARTUP_ROW_BALANCE', 'Сумма балансов'),
+                        html.escape(self._format_balance(total_balance_kopeks)),
+                    ),
+                    (
+                        texts.t('STARTUP_ROW_PAID_SUBS', 'Платных подписок'),
+                        f'{paid_subscriptions_count:,}'.replace(',', ' '),
+                    ),
+                    (
+                        texts.t('STARTUP_ROW_TRIAL_SUBS', 'Триальных подписок'),
+                        f'{trial_subscriptions_count:,}'.replace(',', ' '),
+                    ),
+                    (
+                        texts.t('STARTUP_ROW_OPEN_TICKETS', 'Открытых тикетов'),
+                        f'{open_tickets_count:,}'.replace(',', ' '),
+                    ),
                     ('Remnawave', f'{remnawave_icon} {html.escape(remnawave_status)}'),
                 ]
                 rich_blocks = []
@@ -288,7 +315,7 @@ class StartupNotificationService:
                 rich_blocks.extend(
                     [
                         '<h5>🤖 Remnawave Bedolaga Bot</h5>',
-                        '<p>✅ Бот успешно запущен</p>',
+                        f'<p>{texts.t("STARTUP_BOT_LAUNCHED", "✅ Бот успешно запущен")}</p>',
                         rich_kv_table(stats_rows),
                         '<hr/>',
                         rich_footer_now(),
@@ -393,76 +420,113 @@ def _get_error_recommendations(error_message: str) -> str | None:
     Returns:
         Рекомендации в формате HTML blockquote или None
     """
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
     error_lower = error_message.lower()
 
     # Ошибки прав доступа к примонтированным каталогам (logs/data/locales/uploads)
     if any(keyword in error_lower for keyword in PERMISSION_ERROR_KEYWORDS):
         tips = [
-            '• Бот в контейнере работает от пользователя с uid 1000',
-            '• Похоже, примонтированные каталоги принадлежат другому пользователю',
-            '• Проверьте права на каталоги logs, data, locales (и uploads)',
-            '• Обычно лечится на хосте: <code>chown -R 1000:1000 logs data locales</code>',
-            '• После исправления: docker compose restart bot',
+            texts.t('STARTUP_REC_PERMISSION_1', '• Бот в контейнере работает от пользователя с uid 1000'),
+            texts.t(
+                'STARTUP_REC_PERMISSION_2', '• Похоже, примонтированные каталоги принадлежат другому пользователю'
+            ),
+            texts.t('STARTUP_REC_PERMISSION_3', '• Проверьте права на каталоги logs, data, locales (и uploads)'),
+            texts.t(
+                'STARTUP_REC_PERMISSION_4',
+                '• Обычно лечится на хосте: <code>chown -R 1000:1000 logs data locales</code>',
+            ),
+            texts.t('STARTUP_REC_PERMISSION_5', '• После исправления: docker compose restart bot'),
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return (
+            texts.t('STARTUP_REC_HEADER', '<blockquote expandable>💡 <b>Рекомендации:</b>\n')
+            + '\n'.join(tips)
+            + '</blockquote>'
+        )
 
     # Ошибки вебхука
     if any(keyword in error_lower for keyword in WEBHOOK_ERROR_KEYWORDS):
         tips = [
-            '• Проверьте WEBHOOK_HOST в .env',
-            '• Убедитесь что домен доступен извне',
-            '• Проверьте SSL сертификат (должен быть валидный)',
-            '• Проверьте reverse proxy (nginx/caddy)',
-            '• Проверьте сеть Docker (docker network)',
-            '• Попробуйте: docker compose restart',
+            texts.t('STARTUP_REC_WEBHOOK_1', '• Проверьте WEBHOOK_HOST в .env'),
+            texts.t('STARTUP_REC_WEBHOOK_2', '• Убедитесь что домен доступен извне'),
+            texts.t('STARTUP_REC_WEBHOOK_3', '• Проверьте SSL сертификат (должен быть валидный)'),
+            texts.t('STARTUP_REC_WEBHOOK_4', '• Проверьте reverse proxy (nginx/caddy)'),
+            texts.t('STARTUP_REC_WEBHOOK_5', '• Проверьте сеть Docker (docker network)'),
+            texts.t('STARTUP_REC_WEBHOOK_6', '• Попробуйте: docker compose restart'),
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return (
+            texts.t('STARTUP_REC_HEADER', '<blockquote expandable>💡 <b>Рекомендации:</b>\n')
+            + '\n'.join(tips)
+            + '</blockquote>'
+        )
 
     # Ошибки подключения к БД
     if any(keyword in error_lower for keyword in DATABASE_ERROR_KEYWORDS):
         tips = [
-            '• Проверьте что PostgreSQL запущен',
-            '• Проверьте DATABASE_URL в .env',
-            '• Проверьте сеть Docker между контейнерами',
-            '• Попробуйте: docker compose restart db',
+            texts.t('STARTUP_REC_DATABASE_1', '• Проверьте что PostgreSQL запущен'),
+            texts.t('STARTUP_REC_DATABASE_2', '• Проверьте DATABASE_URL в .env'),
+            texts.t('STARTUP_REC_DATABASE_3', '• Проверьте сеть Docker между контейнерами'),
+            texts.t('STARTUP_REC_DATABASE_4', '• Попробуйте: docker compose restart db'),
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return (
+            texts.t('STARTUP_REC_HEADER', '<blockquote expandable>💡 <b>Рекомендации:</b>\n')
+            + '\n'.join(tips)
+            + '</blockquote>'
+        )
 
     # Ошибки Redis
     if REDIS_ERROR_KEYWORD in error_lower:
         tips = [
-            '• Проверьте что Redis запущен',
-            '• Проверьте REDIS_URL в .env',
-            '• Попробуйте: docker compose restart redis',
+            texts.t('STARTUP_REC_REDIS_1', '• Проверьте что Redis запущен'),
+            texts.t('STARTUP_REC_REDIS_2', '• Проверьте REDIS_URL в .env'),
+            texts.t('STARTUP_REC_REDIS_3', '• Попробуйте: docker compose restart redis'),
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return (
+            texts.t('STARTUP_REC_HEADER', '<blockquote expandable>💡 <b>Рекомендации:</b>\n')
+            + '\n'.join(tips)
+            + '</blockquote>'
+        )
 
     # Ошибки Remnawave API
     if any(keyword in error_lower for keyword in REMNAWAVE_ERROR_KEYWORDS):
         tips = [
-            '• Проверьте REMNAWAVE_API_URL в .env',
-            '• Проверьте REMNAWAVE_API_KEY',
-            '• Убедитесь что панель Remnawave доступна',
+            texts.t('STARTUP_REC_REMNAWAVE_1', '• Проверьте REMNAWAVE_API_URL в .env'),
+            texts.t('STARTUP_REC_REMNAWAVE_2', '• Проверьте REMNAWAVE_API_KEY'),
+            texts.t('STARTUP_REC_REMNAWAVE_3', '• Убедитесь что панель Remnawave доступна'),
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return (
+            texts.t('STARTUP_REC_HEADER', '<blockquote expandable>💡 <b>Рекомендации:</b>\n')
+            + '\n'.join(tips)
+            + '</blockquote>'
+        )
 
     # Ошибки токена бота
     if any(keyword in error_lower for keyword in AUTH_ERROR_KEYWORDS):
         tips = [
-            '• Проверьте BOT_TOKEN в .env',
-            '• Убедитесь что токен актуален (@BotFather)',
+            texts.t('STARTUP_REC_AUTH_1', '• Проверьте BOT_TOKEN в .env'),
+            texts.t('STARTUP_REC_AUTH_2', '• Убедитесь что токен актуален (@BotFather)'),
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return (
+            texts.t('STARTUP_REC_HEADER', '<blockquote expandable>💡 <b>Рекомендации:</b>\n')
+            + '\n'.join(tips)
+            + '</blockquote>'
+        )
 
     # Ошибки inline-кнопок с URL (WebApp, кастомные протоколы)
     if any(keyword in error_lower for keyword in INLINE_BUTTON_URL_ERROR_KEYWORDS):
         tips = [
-            '• Проверьте MINIAPP_CUSTOM_URL в .env',
-            '• Проверьте HAPP_CRYPTOLINK_REDIRECT_TEMPLATE',
-            '• Telegram не поддерживает кастомные схемы (happ://, v2ray://, ss://, и т.д.) в inline-кнопках',
-            '• Используйте HTTPS редирект для диплинков',
+            texts.t('STARTUP_REC_INLINE_1', '• Проверьте MINIAPP_CUSTOM_URL в .env'),
+            texts.t('STARTUP_REC_INLINE_2', '• Проверьте HAPP_CRYPTOLINK_REDIRECT_TEMPLATE'),
+            texts.t(
+                'STARTUP_REC_INLINE_3',
+                '• Telegram не поддерживает кастомные схемы (happ://, v2ray://, ss://, и т.д.) в inline-кнопках',
+            ),
+            texts.t('STARTUP_REC_INLINE_4', '• Используйте HTTPS редирект для диплинков'),
         ]
-        return '<blockquote expandable>💡 <b>Рекомендации:</b>\n' + '\n'.join(tips) + '</blockquote>'
+        return (
+            texts.t('STARTUP_REC_HEADER', '<blockquote expandable>💡 <b>Рекомендации:</b>\n')
+            + '\n'.join(tips)
+            + '</blockquote>'
+        )
 
     return None
 
@@ -491,6 +555,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
         return False
 
     try:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         timestamp = format_local_datetime(datetime.now(UTC), DATETIME_FORMAT)
         error_type = type(error).__name__
         error_message = str(error)[:CRASH_ERROR_MESSAGE_MAX_LENGTH]
@@ -518,10 +583,15 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
 
         # Текст сообщения (escape HTML в error_type/message — они могут содержать <class ...>)
         message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
-            f'❌ Бот упал с ошибкой\n\n'
-            f'<b>Тип:</b> <code>{html.escape(error_type)}</code>\n'
-            f'<b>Сообщение:</b> <code>{html.escape(error_message[:CRASH_ERROR_PREVIEW_LENGTH])}</code>\n'
+            '<b>Remnawave Bedolaga Bot</b>\n\n'
+            + texts.t('CRASH_BOT_FAILED', '❌ Бот упал с ошибкой')
+            + '\n\n'
+            + texts.t('CRASH_FIELD_TYPE', '<b>Тип:</b> <code>{value}</code>').format(value=html.escape(error_type))
+            + '\n'
+            + texts.t('CRASH_FIELD_MESSAGE', '<b>Сообщение:</b> <code>{value}</code>').format(
+                value=html.escape(error_message[:CRASH_ERROR_PREVIEW_LENGTH])
+            )
+            + '\n'
         )
 
         # Добавляем рекомендации если есть
@@ -536,7 +606,7 @@ async def send_crash_notification(bot: Bot, error: Exception, traceback_str: str
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text='💬 Сообщить разработчику',
+                        text=texts.t('CRASH_BUTTON_CONTACT_DEV', '💬 Сообщить разработчику'),
                         url=DEVELOPER_CONTACT_URL,
                     ),
                 ],

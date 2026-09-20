@@ -12,6 +12,7 @@ from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton
 from sqlalchemy.exc import InterfaceError, OperationalError
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.services.startup_notification_service import _get_error_recommendations
 from app.utils.rich_admin import RICH_TEXT_LIMIT, rich_footer_now, rich_traceback_details, try_send_rich_admin_message
 from app.utils.timezone import format_local_datetime
@@ -209,12 +210,18 @@ def _build_rich_error_report(now: datetime, error_type: str, context: str) -> st
     None — отчёт не влезает в лимит rich-сообщения (классический путь отправит
     его .txt-файлом без потерь).
     """
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
     blocks = [
-        '<h6>⚠️ Ошибка во время работы</h6><hr/>',
-        f'<p><b>Тип:</b> <code>{html.escape(error_type)}</code> · <b>Ошибок в отчёте:</b> {len(_error_buffer)}</p>',
+        texts.t('ADMIN_ERROR_REPORT_RICH_HEADER', '<h6>⚠️ Ошибка во время работы</h6><hr/>'),
+        texts.t(
+            'ADMIN_ERROR_REPORT_RICH_SUMMARY',
+            '<p><b>Тип:</b> <code>{error_type}</code> · <b>Ошибок в отчёте:</b> {errors_count}</p>',
+        ).format(error_type=html.escape(error_type), errors_count=len(_error_buffer)),
     ]
     if context:
-        blocks.append(f'<p><b>Контекст:</b> {context}</p>')
+        blocks.append(
+            texts.t('ADMIN_ERROR_REPORT_RICH_CONTEXT', '<p><b>Контекст:</b> {context}</p>').format(context=context)
+        )
 
     recommendations = _get_error_recommendations(_error_buffer[-1][1] if _error_buffer else '')
     if recommendations:
@@ -280,11 +287,12 @@ async def send_error_to_admin_chat(
 
     _last_error_notification = now
 
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text='💬 Сообщить разработчику',
+                    text=texts.t('ADMIN_ERROR_REPORT_CONTACT_DEVELOPER', '💬 Сообщить разработчику'),
                     url=DEVELOPER_CONTACT_URL,
                 ),
             ],
@@ -344,14 +352,17 @@ async def send_error_to_admin_chat(
             filename=file_name,
         )
 
-        message_text = (
-            f'<b>Remnawave Bedolaga Bot</b>\n\n'
-            f'⚠️ Ошибка во время работы\n\n'
-            f'<b>Тип:</b> <code>{html.escape(error_type)}</code>\n'
-            f'<b>Ошибок в отчёте:</b> {errors_count}\n'
-        )
+        message_text = texts.t(
+            'ADMIN_ERROR_REPORT_CAPTION',
+            '<b>Remnawave Bedolaga Bot</b>\n\n'
+            '⚠️ Ошибка во время работы\n\n'
+            '<b>Тип:</b> <code>{error_type}</code>\n'
+            '<b>Ошибок в отчёте:</b> {errors_count}\n',
+        ).format(error_type=html.escape(error_type), errors_count=errors_count)
         if context:
-            message_text += f'<b>Контекст:</b> {context}\n'
+            message_text += texts.t('ADMIN_ERROR_REPORT_CAPTION_CONTEXT', '<b>Контекст:</b> {context}\n').format(
+                context=context
+            )
 
         # Добавляем рекомендации если есть
         recommendations = _get_error_recommendations(error_message)

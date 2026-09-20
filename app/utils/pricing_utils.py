@@ -7,6 +7,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.localization.texts import get_texts
 
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -274,31 +275,34 @@ def _pluralize_days_ru(n: int) -> str:
 
 def format_period_description(days: int, language: str = 'ru') -> str:
     language_code = (language or 'ru').split('-')[0].lower()
+    texts = get_texts(language_code)
     if language_code in {'ru', 'fa'}:
         if days == 30:
-            return '1 месяц'
+            return texts.t('PERIOD_DESCRIPTION_1_MONTH', '1 месяц')
         if days == 60:
-            return '2 месяца'
+            return texts.t('PERIOD_DESCRIPTION_2_MONTHS', '2 месяца')
         if days == 90:
-            return '3 месяца'
+            return texts.t('PERIOD_DESCRIPTION_3_MONTHS', '3 месяца')
         if days == 180:
-            return '6 месяцев'
+            return texts.t('PERIOD_DESCRIPTION_6_MONTHS', '6 месяцев')
         if days == 360:
-            return '12 месяцев'
-        return f'{days} {_pluralize_days_ru(days)}'
+            return texts.t('PERIOD_DESCRIPTION_12_MONTHS', '12 месяцев')
+        return texts.t('PERIOD_DESCRIPTION_DAYS', '{days} {day_word}').format(
+            days=days, day_word=_pluralize_days_ru(days)
+        )
 
     if days == 30:
-        return '1 month'
+        return texts.t('PERIOD_DESCRIPTION_1_MONTH', '1 month')
     if days == 60:
-        return '2 months'
+        return texts.t('PERIOD_DESCRIPTION_2_MONTHS', '2 months')
     if days == 90:
-        return '3 months'
+        return texts.t('PERIOD_DESCRIPTION_3_MONTHS', '3 months')
     if days == 180:
-        return '6 months'
+        return texts.t('PERIOD_DESCRIPTION_6_MONTHS', '6 months')
     if days == 360:
-        return '12 months'
+        return texts.t('PERIOD_DESCRIPTION_12_MONTHS', '12 months')
     day_word = 'day' if days == 1 else 'days'
-    return f'{days} {day_word}'
+    return texts.t('PERIOD_DESCRIPTION_DAYS', '{days} {day_word}').format(days=days, day_word=day_word)
 
 
 def validate_pricing_calculation(base_price: int, monthly_additions: int, months: int, total_calculated: int) -> bool:

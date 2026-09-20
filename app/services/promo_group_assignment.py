@@ -9,6 +9,7 @@ from app.config import settings
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.crud.user import lock_user_for_update
 from app.database.models import PromoGroup, User
+from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 
 
@@ -33,10 +34,15 @@ async def _notify_admins_about_auto_assignment(
     bot = create_bot(token=bot_token)
     try:
         notification_service = AdminNotificationService(bot)
+        reason_texts = get_texts(settings.DEFAULT_LANGUAGE)
         reason = (
-            f'Автоназначение за траты {settings.format_price(total_spent_kopeks)}'
+            reason_texts.t('PROMO_GROUP_AUTO_ASSIGN_REASON', 'Автоназначение за траты {amount}').format(
+                amount=settings.format_price(total_spent_kopeks)
+            )
             if hasattr(settings, 'format_price')
-            else f'Автоназначение за траты {total_spent_kopeks / 100:.2f}₽'
+            else reason_texts.t('PROMO_GROUP_AUTO_ASSIGN_REASON', 'Автоназначение за траты {amount}').format(
+                amount=f'{total_spent_kopeks / 100:.2f}₽'
+            )
         )
         await notification_service.send_user_promo_group_change_notification(
             db,
