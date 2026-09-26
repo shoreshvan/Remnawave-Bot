@@ -47,9 +47,9 @@ def resolve_config_method_id(method: str) -> str:
 
 
 def format_quick_amount(amount_kopeks: int) -> str:
-    if amount_kopeks % 100 == 0:
-        return f'{amount_kopeks // 100} ₽'
-    return f'{amount_kopeks / 100:.2f} ₽'
+    from app.config import settings
+
+    return settings.format_price(amount_kopeks, round_kopeks=False)
 
 
 async def _load_quick_amounts(db: AsyncSession, method: str, min_amount_kopeks: int | None = None) -> list[int]:

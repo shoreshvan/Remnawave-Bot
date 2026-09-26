@@ -29,7 +29,9 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     keyboard = []
     support_url = settings.get_support_contact_url()
     if support_url:
-        keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+        keyboard.append(
+            [InlineKeyboardButton(text=texts.t('SEVERPAY_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+        )
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -52,7 +54,7 @@ async def _create_severpay_payment_and_respond(
 
     description = settings.PAYMENT_BALANCE_TEMPLATE.format(
         service_name=settings.PAYMENT_SERVICE_NAME,
-        description='Пополнение баланса',
+        description=texts.t('SEVERPAY_PAYMENT_DESCRIPTION', 'Пополнение баланса'),
     )
 
     result = await payment_service.create_severpay_payment(
@@ -145,9 +147,12 @@ async def process_severpay_payment_amount(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('SEVERPAY_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         await message.answer(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
+            texts.t('SEVERPAY_TOPUP_RESTRICTED', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(reason=reason),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -205,9 +210,12 @@ async def start_severpay_topup(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('SEVERPAY_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
+            texts.t('SEVERPAY_TOPUP_RESTRICTED', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(reason=reason),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )

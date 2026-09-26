@@ -168,7 +168,7 @@ async def get_gift_config(
         tariffs=tariffs,
         payment_methods=payment_methods,
         balance_kopeks=user.balance_kopeks,
-        currency_symbol=getattr(settings, 'CURRENCY_SYMBOL', '\u20bd'),
+        currency_symbol=settings.CURRENCY_SYMBOL,
         promo_group_name=promo_group_name,
         active_discount_percent=promo_offer_discount_percent if promo_offer_discount_percent > 0 else None,
         active_discount_expires_at=(

@@ -237,7 +237,10 @@ async def _persist_broadcast_result(
 @admin_required
 @error_handler
 async def show_messages_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    text = """
+    texts = get_texts(db_user.language)
+    text = texts.t(
+        'ADMIN_MESSAGES_MENU_TEXT',
+        """
 📨 <b>Управление рассылками</b>
 
 Выберите тип рассылки:
@@ -248,7 +251,8 @@ async def show_messages_menu(callback: types.CallbackQuery, db_user: User, db: A
 - <b>История</b> - просмотр предыдущих рассылок
 
 ⚠️ Будьте осторожны с массовыми рассылками!
-"""
+""",
+    )
 
     await safe_edit_or_send_text(
         callback, text, reply_markup=get_admin_messages_keyboard(db_user.language), parse_mode='HTML'
@@ -265,6 +269,7 @@ async def show_pinned_message_menu(
     state: FSMContext,
 ):
     await state.clear()
+    texts = get_texts(db_user.language)
     pinned_message = await get_active_pinned_message(db)
 
     if pinned_message:
@@ -273,25 +278,45 @@ async def show_pinned_message_menu(
         timestamp_text = last_updated.strftime('%d.%m.%Y %H:%M') if last_updated else '—'
         media_line = ''
         if pinned_message.media_type:
-            media_label = 'Фото' if pinned_message.media_type == 'photo' else 'Видео'
-            media_line = f'📎 Медиа: {media_label}\n'
-        position_line = '⬆️ Отправлять перед меню' if pinned_message.send_before_menu else '⬇️ Отправлять после меню'
-        start_mode_line = (
-            '🔁 При каждом /start' if pinned_message.send_on_every_start else '🚫 Только один раз и при обновлении'
+            media_label = (
+                texts.t('ADMIN_PINNED_MEDIA_PHOTO', 'Фото')
+                if pinned_message.media_type == 'photo'
+                else texts.t('ADMIN_PINNED_MEDIA_VIDEO', 'Видео')
+            )
+            media_line = texts.t('ADMIN_PINNED_MEDIA_LINE', '📎 Медиа: {media_label}\n').format(
+                media_label=media_label
+            )
+        position_line = (
+            texts.t('ADMIN_PINNED_POSITION_BEFORE_LINE', '⬆️ Отправлять перед меню')
+            if pinned_message.send_before_menu
+            else texts.t('ADMIN_PINNED_POSITION_AFTER_LINE', '⬇️ Отправлять после меню')
         )
-        body = (
+        start_mode_line = (
+            texts.t('ADMIN_PINNED_START_EVERY_LINE', '🔁 При каждом /start')
+            if pinned_message.send_on_every_start
+            else texts.t('ADMIN_PINNED_START_ONCE_LINE', '🚫 Только один раз и при обновлении')
+        )
+        body = texts.t(
+            'ADMIN_PINNED_MENU_BODY',
             '📌 <b>Закрепленное сообщение</b>\n\n'
             '📝 Текущий текст:\n'
-            f'<code>{content_preview}</code>\n\n'
-            f'{media_line}'
-            f'{position_line}\n'
-            f'{start_mode_line}\n'
-            f'🕒 Обновлено: {timestamp_text}'
+            '<code>{content}</code>\n\n'
+            '{media_line}'
+            '{position_line}\n'
+            '{start_mode_line}\n'
+            '🕒 Обновлено: {timestamp}',
+        ).format(
+            content=content_preview,
+            media_line=media_line,
+            position_line=position_line,
+            start_mode_line=start_mode_line,
+            timestamp=timestamp_text,
         )
     else:
-        body = (
+        body = texts.t(
+            'ADMIN_PINNED_MENU_BODY_EMPTY',
             '📌 <b>Закрепленное сообщение</b>\n\n'
-            'Сообщение не задано. Отправьте новый текст, чтобы разослать и закрепить его у пользователей.'
+            'Сообщение не задано. Отправьте новый текст, чтобы разослать и закрепить его у пользователей.',
         )
 
     await callback.message.edit_text(
@@ -313,13 +338,24 @@ async def prompt_pinned_message_update(
     db_user: User,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     await state.set_state(AdminStates.editing_pinned_message)
     await callback.message.edit_text(
-        '✏️ <b>Новое закрепленное сообщение</b>\n\n'
-        'Пришлите текст, фото или видео, которое нужно закрепить.\n'
-        'Бот отправит его всем активным пользователям, открепит старое и закрепит новое без уведомлений.',
+        texts.t(
+            'ADMIN_PINNED_EDIT_PROMPT',
+            '✏️ <b>Новое закрепленное сообщение</b>\n\n'
+            'Пришлите текст, фото или видео, которое нужно закрепить.\n'
+            'Бот отправит его всем активным пользователям, открепит старое и закрепит новое без уведомлений.',
+        ),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_pinned_message')]]
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_CANCEL', '❌ Отмена'),
+                        callback_data='admin_pinned_message',
+                    )
+                ]
+            ]
         ),
         parse_mode='HTML',
     )
@@ -334,9 +370,12 @@ async def toggle_pinned_message_position(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     pinned_message = await get_active_pinned_message(db)
     if not pinned_message:
-        await callback.answer('Сначала задайте закрепленное сообщение', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_PINNED_SET_FIRST', 'Сначала задайте закрепленное сообщение'), show_alert=True
+        )
         return
 
     pinned_message.send_before_menu = not pinned_message.send_before_menu
@@ -354,9 +393,12 @@ async def toggle_pinned_message_start_mode(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     pinned_message = await get_active_pinned_message(db)
     if not pinned_message:
-        await callback.answer('Сначала задайте закрепленное сообщение', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_PINNED_SET_FIRST', 'Сначала задайте закрепленное сообщение'), show_alert=True
+        )
         return
 
     pinned_message.send_on_every_start = not pinned_message.send_on_every_start
@@ -374,13 +416,19 @@ async def delete_pinned_message(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     pinned_message = await get_active_pinned_message(db)
     if not pinned_message:
-        await callback.answer('Закрепленное сообщение уже отсутствует', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_PINNED_ALREADY_ABSENT', 'Закрепленное сообщение уже отсутствует'), show_alert=True
+        )
         return
 
     await callback.message.edit_text(
-        '🗑️ <b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
+        texts.t(
+            'ADMIN_PINNED_DELETING',
+            '🗑️ <b>Удаление закрепленного сообщения</b>\n\nПодождите, пока бот открепит сообщение у пользователей...',
+        ),
         parse_mode='HTML',
     )
 
@@ -391,7 +439,10 @@ async def delete_pinned_message(
 
     if not deleted:
         await callback.message.edit_text(
-            '❌ Не удалось найти активное закрепленное сообщение для удаления',
+            texts.t(
+                'ADMIN_PINNED_DELETE_NOT_FOUND',
+                '❌ Не удалось найти активное закрепленное сообщение для удаления',
+            ),
             reply_markup=get_admin_messages_keyboard(db_user.language),
             parse_mode='HTML',
         )
@@ -400,11 +451,14 @@ async def delete_pinned_message(
 
     total = unpinned_count + failed_count
     await callback.message.edit_text(
-        '✅ <b>Закрепленное сообщение удалено</b>\n\n'
-        f'👥 Чатов обработано: {total}\n'
-        f'✅ Откреплено: {unpinned_count}\n'
-        f'⚠️ Ошибок: {failed_count}\n\n'
-        'Новое сообщение можно задать кнопкой "Обновить".',
+        texts.t(
+            'ADMIN_PINNED_DELETED',
+            '✅ <b>Закрепленное сообщение удалено</b>\n\n'
+            '👥 Чатов обработано: {total}\n'
+            '✅ Откреплено: {unpinned}\n'
+            '⚠️ Ошибок: {failed}\n\n'
+            'Новое сообщение можно задать кнопкой "Обновить".',
+        ).format(total=total, unpinned=unpinned_count, failed=failed_count),
         reply_markup=get_admin_messages_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -491,7 +545,7 @@ async def handle_pinned_broadcast_now(
     pinned_message = result.scalar_one_or_none()
 
     if not pinned_message:
-        await callback.answer('❌ Сообщение не найдено', show_alert=True)
+        await callback.answer(texts.t('ADMIN_PINNED_MESSAGE_NOT_FOUND', '❌ Сообщение не найдено'), show_alert=True)
         await state.clear()
         return
 
@@ -547,8 +601,12 @@ async def handle_pinned_broadcast_skip(
 @admin_required
 @error_handler
 async def show_broadcast_targets(callback: types.CallbackQuery, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        '🎯 <b>Выбор целевой аудитории</b>\n\nВыберите категорию пользователей для рассылки:',
+        texts.t(
+            'ADMIN_BROADCAST_TARGET_SELECT',
+            '🎯 <b>Выбор целевой аудитории</b>\n\nВыберите категорию пользователей для рассылки:',
+        ),
         reply_markup=get_broadcast_target_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -559,13 +617,19 @@ async def show_broadcast_targets(callback: types.CallbackQuery, db_user: User, s
 @error_handler
 async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Показывает список тарифов для фильтрации рассылки."""
+    texts = get_texts(db_user.language)
     tariffs = await get_all_tariffs(db, include_inactive=False)
 
     if not tariffs:
         await callback.message.edit_text(
-            '❌ <b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+            texts.t(
+                'ADMIN_BROADCAST_NO_TARIFFS',
+                '❌ <b>Нет доступных тарифов</b>\n\nСоздайте тарифы в разделе управления тарифами.',
+            ),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_msg_by_sub')]]
+                inline_keyboard=[
+                    [types.InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data='admin_msg_by_sub')]
+                ]
             ),
             parse_mode='HTML',
         )
@@ -588,15 +652,22 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'{tariff.name} ({count} чел.)', callback_data=f'broadcast_tariff_{tariff.id}'
+                    text=texts.t('ADMIN_BROADCAST_TARIFF_OPTION', '{name} ({count} чел.)').format(
+                        name=tariff.name, count=count
+                    ),
+                    callback_data=f'broadcast_tariff_{tariff.id}',
                 )
             ]
         )
 
-    buttons.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_msg_by_sub')])
+    buttons.append([types.InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data='admin_msg_by_sub')])
 
     await callback.message.edit_text(
-        '📦 <b>Рассылка по тарифу</b>\n\nВыберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
+        texts.t(
+            'ADMIN_BROADCAST_BY_TARIFF_PROMPT',
+            '📦 <b>Рассылка по тарифу</b>\n\n'
+            'Выберите тариф для рассылки пользователям с активной подпиской на этот тариф:',
+        ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )
@@ -606,6 +677,7 @@ async def show_tariff_filter(callback: types.CallbackQuery, db_user: User, db: A
 @admin_required
 @error_handler
 async def show_messages_history(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     page = 1
     if '_page_' in callback.data:
         page = int(callback.data.split('_page_')[1])
@@ -623,15 +695,20 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
     total_pages = (total_count + limit - 1) // limit
 
     if not broadcasts:
-        text = """
+        text = texts.t(
+            'ADMIN_BROADCAST_HISTORY_EMPTY',
+            """
 📋 <b>История рассылок</b>
 
 ❌ История рассылок пуста.
 Отправьте первую рассылку, чтобы увидеть её здесь.
-"""
-        keyboard = [[types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_messages')]]
+""",
+        )
+        keyboard = [[types.InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data='admin_messages')]]
     else:
-        text = f'📋 <b>История рассылок</b> (страница {page}/{total_pages})\n\n'
+        text = texts.t(
+            'ADMIN_BROADCAST_HISTORY_HEADER', '📋 <b>История рассылок</b> (страница {page}/{total_pages})\n\n'
+        ).format(page=page, total_pages=total_pages)
 
         for broadcast in broadcasts:
             status_emoji = '✅' if broadcast.status == 'completed' else '❌' if broadcast.status == 'failed' else '⏳'
@@ -642,21 +719,31 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
             message_preview = (
                 broadcast.message_text[:100] + '...'
                 if broadcast.message_text and len(broadcast.message_text) > 100
-                else (broadcast.message_text or '📊 Опрос')
+                else (broadcast.message_text or texts.t('ADMIN_BROADCAST_HISTORY_POLL', '📊 Опрос'))
             )
 
             import html
 
             message_preview = html.escape(message_preview)
 
-            text += f"""
-{status_emoji} <b>{broadcast.created_at.strftime('%d.%m.%Y %H:%M')}</b>
-📊 Отправлено: {broadcast.sent_count}/{broadcast.total_count} ({success_rate}%)
-🎯 Аудитория: {get_target_name(broadcast.target_type)}
-👤 Админ: {html.escape(broadcast.admin_name or '')}
-📝 Сообщение: {message_preview}
-━━━━━━━━━━━━━━━━━━━━━━━
-"""
+            text += texts.t(
+                'ADMIN_BROADCAST_HISTORY_ENTRY',
+                '\n{status_emoji} <b>{date}</b>\n'
+                '📊 Отправлено: {sent}/{total} ({rate}%)\n'
+                '🎯 Аудитория: {audience}\n'
+                '👤 Админ: {admin}\n'
+                '📝 Сообщение: {preview}\n'
+                '━━━━━━━━━━━━━━━━━━━━━━━\n',
+            ).format(
+                status_emoji=status_emoji,
+                date=broadcast.created_at.strftime('%d.%m.%Y %H:%M'),
+                sent=broadcast.sent_count,
+                total=broadcast.total_count,
+                rate=success_rate,
+                audience=get_target_name(broadcast.target_type),
+                admin=html.escape(broadcast.admin_name or ''),
+                preview=message_preview,
+            )
 
         keyboard = get_broadcast_history_keyboard(page, total_pages, db_user.language).inline_keyboard
 
@@ -669,29 +756,42 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
 @admin_required
 @error_handler
 async def show_custom_broadcast(callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession):
+    texts = get_texts(db_user.language)
     stats = await get_users_statistics(db)
 
-    text = f"""
+    text = texts.t(
+        'ADMIN_BROADCAST_CUSTOM_MENU',
+        """
 📝 <b>Рассылка по критериям</b>
 
 📊 <b>Доступные фильтры:</b>
 
 👥 <b>По регистрации:</b>
-• Сегодня: {stats['today']} чел.
-• За неделю: {stats['week']} чел.
-• За месяц: {stats['month']} чел.
+• Сегодня: {today} чел.
+• За неделю: {week} чел.
+• За месяц: {month} чел.
 
 💼 <b>По активности:</b>
-• Активные сегодня: {stats['active_today']} чел.
-• Неактивные 7+ дней: {stats['inactive_week']} чел.
-• Неактивные 30+ дней: {stats['inactive_month']} чел.
+• Активные сегодня: {active_today} чел.
+• Неактивные 7+ дней: {inactive_week} чел.
+• Неактивные 30+ дней: {inactive_month} чел.
 
 🔗 <b>По источнику:</b>
-• Через рефералов: {stats['referrals']} чел.
-• Прямая регистрация: {stats['direct']} чел.
+• Через рефералов: {referrals} чел.
+• Прямая регистрация: {direct} чел.
 
 Выберите критерий для фильтрации:
-"""
+""",
+    ).format(
+        today=stats['today'],
+        week=stats['week'],
+        month=stats['month'],
+        active_today=stats['active_today'],
+        inactive_week=stats['inactive_week'],
+        inactive_month=stats['inactive_month'],
+        referrals=stats['referrals'],
+        direct=stats['direct'],
+    )
 
     await callback.message.edit_text(
         text, reply_markup=get_custom_criteria_keyboard(db_user.language), parse_mode='HTML'
@@ -702,17 +802,18 @@ async def show_custom_broadcast(callback: types.CallbackQuery, db_user: User, st
 @admin_required
 @error_handler
 async def select_custom_criteria(callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession):
+    texts = get_texts(db_user.language)
     criteria = callback.data.replace('criteria_', '')
 
     criteria_names = {
-        'today': 'Зарегистрированные сегодня',
-        'week': 'Зарегистрированные за неделю',
-        'month': 'Зарегистрированные за месяц',
-        'active_today': 'Активные сегодня',
-        'inactive_week': 'Неактивные 7+ дней',
-        'inactive_month': 'Неактивные 30+ дней',
-        'referrals': 'Пришедшие через рефералов',
-        'direct': 'Прямая регистрация',
+        'today': texts.t('ADMIN_BROADCAST_CRITERIA_TODAY', 'Зарегистрированные сегодня'),
+        'week': texts.t('ADMIN_BROADCAST_CRITERIA_WEEK', 'Зарегистрированные за неделю'),
+        'month': texts.t('ADMIN_BROADCAST_CRITERIA_MONTH', 'Зарегистрированные за месяц'),
+        'active_today': texts.t('ADMIN_BROADCAST_CRITERIA_ACTIVE_TODAY', 'Активные сегодня'),
+        'inactive_week': texts.t('ADMIN_BROADCAST_CRITERIA_INACTIVE_WEEK', 'Неактивные 7+ дней'),
+        'inactive_month': texts.t('ADMIN_BROADCAST_CRITERIA_INACTIVE_MONTH', 'Неактивные 30+ дней'),
+        'referrals': texts.t('ADMIN_BROADCAST_CRITERIA_REFERRALS', 'Пришедшие через рефералов'),
+        'direct': texts.t('ADMIN_BROADCAST_CRITERIA_DIRECT', 'Прямая регистрация'),
     }
 
     user_count = await get_custom_users_count(db, criteria)
@@ -720,13 +821,18 @@ async def select_custom_criteria(callback: types.CallbackQuery, db_user: User, s
     await state.update_data(broadcast_target=f'custom_{criteria}')
 
     await callback.message.edit_text(
-        f'📨 <b>Создание рассылки</b>\n\n'
-        f'🎯 <b>Критерий:</b> {criteria_names.get(criteria, criteria)}\n'
-        f'👥 <b>Получателей:</b> {user_count}\n\n'
-        f'Введите текст сообщения для рассылки:\n\n'
-        f'<i>Поддерживается HTML разметка</i>',
+        texts.t(
+            'ADMIN_BROADCAST_CREATE_BY_CRITERIA',
+            '📨 <b>Создание рассылки</b>\n\n'
+            '🎯 <b>Критерий:</b> {criteria}\n'
+            '👥 <b>Получателей:</b> {count}\n\n'
+            'Введите текст сообщения для рассылки:\n\n'
+            '<i>Поддерживается HTML разметка</i>',
+        ).format(criteria=criteria_names.get(criteria, criteria), count=user_count),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_messages')]]
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text=texts.t('ADMIN_CANCEL', '❌ Отмена'), callback_data='admin_messages')]
+            ]
         ),
         parse_mode='HTML',
     )
@@ -738,6 +844,7 @@ async def select_custom_criteria(callback: types.CallbackQuery, db_user: User, s
 @admin_required
 @error_handler
 async def select_broadcast_target(callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession):
+    texts = get_texts(db_user.language)
     raw_target = callback.data[len('broadcast_') :]
     target_aliases = {
         'no_sub': 'no',
@@ -745,14 +852,14 @@ async def select_broadcast_target(callback: types.CallbackQuery, db_user: User, 
     target = target_aliases.get(raw_target, raw_target)
 
     target_names = {
-        'all': 'Всем пользователям',
-        'active': 'С активной подпиской',
-        'trial': 'С триальной подпиской',
-        'no': 'Без подписки',
-        'expiring': 'С истекающей подпиской',
-        'expired': 'С истекшей подпиской',
-        'active_zero': 'Активная подписка, трафик 0 ГБ',
-        'trial_zero': 'Триальная подписка, трафик 0 ГБ',
+        'all': texts.t('ADMIN_BROADCAST_TARGET_ALL_DESC', 'Всем пользователям'),
+        'active': texts.t('ADMIN_BROADCAST_TARGET_ACTIVE_DESC', 'С активной подпиской'),
+        'trial': texts.t('ADMIN_BROADCAST_TARGET_TRIAL_DESC', 'С триальной подпиской'),
+        'no': texts.t('ADMIN_BROADCAST_TARGET_NO_DESC', 'Без подписки'),
+        'expiring': texts.t('ADMIN_BROADCAST_TARGET_EXPIRING_DESC', 'С истекающей подпиской'),
+        'expired': texts.t('ADMIN_BROADCAST_TARGET_EXPIRED_DESC', 'С истекшей подпиской'),
+        'active_zero': texts.t('ADMIN_BROADCAST_TARGET_ACTIVE_ZERO_DESC', 'Активная подписка, трафик 0 ГБ'),
+        'trial_zero': texts.t('ADMIN_BROADCAST_TARGET_TRIAL_ZERO_DESC', 'Триальная подписка, трафик 0 ГБ'),
     }
 
     # Обработка фильтра по тарифу
@@ -763,22 +870,27 @@ async def select_broadcast_target(callback: types.CallbackQuery, db_user: User, 
 
         tariff = await get_tariff_by_id(db, tariff_id)
         if tariff:
-            target_name = f'Тариф «{tariff.name}»'
+            target_name = texts.t('ADMIN_BROADCAST_TARGET_TARIFF_NAMED', 'Тариф «{name}»').format(name=tariff.name)
         else:
-            target_name = f'Тариф #{tariff_id}'
+            target_name = texts.t('ADMIN_BROADCAST_TARGET_TARIFF_ID', 'Тариф #{tariff_id}').format(tariff_id=tariff_id)
 
     user_count = await get_target_users_count(db, target)
 
     await state.update_data(broadcast_target=target)
 
     await callback.message.edit_text(
-        f'📨 <b>Создание рассылки</b>\n\n'
-        f'🎯 <b>Аудитория:</b> {target_name}\n'
-        f'👥 <b>Получателей:</b> {user_count}\n\n'
-        f'Введите текст сообщения для рассылки:\n\n'
-        f'<i>Поддерживается HTML разметка</i>',
+        texts.t(
+            'ADMIN_BROADCAST_CREATE_BY_TARGET',
+            '📨 <b>Создание рассылки</b>\n\n'
+            '🎯 <b>Аудитория:</b> {target_name}\n'
+            '👥 <b>Получателей:</b> {count}\n\n'
+            'Введите текст сообщения для рассылки:\n\n'
+            '<i>Поддерживается HTML разметка</i>',
+        ).format(target_name=target_name, count=user_count),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_messages')]]
+            inline_keyboard=[
+                [types.InlineKeyboardButton(text=texts.t('ADMIN_CANCEL', '❌ Отмена'), callback_data='admin_messages')]
+            ]
         ),
         parse_mode='HTML',
     )
@@ -790,19 +902,25 @@ async def select_broadcast_target(callback: types.CallbackQuery, db_user: User, 
 @admin_required
 @error_handler
 async def process_broadcast_message(message: types.Message, db_user: User, state: FSMContext, db: AsyncSession):
+    texts = get_texts(db_user.language)
     broadcast_text = message.text
 
     if len(broadcast_text) > 4000:
-        await message.answer('❌ Сообщение слишком длинное (максимум 4000 символов)')
+        await message.answer(
+            texts.t('ADMIN_BROADCAST_MESSAGE_TOO_LONG', '❌ Сообщение слишком длинное (максимум 4000 символов)')
+        )
         return
 
     await state.update_data(broadcast_message=broadcast_text)
 
     await message.answer(
-        '🖼️ <b>Добавление медиафайла</b>\n\n'
-        'Вы можете добавить к сообщению фото, видео или документ.\n'
-        'Или пропустить этот шаг.\n\n'
-        'Выберите тип медиа:',
+        texts.t(
+            'ADMIN_BROADCAST_ADD_MEDIA_PROMPT',
+            '🖼️ <b>Добавление медиафайла</b>\n\n'
+            'Вы можете добавить к сообщению фото, видео или документ.\n'
+            'Или пропустить этот шаг.\n\n'
+            'Выберите тип медиа:',
+        ),
         reply_markup=get_broadcast_media_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -816,21 +934,24 @@ async def handle_media_selection(callback: types.CallbackQuery, db_user: User, s
         await show_button_selector_callback(callback, db_user, state)
         return
 
+    texts = get_texts(db_user.language)
     media_type = callback.data.replace('add_media_', '')
 
     media_instructions = {
-        'photo': '📷 Отправьте фотографию для рассылки:',
-        'video': '🎥 Отправьте видео для рассылки:',
-        'document': '📄 Отправьте документ для рассылки:',
+        'photo': texts.t('ADMIN_BROADCAST_MEDIA_INSTR_PHOTO', '📷 Отправьте фотографию для рассылки:'),
+        'video': texts.t('ADMIN_BROADCAST_MEDIA_INSTR_VIDEO', '🎥 Отправьте видео для рассылки:'),
+        'document': texts.t('ADMIN_BROADCAST_MEDIA_INSTR_DOCUMENT', '📄 Отправьте документ для рассылки:'),
     }
 
     await state.update_data(media_type=media_type, waiting_for_media=True)
 
-    instruction_text = (
-        f'{media_instructions.get(media_type, "Отправьте медиафайл:")}\n\n<i>Размер файла не должен превышать 50 МБ</i>'
-    )
+    instruction_text = media_instructions.get(
+        media_type, texts.t('ADMIN_BROADCAST_MEDIA_INSTR_DEFAULT', 'Отправьте медиафайл:')
+    ) + texts.t('ADMIN_BROADCAST_MEDIA_SIZE_HINT', '\n\n<i>Размер файла не должен превышать 50 МБ</i>')
     instruction_keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_messages')]]
+        inline_keyboard=[
+            [types.InlineKeyboardButton(text=texts.t('ADMIN_CANCEL', '❌ Отмена'), callback_data='admin_messages')]
+        ]
     )
 
     # Проверяем, является ли текущее сообщение медиа-сообщением
@@ -860,6 +981,7 @@ async def handle_media_selection(callback: types.CallbackQuery, db_user: User, s
 @admin_required
 @error_handler
 async def process_broadcast_media(message: types.Message, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     expected_type = data.get('media_type')
 
@@ -876,7 +998,12 @@ async def process_broadcast_media(message: types.Message, db_user: User, state: 
         media_file_id = message.document.file_id
         media_type = 'document'
     else:
-        await message.answer(f'❌ Пожалуйста, отправьте {expected_type} как указано в инструкции.')
+        await message.answer(
+            texts.t(
+                'ADMIN_BROADCAST_MEDIA_WRONG_TYPE',
+                '❌ Пожалуйста, отправьте {expected_type} как указано в инструкции.',
+            ).format(expected_type=expected_type)
+        )
         return
 
     await state.update_data(
@@ -887,16 +1014,18 @@ async def process_broadcast_media(message: types.Message, db_user: User, state: 
 
 
 async def show_media_preview(message: types.Message, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     media_type = data.get('media_type')
     media_file_id = data.get('media_file_id')
 
-    preview_text = (
-        f'🖼️ <b>Медиафайл добавлен</b>\n\n'
-        f'📎 <b>Тип:</b> {media_type}\n'
-        f'✅ Файл сохранен и готов к отправке\n\n'
-        f'Что делать дальше?'
-    )
+    preview_text = texts.t(
+        'ADMIN_BROADCAST_MEDIA_PREVIEW',
+        '🖼️ <b>Медиафайл добавлен</b>\n\n'
+        '📎 <b>Тип:</b> {media_type}\n'
+        '✅ Файл сохранен и готов к отправке\n\n'
+        'Что делать дальше?',
+    ).format(media_type=media_type)
 
     # Для предпросмотра рассылки используем оригинальный метод без патчинга логотипа
     # чтобы показать именно загруженное фото
@@ -937,9 +1066,13 @@ async def handle_media_confirmation(callback: types.CallbackQuery, db_user: User
 @admin_required
 @error_handler
 async def handle_change_media(callback: types.CallbackQuery, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     await safe_edit_or_send_text(
         callback,
-        '🖼️ <b>Изменение медиафайла</b>\n\nВыберите новый тип медиа:',
+        texts.t(
+            'ADMIN_BROADCAST_CHANGE_MEDIA_PROMPT',
+            '🖼️ <b>Изменение медиафайла</b>\n\nВыберите новый тип медиа:',
+        ),
         reply_markup=get_broadcast_media_keyboard(db_user.language),
         parse_mode='HTML',
     )
@@ -949,6 +1082,7 @@ async def handle_change_media(callback: types.CallbackQuery, db_user: User, stat
 @admin_required
 @error_handler
 async def show_button_selector_callback(callback: types.CallbackQuery, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     has_media = data.get('has_media', False)
     selected_buttons = data.get('selected_buttons')
@@ -959,10 +1093,15 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
 
     media_info = ''
     if has_media:
-        media_type = data.get('media_type', 'файл')
-        media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type} добавлен'
+        media_type = data.get('media_type', texts.t('ADMIN_BROADCAST_MEDIA_GENERIC', 'файл'))
+        media_info = texts.t(
+            'ADMIN_BROADCAST_BUTTONS_MEDIA_INFO', '\n🖼️ <b>Медиафайл:</b> {media_type} добавлен'
+        ).format(media_type=media_type)
 
-    text = f"""
+    text = (
+        texts.t(
+            'ADMIN_BROADCAST_BUTTONS_HEADER',
+            """
 📘 <b>Выбор дополнительных кнопок</b>
 
 Выберите кнопки, которые будут добавлены к сообщению рассылки:
@@ -974,10 +1113,17 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
 📱 <b>Подписка</b> — покажет состояние подписки
 🛠️ <b>Техподдержка</b> — свяжет с поддержкой
 
-🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.{media_info}
+🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.""",
+        )
+        + media_info
+        + texts.t(
+            'ADMIN_BROADCAST_BUTTONS_FOOTER',
+            """
 
 Выберите нужные кнопки и нажмите "Продолжить":
-"""
+""",
+        )
+    )
 
     keyboard = get_updated_message_buttons_selector_keyboard_with_media(selected_buttons, has_media, db_user.language)
 
@@ -1007,6 +1153,7 @@ async def show_button_selector_callback(callback: types.CallbackQuery, db_user: 
 @admin_required
 @error_handler
 async def show_button_selector(message: types.Message, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     selected_buttons = data.get('selected_buttons')
     if selected_buttons is None:
@@ -1015,7 +1162,9 @@ async def show_button_selector(message: types.Message, db_user: User, state: FSM
 
     has_media = data.get('has_media', False)
 
-    text = """
+    text = texts.t(
+        'ADMIN_BROADCAST_BUTTONS_HEADER',
+        """
 📘 <b>Выбор дополнительных кнопок</b>
 
 Выберите кнопки, которые будут добавлены к сообщению рассылки:
@@ -1027,10 +1176,14 @@ async def show_button_selector(message: types.Message, db_user: User, state: FSM
 📱 <b>Подписка</b> — покажет состояние подписки
 🛠️ <b>Техподдержка</b> — свяжет с поддержкой
 
-🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.
+🏠 <b>Кнопка "На главную"</b> включена по умолчанию, но вы можете отключить её при необходимости.""",
+    ) + texts.t(
+        'ADMIN_BROADCAST_BUTTONS_FOOTER',
+        """
 
 Выберите нужные кнопки и нажмите "Продолжить":
-"""
+""",
+    )
 
     keyboard = get_updated_message_buttons_selector_keyboard_with_media(selected_buttons, has_media, db_user.language)
 
@@ -1065,6 +1218,7 @@ async def toggle_button_selection(callback: types.CallbackQuery, db_user: User, 
 @admin_required
 @error_handler
 async def confirm_button_selection(callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     target = data.get('broadcast_target')
     message_text = data.get('broadcast_message')
@@ -1084,42 +1238,65 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
 
     media_info = ''
     if has_media:
-        media_type_names = {'photo': 'Фотография', 'video': 'Видео', 'document': 'Документ'}
-        media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type_names.get(media_type, media_type)}'
+        media_type_names = {
+            'photo': texts.t('ADMIN_BROADCAST_MEDIA_TYPE_PHOTO', 'Фотография'),
+            'video': texts.t('ADMIN_BROADCAST_MEDIA_TYPE_VIDEO', 'Видео'),
+            'document': texts.t('ADMIN_BROADCAST_MEDIA_TYPE_DOCUMENT', 'Документ'),
+        }
+        media_info = texts.t('ADMIN_BROADCAST_PREVIEW_MEDIA', '\n🖼️ <b>Медиафайл:</b> {media_type}').format(
+            media_type=media_type_names.get(media_type, media_type)
+        )
 
     ordered_keys = [button_key for row in BUTTON_ROWS for button_key in row]
     button_labels = get_broadcast_button_labels(db_user.language)
     selected_names = [button_labels[key] for key in ordered_keys if key in selected_buttons]
     if selected_names:
-        buttons_info = f'\n📘 <b>Кнопки:</b> {", ".join(selected_names)}'
+        buttons_info = texts.t('ADMIN_BROADCAST_BUTTONS_LIST', '\n📘 <b>Кнопки:</b> {names}').format(
+            names=', '.join(selected_names)
+        )
     else:
-        buttons_info = '\n📘 <b>Кнопки:</b> отсутствуют'
+        buttons_info = texts.t('ADMIN_BROADCAST_BUTTONS_NONE', '\n📘 <b>Кнопки:</b> отсутствуют')
 
-    preview_text = f"""
-📨 <b>Предварительный просмотр рассылки</b>
-
-🎯 <b>Аудитория:</b> {target_display}
-👥 <b>Получателей:</b> {user_count}
-
-📝 <b>Сообщение:</b>
-{message_text}{media_info}
-
-{buttons_info}
-
-Подтвердить отправку?
-"""
+    preview_text = texts.t(
+        'ADMIN_BROADCAST_PREVIEW',
+        '\n📨 <b>Предварительный просмотр рассылки</b>\n\n'
+        '🎯 <b>Аудитория:</b> {target_display}\n'
+        '👥 <b>Получателей:</b> {count}\n\n'
+        '📝 <b>Сообщение:</b>\n'
+        '{message}{media_info}\n\n'
+        '{buttons_info}\n\n'
+        'Подтвердить отправку?\n',
+    ).format(
+        target_display=target_display,
+        count=user_count,
+        message=message_text,
+        media_info=media_info,
+        buttons_info=buttons_info,
+    )
 
     keyboard = [
         [
-            types.InlineKeyboardButton(text='✅ Отправить', callback_data='admin_confirm_broadcast'),
-            types.InlineKeyboardButton(text='📘 Изменить кнопки', callback_data='edit_buttons'),
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_POLLS_SEND_CONFIRM_BUTTON', '✅ Отправить'), callback_data='admin_confirm_broadcast'
+            ),
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_BROADCAST_EDIT_BUTTONS', '📘 Изменить кнопки'), callback_data='edit_buttons'
+            ),
         ]
     ]
 
     if has_media:
-        keyboard.append([types.InlineKeyboardButton(text='🖼️ Изменить медиа', callback_data='change_media')])
+        keyboard.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_BROADCAST_CHANGE_MEDIA', '🖼️ Изменить медиа'), callback_data='change_media'
+                )
+            ]
+        )
 
-    keyboard.append([types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_messages')])
+    keyboard.append(
+        [types.InlineKeyboardButton(text=texts.t('ADMIN_CANCEL', '❌ Отмена'), callback_data='admin_messages')]
+    )
 
     # Если есть медиа, показываем его с загруженным фото, иначе обычное текстовое сообщение
     if has_media and media_type == 'photo':
@@ -1193,10 +1370,11 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     admin_name: str = db_user.full_name  # property, читает first_name/last_name
     admin_telegram_id: int | None = db_user.telegram_id
     admin_language: str = db_user.language
+    texts = get_texts(admin_language)
 
     await safe_edit_or_send_text(
         callback,
-        '📨 <b>Подготовка рассылки...</b>\n\n⏳ Загружаю список получателей...',
+        texts.t('ADMIN_BROADCAST_PREPARING', '📨 <b>Подготовка рассылки...</b>\n\n⏳ Загружаю список получателей...'),
         reply_markup=None,
         parse_mode='HTML',
     )
@@ -1381,16 +1559,31 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
         bar = '█' * filled + '░' * (bar_length - filled)
 
         if phase == 'sending':
-            blocked_line = f'• Заблокировали бота: {current_blocked}\n' if current_blocked else ''
-            return (
-                f'📨 <b>Рассылка в процессе...</b>\n\n'
-                f'[{bar}] {percent}%\n\n'
-                f'📊 <b>Прогресс:</b>\n'
-                f'• Отправлено: {current_sent}\n'
-                f'{blocked_line}'
-                f'• Ошибок: {current_failed}\n'
-                f'• Обработано: {processed}/{total}\n\n'
-                f'⏳ Не закрывайте диалог — рассылка продолжается...'
+            blocked_line = (
+                texts.t('ADMIN_BROADCAST_PROGRESS_BLOCKED', '• Заблокировали бота: {count}\n').format(
+                    count=current_blocked
+                )
+                if current_blocked
+                else ''
+            )
+            return texts.t(
+                'ADMIN_BROADCAST_PROGRESS',
+                '📨 <b>Рассылка в процессе...</b>\n\n'
+                '[{bar}] {percent}%\n\n'
+                '📊 <b>Прогресс:</b>\n'
+                '• Отправлено: {sent}\n'
+                '{blocked_line}'
+                '• Ошибок: {failed}\n'
+                '• Обработано: {processed}/{total}\n\n'
+                '⏳ Не закрывайте диалог — рассылка продолжается...',
+            ).format(
+                bar=bar,
+                percent=percent,
+                sent=current_sent,
+                blocked_line=blocked_line,
+                failed=current_failed,
+                processed=processed,
+                total=total,
             )
         return ''
 
@@ -1476,22 +1669,45 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     )
 
     success_rate = round(sent_count / total_users_count * 100, 1) if total_users_count else 0
-    media_info = f'\n🖼️ <b>Медиафайл:</b> {media_type}' if has_media else ''
-    blocked_line = f'• Заблокировали бота: {blocked_count}\n' if blocked_count else ''
+    media_info = (
+        texts.t('ADMIN_BROADCAST_RESULT_MEDIA', '\n🖼️ <b>Медиафайл:</b> {media_type}').format(media_type=media_type)
+        if has_media
+        else ''
+    )
+    blocked_line = (
+        texts.t('ADMIN_BROADCAST_PROGRESS_BLOCKED', '• Заблокировали бота: {count}\n').format(count=blocked_count)
+        if blocked_count
+        else ''
+    )
 
-    result_text = (
-        f'✅ <b>Рассылка завершена!</b>\n\n'
-        f'📊 <b>Результат:</b>\n'
-        f'• Отправлено: {sent_count}\n'
-        f'{blocked_line}'
-        f'• Не доставлено: {failed_count}\n'
-        f'• Всего пользователей: {total_users_count}\n'
-        f'• Успешность: {success_rate}%{media_info}\n\n'
-        f'<b>Администратор:</b> {html.escape(admin_name)}'
+    result_text = texts.t(
+        'ADMIN_BROADCAST_RESULT',
+        '✅ <b>Рассылка завершена!</b>\n\n'
+        '📊 <b>Результат:</b>\n'
+        '• Отправлено: {sent}\n'
+        '{blocked_line}'
+        '• Не доставлено: {failed}\n'
+        '• Всего пользователей: {total}\n'
+        '• Успешность: {rate}%{media_info}\n\n'
+        '<b>Администратор:</b> {admin}',
+    ).format(
+        sent=sent_count,
+        blocked_line=blocked_line,
+        failed=failed_count,
+        total=total_users_count,
+        rate=success_rate,
+        media_info=media_info,
+        admin=html.escape(admin_name),
     )
 
     back_keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='📨 К рассылкам', callback_data='admin_messages')]]
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_BROADCAST_BACK_TO_LIST', '📨 К рассылкам'), callback_data='admin_messages'
+                )
+            ]
+        ]
     )
 
     try:

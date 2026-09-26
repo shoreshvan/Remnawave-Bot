@@ -44,7 +44,7 @@ class GiftConfigResponse(BaseModel):
     tariffs: list[GiftConfigTariff] = []
     payment_methods: list[GiftConfigPaymentMethod] = []
     balance_kopeks: int = 0
-    currency_symbol: str = '\u20bd'
+    currency_symbol: str = 'تومان'
     promo_group_name: str | None = None
     active_discount_percent: int | None = None
     active_discount_expires_at: datetime | None = None

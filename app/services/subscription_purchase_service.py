@@ -324,7 +324,7 @@ class MiniAppSubscriptionPurchaseService:
         else:
             subscription = await get_subscription_by_user_id(db, user.id)
         balance_kopeks = int(getattr(user, 'balance_kopeks', 0) or 0)
-        currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
+        currency = (getattr(user, 'balance_currency', None) or settings.HOME_CURRENCY_CODE).upper()
         texts = get_texts(getattr(user, 'language', None))
 
         available_servers = await get_available_server_squads(

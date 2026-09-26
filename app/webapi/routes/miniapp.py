@@ -690,7 +690,7 @@ async def get_payment_methods(
                 id='stars',
                 icon='⭐',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=stars_min_amount,
                 amount_step_kopeks=stars_min_amount,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -704,7 +704,7 @@ async def get_payment_methods(
                     id='yookassa_sbp',
                     icon='🏦',
                     requires_amount=True,
-                    currency='RUB',
+                    currency=settings.HOME_CURRENCY_CODE,
                     min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
                     max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
                     integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -716,7 +716,7 @@ async def get_payment_methods(
                 id='yookassa',
                 icon='💳',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -734,7 +734,7 @@ async def get_payment_methods(
                 name=settings.get_mulenpay_display_name(),
                 icon='💳',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=settings.MULENPAY_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.MULENPAY_MAX_AMOUNT_KOPEKS,
                 integration_type=mulenpay_integration,
@@ -748,7 +748,7 @@ async def get_payment_methods(
                 id='pal24',
                 icon='🏦',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -779,7 +779,7 @@ async def get_payment_methods(
                 id='wata',
                 icon='🌊',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -827,7 +827,7 @@ async def get_payment_methods(
                 id='cryptobot',
                 icon='🪙',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=min_amount_kopeks,
                 max_amount_kopeks=max_amount_kopeks,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -840,7 +840,7 @@ async def get_payment_methods(
                 id='heleket',
                 icon='🪙',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=100 * 100,
                 max_amount_kopeks=100_000 * 100,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -853,7 +853,7 @@ async def get_payment_methods(
                 id='cloudpayments',
                 icon='💳',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -866,7 +866,7 @@ async def get_payment_methods(
                 id='freekassa',
                 icon='💳',
                 requires_amount=True,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -879,7 +879,7 @@ async def get_payment_methods(
                 id='tribute',
                 icon='💎',
                 requires_amount=False,
-                currency='RUB',
+                currency=settings.HOME_CURRENCY_CODE,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
@@ -2433,7 +2433,7 @@ async def _resolve_stars_payment_status(
         status='paid',
         is_paid=True,
         amount_kopeks=transaction.amount_kopeks,
-        currency='RUB',
+        currency=settings.HOME_CURRENCY_CODE,
         completed_at=transaction.completed_at or transaction.created_at,
         transaction_id=transaction.id,
         external_id=transaction.external_id,
@@ -2476,7 +2476,7 @@ async def _resolve_tribute_payment_status(
         status='paid',
         is_paid=True,
         amount_kopeks=transaction.amount_kopeks,
-        currency='RUB',
+        currency=settings.HOME_CURRENCY_CODE,
         completed_at=transaction.completed_at or transaction.created_at,
         transaction_id=transaction.id,
         external_id=transaction.external_id,
@@ -5581,7 +5581,7 @@ async def _build_subscription_settings(
 
     settings_payload = MiniAppSubscriptionSettings(
         subscription_id=subscription.id,
-        currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
+        currency=(getattr(user, 'balance_currency', None) or settings.HOME_CURRENCY_CODE).upper(),
         current=MiniAppSubscriptionCurrentSettings(
             servers=current_servers,
             traffic_limit_gb=subscription.traffic_limit_gb,
@@ -5640,7 +5640,7 @@ async def get_subscription_renewal_options_endpoint(
     if settings.is_tariffs_mode() and not subscription.tariff_id:
         return MiniAppSubscriptionRenewalOptionsResponse(
             periods=[],
-            currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
+            currency=(getattr(user, 'balance_currency', None) or settings.HOME_CURRENCY_CODE).upper(),
             balance_kopeks=getattr(user, 'balance_kopeks', 0),
             balance_label=settings.format_price(getattr(user, 'balance_kopeks', 0)),
             status_message=get_texts().t(
@@ -5657,7 +5657,7 @@ async def get_subscription_renewal_options_endpoint(
     )
 
     balance_kopeks = getattr(user, 'balance_kopeks', 0)
-    currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
+    currency = (getattr(user, 'balance_currency', None) or settings.HOME_CURRENCY_CODE).upper()
 
     promo_group = getattr(user, 'promo_group', None)
     promo_group_model = (

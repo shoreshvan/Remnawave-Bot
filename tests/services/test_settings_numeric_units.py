@@ -36,4 +36,6 @@ def test_devices_selection_disabled_amount_zero_stays_plain() -> None:
     ],
 )
 def test_money_keys_keep_currency_formatting(key: str) -> None:
-    assert '₽' in svc.format_value_human(key, 5000)
+    from app.config import settings
+
+    assert settings.CURRENCY_SYMBOL in svc.format_value_human(key, 5000)

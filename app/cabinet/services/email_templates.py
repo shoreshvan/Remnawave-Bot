@@ -9,6 +9,7 @@ from functools import partial
 from typing import Any
 
 from app.config import settings
+from app.localization.texts import get_texts
 
 
 class EmailNotificationTemplates:
@@ -284,6 +285,7 @@ class EmailNotificationTemplates:
 
     def _balance_topup_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for balance top-up notification."""
+        texts = get_texts(language)
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
         balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
 
@@ -334,12 +336,20 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': texts.t('EMAIL_BALANCE_TOPUP_SUBJECT', subjects.get(language, subjects['ru'])).format(
+                amount=amount
+            ),
+            'body_html': self._get_base_template(
+                texts.t('EMAIL_BALANCE_TOPUP_BODY', bodies.get(language, bodies['ru'])).format(
+                    amount=amount, balance=balance, cabinet_button=self._get_cabinet_button(language)
+                ),
+                language,
+            ),
         }
 
     def _balance_change_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for balance change notification."""
+        texts = get_texts(language)
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
         balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
 
@@ -386,8 +396,13 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': texts.t('EMAIL_BALANCE_CHANGE_SUBJECT', subjects.get(language, subjects['ru'])),
+            'body_html': self._get_base_template(
+                texts.t('EMAIL_BALANCE_CHANGE_BODY', bodies.get(language, bodies['ru'])).format(
+                    amount=amount, balance=balance, cabinet_button=self._get_cabinet_button(language)
+                ),
+                language,
+            ),
         }
 
     # ============================================================================
@@ -865,6 +880,7 @@ class EmailNotificationTemplates:
 
     def _winback_trial_ending_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Email: trial ending soon (email-only users)."""
+        texts = get_texts(language)
         subjects = {
             'ru': 'Пробная подписка скоро закончится',
             'en': 'Your trial is ending soon',
@@ -878,9 +894,13 @@ class EmailNotificationTemplates:
             'ua': f'<h2>Пробна підписка скоро закінчиться</h2><div class="highlight warning"><p>Ваша тестова підписка скоро закінчується.</p><p>Оформіть підписку, щоб не залишитися без VPN — конфіг і пристрої збережуться.</p></div>{self._get_cabinet_button(language)}',
         }
         return {
-            'subject': subjects.get(language, subjects['ru']),
+            'subject': texts.t('EMAIL_WINBACK_TRIAL_ENDING_SUBJECT', subjects.get(language, subjects['ru'])),
             'body_html': self._get_base_template(
-                bodies.get(language, bodies['ru']), language, context.get('unsubscribe_url', '')
+                texts.t('EMAIL_WINBACK_TRIAL_ENDING_BODY', bodies.get(language, bodies['ru'])).format(
+                    cabinet_button=self._get_cabinet_button(language)
+                ),
+                language,
+                context.get('unsubscribe_url', ''),
             ),
         }
 
@@ -934,6 +954,7 @@ class EmailNotificationTemplates:
 
     def _autopay_success_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for successful autopay notification."""
+        texts = get_texts(language)
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
         new_expires_at = context.get('new_expires_at', '')
 
@@ -966,8 +987,13 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': texts.t('EMAIL_AUTOPAY_SUCCESS_SUBJECT', subjects.get(language, subjects['ru'])),
+            'body_html': self._get_base_template(
+                texts.t('EMAIL_AUTOPAY_SUCCESS_BODY', bodies.get(language, bodies['ru'])).format(
+                    amount=amount, new_expires_at=new_expires_at, cabinet_button=self._get_cabinet_button(language)
+                ),
+                language,
+            ),
         }
 
     def _autopay_failed_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
@@ -1053,6 +1079,7 @@ class EmailNotificationTemplates:
 
     def _daily_debit_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for daily subscription debit notification."""
+        texts = get_texts(language)
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
         balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
 
@@ -1083,12 +1110,20 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': texts.t('EMAIL_DAILY_DEBIT_SUBJECT', subjects.get(language, subjects['ru'])).format(
+                amount=amount
+            ),
+            'body_html': self._get_base_template(
+                texts.t('EMAIL_DAILY_DEBIT_BODY', bodies.get(language, bodies['ru'])).format(
+                    amount=amount, balance=balance, cabinet_button=self._get_cabinet_button(language)
+                ),
+                language,
+            ),
         }
 
     def _daily_insufficient_funds_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for daily subscription insufficient funds."""
+        texts = get_texts(language)
         subjects = {
             'ru': 'Недостаточно средств для продления',
             'en': 'Insufficient Funds',
@@ -1118,12 +1153,18 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': texts.t('EMAIL_DAILY_INSUFFICIENT_FUNDS_SUBJECT', subjects.get(language, subjects['ru'])),
+            'body_html': self._get_base_template(
+                texts.t('EMAIL_DAILY_INSUFFICIENT_FUNDS_BODY', bodies.get(language, bodies['ru'])).format(
+                    cabinet_button=self._get_cabinet_button(language)
+                ),
+                language,
+            ),
         }
 
     def _traffic_reset_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for traffic reset notification."""
+        texts = get_texts(language)
         subjects = {
             'ru': 'Трафик обновлён',
             'en': 'Traffic Reset',
@@ -1149,8 +1190,13 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': texts.t('EMAIL_TRAFFIC_RESET_SUBJECT', subjects.get(language, subjects['ru'])),
+            'body_html': self._get_base_template(
+                texts.t('EMAIL_TRAFFIC_RESET_BODY', bodies.get(language, bodies['ru'])).format(
+                    cabinet_button=self._get_cabinet_button(language)
+                ),
+                language,
+            ),
         }
 
     # ============================================================================
@@ -1194,6 +1240,7 @@ class EmailNotificationTemplates:
 
     def _unban_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for unban notification."""
+        texts = get_texts(language)
         subjects = {
             'ru': 'Аккаунт разблокирован',
             'en': 'Account Reactivated',
@@ -1221,8 +1268,13 @@ class EmailNotificationTemplates:
         }
 
         return {
-            'subject': subjects.get(language, subjects['ru']),
-            'body_html': self._get_base_template(bodies.get(language, bodies['ru']), language),
+            'subject': texts.t('EMAIL_UNBAN_SUBJECT', subjects.get(language, subjects['ru'])),
+            'body_html': self._get_base_template(
+                texts.t('EMAIL_UNBAN_BODY', bodies.get(language, bodies['ru'])).format(
+                    cabinet_button=self._get_cabinet_button(language)
+                ),
+                language,
+            ),
         }
 
     def _warning_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:

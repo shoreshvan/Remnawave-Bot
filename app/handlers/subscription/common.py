@@ -92,7 +92,8 @@ async def resolve_subscription_from_context(
         return active_subs[0], active_subs[0].id
 
     # 4. Cannot determine
-    await callback.answer('Выберите подписку', show_alert=True)
+    texts = get_texts(db_user.language)
+    await callback.answer(texts.t('SUBSCRIPTION_SELECT_PROMPT', 'Выберите подписку'), show_alert=True)
     return None, None
 
 
@@ -232,6 +233,7 @@ def get_localized_value(values: Any, language: str, default_language: str = 'en'
 
 def render_guide_blocks(blocks: list[dict], language: str) -> str:
     """Render block-format guide steps to HTML text."""
+    texts = get_texts(language)
     parts: list[str] = []
     step_num = 1
     for block in blocks:
@@ -244,7 +246,7 @@ def render_guide_blocks(blocks: list[dict], language: str) -> str:
         )
         desc_text = html_mod.escape(get_localized_value(desc, language) if isinstance(desc, dict) else str(desc or ''))
         if title_text or desc_text:
-            step = f'<b>Шаг {step_num}'
+            step = texts.t('GUIDE_STEP_LABEL', '<b>Шаг {step_num}').format(step_num=step_num)
             if title_text:
                 step += f' - {title_text}'
             step += ':</b>'
@@ -569,11 +571,21 @@ def create_deep_link(app: dict[str, Any], subscription_url: str) -> str | None:
 def get_reset_devices_confirm_keyboard(
     language: str = 'ru', back_callback: str = 'menu_subscription'
 ) -> InlineKeyboardMarkup:
-    get_texts(language)
+    texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text='✅ Да, сбросить все устройства', callback_data='confirm_reset_devices')],
-            [InlineKeyboardButton(text='❌ Отмена', callback_data=back_callback)],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('RESET_DEVICES_CONFIRM_BUTTON', '✅ Да, сбросить все устройства'),
+                    callback_data='confirm_reset_devices',
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('SUBSCRIPTION_CANCEL_BUTTON', '❌ Отмена'),
+                    callback_data=back_callback,
+                )
+            ],
         ]
     )
 
@@ -588,6 +600,8 @@ def get_traffic_switch_keyboard(
 ) -> InlineKeyboardMarkup:
     from app.config import settings
 
+    texts = get_texts(language)
+
     # Если базовый трафик не передан, используем текущий
     # (для обратной совместимости и случаев без докупленного трафика)
     if base_traffic_gb is None:
@@ -598,7 +612,11 @@ def get_traffic_switch_keyboard(
         now = datetime.now(UTC)
         days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
-        period_text = f' (за {days_left} дн.)' if days_left > 1 else ' (за 1 день)'
+        period_text = (
+            texts.t('TRAFFIC_SWITCH_PERIOD_DAYS', ' (за {days_left} дн.)').format(days_left=days_left)
+            if days_left > 1
+            else texts.t('TRAFFIC_SWITCH_PERIOD_ONE_DAY', ' (за 1 день)')
+        )
     else:
         price_multiplier = 1
         period_text = ''
@@ -629,7 +647,7 @@ def get_traffic_switch_keyboard(
         # Сравниваем с базовым трафиком (без докупленного)
         if gb == base_traffic_gb:
             emoji = '✅'
-            action_text = ' (текущий)'
+            action_text = texts.t('TRAFFIC_SWITCH_CURRENT', ' (текущий)')
             price_text = ''
         elif total_price_diff > 0:
             emoji = '⬆️'
@@ -638,18 +656,21 @@ def get_traffic_switch_keyboard(
             if discount_percent > 0:
                 discount_total = int((price_per_month - current_price_per_month) * price_multiplier) - total_price_diff
                 if discount_total > 0:
-                    price_text += f' (скидка {discount_percent}%: -{discount_total // 100}₽)'
+                    price_text += texts.t(
+                        'TRAFFIC_SWITCH_DISCOUNT_NOTE',
+                        ' (скидка {discount_percent}%: -{discount_rub}₽)',
+                    ).format(discount_percent=discount_percent, discount_rub=discount_total // 100)
         elif total_price_diff < 0:
             emoji = '⬇️'
             action_text = ''
-            price_text = ' (без возврата)'
+            price_text = texts.t('TRAFFIC_SWITCH_NO_REFUND', ' (без возврата)')
         else:
             emoji = '🔄'
             action_text = ''
-            price_text = ' (бесплатно)'
+            price_text = texts.t('TRAFFIC_SWITCH_FREE', ' (бесплатно)')
 
         if gb == 0:
-            traffic_text = 'Безлимит'
+            traffic_text = texts.t('TRAFFIC_SWITCH_UNLIMITED', 'Безлимит')
         else:
             traffic_text = f'{gb} ГБ'
 
@@ -661,7 +682,10 @@ def get_traffic_switch_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text='⬅️ Назад' if language_code in {'ru', 'fa'} else '⬅️ Back',
+                text=texts.t(
+                    'TRAFFIC_SWITCH_BACK_BUTTON',
+                    '⬅️ Назад' if language_code in {'ru', 'fa'} else '⬅️ Back',
+                ),
                 callback_data=back_callback,
             )
         ]
@@ -673,14 +697,20 @@ def get_traffic_switch_keyboard(
 def get_confirm_switch_traffic_keyboard(
     new_traffic_gb: int, price_difference: int, language: str = 'ru', back_callback: str = 'subscription_settings'
 ) -> InlineKeyboardMarkup:
+    texts = get_texts(language)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text='✅ Подтвердить переключение',
+                    text=texts.t('CONFIRM_SWITCH_TRAFFIC_BUTTON', '✅ Подтвердить переключение'),
                     callback_data=f'confirm_switch_traffic_{new_traffic_gb}_{price_difference}',
                 )
             ],
-            [InlineKeyboardButton(text='❌ Отмена', callback_data=back_callback)],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('SUBSCRIPTION_CANCEL_BUTTON', '❌ Отмена'),
+                    callback_data=back_callback,
+                )
+            ],
         ]
     )
