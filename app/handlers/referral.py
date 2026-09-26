@@ -970,33 +970,50 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
 
     user_id_display = html_escape(str(db_user.telegram_id or db_user.email or f'#{db_user.id}'))
-    safe_name = html_escape(db_user.full_name or 'Без имени')
+    safe_name = html_escape(db_user.full_name or texts.t('REFERRAL_WITHDRAWAL_NO_NAME', 'Без имени'))
     safe_details = html_escape(payment_details)
-    admin_text = f"""
-🔔 <b>Новая заявка на вывод #{request.id}</b>
+    admin_text = texts.t(
+        'REFERRAL_WITHDRAWAL_ADMIN_NOTIFICATION',
+        """
+🔔 <b>Новая заявка на вывод #{id}</b>
 
-👤 Пользователь: {safe_name}
-🆔 ID: <code>{user_id_display}</code>
-💰 Сумма: <b>{amount_kopeks / 100:.0f}₽</b>
+👤 Пользователь: {name}
+🆔 ID: <code>{user_id}</code>
+💰 Сумма: <b>{amount:.0f}₽</b>
 
 💳 Реквизиты:
-<code>{safe_details}</code>
+<code>{details}</code>
 
-{referral_withdrawal_service.format_analysis_for_admin(analysis)}
-"""
+{analysis}
+""",
+    ).format(
+        id=request.id,
+        name=safe_name,
+        user_id=user_id_display,
+        amount=amount_kopeks / 100,
+        details=safe_details,
+        analysis=referral_withdrawal_service.format_analysis_for_admin(analysis),
+    )
 
     # Формируем клавиатуру - кнопка профиля только для Telegram-пользователей
     keyboard_rows = [
         [
-            types.InlineKeyboardButton(text='✅ Одобрить', callback_data=f'admin_withdrawal_approve_{request.id}'),
-            types.InlineKeyboardButton(text='❌ Отклонить', callback_data=f'admin_withdrawal_reject_{request.id}'),
+            types.InlineKeyboardButton(
+                text=texts.t('REFERRAL_WITHDRAWAL_APPROVE_BUTTON', '✅ Одобрить'),
+                callback_data=f'admin_withdrawal_approve_{request.id}',
+            ),
+            types.InlineKeyboardButton(
+                text=texts.t('REFERRAL_WITHDRAWAL_REJECT_BUTTON', '❌ Отклонить'),
+                callback_data=f'admin_withdrawal_reject_{request.id}',
+            ),
         ]
     ]
     if db_user.telegram_id:
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='👤 Профиль пользователя', callback_data=f'admin_user_{db_user.telegram_id}'
+                    text=texts.t('REFERRAL_WITHDRAWAL_USER_PROFILE_BUTTON', '👤 Профиль пользователя'),
+                    callback_data=f'admin_user_{db_user.telegram_id}',
                 )
             ]
         )

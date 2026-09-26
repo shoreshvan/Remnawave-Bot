@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.apple_iap import AppleIAPFulfillmentService, apple_iap_fulfillment_service
 from app.services.apple_iap_reconciliation_service import apple_iap_reconciliation_service
 
@@ -134,9 +135,10 @@ async def apple_iap_account_token(
 ):
     """Return the stable StoreKit appAccountToken UUID for the authenticated user."""
     if not settings.is_apple_iap_enabled():
+        texts = get_texts(user.language)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Apple In-App Purchase is not enabled or not fully configured',
+            detail=texts.t('APPLE_IAP_NOT_CONFIGURED', 'Apple In-App Purchase is not enabled or not fully configured'),
         )
     token = await fulfillment_service.get_account_token(db, user.id)
     return AppleAccountTokenResponse(app_account_token=token)
@@ -153,16 +155,18 @@ async def apple_purchase(
 ):
     """Verify an Apple consumable transaction and credit the user's internal balance."""
     if not settings.is_apple_iap_enabled():
+        texts = get_texts(user.language)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Apple In-App Purchase is not enabled or not fully configured',
+            detail=texts.t('APPLE_IAP_NOT_CONFIGURED', 'Apple In-App Purchase is not enabled or not fully configured'),
         )
 
     ip_address = get_client_ip(http_request)
     if not await _check_purchase_rate_limit(redis_client, user.id, ip_address):
+        texts = get_texts(user.language)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many Apple purchase verification attempts',
+            detail=texts.t('APPLE_IAP_TOO_MANY_ATTEMPTS', 'Too many Apple purchase verification attempts'),
         )
 
     result = await fulfillment_service.verify_and_fulfill_purchase(

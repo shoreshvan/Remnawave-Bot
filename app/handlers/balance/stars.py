@@ -22,21 +22,31 @@ async def start_stars_payment(callback: types.CallbackQuery, db_user: User, stat
     texts = get_texts(db_user.language)
 
     if not settings.TELEGRAM_STARS_ENABLED:
-        await callback.answer('❌ Пополнение через Stars временно недоступно', show_alert=True)
+        await callback.answer(
+            texts.t('STARS_TOPUP_UNAVAILABLE', '❌ Пополнение через Stars временно недоступно'), show_alert=True
+        )
         return
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('STARS_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append(
+                [types.InlineKeyboardButton(text=texts.t('STARS_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+            )
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+            texts.t(
+                'STARS_TOPUP_RESTRICTED',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+                'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+            ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -64,16 +74,24 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('STARS_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append(
+                [types.InlineKeyboardButton(text=texts.t('STARS_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+            )
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await message.answer(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+            texts.t(
+                'STARS_TOPUP_RESTRICTED',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+                'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+            ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
         )
@@ -83,7 +101,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
     texts = get_texts(db_user.language)
 
     if not settings.TELEGRAM_STARS_ENABLED:
-        await message.answer('⚠️ Оплата Stars временно недоступна')
+        await message.answer(texts.t('STARS_PAYMENT_UNAVAILABLE', '⚠️ Оплата Stars временно недоступна'))
         return
 
     try:
@@ -94,13 +112,15 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         payment_service = PaymentService(message.bot)
         invoice_link = await payment_service.create_stars_invoice(
             amount_kopeks=amount_kopeks,
-            description=f'Пополнение баланса на {texts.format_price(amount_kopeks)}',
+            description=texts.t('STARS_PAYMENT_DESCRIPTION', 'Пополнение баланса на {amount}').format(
+                amount=texts.format_price(amount_kopeks)
+            ),
             payload=f'balance_{db_user.id}_{amount_kopeks}',
         )
 
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⭐ Оплатить', url=invoice_link)],
+                [types.InlineKeyboardButton(text=texts.t('STARS_PAY_BUTTON', '⭐ Оплатить'), url=invoice_link)],
                 [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
             ]
         )
@@ -122,11 +142,18 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
                 logger.warning('Не удалось удалить сообщение с запросом суммы Stars', delete_error=delete_error)
 
         invoice_message = await message.answer(
-            f'⭐ <b>Оплата через Telegram Stars</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'⭐ К оплате: {stars_amount} звезд\n'
-            f'📊 Курс: {stars_rate}₽ за звезду\n\n'
-            f'Нажмите кнопку ниже для оплаты:',
+            texts.t(
+                'STARS_INVOICE_INSTRUCTIONS',
+                '⭐ <b>Оплата через Telegram Stars</b>\n\n'
+                '💰 Сумма: {amount}\n'
+                '⭐ К оплате: {stars} звезд\n'
+                '📊 Курс: {rate}₽ за звезду\n\n'
+                'Нажмите кнопку ниже для оплаты:',
+            ).format(
+                amount=texts.format_price(amount_kopeks),
+                stars=stars_amount,
+                rate=stars_rate,
+            ),
             reply_markup=keyboard,
             parse_mode='HTML',
         )
@@ -140,4 +167,4 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
 
     except Exception as e:
         logger.error('Ошибка создания Stars invoice', error=e)
-        await message.answer('⚠️ Ошибка создания платежа')
+        await message.answer(texts.t('STARS_PAYMENT_CREATE_ERROR', '⚠️ Ошибка создания платежа'))

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.utils.decorators import admin_required, error_handler
 
 
@@ -102,12 +103,13 @@ async def refresh_system_logs(
     db_user: User,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
     log_path = _resolve_log_path()
     message = _build_logs_message(log_path)
 
     reply_markup = _get_logs_keyboard()
     await callback.message.edit_text(message, reply_markup=reply_markup, parse_mode='HTML')
-    await callback.answer('🔄 Обновлено')
+    await callback.answer(texts.t('ADMIN_SYSTEM_LOGS_REFRESHED', '🔄 Обновлено'))
 
 
 @admin_required
@@ -117,26 +119,31 @@ async def download_system_logs(
     db_user: User,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
     log_path = _resolve_log_path()
 
     if not log_path.exists() or not log_path.is_file():
-        await callback.answer('❌ Лог-файл не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_SYSTEM_LOGS_FILE_NOT_FOUND', '❌ Лог-файл не найден'), show_alert=True)
         return
 
     try:
-        await callback.answer('⬇️ Отправляю лог...')
+        await callback.answer(texts.t('ADMIN_SYSTEM_LOGS_SENDING', '⬇️ Отправляю лог...'))
 
         document = FSInputFile(log_path)
         stats = log_path.stat()
         updated_at = datetime.fromtimestamp(stats.st_mtime, tz=UTC).strftime('%d.%m.%Y %H:%M:%S')
-        caption = (
-            f'🧾 Лог-файл <code>{log_path.name}</code>\n📁 Путь: <code>{log_path}</code>\n🕒 Обновлен: {updated_at}'
-        )
+        caption = texts.t(
+            'ADMIN_SYSTEM_LOGS_CAPTION',
+            '🧾 Лог-файл <code>{name}</code>\n📁 Путь: <code>{path}</code>\n🕒 Обновлен: {updated}',
+        ).format(name=log_path.name, path=log_path, updated=updated_at)
         await callback.message.answer_document(document=document, caption=caption, parse_mode='HTML')
     except Exception as error:  # pragma: no cover - защита от ошибок отправки
         logger.error('Ошибка отправки лог-файла', log_path=log_path, error=error)
         await callback.message.answer(
-            '❌ <b>Не удалось отправить лог-файл</b>\n\nПроверьте журналы приложения или повторите попытку позже.',
+            texts.t(
+                'ADMIN_SYSTEM_LOGS_SEND_FAILED',
+                '❌ <b>Не удалось отправить лог-файл</b>\n\nПроверьте журналы приложения или повторите попытку позже.',
+            ),
             parse_mode='HTML',
         )
 

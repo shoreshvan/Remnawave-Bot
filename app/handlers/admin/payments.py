@@ -435,7 +435,9 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
                 f'🧾 {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}'
             )
         if getattr(payment, 'terminal_public_id', None):
-            lines.append(f'🏦 Terminal: {html.escape(str(payment.terminal_public_id))}')
+            lines.append(
+                f'🏦 {texts.t("ADMIN_PAYMENT_TERMINAL", "Terminal")}: {html.escape(str(payment.terminal_public_id))}'
+            )
 
     if record.method == PaymentMethod.HELEKET:
         if getattr(payment, 'order_id', None):
@@ -589,15 +591,22 @@ async def show_payment_details(
     db_user: User,
     db: AsyncSession,
 ) -> None:
+    texts = get_texts(db_user.language)
     parsed = _parse_method_and_id(callback.data, prefix='admin_payment_')
     if not parsed:
-        await callback.answer('❌ Invalid payment reference', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'),
+            show_alert=True,
+        )
         return
 
     method, payment_id = parsed
     record = await get_payment_record(db, method, payment_id)
     if not record:
-        await callback.answer('❌ Платеж не найден', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_PAYMENT_NOT_FOUND_ALERT', '❌ Платеж не найден'),
+            show_alert=True,
+        )
         return
 
     await _render_payment_details(callback, db_user, record)
@@ -616,7 +625,10 @@ async def manual_check_payment(
     parsed = _parse_method_and_id(callback.data, prefix='admin_payment_check_')
     if not parsed:
         logger.warning('Failed to parse', callback_data=callback.data)
-        await callback.answer('❌ Invalid payment reference', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'),
+            show_alert=True,
+        )
         return
 
     method, payment_id = parsed

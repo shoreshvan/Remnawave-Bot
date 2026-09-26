@@ -27,14 +27,13 @@ def format_traffic(gb: int) -> str:
 
 
 def format_price_kopeks(kopeks: int, compact: bool = False) -> str:
-    """Форматирует цену из копеек в рубли."""
-    rubles = kopeks / 100
+    """Форматирует цену из минорных единиц (1/100 тумана) для отображения."""
+    from app.config import settings
+
     if compact:
-        # Компактный формат - округляем до рублей
-        return f'{int(round(rubles))}₽'
-    if rubles == int(rubles):
-        return f'{int(rubles)} ₽'
-    return f'{rubles:.2f} ₽'
+        # Компактный формат - округляем до целых туманов
+        return settings.format_price(kopeks, round_kopeks=True)
+    return settings.format_price(kopeks, round_kopeks=False)
 
 
 def format_period(days: int) -> str:

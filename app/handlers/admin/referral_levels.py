@@ -37,6 +37,7 @@ from app.database.crud.referral_reward_level import (
 )
 from app.database.crud.tariff import get_all_tariffs
 from app.database.models import ReferralRewardMode, ReferralRewardTrigger, User
+from app.localization.texts import get_texts
 from app.services.system_settings_service import bot_configuration_service
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
@@ -467,11 +468,15 @@ async def toggle_reward_scheme(
     Смена схемы меняет то, что бот платит живым людям, поэтому она сознательно
     сделана отдельным действием, а не побочным эффектом создания уровня.
     """
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     if bot_configuration_service.is_env_locked('REFERRAL_REWARD_SCHEME'):
         await callback.answer(
-            'REFERRAL_REWARD_SCHEME задан в .env и не меняется из админки. '
-            'Уберите строку из .env и перезапустите бота.',
+            texts.t(
+                'ADMIN_REF_LVL_SCHEME_ENV_LOCKED',
+                'REFERRAL_REWARD_SCHEME задан в .env и не меняется из админки. '
+                'Уберите строку из .env и перезапустите бота.',
+            ),
             show_alert=True,
         )
         return
@@ -485,7 +490,10 @@ async def toggle_reward_scheme(
         reachable = [lvl for lvl in active if lvl.level <= max_depth]
         if not active:
             await callback.answer(
-                'Схема включена, но активных уровней нет — награды начисляться не будут.',
+                texts.t(
+                    'ADMIN_REF_LVL_SCHEME_NO_ACTIVE',
+                    'Схема включена, но активных уровней нет — награды начисляться не будут.',
+                ),
                 show_alert=True,
             )
         elif not reachable:
@@ -493,14 +501,21 @@ async def toggle_reward_scheme(
             # не доходит, и «схема включена» без этой оговорки означало бы, что
             # награды пошли, хотя не пойдёт ни одна.
             await callback.answer(
-                f'Схема включена, но все активные уровни глубже {max_depth} — '
-                'цепочка до них не доходит, награды начисляться не будут.',
+                texts.t(
+                    'ADMIN_REF_LVL_SCHEME_ALL_DEEPER',
+                    'Схема включена, но все активные уровни глубже {max_depth} — '
+                    'цепочка до них не доходит, награды начисляться не будут.',
+                ).format(max_depth=max_depth),
                 show_alert=True,
             )
         else:
-            await callback.answer(f'Схема наград: {new_value}')
+            await callback.answer(
+                texts.t('ADMIN_REF_LVL_SCHEME_SET', 'Схема наград: {value}').format(value=new_value)
+            )
     else:
-        await callback.answer(f'Схема наград: {new_value}')
+        await callback.answer(
+            texts.t('ADMIN_REF_LVL_SCHEME_SET', 'Схема наград: {value}').format(value=new_value)
+        )
 
     await _render_levels(callback, db)
 
@@ -510,11 +525,15 @@ async def toggle_reward_scheme(
 async def add_reward_level(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
 ):
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     levels = await get_all_reward_levels(db)
     next_level = _next_free_level(levels)
     if next_level > MAX_SUPPORTED_LEVEL:
-        await callback.answer(f'Максимум {MAX_SUPPORTED_LEVEL} уровней', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_REF_LVL_MAX_LEVELS', 'Максимум {max} уровней').format(max=MAX_SUPPORTED_LEVEL),
+            show_alert=True,
+        )
         return
 
     # Новый уровень заводится ВЫКЛЮЧЕННЫМ и пустым: включение сразу при создании
@@ -526,7 +545,9 @@ async def add_reward_level(
         reward_mode=ReferralRewardMode.MONEY.value,
         trigger=ReferralRewardTrigger.EVERY_TOPUP.value,
     )
-    await callback.answer(f'Уровень {next_level} создан (выключен)')
+    await callback.answer(
+        texts.t('ADMIN_REF_LVL_CREATED', 'Уровень {level} создан (выключен)').format(level=next_level)
+    )
     await _render_level(callback, db, next_level)
 
 
@@ -551,9 +572,12 @@ async def import_legacy_settings(
     попросить админа осознанно поменять повод безопаснее, чем переплатить молча;
     правило создаётся выключенным и подписано ровно этим текстом.
     """
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     if await get_reward_level(db, 1) is not None:
-        await callback.answer('Уровень 1 уже существует', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_REF_LVL_IMPORT_EXISTS', 'Уровень 1 уже существует'), show_alert=True
+        )
         return
 
     from app.services.referral_reward_service import legacy_percent_for_import
@@ -575,7 +599,14 @@ async def import_legacy_settings(
     # ни что перенесено, ни что потеряно, — при уже созданном уровне.
     await _answer_capped(
         callback,
-        'Перенесено в уровень 1 (выключен).' + (f' Не перенесено: {len(notes)} — см. карточку.' if notes else ''),
+        texts.t('ADMIN_REF_LVL_IMPORT_DONE', 'Перенесено в уровень 1 (выключен).')
+        + (
+            texts.t('ADMIN_REF_LVL_IMPORT_SKIPPED', ' Не перенесено: {count} — см. карточку.').format(
+                count=len(notes)
+            )
+            if notes
+            else ''
+        ),
         show_alert=True,
     )
     await _render_level(callback, db, 1, notes=notes)
@@ -785,10 +816,11 @@ async def _render_level(
 async def show_reward_level(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
 ):
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     if not await _render_level(callback, db, level_number):
-        await callback.answer('Уровень не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REF_LVL_NOT_FOUND', 'Уровень не найден'), show_alert=True)
         return
     await callback.answer()
 
@@ -798,11 +830,12 @@ async def show_reward_level(
 async def toggle_level_active(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
 ):
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     level = await get_reward_level(db, level_number)
     if level is None:
-        await callback.answer('Уровень не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REF_LVL_NOT_FOUND', 'Уровень не найден'), show_alert=True)
         return
 
     # Новое состояние вычисляется ДО записи. upsert правит тот же ORM-объект, и
@@ -810,7 +843,11 @@ async def toggle_level_active(
     # сообщал ровно противоположное тому, что произошло.
     now_active = not level.is_active
     await upsert_reward_level(db, level_number, is_active=now_active)
-    await callback.answer('Уровень включён' if now_active else 'Уровень выключен')
+    await callback.answer(
+        texts.t('ADMIN_REF_LVL_ENABLED', 'Уровень включён')
+        if now_active
+        else texts.t('ADMIN_REF_LVL_DISABLED', 'Уровень выключен')
+    )
     await _render_level(callback, db, level_number)
 
 
@@ -820,11 +857,12 @@ async def cycle_level_mode(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
 ):
     """Перебрать активные бонусы уровня: деньги → дни → оба."""
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     level = await get_reward_level(db, level_number)
     if level is None:
-        await callback.answer('Уровень не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REF_LVL_NOT_FOUND', 'Уровень не найден'), show_alert=True)
         return
 
     current_index = _MODE_CYCLE.index(level.reward_mode) if level.reward_mode in _MODE_CYCLE else 0
@@ -839,11 +877,12 @@ async def cycle_level_mode(
 async def cycle_level_trigger(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
 ):
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     level = await get_reward_level(db, level_number)
     if level is None:
-        await callback.answer('Уровень не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REF_LVL_NOT_FOUND', 'Уровень не найден'), show_alert=True)
         return
 
     current_index = _TRIGGER_CYCLE.index(level.trigger) if level.trigger in _TRIGGER_CYCLE else 0
@@ -864,16 +903,30 @@ async def confirm_delete_level(
     все поля. Удаление с одного касания, рядом с остальными кнопками карточки,
     слишком легко нажать мимо.
     """
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
 
     await callback.message.edit_text(
-        f'🗑 <b>Удалить уровень {level_number}?</b>\n\n'
-        'Настройки правила будут потеряны: восстановить их можно только заново.',
+        texts.t(
+            'ADMIN_REF_LVL_DELETE_CONFIRM',
+            '🗑 <b>Удалить уровень {level_number}?</b>\n\n'
+            'Настройки правила будут потеряны: восстановить их можно только заново.',
+        ).format(level_number=level_number),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='🗑 Да, удалить', callback_data=f'admin_ref_lvl_del:{level_number}')],
-                [types.InlineKeyboardButton(text='⬅️ Отмена', callback_data=f'admin_ref_lvl:{level_number}')],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_LVL_DELETE_YES', '🗑 Да, удалить'),
+                        callback_data=f'admin_ref_lvl_del:{level_number}',
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_LVL_CANCEL', '⬅️ Отмена'),
+                        callback_data=f'admin_ref_lvl:{level_number}',
+                    )
+                ],
             ]
         ),
     )
@@ -890,26 +943,36 @@ async def toggle_threshold_population(
     Разница не косметическая. Порог по всем регистрациям берётся накруткой пустых
     аккаунтов, и уровень открывается, не принеся программе ни рубля.
     """
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     level = await get_reward_level(db, level_number)
     if level is None:
-        await callback.answer('Уровень не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REF_LVL_NOT_FOUND', 'Уровень не найден'), show_alert=True)
         return
 
     active_only = not bool(getattr(level, 'required_referrals_active_only', True))
     await upsert_reward_level(db, level_number, required_referrals_active_only=active_only)
-    await callback.answer('Считаем рефералов с пополнением' if active_only else 'Считаем всех приглашённых')
+    await callback.answer(
+        texts.t('ADMIN_REF_LVL_COUNT_ACTIVE', 'Считаем рефералов с пополнением')
+        if active_only
+        else texts.t('ADMIN_REF_LVL_COUNT_ALL', 'Считаем всех приглашённых')
+    )
     await _render_level(callback, db, level_number)
 
 
 @admin_required
 @error_handler
 async def delete_level(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None):
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     level_number = int(callback.data.split(':')[1])
     removed = await delete_reward_level(db, level_number)
-    await callback.answer(f'Уровень {level_number} удалён' if removed else 'Уровень уже удалён')
+    await callback.answer(
+        texts.t('ADMIN_REF_LVL_DELETED', 'Уровень {level} удалён').format(level=level_number)
+        if removed
+        else texts.t('ADMIN_REF_LVL_ALREADY_DELETED', 'Уровень уже удалён')
+    )
     await _render_levels(callback, db)
 
 
@@ -918,6 +981,7 @@ async def delete_level(callback: types.CallbackQuery, db_user: User, db: AsyncSe
 async def choose_level_tariff(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
 ):
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     _, level_raw, side = callback.data.split(':')
     level_number = int(level_raw)
@@ -938,11 +1002,16 @@ async def choose_level_tariff(
         if assigned is not None:
             tariffs.insert(0, assigned)
 
-    side_label = 'пригласившему' if side == 'referrer' else 'приглашённому'
+    side_label = (
+        texts.t('ADMIN_REF_LVL_SIDE_REFERRER', 'пригласившему')
+        if side == 'referrer'
+        else texts.t('ADMIN_REF_LVL_SIDE_REFEREE', 'приглашённому')
+    )
     rows = [
         [
             types.InlineKeyboardButton(
-                text=('✅ ' if not current_id else '') + '➖ Без тарифа (основная подписка)',
+                text=('✅ ' if not current_id else '')
+                + texts.t('ADMIN_REF_LVL_TARIFF_NONE', '➖ Без тарифа (основная подписка)'),
                 callback_data=f'admin_ref_lvl_settariff:{level_number}:{side}:0',
             )
         ]
@@ -951,7 +1020,7 @@ async def choose_level_tariff(
     shown = tariffs[:_TARIFF_PICKER_LIMIT]
     for tariff in shown:
         mark = '✅ ' if tariff.id == current_id else '🎯 '
-        suffix = '' if tariff.is_active else ' (неактивен)'
+        suffix = '' if tariff.is_active else texts.t('ADMIN_REF_LVL_TARIFF_INACTIVE', ' (неактивен)')
         rows.append(
             [
                 types.InlineKeyboardButton(
@@ -960,18 +1029,29 @@ async def choose_level_tariff(
                 )
             ]
         )
-    rows.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data=f'admin_ref_lvl:{level_number}')])
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_REF_LVL_BACK', '⬅️ Назад'),
+                callback_data=f'admin_ref_lvl:{level_number}',
+            )
+        ]
+    )
 
-    text = (
-        f'🎯 <b>Тариф для дней {side_label}</b>\n\n'
+    text = texts.t(
+        'ADMIN_REF_LVL_TARIFF_PICKER',
+        '🎯 <b>Тариф для дней {side_label}</b>\n\n'
         'Дни лягут в подписку выбранного тарифа. Если такой подписки у получателя нет, '
         'она будет создана — но только когда у него нет живого триала.\n\n'
         '<i>Без тарифа дни идут в оплаченную подписку получателя; при нескольких '
-        'выбирается с самым поздним сроком.</i>'
-    )
+        'выбирается с самым поздним сроком.</i>',
+    ).format(side_label=side_label)
     # Молчаливое обрезание списка означало бы «такого тарифа нет», хотя он есть.
     if len(tariffs) > len(shown):
-        text += f'\n\n<i>⚠️ Показаны первые {len(shown)} из {len(tariffs)} тарифов.</i>'
+        text += texts.t(
+            'ADMIN_REF_LVL_TARIFF_TRUNCATED',
+            '\n\n<i>⚠️ Показаны первые {shown} из {total} тарифов.</i>',
+        ).format(shown=len(shown), total=len(tariffs))
 
     await callback.message.edit_text(text, reply_markup=types.InlineKeyboardMarkup(inline_keyboard=rows))
     await callback.answer()
@@ -982,6 +1062,7 @@ async def choose_level_tariff(
 async def set_level_tariff(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext | None = None
 ):
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     _, level_raw, side, tariff_raw = callback.data.split(':')
     level_number = int(level_raw)
@@ -989,13 +1070,14 @@ async def set_level_tariff(
 
     field = 'referrer_tariff_id' if side == 'referrer' else 'referee_tariff_id'
     await upsert_reward_level(db, level_number, **{field: tariff_id})
-    await callback.answer('Тариф сохранён')
+    await callback.answer(texts.t('ADMIN_REF_LVL_TARIFF_SAVED', 'Тариф сохранён'))
     await _render_level(callback, db, level_number)
 
 
 @admin_required
 @error_handler
 async def start_level_value_edit(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     _, level_raw, field = callback.data.split(':')
     level_number = int(level_raw)
     label, unit, maximum = _NUMERIC_FIELDS[field]
@@ -1003,17 +1085,25 @@ async def start_level_value_edit(callback: types.CallbackQuery, db_user: User, d
     await state.update_data(referral_level=level_number, referral_field=field)
     await state.set_state(AdminStates.referral_level_value_input)
 
-    hint = f'Введите значение ({unit}).'
+    hint = texts.t('ADMIN_REF_LVL_VALUE_HINT', 'Введите значение ({unit}).').format(unit=unit)
     if maximum is not None:
-        hint += f' Максимум: {maximum}.'
+        hint += texts.t('ADMIN_REF_LVL_VALUE_HINT_MAX', ' Максимум: {maximum}.').format(maximum=maximum)
     if field in _MONEY_FIELDS:
-        hint += ' Сумма в рублях, можно дробную.'
+        hint += texts.t('ADMIN_REF_LVL_VALUE_HINT_RUB', ' Сумма в рублях, можно дробную.')
 
     await callback.message.edit_text(
-        f'✏️ <b>{label}</b>\nУровень {level_number}\n\n{hint}\n\n0 — не начислять.',
+        texts.t(
+            'ADMIN_REF_LVL_VALUE_PROMPT',
+            '✏️ <b>{label}</b>\nУровень {level_number}\n\n{hint}\n\n0 — не начислять.',
+        ).format(label=label, level_number=level_number, hint=hint),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='⬅️ Отмена', callback_data=f'admin_ref_lvl:{level_number}')]
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_LVL_CANCEL', '⬅️ Отмена'),
+                        callback_data=f'admin_ref_lvl:{level_number}',
+                    )
+                ]
             ]
         ),
     )
@@ -1023,12 +1113,15 @@ async def start_level_value_edit(callback: types.CallbackQuery, db_user: User, d
 @admin_required
 @error_handler
 async def process_level_value(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     level_number = data.get('referral_level')
     field = data.get('referral_field')
     if not level_number or field not in _NUMERIC_FIELDS:
         await state.clear()
-        await message.answer('❌ Не понял, какое поле правим. Откройте уровень заново.')
+        await message.answer(
+            texts.t('ADMIN_REF_LVL_VALUE_NO_FIELD', '❌ Не понял, какое поле правим. Откройте уровень заново.')
+        )
         return
 
     label, unit, maximum = _NUMERIC_FIELDS[field]
@@ -1037,7 +1130,11 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
     try:
         parsed = float(raw)
     except ValueError:
-        await message.answer(f'❌ Нужно число. {label} ({unit}).')
+        await message.answer(
+            texts.t('ADMIN_REF_LVL_VALUE_NOT_NUMBER', '❌ Нужно число. {label} ({unit}).').format(
+                label=label, unit=unit
+            )
+        )
         return
 
     # float() принимает 'inf' и 'nan', проверка на отрицательность их пропускает,
@@ -1045,17 +1142,27 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
     # ошибкой, НЕ сняв состояние: следующее произвольное сообщение админа
     # попадает сюда же и переписывает денежное поле.
     if not math.isfinite(parsed):
-        await message.answer(f'❌ Нужно обычное число. {label} ({unit}).')
+        await message.answer(
+            texts.t('ADMIN_REF_LVL_VALUE_NOT_FINITE', '❌ Нужно обычное число. {label} ({unit}).').format(
+                label=label, unit=unit
+            )
+        )
         return
 
     if parsed < 0:
-        await message.answer('❌ Отрицательные значения недопустимы.')
+        await message.answer(
+            texts.t('ADMIN_REF_LVL_VALUE_NEGATIVE', '❌ Отрицательные значения недопустимы.')
+        )
         return
 
     # Деньги вводятся в рублях, а хранятся в копейках — как и везде в админке.
     value = int(round(parsed * 100)) if field in _MONEY_FIELDS else int(parsed)
     if maximum is not None and value > maximum:
-        await message.answer(f'❌ Максимум: {maximum} {unit}.')
+        await message.answer(
+            texts.t('ADMIN_REF_LVL_VALUE_OVER_MAX', '❌ Максимум: {maximum} {unit}.').format(
+                maximum=maximum, unit=unit
+            )
+        )
         return
 
     # Ноль в проценте и фиксированной сумме хранится как NULL: в расчёте NULL и 0
@@ -1071,10 +1178,18 @@ async def process_level_value(message: types.Message, db_user: User, db: AsyncSe
 
     display = settings.format_price(value) if field in _MONEY_FIELDS else f'{value} {unit}'
     await message.answer(
-        f'✅ {label}: {display}\n\nОткройте «Уровни наград», чтобы продолжить настройку.',
+        texts.t(
+            'ADMIN_REF_LVL_VALUE_SAVED',
+            '✅ {label}: {display}\n\nОткройте «Уровни наград», чтобы продолжить настройку.',
+        ).format(label=label, display=display),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='🪜 К уровням', callback_data='admin_ref_levels')],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_LVL_TO_LEVELS', '🪜 К уровням'),
+                        callback_data='admin_ref_levels',
+                    )
+                ],
             ]
         ),
     )
@@ -1091,10 +1206,15 @@ async def toggle_levels_mode(
     число сработавших правил на одном пополнении, то есть реальные выплаты живым
     людям. Побочным эффектом создания уровня такое быть не должно.
     """
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     if bot_configuration_service.is_env_locked('REFERRAL_LEVELS_MODE'):
         await callback.answer(
-            'REFERRAL_LEVELS_MODE задан в .env и не меняется из админки. Уберите строку из .env и перезапустите бота.',
+            texts.t(
+                'ADMIN_REF_LVL_MODE_ENV_LOCKED',
+                'REFERRAL_LEVELS_MODE задан в .env и не меняется из админки. '
+                'Уберите строку из .env и перезапустите бота.',
+            ),
             show_alert=True,
         )
         return
@@ -1114,19 +1234,28 @@ async def toggle_levels_mode(
             # обрезки. В окне только счёт, чтобы админ понял, куда смотреть.
             await _answer_capped(
                 callback,
-                f'Режим: уровни за приглашённых. Внимание: предупреждений к лестнице — {len(warnings)}, '
-                'смотрите экран.',
+                texts.t(
+                    'ADMIN_REF_LVL_MODE_TIERS_WARN',
+                    'Режим: уровни за приглашённых. Внимание: предупреждений к лестнице — {count}, '
+                    'смотрите экран.',
+                ).format(count=len(warnings)),
                 show_alert=True,
             )
         else:
             await _answer_capped(
                 callback,
-                'Режим: уровни за приглашённых. Платят только прямому пригласившему, применяется один уровень.',
+                texts.t(
+                    'ADMIN_REF_LVL_MODE_TIERS',
+                    'Режим: уровни за приглашённых. Платят только прямому пригласившему, применяется один уровень.',
+                ),
                 show_alert=True,
             )
     else:
         await callback.answer(
-            f'Режим: уровни по цепочке. Обход до {settings.get_referral_max_level_depth()} уровней вверх.',
+            texts.t(
+                'ADMIN_REF_LVL_MODE_CHAIN',
+                'Режим: уровни по цепочке. Обход до {depth} уровней вверх.',
+            ).format(depth=settings.get_referral_max_level_depth()),
             show_alert=True,
         )
 
@@ -1144,6 +1273,7 @@ async def toggle_user_choice(
     выключены, сохранённые предпочтения игнорируются целиком, а начисления идут
     ровно так, как настроено правилом.
     """
+    texts = get_texts(db_user.language)
     await _cancel_pending_input(state)
     key = (
         'REFERRAL_ALLOW_REWARD_KIND_CHOICE'
@@ -1154,7 +1284,11 @@ async def toggle_user_choice(
     if bot_configuration_service.is_env_locked(key):
         await _answer_capped(
             callback,
-            f'{key} задан в .env и не меняется из админки. Уберите строку из .env и перезапустите бота.',
+            texts.t(
+                'ADMIN_REF_LVL_CHOICE_ENV_LOCKED',
+                '{key} задан в .env и не меняется из админки. '
+                'Уберите строку из .env и перезапустите бота.',
+            ).format(key=key),
             show_alert=True,
         )
         return
@@ -1162,8 +1296,23 @@ async def toggle_user_choice(
     new_value = not bool(getattr(settings, key))
     await bot_configuration_service.set_value(db, key, new_value)
 
-    label = 'Выбор вида награды' if key == 'REFERRAL_ALLOW_REWARD_KIND_CHOICE' else 'Выбор подписки для дней'
-    await _answer_capped(callback, f'{label}: {"разрешён" if new_value else "запрещён"} пользователю.', show_alert=True)
+    label = (
+        texts.t('ADMIN_REF_LVL_CHOICE_KIND', 'Выбор вида награды')
+        if key == 'REFERRAL_ALLOW_REWARD_KIND_CHOICE'
+        else texts.t('ADMIN_REF_LVL_CHOICE_DAYS', 'Выбор подписки для дней')
+    )
+    await _answer_capped(
+        callback,
+        texts.t('ADMIN_REF_LVL_CHOICE_RESULT', '{label}: {state} пользователю.').format(
+            label=label,
+            state=(
+                texts.t('ADMIN_REF_LVL_CHOICE_ALLOWED', 'разрешён')
+                if new_value
+                else texts.t('ADMIN_REF_LVL_CHOICE_FORBIDDEN', 'запрещён')
+            ),
+        ),
+        show_alert=True,
+    )
     await _render_levels(callback, db)
 
 
@@ -1177,35 +1326,52 @@ async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: Asy
     предел экран не давал — со стороны это выглядело как «уровни выше третьего
     просто не работают».
     """
+    texts = get_texts(db_user.language)
     if settings.is_referral_tier_levels():
         # Правку не открываем вовсе: в режиме рангов цепочки нет, и сохранённое
         # здесь число ни на что не повлияет. Форма, которая принимает значение и
         # ничего не меняет, хуже отсутствующей кнопки.
         await callback.answer(
-            'В режиме «за приглашённых» цепочка не обходится — глубина не применяется. '
-            'Переключите режим на «по цепочке», чтобы её настроить.',
+            texts.t(
+                'ADMIN_REF_LVL_DEPTH_TIER_MODE',
+                'В режиме «за приглашённых» цепочка не обходится — глубина не применяется. '
+                'Переключите режим на «по цепочке», чтобы её настроить.',
+            ),
             show_alert=True,
         )
         return
 
     if bot_configuration_service.is_env_locked('REFERRAL_MAX_LEVEL_DEPTH'):
         await callback.answer(
-            'REFERRAL_MAX_LEVEL_DEPTH задан в .env и не меняется из админки. '
-            'Уберите строку из .env и перезапустите бота.',
+            texts.t(
+                'ADMIN_REF_LVL_DEPTH_ENV_LOCKED',
+                'REFERRAL_MAX_LEVEL_DEPTH задан в .env и не меняется из админки. '
+                'Уберите строку из .env и перезапустите бота.',
+            ),
             show_alert=True,
         )
         return
 
     await state.set_state(AdminStates.referral_depth_input)
     await callback.message.edit_text(
-        f'📏 <b>Глубина реферальной цепочки</b>\n\n'
-        f'Сейчас: {settings.get_referral_max_level_depth()}\n\n'
-        f'Сколько звеньев вверх обходить при начислении. Уровень 1 — тот, кто пригласил '
-        f'напрямую; уровень 2 — пригласивший его, и так далее. Правила глубже этого числа '
-        f'не начисляют ничего.\n\n'
-        f'Введите число от 1 до {MAX_SUPPORTED_LEVEL}.',
+        texts.t(
+            'ADMIN_REF_LVL_DEPTH_PROMPT',
+            '📏 <b>Глубина реферальной цепочки</b>\n\n'
+            'Сейчас: {current}\n\n'
+            'Сколько звеньев вверх обходить при начислении. Уровень 1 — тот, кто пригласил '
+            'напрямую; уровень 2 — пригласивший его, и так далее. Правила глубже этого числа '
+            'не начисляют ничего.\n\n'
+            'Введите число от 1 до {max}.',
+        ).format(current=settings.get_referral_max_level_depth(), max=MAX_SUPPORTED_LEVEL),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Отмена', callback_data='admin_ref_levels')]]
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_LVL_CANCEL', '⬅️ Отмена'),
+                        callback_data='admin_ref_levels',
+                    )
+                ]
+            ]
         ),
     )
     await callback.answer()
@@ -1214,23 +1380,42 @@ async def start_depth_edit(callback: types.CallbackQuery, db_user: User, db: Asy
 @admin_required
 @error_handler
 async def process_depth_value(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     raw = (message.text or '').strip()
     try:
         depth = int(raw)
     except ValueError:
-        await message.answer(f'❌ Нужно целое число от 1 до {MAX_SUPPORTED_LEVEL}.')
+        await message.answer(
+            texts.t('ADMIN_REF_LVL_DEPTH_NOT_INT', '❌ Нужно целое число от 1 до {max}.').format(
+                max=MAX_SUPPORTED_LEVEL
+            )
+        )
         return
 
     if depth < 1 or depth > MAX_SUPPORTED_LEVEL:
-        await message.answer(f'❌ Допустимо от 1 до {MAX_SUPPORTED_LEVEL}.')
+        await message.answer(
+            texts.t('ADMIN_REF_LVL_DEPTH_OUT_OF_RANGE', '❌ Допустимо от 1 до {max}.').format(
+                max=MAX_SUPPORTED_LEVEL
+            )
+        )
         return
 
     await bot_configuration_service.set_value(db, 'REFERRAL_MAX_LEVEL_DEPTH', depth)
     await state.clear()
     await message.answer(
-        f'✅ Глубина цепочки: {depth}\n\nПравила уровней до {depth} включительно теперь начисляют награды.',
+        texts.t(
+            'ADMIN_REF_LVL_DEPTH_SAVED',
+            '✅ Глубина цепочки: {depth}\n\nПравила уровней до {depth} включительно теперь начисляют награды.',
+        ).format(depth=depth),
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='🪜 К уровням', callback_data='admin_ref_levels')]]
+            inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_LVL_TO_LEVELS', '🪜 К уровням'),
+                        callback_data='admin_ref_levels',
+                    )
+                ]
+            ]
         ),
     )
 

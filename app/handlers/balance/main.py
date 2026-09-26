@@ -289,11 +289,14 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
             total_unique += 1
 
     if not unique_transactions:
-        await callback.message.edit_text('📊 История операций пуста', reply_markup=get_back_keyboard(db_user.language))
+        await callback.message.edit_text(
+            texts.t('BALANCE_HISTORY_EMPTY', '📊 История операций пуста'),
+            reply_markup=get_back_keyboard(db_user.language),
+        )
         await callback.answer()
         return
 
-    text = '📊 <b>История операций</b>\n\n'
+    text = texts.t('BALANCE_HISTORY_HEADER', '📊 <b>История операций</b>\n\n')
 
     for transaction in unique_transactions:
         is_credit = transaction.type in CREDIT_TRANSACTION_TYPES
@@ -338,16 +341,24 @@ async def show_payment_methods(callback: types.CallbackQuery, db_user: User, db:
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('BALANCE_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([types.InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append(
+                [types.InlineKeyboardButton(text=texts.t('BALANCE_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+            )
         keyboard.append([types.InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-            'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+            texts.t(
+                'BALANCE_TOPUP_RESTRICTED',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
+                'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+            ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
         await callback.answer()
@@ -437,27 +448,44 @@ async def handle_successful_topup_with_cart(user_id: int, amount_kopeks: int, bo
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text='🛒 Вернуться к оформлению подписки', callback_data='return_to_saved_cart'
+                            text=texts.t('BALANCE_RETURN_TO_CART_BUTTON', '🛒 Вернуться к оформлению подписки'),
+                            callback_data='return_to_saved_cart',
                         )
                     ],
-                    [types.InlineKeyboardButton(text='💰 Мой баланс', callback_data='menu_balance')],
-                    [types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='back_to_menu')],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('BALANCE_MY_BALANCE_BUTTON', '💰 Мой баланс'), callback_data='menu_balance'
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('BALANCE_MAIN_MENU_BUTTON', '🏠 Главное меню'), callback_data='back_to_menu'
+                        )
+                    ],
                 ]
             )
 
             if 0 < total_price <= user.balance_kopeks:
-                balance_hint = 'Средств на балансе достаточно для оформления.'
+                balance_hint = texts.t('BALANCE_ENOUGH_FOR_CHECKOUT', 'Средств на балансе достаточно для оформления.')
             else:
                 missing = max(total_price - user.balance_kopeks, 0)
                 # Без округления, иначе при не хватке <50 копеек покажется «0 ₽».
-                balance_hint = f'Не хватает: {texts.format_price(missing, round_kopeks=False)}'
+                balance_hint = texts.t('BALANCE_MISSING_AMOUNT', 'Не хватает: {amount}').format(
+                    amount=texts.format_price(missing, round_kopeks=False)
+                )
 
-            success_text = (
-                f'✅ Баланс пополнен на {texts.format_price(amount_kopeks)}!\n\n'
-                f'💰 Текущий баланс: {texts.format_price(user.balance_kopeks)}\n\n'
-                f'🛒 У вас есть сохранённая корзина на {texts.format_price(total_price)}\n'
-                f'{balance_hint}\n\n'
-                f'Хотите продолжить оформление?'
+            success_text = texts.t(
+                'BALANCE_TOPUP_CART_SUCCESS',
+                '✅ Баланс пополнен на {amount}!\n\n'
+                '💰 Текущий баланс: {balance}\n\n'
+                '🛒 У вас есть сохранённая корзина на {cart_total}\n'
+                '{hint}\n\n'
+                'Хотите продолжить оформление?',
+            ).format(
+                amount=texts.format_price(amount_kopeks),
+                balance=texts.format_price(user.balance_kopeks),
+                cart_total=texts.format_price(total_price),
+                hint=balance_hint,
             )
 
             await bot.send_message(
@@ -483,30 +511,28 @@ async def request_support_topup(callback: types.CallbackQuery, db_user: User):
         return
 
     user_id_display = db_user.telegram_id or db_user.email or f'#{db_user.id}'
-    support_text = f"""
-🛠️ <b>Пополнение через поддержку</b>
-
-Для пополнения баланса обратитесь в техподдержку:
-{settings.get_support_contact_display_html()}
-
-Укажите:
-• ID: {user_id_display}
-• Сумму пополнения
-• Способ оплаты
-
-⏰ Время обработки: 1-24 часа
-
-<b>Доступные способы:</b>
-• Криптовалюта
-• Переводы между банками
-• Другие платежные системы
-"""
+    support_text = texts.t(
+        'BALANCE_SUPPORT_TOPUP_INFO',
+        '\n🛠️ <b>Пополнение через поддержку</b>\n\n'
+        'Для пополнения баланса обратитесь в техподдержку:\n'
+        '{support}\n\n'
+        'Укажите:\n'
+        '• ID: {user_id}\n'
+        '• Сумму пополнения\n'
+        '• Способ оплаты\n\n'
+        '⏰ Время обработки: 1-24 часа\n\n'
+        '<b>Доступные способы:</b>\n'
+        '• Криптовалюта\n'
+        '• Переводы между банками\n'
+        '• Другие платежные системы\n',
+    ).format(support=settings.get_support_contact_display_html(), user_id=user_id_display)
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text='💬 Написать в поддержку', url=settings.get_support_contact_url() or 'https://t.me/'
+                    text=texts.t('BALANCE_WRITE_SUPPORT_BUTTON', '💬 Написать в поддержку'),
+                    url=settings.get_support_contact_url() or 'https://t.me/',
                 )
             ],
             [types.InlineKeyboardButton(text=texts.BACK, callback_data='balance_topup')],
@@ -542,14 +568,14 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
 
         if amount_rubles < 1:
             await message.answer(
-                'Минимальная сумма пополнения: 1 ₽',
+                texts.t('BALANCE_MIN_AMOUNT', 'Минимальная сумма пополнения: 1 ₽'),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
             return
 
         if amount_rubles > 50000:
             await message.answer(
-                'Максимальная сумма пополнения: 50,000 ₽',
+                texts.t('BALANCE_MAX_AMOUNT', 'Максимальная сумма пополнения: 50,000 ₽'),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
             return
@@ -562,7 +588,9 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
                 min_rubles = settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100
                 await message.answer(
-                    f'❌ Минимальная сумма для оплаты через YooKassa: {min_rubles:.0f} ₽',
+                    texts.t(
+                        'BALANCE_YOOKASSA_MIN', '❌ Минимальная сумма для оплаты через YooKassa: {amount:.0f} ₽'
+                    ).format(amount=min_rubles),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
                 return
@@ -570,13 +598,15 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
                 max_rubles = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
                 await message.answer(
-                    f'❌ Максимальная сумма для оплаты через YooKassa: {max_rubles:,.0f} ₽'.replace(',', ' '),
+                    texts.t('BALANCE_YOOKASSA_MAX', '❌ Максимальная сумма для оплаты через YooKassa: {amount:,.0f} ₽')
+                    .format(amount=max_rubles)
+                    .replace(',', ' '),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
                 return
 
         if not await route_payment_by_method(message, db_user, amount_kopeks, state, payment_method):
-            await message.answer('Неизвестный способ оплаты')
+            await message.answer(texts.t('BALANCE_UNKNOWN_PAYMENT_METHOD', 'Неизвестный способ оплаты'))
 
     except ValueError:
         await message.answer(texts.INVALID_AMOUNT, reply_markup=get_back_keyboard(db_user.language))
@@ -631,11 +661,15 @@ async def handle_topup_amount_callback(
         _, method, amount_str = callback.data.split('|', 2)
         amount_kopeks = int(amount_str)
     except ValueError:
-        await callback.answer('❌ Некорректный запрос', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('BALANCE_INVALID_REQUEST', '❌ Некорректный запрос'), show_alert=True
+        )
         return
 
     if amount_kopeks <= 0:
-        await callback.answer('❌ Некорректная сумма', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('BALANCE_INVALID_AMOUNT', '❌ Некорректная сумма'), show_alert=True
+        )
         return
 
     try:
@@ -675,14 +709,22 @@ async def handle_topup_amount_callback(
             await state.update_data(payment_method=method)
             await state.set_state(BalanceStates.waiting_for_amount)
             if not await route_payment_by_method(callback.message, db_user, amount_kopeks, state, method):
-                await callback.answer('❌ Неизвестный способ оплаты', show_alert=True)
+                await callback.answer(
+                    get_texts(db_user.language).t(
+                        'BALANCE_UNKNOWN_PAYMENT_METHOD_ALERT', '❌ Неизвестный способ оплаты'
+                    ),
+                    show_alert=True,
+                )
                 return
 
         await callback.answer()
 
     except Exception as error:
         logger.error('Ошибка быстрого пополнения', error=error)
-        await callback.answer('❌ Ошибка обработки запроса', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('BALANCE_REQUEST_PROCESSING_ERROR', '❌ Ошибка обработки запроса'),
+            show_alert=True,
+        )
 
 
 def register_balance_handlers(dp: Dispatcher):

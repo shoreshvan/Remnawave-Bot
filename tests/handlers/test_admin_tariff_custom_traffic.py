@@ -83,7 +83,7 @@ def test_tariff_card_renders_custom_traffic_status_and_navigation() -> None:
 
     assert '<b>Произвольный трафик:</b>' in rendered
     assert '✅ Включено' in rendered
-    assert 'Цена за 1 ГБ: 2 ₽' in rendered
+    assert 'Цена за 1 ГБ: 2 تومان' in rendered
     assert 'Минимальный объём: 5 ГБ' in rendered
     assert 'Максимальный объём: 100 ГБ' in rendered
     assert 'admin_tariff_edit_custom_traffic:7' in callbacks
@@ -203,7 +203,7 @@ async def test_price_input_converts_rubles_exactly_and_updates_only_price(monkey
 
     assert updates == [{'traffic_price_per_gb_kopeks': 250}]
     state.clear.assert_awaited_once()
-    assert '2.50 ₽' in message.answer.await_args.args[0]
+    assert '2.5 تومان' in message.answer.await_args.args[0]
 
 
 async def test_invalid_price_keeps_fsm_active_and_does_not_write(monkeypatch) -> None:

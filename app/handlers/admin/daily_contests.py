@@ -57,24 +57,42 @@ async def show_daily_contests(
         for tpl in templates:
             status = '🟢' if tpl.is_enabled else '⚪️'
             prize_info = f'{tpl.prize_value} ({tpl.prize_type})' if tpl.prize_type else tpl.prize_value
-            lines.append(f'{status} <b>{tpl.name}</b> (slug: {tpl.slug}) — приз {prize_info}, макс {tpl.max_winners}')
+            lines.append(
+                texts.t(
+                    'ADMIN_CONTEST_LIST_ITEM',
+                    '{status} <b>{name}</b> (slug: {slug}) — приз {prize_info}, макс {max_winners}',
+                ).format(
+                    status=status,
+                    name=tpl.name,
+                    slug=tpl.slug,
+                    prize_info=prize_info,
+                    max_winners=tpl.max_winners,
+                )
+            )
 
     keyboard_rows = []
     if templates:
         keyboard_rows.append(
-            [types.InlineKeyboardButton(text='❌ Закрыть все активные раунды', callback_data='admin_daily_close_all')]
-        )
-        keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='� Сбросить попытки во всех активных раундах', callback_data='admin_daily_reset_all_attempts'
+                    text=texts.t('ADMIN_CONTEST_CLOSE_ALL_BUTTON', '❌ Закрыть все активные раунды'),
+                    callback_data='admin_daily_close_all',
                 )
             ]
         )
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='� Запустить все активные конкурсы', callback_data='admin_daily_start_all'
+                    text=texts.t('ADMIN_CONTEST_RESET_ALL_BUTTON', '� Сбросить попытки во всех активных раундах'),
+                    callback_data='admin_daily_reset_all_attempts',
+                )
+            ]
+        )
+        keyboard_rows.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_CONTEST_START_ALL_BUTTON', '� Запустить все активные конкурсы'),
+                    callback_data='admin_daily_start_all',
                 )
             ]
         )
@@ -107,7 +125,7 @@ async def show_daily_contest(
     try:
         template_id = int(callback.data.split('_')[-1])
     except Exception:
-        await callback.answer('Некорректный id', show_alert=True)
+        await callback.answer(texts.t('ADMIN_INVALID_ID', 'Некорректный id'), show_alert=True)
         return
 
     tpl = await _get_template(db, template_id)
@@ -118,12 +136,14 @@ async def show_daily_contest(
     lines = [
         f'🏷 <b>{tpl.name}</b> (slug: {tpl.slug})',
         f'{texts.t("ADMIN_CONTEST_STATUS_ACTIVE", "🟢 Активен") if tpl.is_enabled else texts.t("ADMIN_CONTEST_STATUS_INACTIVE", "⚪️ Выключен")}',
-        f'Тип приза: {tpl.prize_type or "days"} | Значение: {tpl.prize_value or "1"}',
-        f'Макс победителей: {tpl.max_winners}',
-        f'Попыток/польз: {tpl.attempts_per_user}',
-        f'Раундов в день: {tpl.times_per_day}',
-        f'Расписание: {tpl.schedule_times or "-"}',
-        f'Длительность раунда: {tpl.cooldown_hours} ч.',
+        texts.t('ADMIN_CONTEST_INFO_PRIZE', 'Тип приза: {prize_type} | Значение: {prize_value}').format(
+            prize_type=tpl.prize_type or 'days', prize_value=tpl.prize_value or '1'
+        ),
+        texts.t('ADMIN_CONTEST_INFO_MAX_WINNERS', 'Макс победителей: {count}').format(count=tpl.max_winners),
+        texts.t('ADMIN_CONTEST_INFO_ATTEMPTS', 'Попыток/польз: {count}').format(count=tpl.attempts_per_user),
+        texts.t('ADMIN_CONTEST_INFO_ROUNDS_PER_DAY', 'Раундов в день: {count}').format(count=tpl.times_per_day),
+        texts.t('ADMIN_CONTEST_INFO_SCHEDULE', 'Расписание: {schedule}').format(schedule=tpl.schedule_times or '-'),
+        texts.t('ADMIN_CONTEST_INFO_DURATION', 'Длительность раунда: {hours} ч.').format(hours=tpl.cooldown_hours),
     ]
     await callback.message.edit_text(
         '\n'.join(lines),
@@ -447,7 +467,7 @@ async def start_all_contests(
         )
         started_count += 1
 
-    message = f'Запущено конкурсов: {started_count}'
+    message = texts.t('ADMIN_CONTESTS_STARTED_COUNT', 'Запущено конкурсов: {count}').format(count=started_count)
     await callback.answer(message, show_alert=True)
     await show_daily_contests(callback, db_user, db)
 
@@ -459,19 +479,22 @@ async def close_all_rounds(
     db_user,
     db: AsyncSession,
 ):
-    get_texts(db_user.language)
+    texts = get_texts(db_user.language)
     from app.database.crud.contest import get_active_rounds
 
     active_rounds = await get_active_rounds(db)
     if not active_rounds:
-        await callback.answer('Нет активных раундов', show_alert=True)
+        await callback.answer(texts.t('ADMIN_NO_ACTIVE_ROUNDS', 'Нет активных раундов'), show_alert=True)
         return
 
     for rnd in active_rounds:
         rnd.status = 'finished'
     await db.commit()
 
-    await callback.answer(f'Закрыто раундов: {len(active_rounds)}', show_alert=True)
+    await callback.answer(
+        texts.t('ADMIN_ROUNDS_CLOSED_COUNT', 'Закрыто раундов: {count}').format(count=len(active_rounds)),
+        show_alert=True,
+    )
     await show_daily_contests(callback, db_user, db)
 
 
@@ -482,12 +505,12 @@ async def reset_all_attempts(
     db_user,
     db: AsyncSession,
 ):
-    get_texts(db_user.language)
+    texts = get_texts(db_user.language)
     from app.database.crud.contest import get_active_rounds
 
     active_rounds = await get_active_rounds(db)
     if not active_rounds:
-        await callback.answer('Нет активных раундов', show_alert=True)
+        await callback.answer(texts.t('ADMIN_NO_ACTIVE_ROUNDS', 'Нет активных раундов'), show_alert=True)
         return
 
     total_deleted = 0
@@ -495,7 +518,10 @@ async def reset_all_attempts(
         deleted = await clear_attempts(db, rnd.id)
         total_deleted += deleted
 
-    await callback.answer(f'Попытки сброшены: {total_deleted}', show_alert=True)
+    await callback.answer(
+        texts.t('ADMIN_ATTEMPTS_RESET_COUNT', 'Попытки сброшены: {count}').format(count=total_deleted),
+        show_alert=True,
+    )
     await show_daily_contests(callback, db_user, db)
 
 
@@ -517,11 +543,14 @@ async def reset_attempts(
 
     round_obj = await get_active_round_by_template(db, tpl.id)
     if not round_obj:
-        await callback.answer('Нет активного раунда', show_alert=True)
+        await callback.answer(texts.t('ADMIN_NO_ACTIVE_ROUND', 'Нет активного раунда'), show_alert=True)
         return
 
     deleted_count = await clear_attempts(db, round_obj.id)
-    await callback.answer(f'Попытки сброшены: {deleted_count}', show_alert=True)
+    await callback.answer(
+        texts.t('ADMIN_ATTEMPTS_RESET_COUNT', 'Попытки сброшены: {count}').format(count=deleted_count),
+        show_alert=True,
+    )
     await show_daily_contest(callback, db_user, db)
 
 
@@ -543,14 +572,14 @@ async def close_round(
 
     round_obj = await get_active_round_by_template(db, tpl.id)
     if not round_obj:
-        await callback.answer('Нет активного раунда', show_alert=True)
+        await callback.answer(texts.t('ADMIN_NO_ACTIVE_ROUND', 'Нет активного раунда'), show_alert=True)
         return
 
     round_obj.status = 'finished'
     await db.commit()
     await db.refresh(round_obj)
 
-    await callback.answer('Раунд закрыт', show_alert=True)
+    await callback.answer(texts.t('ADMIN_ROUND_CLOSED', 'Раунд закрыт'), show_alert=True)
     await show_daily_contest(callback, db_user, db)
 
 
