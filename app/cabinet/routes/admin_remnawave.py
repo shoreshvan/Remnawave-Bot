@@ -15,6 +15,7 @@ from app.database.crud.server_squad import (
     sync_with_remnawave,
 )
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.utils.cache import cache
 from app.utils.panel_node_usage import normalize_node_usage
 
@@ -111,7 +112,7 @@ def _get_service() -> RemnaWaveService:
     if RemnaWaveService is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='RemnaWave service is not available',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_SERVICE_UNAVAILABLE', 'RemnaWave service is not available'),
         )
     return RemnaWaveService()
 
@@ -121,7 +122,8 @@ def _ensure_configured(service: RemnaWaveService) -> None:
     if not service.is_configured:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=service.configuration_error or 'RemnaWave API is not configured',
+            detail=service.configuration_error
+            or get_texts().t('CABINET_ADMIN_REMNAWAVE_API_NOT_CONFIGURED', 'RemnaWave API is not configured'),
         )
 
 
@@ -228,7 +230,7 @@ async def get_system_statistics(
     if not stats or 'system' not in stats:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to get RemnaWave statistics',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_STATISTICS_FAILED', 'Failed to get RemnaWave statistics'),
         )
 
     system_data = stats.get('system', {})
@@ -283,7 +285,10 @@ async def get_recap(
     _ensure_configured(service)
     data = await service.get_recap_statistics()
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get RemnaWave recap')
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_RECAP_FAILED', 'Failed to get RemnaWave recap'),
+        )
     return RecapResponse(**data)
 
 
@@ -296,7 +301,10 @@ async def get_devices_stats(
     _ensure_configured(service)
     data = await service.get_devices_statistics()
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get device statistics')
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_DEVICE_STATS_FAILED', 'Failed to get device statistics'),
+        )
     return DevicesStatsResponse(**data)
 
 
@@ -311,7 +319,10 @@ async def get_top_consumers_route(
     _ensure_configured(service)
     data = await service.get_top_consumers(days=days, limit=limit)
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get top consumers')
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_TOP_CONSUMERS_FAILED', 'Failed to get top consumers'),
+        )
     return TopConsumersResponse(**data)
 
 
@@ -324,7 +335,10 @@ async def get_health_route(
     _ensure_configured(service)
     data = await service.get_health_statistics()
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get panel health')
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_HEALTH_FAILED', 'Failed to get panel health'),
+        )
     return HealthResponse(**data)
 
 
@@ -337,7 +351,12 @@ async def get_subscription_requests_route(
     _ensure_configured(service)
     data = await service.get_subscription_request_statistics()
     if isinstance(data, dict) and data.get('error'):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to get subscription request stats')
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=get_texts().t(
+                'CABINET_ADMIN_REMNAWAVE_SUB_REQUEST_STATS_FAILED', 'Failed to get subscription request stats'
+            ),
+        )
     return SubscriptionRequestStatsResponse(**data)
 
 
@@ -408,7 +427,7 @@ async def get_node_details(
     if not node:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Node not found',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_NODE_NOT_FOUND', 'Node not found'),
         )
 
     return _serialize_node(node)
@@ -427,7 +446,9 @@ async def get_node_statistics(
     if not stats or not stats.get('node'):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Node not found or no statistics available',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REMNAWAVE_NODE_NO_STATS', 'Node not found or no statistics available'
+            ),
         )
 
     return NodeStatisticsResponse(
@@ -458,7 +479,7 @@ async def get_node_usage(
     if start_dt >= end_dt:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid date range',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_INVALID_DATE_RANGE', 'Invalid date range'),
         )
 
     usage = await service.get_node_user_usage_by_range(node_uuid, start_dt, end_dt)
@@ -482,15 +503,15 @@ async def perform_node_action(
         if not node:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Node not found',
+                detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_NODE_NOT_FOUND', 'Node not found'),
             )
 
     success = await service.manage_node(node_uuid, payload.action)
 
     messages = {
-        'enable': 'Node enabled',
-        'disable': 'Node disabled',
-        'restart': 'Node restart initiated',
+        'enable': get_texts().t('CABINET_ADMIN_REMNAWAVE_NODE_ENABLED', 'Node enabled'),
+        'disable': get_texts().t('CABINET_ADMIN_REMNAWAVE_NODE_DISABLED', 'Node disabled'),
+        'restart': get_texts().t('CABINET_ADMIN_REMNAWAVE_NODE_RESTART_INITIATED', 'Node restart initiated'),
     }
 
     if success:
@@ -499,12 +520,18 @@ async def perform_node_action(
         )
         return NodeActionResponse(
             success=True,
-            message=messages.get(payload.action, 'Action completed'),
+            message=messages.get(
+                payload.action,
+                get_texts().t('CABINET_ADMIN_REMNAWAVE_ACTION_COMPLETED', 'Action completed'),
+            ),
             is_disabled=payload.action == 'disable' if payload.action in ('enable', 'disable') else None,
         )
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f'Failed to {payload.action} node',
+        detail=get_texts().t(
+            'CABINET_ADMIN_REMNAWAVE_NODE_ACTION_FAILED',
+            'Failed to {action} node',
+        ).format(action=payload.action),
     )
 
 
@@ -526,10 +553,13 @@ async def restart_all_nodes(
 
     if success:
         logger.info('Admin restarted all nodes', telegram_id=admin.telegram_id)
-        return NodeActionResponse(success=True, message='All nodes restart initiated')
+        return NodeActionResponse(
+            success=True,
+            message=get_texts().t('CABINET_ADMIN_REMNAWAVE_RESTART_ALL_INITIATED', 'All nodes restart initiated'),
+        )
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail='Failed to restart all nodes',
+        detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_RESTART_ALL_FAILED', 'Failed to restart all nodes'),
     )
 
 
@@ -553,7 +583,10 @@ def _geocheck_http_error(exc: Exception, *, missing_is_404: bool) -> HTTPExcepti
             return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message)
         return HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'GeoCheck requires Remnawave Panel and Node {GEOCHECK_MIN_PANEL_VERSION} or newer',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REMNAWAVE_GEOCHECK_VERSION_REQUIRED',
+                'GeoCheck requires Remnawave Panel and Node {version} or newer',
+            ).format(version=GEOCHECK_MIN_PANEL_VERSION),
         )
 
     if status_code and 400 <= status_code < 500:
@@ -674,7 +707,7 @@ async def get_squad_details(
     if not squad:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Squad not found',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_NOT_FOUND', 'Squad not found'),
         )
 
     # Get local info from DB
@@ -719,12 +752,12 @@ async def create_squad(
         )
         return SquadOperationResponse(
             success=True,
-            message='Squad created successfully',
+            message=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_CREATED', 'Squad created successfully'),
             data={'uuid': squad_uuid},
         )
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail='Failed to create squad',
+        detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_CREATE_FAILED', 'Failed to create squad'),
     )
 
 
@@ -741,7 +774,7 @@ async def update_squad(
     if payload.name is None and payload.inbound_uuids is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No update data provided',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_NO_UPDATE_DATA', 'No update data provided'),
         )
 
     success = await service.update_squad(
@@ -752,10 +785,12 @@ async def update_squad(
 
     if success:
         logger.info('Admin updated squad', telegram_id=admin.telegram_id, squad_uuid=squad_uuid)
-        return SquadOperationResponse(success=True, message='Squad updated')
+        return SquadOperationResponse(
+            success=True, message=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_UPDATED', 'Squad updated')
+        )
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail='Failed to update squad',
+        detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_UPDATE_FAILED', 'Failed to update squad'),
     )
 
 
@@ -771,33 +806,55 @@ async def perform_squad_action(
 
     action = payload.action
     success = False
-    message = 'Unknown action'
+    message = get_texts().t('CABINET_ADMIN_REMNAWAVE_UNKNOWN_ACTION', 'Unknown action')
 
     if action == 'add_all_users':
         success = await service.add_all_users_to_squad(squad_uuid)
-        message = 'Users added' if success else 'Failed to add users'
+        message = (
+            get_texts().t('CABINET_ADMIN_REMNAWAVE_USERS_ADDED', 'Users added')
+            if success
+            else get_texts().t('CABINET_ADMIN_REMNAWAVE_USERS_ADD_FAILED', 'Failed to add users')
+        )
     elif action == 'remove_all_users':
         success = await service.remove_all_users_from_squad(squad_uuid)
-        message = 'Users removed' if success else 'Failed to remove users'
+        message = (
+            get_texts().t('CABINET_ADMIN_REMNAWAVE_USERS_REMOVED', 'Users removed')
+            if success
+            else get_texts().t('CABINET_ADMIN_REMNAWAVE_USERS_REMOVE_FAILED', 'Failed to remove users')
+        )
     elif action == 'delete':
         success = await service.delete_squad(squad_uuid)
-        message = 'Squad deleted' if success else 'Failed to delete squad'
+        message = (
+            get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_DELETED', 'Squad deleted')
+            if success
+            else get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_DELETE_FAILED', 'Failed to delete squad')
+        )
     elif action == 'rename':
         if not payload.name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Name is required for rename action',
+                detail=get_texts().t(
+                    'CABINET_ADMIN_REMNAWAVE_RENAME_NAME_REQUIRED', 'Name is required for rename action'
+                ),
             )
         success = await service.rename_squad(squad_uuid, payload.name)
-        message = 'Squad renamed' if success else 'Failed to rename squad'
+        message = (
+            get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_RENAMED', 'Squad renamed')
+            if success
+            else get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_RENAME_FAILED', 'Failed to rename squad')
+        )
     elif action == 'update_inbounds':
         if not payload.inbound_uuids:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Inbound UUIDs are required',
+                detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_INBOUND_UUIDS_REQUIRED', 'Inbound UUIDs are required'),
             )
         success = await service.update_squad_inbounds(squad_uuid, payload.inbound_uuids)
-        message = 'Inbounds updated' if success else 'Failed to update inbounds'
+        message = (
+            get_texts().t('CABINET_ADMIN_REMNAWAVE_INBOUNDS_UPDATED', 'Inbounds updated')
+            if success
+            else get_texts().t('CABINET_ADMIN_REMNAWAVE_INBOUNDS_UPDATE_FAILED', 'Failed to update inbounds')
+        )
 
     if success:
         logger.info('Admin performed on squad', telegram_id=admin.telegram_id, action=action, squad_uuid=squad_uuid)
@@ -818,10 +875,12 @@ async def delete_squad(
 
     if success:
         logger.info('Admin deleted squad', telegram_id=admin.telegram_id, squad_uuid=squad_uuid)
-        return SquadOperationResponse(success=True, message='Squad deleted')
+        return SquadOperationResponse(
+            success=True, message=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_DELETED', 'Squad deleted')
+        )
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail='Failed to delete squad',
+        detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_DELETE_FAILED', 'Failed to delete squad'),
     )
 
 
@@ -839,7 +898,7 @@ async def preview_migration(
     if not squad:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Squad not found in local database',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUAD_NOT_FOUND_LOCAL', 'Squad not found in local database'),
         )
 
     users_to_migrate = await count_active_users_for_squad(db, squad_uuid)
@@ -869,21 +928,23 @@ async def migrate_squad_users(
     if source_uuid == target_uuid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Source and target squads must be different',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REMNAWAVE_MIGRATE_SAME_SQUAD', 'Source and target squads must be different'
+            ),
         )
 
     source = await get_server_squad_by_uuid(db, source_uuid)
     if not source:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Source squad not found',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_SOURCE_SQUAD_NOT_FOUND', 'Source squad not found'),
         )
 
     target = await get_server_squad_by_uuid(db, target_uuid)
     if not target:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Target squad not found',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_TARGET_SQUAD_NOT_FOUND', 'Target squad not found'),
         )
 
     try:
@@ -901,7 +962,8 @@ async def migrate_squad_users(
     if not result.get('success'):
         return MigrationResponse(
             success=False,
-            message=result.get('message') or 'Migration failed',
+            message=result.get('message')
+            or get_texts().t('CABINET_ADMIN_REMNAWAVE_MIGRATION_FAILED', 'Migration failed'),
             error=result.get('error'),
         )
 
@@ -911,7 +973,8 @@ async def migrate_squad_users(
 
     return MigrationResponse(
         success=True,
-        message=result.get('message') or 'Migration completed',
+        message=result.get('message')
+        or get_texts().t('CABINET_ADMIN_REMNAWAVE_MIGRATION_COMPLETED', 'Migration completed'),
         data=MigrationStats(
             source_uuid=source.squad_uuid,
             target_uuid=target.squad_uuid,
@@ -951,7 +1014,9 @@ async def get_auto_sync_status(
     if remnawave_sync_service is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Auto sync service is not available',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REMNAWAVE_AUTO_SYNC_UNAVAILABLE', 'Auto sync service is not available'
+            ),
         )
 
     status_obj = remnawave_sync_service.get_status()
@@ -980,7 +1045,9 @@ async def toggle_auto_sync(
     if remnawave_sync_service is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Auto sync service is not available',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REMNAWAVE_AUTO_SYNC_UNAVAILABLE', 'Auto sync service is not available'
+            ),
         )
 
     # This would need to update settings - for now just return info
@@ -993,18 +1060,21 @@ async def toggle_auto_sync(
         logger.info('Admin enabled auto sync', telegram_id=admin.telegram_id)
         return SyncResponse(
             success=True,
-            message='Auto sync enabled and scheduled',
+            message=get_texts().t('CABINET_ADMIN_REMNAWAVE_AUTO_SYNC_ENABLED', 'Auto sync enabled and scheduled'),
         )
     if not payload.enabled and current_status.enabled:
         # Disable - would need to update settings and stop scheduler
         logger.info('Admin disabled auto sync', telegram_id=admin.telegram_id)
         return SyncResponse(
             success=True,
-            message='Auto sync setting change requested. Restart may be required.',
+            message=get_texts().t(
+                'CABINET_ADMIN_REMNAWAVE_AUTO_SYNC_CHANGE_REQUESTED',
+                'Auto sync setting change requested. Restart may be required.',
+            ),
         )
     return SyncResponse(
         success=True,
-        message='No change needed',
+        message=get_texts().t('CABINET_ADMIN_REMNAWAVE_NO_CHANGE_NEEDED', 'No change needed'),
     )
 
 
@@ -1016,7 +1086,9 @@ async def run_auto_sync_now(
     if remnawave_sync_service is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Auto sync service is not available',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REMNAWAVE_AUTO_SYNC_UNAVAILABLE', 'Auto sync service is not available'
+            ),
         )
 
     logger.info('Admin triggered manual sync', telegram_id=admin.telegram_id)
@@ -1050,7 +1122,7 @@ async def sync_from_panel(
         logger.info('Admin synced from panel (mode: )', telegram_id=admin.telegram_id, mode=payload.mode)
         return SyncResponse(
             success=True,
-            message='Sync from panel completed',
+            message=get_texts().t('CABINET_ADMIN_REMNAWAVE_SYNC_FROM_PANEL_DONE', 'Sync from panel completed'),
             data=stats,
         )
     except RemnaWaveConfigurationError as exc:
@@ -1074,7 +1146,7 @@ async def sync_to_panel(
 
     return SyncResponse(
         success=True,
-        message='Sync to panel completed',
+        message=get_texts().t('CABINET_ADMIN_REMNAWAVE_SYNC_TO_PANEL_DONE', 'Sync to panel completed'),
         data=stats,
     )
 
@@ -1092,7 +1164,7 @@ async def sync_servers(
     if not squads:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to get squads from RemnaWave',
+            detail=get_texts().t('CABINET_ADMIN_REMNAWAVE_SQUADS_FETCH_FAILED', 'Failed to get squads from RemnaWave'),
         )
 
     created, updated, removed = await sync_with_remnawave(db, squads)
@@ -1112,7 +1184,7 @@ async def sync_servers(
 
     return SyncResponse(
         success=True,
-        message='Servers synced successfully',
+        message=get_texts().t('CABINET_ADMIN_REMNAWAVE_SERVERS_SYNCED', 'Servers synced successfully'),
         data={
             'created': created,
             'updated': updated,
@@ -1136,7 +1208,7 @@ async def validate_subscriptions(
 
     return SyncResponse(
         success=True,
-        message='Subscriptions validated',
+        message=get_texts().t('CABINET_ADMIN_REMNAWAVE_SUBS_VALIDATED', 'Subscriptions validated'),
         data=stats,
     )
 
@@ -1155,7 +1227,7 @@ async def cleanup_subscriptions(
 
     return SyncResponse(
         success=True,
-        message='Cleanup completed',
+        message=get_texts().t('CABINET_ADMIN_REMNAWAVE_CLEANUP_DONE', 'Cleanup completed'),
         data=stats,
     )
 
@@ -1174,7 +1246,7 @@ async def sync_subscription_statuses(
 
     return SyncResponse(
         success=True,
-        message='Subscription statuses synced',
+        message=get_texts().t('CABINET_ADMIN_REMNAWAVE_SUB_STATUSES_SYNCED', 'Subscription statuses synced'),
         data=stats,
     )
 
@@ -1192,6 +1264,6 @@ async def get_sync_recommendations(
 
     return SyncResponse(
         success=True,
-        message='Recommendations retrieved',
+        message=get_texts().t('CABINET_ADMIN_REMNAWAVE_RECOMMENDATIONS_RETRIEVED', 'Recommendations retrieved'),
         data=data,
     )

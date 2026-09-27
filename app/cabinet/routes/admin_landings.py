@@ -25,6 +25,7 @@ from app.database.crud.landing import (
     update_landing_order,
 )
 from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff, User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from .branding import ALLOWED_BG_TYPES, _validate_settings
@@ -61,24 +62,40 @@ def _validate_background_config(v: dict | None) -> dict | None:
     if v is None:
         return None
     if not isinstance(v.get('enabled'), bool):
-        raise ValueError('background_config.enabled must be a boolean')
+        raise ValueError(
+            get_texts().t('CABINET_ADMIN_LANDINGS_BG_ENABLED_BOOL', 'background_config.enabled must be a boolean')
+        )
     bg_type = v.get('type')
     if not isinstance(bg_type, str) or bg_type not in ALLOWED_BG_TYPES:
-        raise ValueError(f'background_config.type must be one of: {", ".join(ALLOWED_BG_TYPES)}')
+        raise ValueError(
+            get_texts()
+            .t('CABINET_ADMIN_LANDINGS_BG_TYPE_INVALID', 'background_config.type must be one of: {allowed}')
+            .format(allowed=", ".join(ALLOWED_BG_TYPES))
+        )
     if 'settings' in v:
         if not isinstance(v['settings'], dict):
-            raise ValueError('background_config.settings must be a dict')
+            raise ValueError(
+                get_texts().t('CABINET_ADMIN_LANDINGS_BG_SETTINGS_DICT', 'background_config.settings must be a dict')
+            )
         _validate_settings(v['settings'])
     if 'opacity' in v:
         opacity = v['opacity']
         if not isinstance(opacity, int | float) or not (0 <= opacity <= 1):
-            raise ValueError('background_config.opacity must be 0-1')
+            raise ValueError(
+                get_texts().t('CABINET_ADMIN_LANDINGS_BG_OPACITY_RANGE', 'background_config.opacity must be 0-1')
+            )
     if 'blur' in v:
         blur = v['blur']
         if not isinstance(blur, int | float) or not (0 <= blur <= 100):
-            raise ValueError('background_config.blur must be 0-100')
+            raise ValueError(
+                get_texts().t('CABINET_ADMIN_LANDINGS_BG_BLUR_RANGE', 'background_config.blur must be 0-100')
+            )
     if 'reducedOnMobile' in v and not isinstance(v['reducedOnMobile'], bool):
-        raise ValueError('background_config.reducedOnMobile must be a boolean')
+        raise ValueError(
+            get_texts().t(
+                'CABINET_ADMIN_LANDINGS_BG_REDUCED_BOOL', 'background_config.reducedOnMobile must be a boolean'
+            )
+        )
     # Strip unknown keys
     return {k: val for k, val in v.items() if k in _ALLOWED_BG_CONFIG_KEYS}
 
@@ -125,10 +142,17 @@ class LandingPaymentMethodInput(BaseModel):
         if not v:
             return None
         if len(v) > 20:
-            raise ValueError('sub_options cannot have more than 20 keys')
+            raise ValueError(
+                get_texts().t('CABINET_ADMIN_LANDINGS_SUB_OPTIONS_MAX', 'sub_options cannot have more than 20 keys')
+            )
         for key in v:
             if not isinstance(key, str) or len(key) > 50:
-                raise ValueError('sub_options keys must be strings of at most 50 characters')
+                raise ValueError(
+                    get_texts().t(
+                        'CABINET_ADMIN_LANDINGS_SUB_OPTIONS_KEY_LEN',
+                        'sub_options keys must be strings of at most 50 characters',
+                    )
+                )
         return v
 
     @field_validator('icon_url', mode='before')
@@ -137,7 +161,9 @@ class LandingPaymentMethodInput(BaseModel):
         if not v:
             return None
         if not v.startswith(('https://', '/')):
-            raise ValueError('icon_url must use HTTPS or be a relative path')
+            raise ValueError(
+                get_texts().t('CABINET_ADMIN_LANDINGS_ICON_URL_HTTPS', 'icon_url must use HTTPS or be a relative path')
+            )
         return v
 
     @field_validator('return_url', mode='before')
@@ -146,10 +172,17 @@ class LandingPaymentMethodInput(BaseModel):
         if not v:
             return None
         if not v.startswith('https://'):
-            raise ValueError('return_url must use HTTPS')
+            raise ValueError(
+                get_texts().t('CABINET_ADMIN_LANDINGS_RETURN_URL_HTTPS', 'return_url must use HTTPS')
+            )
         parsed = urlparse(v)
         if not parsed.hostname or parsed.username or parsed.password:
-            raise ValueError('return_url must be a valid HTTPS URL without credentials')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_ADMIN_LANDINGS_RETURN_URL_INVALID',
+                    'return_url must be a valid HTTPS URL without credentials',
+                )
+            )
         return v
 
     @field_validator('currency', mode='before')
@@ -163,7 +196,9 @@ class LandingPaymentMethodInput(BaseModel):
     @classmethod
     def validate_amounts(cls, v: int | None) -> int | None:
         if v is not None and v < 0:
-            raise ValueError('Amount cannot be negative')
+            raise ValueError(
+                get_texts().t('CABINET_ADMIN_LANDINGS_AMOUNT_NEGATIVE', 'Amount cannot be negative')
+            )
         return v
 
     @model_validator(mode='after')
@@ -173,7 +208,12 @@ class LandingPaymentMethodInput(BaseModel):
             and self.max_amount_kopeks is not None
             and self.min_amount_kopeks > self.max_amount_kopeks
         ):
-            raise ValueError('min_amount_kopeks cannot be greater than max_amount_kopeks')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_ADMIN_LANDINGS_AMOUNT_RANGE',
+                    'min_amount_kopeks cannot be greater than max_amount_kopeks',
+                )
+            )
         return self
 
 
@@ -192,10 +232,22 @@ class LandingCreateRequest(BaseModel):
     @classmethod
     def validate_allowed_periods_size(cls, v: dict[str, list[int]]) -> dict[str, list[int]]:
         if len(v) > 50:
-            raise ValueError('allowed_periods cannot have more than 50 entries')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_ADMIN_LANDINGS_PERIODS_MAX_ENTRIES',
+                    'allowed_periods cannot have more than 50 entries',
+                )
+            )
         for key, periods in v.items():
             if len(periods) > 20:
-                raise ValueError(f'allowed_periods[{key}] cannot have more than 20 periods')
+                raise ValueError(
+                    get_texts()
+                    .t(
+                        'CABINET_ADMIN_LANDINGS_PERIODS_MAX_PER_KEY',
+                        'allowed_periods[{key}] cannot have more than 20 periods',
+                    )
+                    .format(key=key)
+                )
         return v
 
     gift_enabled: bool = True
@@ -217,9 +269,19 @@ class LandingCreateRequest(BaseModel):
     @model_validator(mode='after')
     def validate_analytics_goals(self) -> 'LandingCreateRequest':
         if self.analytics_view_enabled and not self.analytics_view_goal:
-            raise ValueError('analytics_view_goal is required when analytics_view_enabled is True')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_ADMIN_LANDINGS_ANALYTICS_VIEW_GOAL_REQUIRED',
+                    'analytics_view_goal is required when analytics_view_enabled is True',
+                )
+            )
         if self.analytics_click_enabled and not self.analytics_click_goal:
-            raise ValueError('analytics_click_goal is required when analytics_click_enabled is True')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_ADMIN_LANDINGS_ANALYTICS_CLICK_GOAL_REQUIRED',
+                    'analytics_click_goal is required when analytics_click_enabled is True',
+                )
+            )
         return self
 
     @field_validator('background_config')
@@ -288,25 +350,62 @@ class LandingCreateRequest(BaseModel):
         has_discount = self.discount_percent is not None
         has_dates = self.discount_starts_at is not None or self.discount_ends_at is not None
         if has_dates and not has_discount:
-            raise ValueError('discount_percent is required when discount dates are set')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_ADMIN_LANDINGS_DISCOUNT_PERCENT_REQUIRED',
+                    'discount_percent is required when discount dates are set',
+                )
+            )
         if has_discount and not (self.discount_starts_at and self.discount_ends_at):
-            raise ValueError('discount_starts_at and discount_ends_at are required when discount_percent is set')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_ADMIN_LANDINGS_DISCOUNT_DATES_REQUIRED',
+                    'discount_starts_at and discount_ends_at are required when discount_percent is set',
+                )
+            )
         if self.discount_starts_at and self.discount_ends_at:
             if self.discount_starts_at >= self.discount_ends_at:
-                raise ValueError('discount_starts_at must be before discount_ends_at')
+                raise ValueError(
+                    get_texts().t(
+                        'CABINET_ADMIN_LANDINGS_DISCOUNT_DATE_ORDER',
+                        'discount_starts_at must be before discount_ends_at',
+                    )
+                )
         if self.discount_overrides:
             if len(self.discount_overrides) > 100:
-                raise ValueError('discount_overrides cannot have more than 100 entries')
+                raise ValueError(
+                    get_texts().t(
+                        'CABINET_ADMIN_LANDINGS_DISCOUNT_OVERRIDES_MAX',
+                        'discount_overrides cannot have more than 100 entries',
+                    )
+                )
             for key, val in self.discount_overrides.items():
                 if not key.isdigit():
-                    raise ValueError('discount_overrides keys must be tariff ID strings')
+                    raise ValueError(
+                        get_texts().t(
+                            'CABINET_ADMIN_LANDINGS_DISCOUNT_OVERRIDES_KEYS',
+                            'discount_overrides keys must be tariff ID strings',
+                        )
+                    )
                 if not (1 <= val <= 99):
-                    raise ValueError('discount_overrides values must be 1-99')
+                    raise ValueError(
+                        get_texts().t(
+                            'CABINET_ADMIN_LANDINGS_DISCOUNT_OVERRIDES_VALUES',
+                            'discount_overrides values must be 1-99',
+                        )
+                    )
             if self.allowed_tariff_ids:
                 allowed_set = {str(tid) for tid in self.allowed_tariff_ids}
                 invalid = set(self.discount_overrides.keys()) - allowed_set
                 if invalid:
-                    raise ValueError(f'discount_overrides contains tariff IDs not in allowed_tariff_ids: {invalid}')
+                    raise ValueError(
+                        get_texts()
+                        .t(
+                            'CABINET_ADMIN_LANDINGS_DISCOUNT_OVERRIDES_INVALID',
+                            'discount_overrides contains tariff IDs not in allowed_tariff_ids: {invalid}',
+                        )
+                        .format(invalid=invalid)
+                    )
         return self
 
 
@@ -347,10 +446,22 @@ class LandingUpdateRequest(BaseModel):
         if v is None:
             return None
         if len(v) > 50:
-            raise ValueError('allowed_periods cannot have more than 50 entries')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_ADMIN_LANDINGS_PERIODS_MAX_ENTRIES',
+                    'allowed_periods cannot have more than 50 entries',
+                )
+            )
         for key, periods in v.items():
             if len(periods) > 20:
-                raise ValueError(f'allowed_periods[{key}] cannot have more than 20 periods')
+                raise ValueError(
+                    get_texts()
+                    .t(
+                        'CABINET_ADMIN_LANDINGS_PERIODS_MAX_PER_KEY',
+                        'allowed_periods[{key}] cannot have more than 20 periods',
+                    )
+                    .format(key=key)
+                )
         return v
 
     @field_validator(
@@ -415,15 +526,35 @@ class LandingUpdateRequest(BaseModel):
     def validate_discount(self) -> 'LandingUpdateRequest':
         if self.discount_starts_at is not None and self.discount_ends_at is not None:
             if self.discount_starts_at >= self.discount_ends_at:
-                raise ValueError('discount_starts_at must be before discount_ends_at')
+                raise ValueError(
+                    get_texts().t(
+                        'CABINET_ADMIN_LANDINGS_DISCOUNT_DATE_ORDER',
+                        'discount_starts_at must be before discount_ends_at',
+                    )
+                )
         if self.discount_overrides:
             if len(self.discount_overrides) > 100:
-                raise ValueError('discount_overrides cannot have more than 100 entries')
+                raise ValueError(
+                    get_texts().t(
+                        'CABINET_ADMIN_LANDINGS_DISCOUNT_OVERRIDES_MAX',
+                        'discount_overrides cannot have more than 100 entries',
+                    )
+                )
             for key, val in self.discount_overrides.items():
                 if not key.isdigit():
-                    raise ValueError('discount_overrides keys must be tariff ID strings')
+                    raise ValueError(
+                        get_texts().t(
+                            'CABINET_ADMIN_LANDINGS_DISCOUNT_OVERRIDES_KEYS',
+                            'discount_overrides keys must be tariff ID strings',
+                        )
+                    )
                 if not (1 <= val <= 99):
-                    raise ValueError('discount_overrides values must be 1-99')
+                    raise ValueError(
+                        get_texts().t(
+                            'CABINET_ADMIN_LANDINGS_DISCOUNT_OVERRIDES_VALUES',
+                            'discount_overrides values must be 1-99',
+                        )
+                    )
         return self
 
 
@@ -648,14 +779,18 @@ async def create_landing_page(
     if request.slug in _RESERVED_SLUGS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Slug "{request.slug}" is reserved and cannot be used',
+            detail=get_texts()
+            .t('CABINET_ADMIN_LANDINGS_SLUG_RESERVED', 'Slug "{slug}" is reserved and cannot be used')
+            .format(slug=request.slug),
         )
 
     existing = await get_landing_by_slug(db, request.slug)
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f'Landing page with slug "{request.slug}" already exists',
+            detail=get_texts()
+            .t('CABINET_ADMIN_LANDINGS_SLUG_EXISTS', 'Landing page with slug "{slug}" already exists')
+            .format(slug=request.slug),
         )
 
     landing = await create_landing(
@@ -714,7 +849,7 @@ async def get_landing_detail(
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail=get_texts().t('CABINET_ADMIN_LANDINGS_NOT_FOUND', 'Landing page not found'),
         )
     return _landing_to_detail(landing)
 
@@ -734,13 +869,17 @@ async def update_landing_page(
         if data['slug'] in _RESERVED_SLUGS:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Slug "{data["slug"]}" is reserved and cannot be used',
+                detail=get_texts()
+                .t('CABINET_ADMIN_LANDINGS_SLUG_RESERVED', 'Slug "{slug}" is reserved and cannot be used')
+                .format(slug=data['slug']),
             )
         existing = await get_landing_by_slug(db, data['slug'])
         if existing is not None and existing.id != landing_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f'Landing page with slug "{data["slug"]}" already exists',
+                detail=get_texts()
+                .t('CABINET_ADMIN_LANDINGS_SLUG_EXISTS', 'Landing page with slug "{slug}" already exists')
+                .format(slug=data['slug']),
             )
 
     # Serialize nested Pydantic models to dicts for JSON storage
@@ -765,14 +904,17 @@ async def update_landing_page(
             if effective_starts and effective_ends and effective_starts >= effective_ends:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='discount_starts_at must be before discount_ends_at',
+                    detail=get_texts().t(
+                        'CABINET_ADMIN_LANDINGS_DISCOUNT_DATE_ORDER',
+                        'discount_starts_at must be before discount_ends_at',
+                    ),
                 )
 
     landing = await update_landing(db, landing_id, data)
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail=get_texts().t('CABINET_ADMIN_LANDINGS_NOT_FOUND', 'Landing page not found'),
         )
 
     logger.info('Admin updated landing page', admin_id=admin.id, slug=landing.slug, landing_id=landing.id)
@@ -791,7 +933,7 @@ async def delete_landing_page(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail=get_texts().t('CABINET_ADMIN_LANDINGS_NOT_FOUND', 'Landing page not found'),
         )
     logger.info('Admin deleted landing page', admin_id=admin.id, landing_id=landing_id)
     return {'success': True}
@@ -808,7 +950,7 @@ async def toggle_landing_active(
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail=get_texts().t('CABINET_ADMIN_LANDINGS_NOT_FOUND', 'Landing page not found'),
         )
 
     new_active = not landing.is_active
@@ -844,7 +986,7 @@ async def get_landing_stats(
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail=get_texts().t('CABINET_ADMIN_LANDINGS_NOT_FOUND', 'Landing page not found'),
         )
 
     # -- Summary stats (single query) --
@@ -1048,7 +1190,7 @@ async def get_landing_purchases(
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail=get_texts().t('CABINET_ADMIN_LANDINGS_NOT_FOUND', 'Landing page not found'),
         )
 
     # Base filter conditions

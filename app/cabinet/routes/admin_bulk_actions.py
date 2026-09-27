@@ -33,6 +33,7 @@ from app.database.models import (
     User,
     UserPromoGroup,
 )
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.bulk_actions import (
@@ -327,12 +328,16 @@ async def _do_change_tariff(
     # Record tariff change transaction
     from app.database.crud.transaction import create_transaction
 
+    texts = get_texts(user.language)
     await create_transaction(
         db=db,
         user_id=user.id,
         type=TransactionType.SUBSCRIPTION_PAYMENT,
         amount_kopeks=0,
-        description=f"Смена тарифа (массовое действие) на '{tariff.name}'",
+        description=texts.t(
+            'CABINET_BULK_ACTIONS_DESC_CHANGE_TARIFF',
+            "Смена тарифа (массовое действие) на '{name}'",
+        ).format(name=tariff.name),
         commit=False,
     )
 
@@ -967,7 +972,10 @@ async def _execute_for_subscription(
 @router.post('/execute')
 async def bulk_execute(
     request: BulkExecuteRequest,
-    stream: bool = Query(default=False, description='Stream progress via SSE'),
+    stream: bool = Query(
+        default=False,
+        description=get_texts().t('CABINET_BULK_ACTIONS_STREAM_PARAM', 'Stream progress via SSE'),
+    ),
     admin: User = Depends(require_permission('bulk_actions:execute')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -987,6 +995,7 @@ async def bulk_execute(
     # admin.id уронило бы MissingGreenlet весь запрос — вместе с уже
     # закоммиченными результатами. Та же дисциплина, что в _do_delete_subscription.
     admin_id = admin.id
+    texts = get_texts(admin.language)
 
     # Delete user requires elevated permission
     if action == BulkActionType.DELETE_USER:
@@ -996,7 +1005,10 @@ async def bulk_execute(
         if not allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail='Permission users:delete is required for this action',
+                detail=texts.t(
+                    'CABINET_BULK_ACTIONS_PERMISSION_USERS_DELETE_REQUIRED',
+                    'Permission users:delete is required for this action',
+                ),
             )
 
     # Determine target mode: subscription_ids or user_ids
@@ -1005,7 +1017,10 @@ async def bulk_execute(
     if use_subscription_ids and action in _USER_LEVEL_ACTIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Action {action} operates on users, not subscriptions. Use user_ids instead.',
+            detail=texts.t(
+                'CABINET_BULK_ACTIONS_ACTION_ON_USERS_NOT_SUBS',
+                'Action {action} operates on users, not subscriptions. Use user_ids instead.',
+            ).format(action=action),
         )
 
     tariff = await _validate_and_prepare(db, action, params)

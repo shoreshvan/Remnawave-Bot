@@ -35,6 +35,7 @@ from app.database.models import (
     User,
 )
 from app.handlers.admin.messages import get_custom_users, get_target_users, get_target_users_count
+from app.localization.texts import get_texts
 from app.services.broadcast_service import BroadcastConfig, broadcast_service
 from app.utils.miniapp_buttons import build_miniapp_or_callback_button
 from app.utils.notification_prefs import is_promo_offers_enabled
@@ -144,11 +145,25 @@ class PromoOfferBroadcastRequest(BaseModel):
     target: str | None = None
     user_id: int | None = None
     telegram_id: int | None = None
-    email: str | None = Field(None, description='User email (for email-only users)')
+    email: str | None = Field(
+        None,
+        description=get_texts().t('CABINET_PROMO_OFFER_EMAIL_DESCRIPTION', 'User email (for email-only users)'),
+    )
     # Telegram notification options
-    send_notification: bool = Field(False, description='Send Telegram notification to users')
-    message_text: str | None = Field(None, description='Custom message text (HTML)')
-    button_text: str | None = Field(None, description='Button text')
+    send_notification: bool = Field(
+        False,
+        description=get_texts().t(
+            'CABINET_PROMO_OFFER_SEND_NOTIFICATION_DESCRIPTION', 'Send Telegram notification to users'
+        ),
+    )
+    message_text: str | None = Field(
+        None,
+        description=get_texts().t('CABINET_PROMO_OFFER_MESSAGE_TEXT_DESCRIPTION', 'Custom message text (HTML)'),
+    )
+    button_text: str | None = Field(
+        None,
+        description=get_texts().t('CABINET_PROMO_OFFER_BUTTON_TEXT_DESCRIPTION', 'Button text'),
+    )
 
     _TARGET_ALIASES: ClassVar[dict[str, str]] = {
         'no_sub': 'no',
@@ -175,9 +190,18 @@ class PromoOfferBroadcastResponse(BaseModel):
     notifications_failed: int = 0
     broadcast_id: int | None = Field(
         None,
-        description='ID записи рассылки для отслеживания прогресса доставки в Telegram',
+        description=get_texts().t(
+            'CABINET_PROMO_OFFER_BROADCAST_ID_DESCRIPTION',
+            'ID записи рассылки для отслеживания прогресса доставки в Telegram',
+        ),
     )
-    telegram_recipients: int = Field(0, description='Сколько получателей ушло в Telegram-рассылку')
+    telegram_recipients: int = Field(
+        0,
+        description=get_texts().t(
+            'CABINET_PROMO_OFFER_TELEGRAM_RECIPIENTS_DESCRIPTION',
+            'Сколько получателей ушло в Telegram-рассылку',
+        ),
+    )
 
 
 class PromoOfferSegment(BaseModel):
@@ -387,7 +411,10 @@ async def get_template(
     """Get a promo offer template."""
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Template not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_PROMO_OFFER_TEMPLATE_NOT_FOUND', 'Template not found'),
+        )
     return _serialize_template(template)
 
 
@@ -401,7 +428,10 @@ async def update_template(
     """Update a promo offer template."""
     template = await get_promo_offer_template_by_id(db, template_id)
     if not template:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Template not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_PROMO_OFFER_TEMPLATE_NOT_FOUND', 'Template not found'),
+        )
 
     if payload.test_squad_uuids is not None:
         normalized_squads = [str(uuid).strip() for uuid in payload.test_squad_uuids if str(uuid).strip()]
@@ -472,7 +502,7 @@ def _build_promo_keyboard(offer_id: int, button_text: str) -> InlineKeyboardMark
             ],
             [
                 InlineKeyboardButton(
-                    text='❌ Закрыть',
+                    text=get_texts().t('CABINET_PROMO_OFFER_CLOSE_BUTTON', '❌ Закрыть'),
                     callback_data='promo_offer_close',
                 )
             ],
@@ -538,16 +568,28 @@ def _build_default_promo_message(
     valid_hours: int,
 ) -> str:
     """Build default promo notification message."""
-    lines = ['🎁 <b>Специальное предложение для вас!</b>\n']
+    lines = [get_texts().t('CABINET_PROMO_OFFER_MSG_HEADER', '🎁 <b>Специальное предложение для вас!</b>\n')]
 
     if discount_percent > 0:
-        lines.append(f'🔥 Скидка <b>{discount_percent}%</b> на подписку')
+        lines.append(
+            get_texts()
+            .t('CABINET_PROMO_OFFER_MSG_DISCOUNT', '🔥 Скидка <b>{discount_percent}%</b> на подписку')
+            .format(discount_percent=discount_percent)
+        )
     if bonus_amount_kopeks > 0:
         bonus_rub = bonus_amount_kopeks / 100
-        lines.append(f'💰 Бонус <b>{bonus_rub:.0f}₽</b> на баланс')
+        lines.append(
+            get_texts()
+            .t('CABINET_PROMO_OFFER_MSG_BONUS', '💰 Бонус <b>{bonus_rub:.0f}₽</b> на баланс')
+            .format(bonus_rub=bonus_rub)
+        )
 
-    lines.append(f'\n⏰ Предложение действует <b>{valid_hours} ч.</b>')
-    lines.append('\nНажмите кнопку ниже, чтобы активировать!')
+    lines.append(
+        get_texts()
+        .t('CABINET_PROMO_OFFER_MSG_VALIDITY', '\n⏰ Предложение действует <b>{valid_hours} ч.</b>')
+        .format(valid_hours=valid_hours)
+    )
+    lines.append(get_texts().t('CABINET_PROMO_OFFER_MSG_CTA', '\nНажмите кнопку ниже, чтобы активировать!'))
 
     return '\n'.join(lines)
 
@@ -621,11 +663,18 @@ async def broadcast_offer(
     if payload.telegram_id is not None:
         user = await get_user_by_telegram_id(db, payload.telegram_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found by telegram_id')
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                get_texts().t(
+                    'CABINET_PROMO_OFFER_USER_NOT_FOUND_BY_TELEGRAM_ID', 'User not found by telegram_id'
+                ),
+            )
         if target_user_id and target_user_id != user.id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                'Provided user_id does not match telegram_id',
+                get_texts().t(
+                    'CABINET_PROMO_OFFER_USER_ID_MISMATCH_TELEGRAM', 'Provided user_id does not match telegram_id'
+                ),
             )
         target_user_id = user.id
 
@@ -633,11 +682,14 @@ async def broadcast_offer(
     if payload.email is not None and user is None:
         user = await get_user_by_email(db, payload.email)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found by email')
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                get_texts().t('CABINET_PROMO_OFFER_USER_NOT_FOUND_BY_EMAIL', 'User not found by email'),
+            )
         if target_user_id and target_user_id != user.id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                'Provided user_id does not match email',
+                get_texts().t('CABINET_PROMO_OFFER_USER_ID_MISMATCH_EMAIL', 'Provided user_id does not match email'),
             )
         target_user_id = user.id
 
@@ -645,13 +697,16 @@ async def broadcast_offer(
         if user is None:
             user = await db.get(User, target_user_id)
         if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                get_texts().t('CABINET_PROMO_OFFER_USER_NOT_FOUND', 'User not found'),
+            )
         recipients[target_user_id] = user
 
     if not recipients:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            'No recipients: specify target or user',
+            get_texts().t('CABINET_PROMO_OFFER_NO_RECIPIENTS', 'No recipients: specify target or user'),
         )
 
     # Create offers for all recipients and collect (user, offer) pairs
@@ -735,7 +790,7 @@ async def broadcast_offer(
                     bonus_amount_kopeks=payload.bonus_amount_kopeks,
                     valid_hours=payload.valid_hours,
                 ),
-                button_text=payload.button_text or '🎁 Получить',
+                button_text=payload.button_text or get_texts().t('CABINET_PROMO_OFFER_CLAIM_BUTTON', '🎁 Получить'),
                 notify_targets=notify_targets,
             )
             logger.info(

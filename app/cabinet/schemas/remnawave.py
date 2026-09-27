@@ -7,6 +7,8 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.localization.texts import get_texts
+
 
 # ============ Status & Connection ============
 
@@ -213,7 +215,9 @@ class GeocheckRequest(BaseModel):
         try:
             ipaddress.ip_address(value)
         except ValueError as exc:
-            raise ValueError('ip must be a valid IPv4 or IPv6 address') from exc
+            raise ValueError(
+                get_texts().t('CABINET_REMNAWAVE_GEOCHECK_IP_INVALID', 'ip must be a valid IPv4 or IPv6 address')
+            ) from exc
         return value
 
     @field_validator('interface')
@@ -222,13 +226,20 @@ class GeocheckRequest(BaseModel):
         if value is None:
             return None
         if not _INTERFACE_RE.match(value):
-            raise ValueError('interface must be a network interface name')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_REMNAWAVE_GEOCHECK_INTERFACE_INVALID',
+                    'interface must be a network interface name',
+                )
+            )
         return value
 
     @model_validator(mode='after')
     def _one_route_at_most(self) -> Self:
         if self.ip and self.interface:
-            raise ValueError('choose either ip or interface, not both')
+            raise ValueError(
+                get_texts().t('CABINET_REMNAWAVE_GEOCHECK_BOTH_ROUTES', 'choose either ip or interface, not both')
+            )
         return self
 
 

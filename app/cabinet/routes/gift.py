@@ -19,6 +19,7 @@ from app.database.models import (
     GuestPurchaseStatus,
     User,
 )
+from app.localization.texts import get_texts
 from app.services.gift_claim_service import (
     GiftClaimAlreadyOwnedError,
     GiftClaimNotActivatableError,
@@ -184,22 +185,26 @@ async def create_gift_purchase(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a gift subscription purchase from the cabinet."""
+    texts = get_texts(user.language)
     if not await is_gift_enabled(db):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Gift feature is not enabled',
+            detail=texts.t('CABINET_GIFT_FEATURE_DISABLED', 'Gift feature is not enabled'),
         )
 
     # Rate limit: 5 gift purchases per 60 seconds per user
     is_limited = await RateLimitCache.is_rate_limited(user.id, 'gift_purchase', limit=5, window=60)
     if is_limited:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=texts.t('CABINET_GIFT_TOO_MANY_REQUESTS', 'Too many requests'),
+        )
 
     # Check if user has purchase restrictions
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Purchases are restricted for this account',
+            detail=texts.t('CABINET_GIFT_PURCHASES_RESTRICTED', 'Purchases are restricted for this account'),
         )
 
     # Recipient is optional — when omitted, buyer gets a code to share manually
@@ -210,12 +215,12 @@ async def create_gift_purchase(
         if body.recipient_type == 'email' and not _EMAIL_RE.match(body.recipient_value):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid email format',
+                detail=texts.t('CABINET_GIFT_INVALID_EMAIL', 'Invalid email format'),
             )
         if body.recipient_type == 'telegram' and not _TELEGRAM_RE.match(body.recipient_value):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid Telegram username format',
+                detail=texts.t('CABINET_GIFT_INVALID_TELEGRAM', 'Invalid Telegram username format'),
             )
 
         # Prevent self-gift
@@ -224,13 +229,13 @@ async def create_gift_purchase(
             if user.username and user.username.lower() == normalized_recipient:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Cannot gift to yourself',
+                    detail=texts.t('CABINET_GIFT_CANNOT_SELF_GIFT', 'Cannot gift to yourself'),
                 )
         elif body.recipient_type == 'email':
             if user.email and user.email.lower() == body.recipient_value.lower():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Cannot gift to yourself',
+                    detail=texts.t('CABINET_GIFT_CANNOT_SELF_GIFT', 'Cannot gift to yourself'),
                 )
 
     # Pre-check: verify the Telegram username is known — DB first, then Bot API —
@@ -274,17 +279,17 @@ async def create_gift_purchase(
     except GiftFeatureDisabledError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Gift feature is not enabled',
+            detail=texts.t('CABINET_GIFT_FEATURE_DISABLED', 'Gift feature is not enabled'),
         ) from exc
     except GiftTariffUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found or inactive',
+            detail=texts.t('CABINET_GIFT_TARIFF_UNAVAILABLE', 'Tariff not found or inactive'),
         ) from exc
     except GiftPeriodUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Price is not configured for this period',
+            detail=texts.t('CABINET_GIFT_PERIOD_UNAVAILABLE', 'Price is not configured for this period'),
         ) from exc
 
     # Gateway mode: create payment via external provider
@@ -292,7 +297,7 @@ async def create_gift_purchase(
         if not body.payment_method:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='payment_method is required for gateway mode',
+                detail=texts.t('CABINET_GIFT_PAYMENT_METHOD_REQUIRED', 'payment_method is required for gateway mode'),
             )
 
         # Lock user for pricing before calculating quote to prevent concurrent promo offer reuse
@@ -300,7 +305,7 @@ async def create_gift_purchase(
         if not locked_user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='User not found',
+                detail=texts.t('CABINET_GIFT_USER_NOT_FOUND', 'User not found'),
             )
 
         try:
@@ -313,17 +318,17 @@ async def create_gift_purchase(
         except GiftFeatureDisabledError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Gift feature is not enabled',
+                detail=texts.t('CABINET_GIFT_FEATURE_DISABLED', 'Gift feature is not enabled'),
             ) from exc
         except GiftTariffUnavailableError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Tariff not found or inactive',
+                detail=texts.t('CABINET_GIFT_TARIFF_UNAVAILABLE', 'Tariff not found or inactive'),
             ) from exc
         except GiftPeriodUnavailableError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Price is not configured for this period',
+                detail=texts.t('CABINET_GIFT_PERIOD_UNAVAILABLE', 'Price is not configured for this period'),
             ) from exc
 
         if locked_user.email:
@@ -399,7 +404,9 @@ async def create_gift_purchase(
                 db=payment_db,  # type: ignore[arg-type]
                 amount_kopeks=quote.final_price_kopeks,
                 payment_method=body.payment_method,
-                description=f'Gift: {quote.tariff_name} ({body.period_days}d)',
+                description=texts.t(
+                    'CABINET_GIFT_PAYMENT_DESCRIPTION', 'Gift: {tariff_name} ({period_days}d)'
+                ).format(tariff_name=quote.tariff_name, period_days=body.period_days),
                 purchase_token=purchase.token,
                 return_url=return_url,
             )
@@ -414,7 +421,10 @@ async def create_gift_purchase(
             await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail='Payment provider is unavailable, please try again later',
+                detail=texts.t(
+                    'CABINET_GIFT_PROVIDER_UNAVAILABLE',
+                    'Payment provider is unavailable, please try again later',
+                ),
             )
 
         payment_url = payment_result.get('payment_url')
@@ -427,7 +437,10 @@ async def create_gift_purchase(
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail='Payment provider returned an invalid response',
+                detail=texts.t(
+                    'CABINET_GIFT_PROVIDER_INVALID_RESPONSE',
+                    'Payment provider returned an invalid response',
+                ),
             )
 
         await db.commit()
@@ -465,25 +478,40 @@ async def create_gift_purchase(
             recipient=recipient,
         )
     except GiftFeatureDisabledError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Gift feature is not enabled') from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_GIFT_FEATURE_DISABLED', 'Gift feature is not enabled'),
+        ) from exc
     except GiftPurchaseRestrictedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail='Purchases are restricted for this account'
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=texts.t('CABINET_GIFT_PURCHASES_RESTRICTED', 'Purchases are restricted for this account'),
         ) from exc
     except GiftTariffUnavailableError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Tariff not found or inactive') from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=texts.t('CABINET_GIFT_TARIFF_UNAVAILABLE', 'Tariff not found or inactive'),
+        ) from exc
     except GiftPeriodUnavailableError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail='Price is not configured for this period'
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_GIFT_PERIOD_UNAVAILABLE', 'Price is not configured for this period'),
         ) from exc
     except GiftInsufficientBalanceError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Insufficient balance') from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_GIFT_INSUFFICIENT_BALANCE', 'Insufficient balance'),
+        ) from exc
     except GiftPriceChangedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail='Price has changed, please try again'
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_GIFT_PRICE_CHANGED', 'Price has changed, please try again'),
         ) from exc
     except GiftIdempotencyConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Idempotency conflict') from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=texts.t('CABINET_GIFT_IDEMPOTENCY_CONFLICT', 'Idempotency conflict'),
+        ) from exc
 
     # Persist warning on purchase record if unresolvable telegram recipient
     if recipient_warning:
@@ -569,13 +597,14 @@ async def get_gift_purchase_status(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get the status of a cabinet gift purchase."""
+    texts = get_texts(user.language)
     clean_token = token.strip()
     if clean_token.upper().startswith(('GIFT_', 'GIFT-')):
         clean_token = clean_token[5:]
     if not clean_token:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Purchase not found',
+            detail=texts.t('CABINET_GIFT_PURCHASE_NOT_FOUND', 'Purchase not found'),
         )
     if len(clean_token) >= 64:
         token_filter = GuestPurchase.token == clean_token
@@ -587,14 +616,14 @@ async def get_gift_purchase_status(
     if purchase is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Purchase not found',
+            detail=texts.t('CABINET_GIFT_PURCHASE_NOT_FOUND', 'Purchase not found'),
         )
 
     # Uniform 404 prevents token existence oracle
     if purchase.buyer_user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Purchase not found',
+            detail=texts.t('CABINET_GIFT_PURCHASE_NOT_FOUND', 'Purchase not found'),
         )
 
     tariff_name = purchase.tariff.name if purchase.tariff else None
@@ -743,10 +772,14 @@ async def activate_gift_by_code(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Activate a gift subscription by its code (token)."""
+    texts = get_texts(user.language)
     # Bug 2 fix: rate limit activation attempts to prevent brute-force token enumeration
     is_limited = await RateLimitCache.is_rate_limited(user.id, 'gift_activate', limit=10, window=60)
     if is_limited:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=texts.t('CABINET_GIFT_TOO_MANY_REQUESTS', 'Too many requests'),
+        )
 
     raw_code = body.code.strip()
     try:
@@ -759,23 +792,27 @@ async def activate_gift_by_code(
     except GiftClaimNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST if len(raw_code) < 8 else status.HTTP_404_NOT_FOUND,
-            detail='Code too short' if len(raw_code) < 8 else 'Gift not found',
+            detail=(
+                texts.t('CABINET_GIFT_CODE_TOO_SHORT', 'Code too short')
+                if len(raw_code) < 8
+                else texts.t('CABINET_GIFT_NOT_FOUND', 'Gift not found')
+            ),
         ) from exc
     except GiftClaimAlreadyOwnedError as exc:
         # Bug 1 fix: do not disclose that a token belongs to another account
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Gift not found',
+            detail=texts.t('CABINET_GIFT_NOT_FOUND', 'Gift not found'),
         ) from exc
     except GiftClaimSelfActivationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Cannot activate your own gift',
+            detail=texts.t('CABINET_GIFT_CANNOT_ACTIVATE_OWN', 'Cannot activate your own gift'),
         ) from exc
     except GiftClaimNotActivatableError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This gift cannot be activated',
+            detail=texts.t('CABINET_GIFT_NOT_ACTIVATABLE', 'This gift cannot be activated'),
         ) from exc
     except GuestPurchaseError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc

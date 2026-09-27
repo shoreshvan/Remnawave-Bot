@@ -17,6 +17,7 @@ from app.database.crud.subscription import (
     get_subscription_by_id_for_user,
 )
 from app.database.models import SubscriptionStatus, User
+from app.localization.texts import get_texts
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 
@@ -94,11 +95,12 @@ async def get_subscription_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> SubscriptionListItem:
     """Get specific subscription details with ownership check."""
+    texts = get_texts(user.language)
     subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Subscription not found',
+            detail=texts.t('CABINET_MULTI_TARIFF_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
         )
     return _subscription_to_list_item(subscription)
 
@@ -110,11 +112,12 @@ async def delete_subscription(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict:
     """Delete an expired/disabled subscription. Active subscriptions cannot be deleted."""
+    texts = get_texts(user.language)
     subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Subscription not found',
+            detail=texts.t('CABINET_MULTI_TARIFF_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
         )
 
     # Only expired/disabled subscriptions can be deleted
@@ -125,7 +128,10 @@ async def delete_subscription(
     if getattr(subscription, 'actual_status', subscription.status) not in deletable_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Only expired or disabled subscriptions can be deleted',
+            detail=texts.t(
+                'CABINET_MULTI_TARIFF_ONLY_EXPIRED_DELETABLE',
+                'Only expired or disabled subscriptions can be deleted',
+            ),
         )
 
     from app.services.grace_access_runtime import GraceAccessDeletionBlocked
@@ -136,7 +142,10 @@ async def delete_subscription(
     except GraceAccessDeletionBlocked as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
+            detail=texts.t(
+                'CABINET_MULTI_TARIFF_GRACE_ACCESS_ACTIVE',
+                'Temporary renewal access is still active. Finish or restore grace access before deletion.',
+            ),
         ) from error
 
-    return {'message': 'Subscription deleted'}
+    return {'message': texts.t('CABINET_MULTI_TARIFF_SUBSCRIPTION_DELETED', 'Subscription deleted')}

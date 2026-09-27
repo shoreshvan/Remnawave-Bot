@@ -4,12 +4,17 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.localization.texts import get_texts
+
 
 class PeriodPrice(BaseModel):
     """Price for a specific period."""
 
-    days: int = Field(..., ge=1, description='Period in days')
-    price_kopeks: int = Field(..., ge=0, description='Price in kopeks')
+    days: int = Field(..., ge=1, description=get_texts().t('CABINET_TARIFF_PERIOD_DAYS_DESCRIPTION', 'Period in days'))
+    price_kopeks: int = Field(
+        ..., ge=0,
+        description=get_texts().t('CABINET_TARIFF_PERIOD_PRICE_DESCRIPTION', 'Price in kopeks'),
+    )
     price_rubles: float | None = None
 
     def __init__(self, **data):
@@ -21,7 +26,10 @@ class PeriodPrice(BaseModel):
 class ServerTrafficLimit(BaseModel):
     """Traffic limit for a specific server."""
 
-    traffic_limit_gb: int = Field(0, ge=0, description='0 = use default tariff limit')
+    traffic_limit_gb: int = Field(
+        0, ge=0,
+        description=get_texts().t('CABINET_TARIFF_SERVER_TRAFFIC_DEFAULT_DESCRIPTION', '0 = use default tariff limit'),
+    )
 
 
 class ServerInfo(BaseModel):
@@ -147,15 +155,22 @@ class TariffCreateRequest(BaseModel):
     traffic_topup_enabled: bool = False
     traffic_topup_packages: dict[str, int] = Field(default_factory=dict)
     max_topup_traffic_gb: int = Field(0, ge=0)
-    traffic_limit_gb: int = Field(0, ge=0, description='0 = unlimited')
+    traffic_limit_gb: int = Field(
+        0, ge=0,
+        description=get_texts().t('CABINET_TARIFF_TRAFFIC_UNLIMITED_DESCRIPTION', '0 = unlimited'),
+    )
     device_limit: int = Field(1, ge=1)
     device_price_kopeks: int | None = Field(None, ge=0)
     max_device_limit: int | None = Field(None, ge=1)
     tier_level: int = Field(1, ge=1, le=10)
     period_prices: list[PeriodPrice] = Field(default_factory=list)
-    allowed_squads: list[str] = Field(default_factory=list, description='Server UUIDs')
+    allowed_squads: list[str] = Field(
+        default_factory=list,
+        description=get_texts().t('CABINET_TARIFF_ALLOWED_SQUADS_DESCRIPTION', 'Server UUIDs'),
+    )
     server_traffic_limits: dict[str, ServerTrafficLimit] = Field(
-        default_factory=dict, description='Per-server traffic limits'
+        default_factory=dict,
+        description=get_texts().t('CABINET_TARIFF_SERVER_LIMITS_DESCRIPTION', 'Per-server traffic limits'),
     )
     promo_group_ids: list[int] = Field(default_factory=list)
     # Произвольное количество дней
@@ -226,7 +241,10 @@ class TariffUpdateRequest(BaseModel):
 class TariffSortOrderRequest(BaseModel):
     """Request to reorder tariffs."""
 
-    tariff_ids: list[int] = Field(..., min_length=1, description='Ordered list of tariff IDs')
+    tariff_ids: list[int] = Field(
+        ..., min_length=1,
+        description=get_texts().t('CABINET_TARIFF_SORT_IDS_DESCRIPTION', 'Ordered list of tariff IDs'),
+    )
 
 
 class TariffToggleResponse(BaseModel):

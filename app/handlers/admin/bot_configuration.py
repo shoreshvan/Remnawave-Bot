@@ -2100,9 +2100,9 @@ async def test_remnawave_connection(
     if status == 'connected':
         message = texts.t('BOT_CONFIG_REMNA_CONNECTION_OK', '✅ Подключение успешно')
     elif status == 'not_configured':
-        message = f'⚠️ {result.get("message", "RemnaWave API не настроен")}'
+        message = f'⚠️ {result.get("message", texts.t("BOT_CONFIG_REMNA_NOT_CONFIGURED", "RemnaWave API не настроен"))}'
     else:
-        base_message = result.get('message', 'Ошибка подключения')
+        base_message = result.get('message', texts.t('BOT_CONFIG_REMNA_CONNECTION_ERROR', 'Ошибка подключения'))
         status_code = result.get('status_code')
         if status_code:
             message = f'❌ {base_message} (HTTP {status_code})'
@@ -2183,7 +2183,10 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=f'Тестовый платеж (админ): {description}',
+            description=texts.t(
+                'BOT_CONFIG_PAY_YOOKASSA_TEST_DESC',
+                'Тестовый платеж (админ): {description}',
+            ).format(description=description),
             metadata={
                 'user_telegram_id': str(db_user.telegram_id),
                 'purpose': 'admin_test_payment',
@@ -2237,7 +2240,7 @@ async def test_payment_provider(
             payment_url = await tribute_service.create_payment_link(
                 user_id=db_user.telegram_id,
                 amount_kopeks=10 * 100,
-                description='Тестовый платеж Tribute (админ)',
+                description=texts.t('BOT_CONFIG_PAY_TRIBUTE_TEST_DESC', 'Тестовый платеж Tribute (админ)'),
             )
         except Exception:
             payment_url = None
@@ -2287,7 +2290,10 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=f'Тестовый платеж {mulenpay_name} (админ)',
+            description=texts.t(
+                'BOT_CONFIG_PAY_MULENPAY_TEST_DESC',
+                'Тестовый платеж {name} (админ)',
+            ).format(name=mulenpay_name),
             language=language,
         )
 
@@ -2348,7 +2354,7 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description='Тестовый платеж PayPalych (админ)',
+            description=texts.t('BOT_CONFIG_PAY_PAL24_TEST_DESC', 'Тестовый платеж PayPalych (админ)'),
             language=language or 'ru',
         )
 
@@ -2452,7 +2458,7 @@ async def test_payment_provider(
         try:
             invoice_link = await payment_service.create_stars_invoice(
                 amount_kopeks=amount_kopeks,
-                description='Тестовый платеж Telegram Stars (админ)',
+                description=texts.t('BOT_CONFIG_PAY_STARS_TEST_DESC', 'Тестовый платеж Telegram Stars (админ)'),
                 payload=payload,
             )
         except Exception:
@@ -2513,7 +2519,10 @@ async def test_payment_provider(
             user_id=db_user.id,
             amount_usd=amount_usd,
             asset=settings.CRYPTOBOT_DEFAULT_ASSET,
-            description=f'Тестовый платеж CryptoBot {amount_rubles:.0f} ₽ ({amount_usd:.2f} USD)',
+            description=texts.t(
+                'BOT_CONFIG_PAY_CRYPTOBOT_TEST_DESC',
+                'Тестовый платеж CryptoBot {rubles:.0f} ₽ ({usd:.2f} USD)',
+            ).format(rubles=amount_rubles, usd=amount_usd),
             payload=f'admin_cryptobot_test_{db_user.id}_{int(time.time())}',
         )
 
@@ -2580,7 +2589,7 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description='Тестовый платеж Freekassa (админ)',
+            description=texts.t('BOT_CONFIG_PAY_FREEKASSA_TEST_DESC', 'Тестовый платеж Freekassa (админ)'),
             email=getattr(db_user, 'email', None),
             language=db_user.language or settings.DEFAULT_LANGUAGE,
         )
@@ -2627,7 +2636,7 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description='Тестовый платеж Kassa AI (админ)',
+            description=texts.t('BOT_CONFIG_PAY_KASSA_AI_TEST_DESC', 'Тестовый платеж Kassa AI (админ)'),
             email=getattr(db_user, 'email', None),
             language=db_user.language or settings.DEFAULT_LANGUAGE,
         )
@@ -2676,7 +2685,7 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description='Тестовый платеж RioPay (админ)',
+            description=texts.t('BOT_CONFIG_PAY_RIOPAY_TEST_DESC', 'Тестовый платеж RioPay (админ)'),
             email=getattr(db_user, 'email', None),
             language=db_user.language or settings.DEFAULT_LANGUAGE,
         )

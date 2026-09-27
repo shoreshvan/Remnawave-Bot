@@ -17,6 +17,8 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.localization.texts import get_texts
+
 
 # Pre-compiled regex for hex color validation (reused across validators)
 _HEX_COLOR_RE: re.Pattern[str] = re.compile(r'^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
@@ -87,7 +89,7 @@ def _slugify(title: str) -> str:
 def _validate_hex_color(v: str) -> str:
     """Validate a hex color string. Raises ValueError on invalid input."""
     if not _HEX_COLOR_RE.match(v):
-        msg = 'category_color must be a valid hex color (e.g. #00e5a0)'
+        msg = get_texts().t('NEWS_INVALID_HEX_COLOR', 'category_color must be a valid hex color (e.g. #00e5a0)')
         raise ValueError(msg)
     return v
 
@@ -101,15 +103,18 @@ def _validate_safe_url(v: str) -> str:
     try:
         parsed = urlparse(v)
     except Exception:
-        msg = 'Invalid URL format'
+        msg = get_texts().t('NEWS_INVALID_URL_FORMAT', 'Invalid URL format')
         raise ValueError(msg)
 
     if parsed.scheme not in _SAFE_URL_SCHEMES:
-        msg = f'URL scheme must be http or https, got: {parsed.scheme!r}'
+        msg = get_texts().t(
+            'NEWS_URL_SCHEME_INVALID',
+            'URL scheme must be http or https, got: {scheme}',
+        ).format(scheme=repr(parsed.scheme))
         raise ValueError(msg)
 
     if not parsed.netloc:
-        msg = 'URL must have a valid host'
+        msg = get_texts().t('NEWS_URL_NO_HOST', 'URL must have a valid host')
         raise ValueError(msg)
 
     return v
