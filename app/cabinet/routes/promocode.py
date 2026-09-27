@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.promocode_service import PromoCodeService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
@@ -20,8 +21,18 @@ router = APIRouter(prefix='/promocode', tags=['Cabinet Promocode'])
 class PromocodeActivateRequest(BaseModel):
     """Request to activate a promo code."""
 
-    code: str = Field(..., min_length=1, max_length=50, description='Promo code to activate')
-    subscription_id: int | None = Field(None, description='Subscription ID for multi-tariff promo codes')
+    code: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description=get_texts().t('CABINET_PROMOCODE_FIELD_CODE', 'Promo code to activate'),
+    )
+    subscription_id: int | None = Field(
+        None,
+        description=get_texts().t(
+            'CABINET_PROMOCODE_FIELD_SUBSCRIPTION_ID', 'Subscription ID for multi-tariff promo codes'
+        ),
+    )
 
 
 class PromocodeActivateResponse(BaseModel):
@@ -50,6 +61,7 @@ async def activate_promocode(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Activate a promo code for the current user."""
+    texts = get_texts(user.language)
     promocode_service = PromoCodeService()
 
     result = await promocode_service.activate_promocode(
@@ -92,7 +104,7 @@ async def activate_promocode(
 
         return PromocodeActivateResponse(
             success=True,
-            message='Promo code activated successfully',
+            message=texts.t('CABINET_PROMOCODE_ACTIVATED', 'Promo code activated successfully'),
             balance_before=balance_before_rubles,
             balance_after=balance_after_rubles,
             bonus_description=result.get('description'),
@@ -137,6 +149,7 @@ async def deactivate_discount_promocode(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromocodeDeactivateResponse:
     """Deactivate the currently active discount promo code for the current user."""
+    texts = get_texts(user.language)
     promocode_service = PromoCodeService()
 
     result = await promocode_service.deactivate_discount_promocode(
@@ -148,7 +161,7 @@ async def deactivate_discount_promocode(
     if result['success']:
         return PromocodeDeactivateResponse(
             success=True,
-            message='Discount promo code deactivated successfully',
+            message=texts.t('CABINET_PROMOCODE_DISCOUNT_DEACTIVATED', 'Discount promo code deactivated successfully'),
             deactivated_code=result.get('deactivated_code'),
             discount_percent=result.get('discount_percent', 0),
         )

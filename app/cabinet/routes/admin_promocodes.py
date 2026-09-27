@@ -30,6 +30,7 @@ from app.database.crud.promocode import (
 )
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import PromoCode, PromoCodeType, PromoCodeUse, PromoGroup, User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 
@@ -378,9 +379,13 @@ async def get_promocode(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoCodeDetailResponse:
     """Get promocode details with usage statistics."""
+    texts = get_texts(admin.language)
     promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo code not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            texts.t('CABINET_ADMIN_PROMOCODES_CODE_NOT_FOUND', 'Promo code not found'),
+        )
 
     stats = await get_promocode_statistics(db, promocode_id)
     base = await _serialize_promocode(db, promocode)
@@ -401,6 +406,7 @@ async def create_promocode_endpoint(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoCodeResponse:
     """Create a new promocode."""
+    texts = get_texts(admin.language)
     _validate_create_payload(payload)
 
     normalized_code = payload.code.strip().upper()
@@ -409,7 +415,10 @@ async def create_promocode_endpoint(
 
     existing = await get_promocode_by_code(db, normalized_code)
     if existing:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Promo code with this code already exists')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            texts.t('CABINET_ADMIN_PROMOCODES_CODE_EXISTS', 'Promo code with this code already exists'),
+        )
 
     # 0 means unlimited — convert to large number for is_valid check (current_uses < max_uses)
     effective_max_uses = 999999 if payload.max_uses == 0 else payload.max_uses
@@ -454,9 +463,13 @@ async def update_promocode_endpoint(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoCodeResponse:
     """Update an existing promocode."""
+    texts = get_texts(admin.language)
     promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo code not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            texts.t('CABINET_ADMIN_PROMOCODES_CODE_NOT_FOUND', 'Promo code not found'),
+        )
 
     _validate_update_payload(payload, promocode)
 
@@ -467,7 +480,10 @@ async def update_promocode_endpoint(
         if normalized_code != promocode.code:
             existing = await get_promocode_by_code(db, normalized_code)
             if existing and existing.id != promocode_id:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Promo code with this code already exists')
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    texts.t('CABINET_ADMIN_PROMOCODES_CODE_EXISTS', 'Promo code with this code already exists'),
+                )
         updates['code'] = normalized_code
 
     if payload.type is not None:
@@ -520,13 +536,20 @@ async def delete_promocode_endpoint(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> Response:
     """Delete a promocode."""
+    texts = get_texts(admin.language)
     promocode = await get_promocode_by_id(db, promocode_id)
     if not promocode:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo code not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            texts.t('CABINET_ADMIN_PROMOCODES_CODE_NOT_FOUND', 'Promo code not found'),
+        )
 
     success = await delete_promocode(db, promocode)
     if not success:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Failed to delete promo code')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            texts.t('CABINET_ADMIN_PROMOCODES_DELETE_FAILED', 'Failed to delete promo code'),
+        )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -548,15 +571,22 @@ async def admin_deactivate_discount_promocode(
     """Admin: deactivate a user's active discount (promo code or promo offer)."""
     from app.database.crud.user import get_user_by_id as get_user
 
+    texts = get_texts(admin.language)
     target_user = await get_user(db, user_id)
     if not target_user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            texts.t('CABINET_ADMIN_PROMOCODES_USER_NOT_FOUND', 'User not found'),
+        )
 
     current_discount = getattr(target_user, 'promo_offer_discount_percent', 0) or 0
     source = getattr(target_user, 'promo_offer_discount_source', None)
 
     if current_discount <= 0:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User has no active discount')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            texts.t('CABINET_ADMIN_PROMOCODES_NO_ACTIVE_DISCOUNT', 'User has no active discount'),
+        )
 
     # If source is a promo code, use the service to properly rollback usage
     if source and source.startswith('promocode:'):
@@ -572,21 +602,34 @@ async def admin_deactivate_discount_promocode(
         if result['success']:
             return DeactivateDiscountResponse(
                 success=True,
-                message=f'Discount promo code deactivated for user {user_id}',
+                message=texts.t(
+                    'CABINET_ADMIN_PROMOCODES_DISCOUNT_DEACTIVATED',
+                    'Discount promo code deactivated for user {user_id}',
+                ).format(user_id=user_id),
                 deactivated_code=result.get('deactivated_code'),
                 discount_percent=result.get('discount_percent', 0),
                 user_id=user_id,
             )
 
         error_messages = {
-            'user_not_found': 'User not found',
-            'no_active_discount_promocode': 'User has no active discount from a promo code',
-            'discount_already_expired': 'Discount has already expired (cleaned up)',
-            'server_error': 'Server error occurred',
+            'user_not_found': texts.t('CABINET_ADMIN_PROMOCODES_USER_NOT_FOUND', 'User not found'),
+            'no_active_discount_promocode': texts.t(
+                'CABINET_ADMIN_PROMOCODES_NO_ACTIVE_DISCOUNT_PROMOCODE',
+                'User has no active discount from a promo code',
+            ),
+            'discount_already_expired': texts.t(
+                'CABINET_ADMIN_PROMOCODES_DISCOUNT_ALREADY_EXPIRED', 'Discount has already expired (cleaned up)'
+            ),
+            'server_error': texts.t('CABINET_ADMIN_PROMOCODES_SERVER_ERROR', 'Server error occurred'),
         }
 
         error_code = result.get('error', 'server_error')
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, error_messages.get(error_code, 'Failed to deactivate'))
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            error_messages.get(
+                error_code, texts.t('CABINET_ADMIN_PROMOCODES_FAILED_TO_DEACTIVATE', 'Failed to deactivate')
+            ),
+        )
 
     # For non-promocode offers (admin offers, etc.) — just clear the fields
     old_percent = target_user.promo_offer_discount_percent
@@ -598,7 +641,10 @@ async def admin_deactivate_discount_promocode(
 
     return DeactivateDiscountResponse(
         success=True,
-        message=f'Promo offer deactivated for user {user_id}',
+        message=texts.t(
+            'CABINET_ADMIN_PROMOCODES_OFFER_DEACTIVATED',
+            'Promo offer deactivated for user {user_id}',
+        ).format(user_id=user_id),
         deactivated_code=None,
         discount_percent=old_percent,
         user_id=user_id,
@@ -640,9 +686,13 @@ async def get_promo_group(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> PromoGroupResponse:
     """Get promo group details."""
+    texts = get_texts(admin.language)
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            texts.t('CABINET_ADMIN_PROMO_GROUPS_NOT_FOUND', 'Promo group not found'),
+        )
 
     members_count = await count_promo_group_members(db, group_id)
     return _serialize_promo_group(group, members_count=members_count)
@@ -657,6 +707,7 @@ async def create_promo_group_endpoint(
     """Create a new promo group."""
     from sqlalchemy.exc import IntegrityError
 
+    texts = get_texts(admin.language)
     try:
         group = await create_promo_group(
             db,
@@ -673,7 +724,7 @@ async def create_promo_group_endpoint(
         await db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            'Promo group with this name already exists',
+            texts.t('CABINET_ADMIN_PROMO_GROUPS_NAME_EXISTS', 'Promo group with this name already exists'),
         )
 
     return _serialize_promo_group(group, members_count=0)
@@ -689,9 +740,13 @@ async def update_promo_group_endpoint(
     """Update a promo group."""
     from sqlalchemy.exc import IntegrityError
 
+    texts = get_texts(admin.language)
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            texts.t('CABINET_ADMIN_PROMO_GROUPS_NOT_FOUND', 'Promo group not found'),
+        )
 
     try:
         group = await update_promo_group(
@@ -710,7 +765,7 @@ async def update_promo_group_endpoint(
         await db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            'Promo group with this name already exists',
+            texts.t('CABINET_ADMIN_PROMO_GROUPS_NAME_EXISTS', 'Promo group with this name already exists'),
         )
 
     members_count = await count_promo_group_members(db, group_id)
@@ -724,12 +779,19 @@ async def delete_promo_group_endpoint(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> Response:
     """Delete a promo group."""
+    texts = get_texts(admin.language)
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Promo group not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            texts.t('CABINET_ADMIN_PROMO_GROUPS_NOT_FOUND', 'Promo group not found'),
+        )
 
     success = await delete_promo_group(db, group)
     if not success:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Cannot delete default promo group')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            texts.t('CABINET_ADMIN_PROMO_GROUPS_DELETE_DEFAULT', 'Cannot delete default promo group'),
+        )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

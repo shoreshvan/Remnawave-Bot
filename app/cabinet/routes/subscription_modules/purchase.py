@@ -35,6 +35,7 @@ from app.database.crud.transaction import create_transaction
 from app.database.crud.user import add_user_balance, get_user_by_id, subtract_user_balance
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, Subscription, Tariff, Transaction, TransactionType, User
+from app.localization.texts import get_texts
 from app.services.notification_delivery_service import (
     NotificationType,
     notification_delivery_service,
@@ -225,7 +226,11 @@ async def _build_tariff_response(
 
             periods.append(period_data)
 
-    traffic_label = '♾️ Безлимит' if tariff.traffic_limit_gb == 0 else f'{tariff.traffic_limit_gb} ГБ'
+    traffic_label = (
+        get_texts().t('CABINET_PURCHASE_TRAFFIC_UNLIMITED_LABEL', '♾️ Безлимит')
+        if tariff.traffic_limit_gb == 0
+        else f'{tariff.traffic_limit_gb} ГБ'
+    )
 
     # Apply discount to daily price if applicable (group + promo-offer)
     daily_price = getattr(tariff, 'daily_price_kopeks', 0)
@@ -435,7 +440,7 @@ async def get_purchase_options(
         logger.error('Failed to build purchase options for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load purchase options',
+            detail=get_texts().t('CABINET_PURCHASE_OPTIONS_LOAD_FAILED', 'Failed to load purchase options'),
         )
 
 
@@ -450,7 +455,10 @@ async def preview_purchase(
     if settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
+            detail=get_texts().t(
+                'CABINET_PURCHASE_ENDPOINT_TARIFFS_MODE',
+                'This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
+            ),
         )
 
     try:
@@ -480,7 +488,7 @@ async def preview_purchase(
         logger.error('Failed to calculate purchase preview for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to calculate price',
+            detail=get_texts().t('CABINET_PURCHASE_PRICE_CALC_FAILED', 'Failed to calculate price'),
         )
 
 
@@ -494,14 +502,19 @@ async def submit_purchase(
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Subscription purchases are restricted for this account',
+            detail=get_texts().t(
+                'CABINET_PURCHASE_RESTRICTED', 'Subscription purchases are restricted for this account'
+            ),
         )
 
     # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
     if settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
+            detail=get_texts().t(
+                'CABINET_PURCHASE_ENDPOINT_TARIFFS_MODE',
+                'This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
+            ),
         )
 
     try:
@@ -640,7 +653,7 @@ async def submit_purchase(
         logger.error('Failed to submit purchase for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to process purchase',
+            detail=get_texts().t('CABINET_PURCHASE_PROCESS_FAILED', 'Failed to process purchase'),
         )
 
 
@@ -657,7 +670,9 @@ async def purchase_tariff(
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Subscription purchases are restricted for this account',
+            detail=get_texts().t(
+                'CABINET_PURCHASE_RESTRICTED', 'Subscription purchases are restricted for this account'
+            ),
         )
 
     try:
@@ -665,7 +680,7 @@ async def purchase_tariff(
         if not settings.is_tariffs_mode():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Tariffs mode is not enabled',
+                detail=get_texts().t('CABINET_PURCHASE_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'),
             )
 
         # Get tariff
@@ -673,7 +688,7 @@ async def purchase_tariff(
         if not tariff or not tariff.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Tariff not found or inactive',
+                detail=get_texts().t('CABINET_PURCHASE_TARIFF_NOT_FOUND', 'Tariff not found or inactive'),
             )
 
         # Lock user BEFORE price computation to prevent TOCTOU on promo offer
@@ -687,7 +702,9 @@ async def purchase_tariff(
         if not tariff.is_available_for_promo_group(promo_group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail='This tariff is not available for your promo group',
+                detail=get_texts().t(
+                    'CABINET_PURCHASE_TARIFF_NOT_FOR_PROMO_GROUP', 'This tariff is not available for your promo group'
+                ),
             )
 
         # Handle daily tariffs specially
@@ -714,7 +731,9 @@ async def purchase_tariff(
             if period_days not in available_periods and not custom_days_allowed:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Selected period is not available for this tariff',
+                    detail=get_texts().t(
+                        'CABINET_PURCHASE_PERIOD_UNAVAILABLE', 'Selected period is not available for this tariff'
+                    ),
                 )
 
         # Determine traffic limit (custom traffic support)
@@ -728,10 +747,12 @@ async def purchase_tariff(
             if request.traffic_gb < tariff.min_traffic_gb or request.traffic_gb > tariff.max_traffic_gb:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f'Traffic must be between {tariff.min_traffic_gb} and '
-                        f'{tariff.max_traffic_gb} GB for this tariff'
-                    ),
+                    detail=get_texts()
+                    .t(
+                        'CABINET_PURCHASE_TRAFFIC_OUT_OF_RANGE',
+                        'Traffic must be between {min_traffic} and {max_traffic} GB for this tariff',
+                    )
+                    .format(min_traffic=tariff.min_traffic_gb, max_traffic=tariff.max_traffic_gb),
                 )
             custom_traffic_gb = request.traffic_gb
             traffic_limit_gb = request.traffic_gb
@@ -807,7 +828,9 @@ async def purchase_tariff(
         if price_kopeks <= 0 and result.original_total <= 0 and not is_daily_tariff:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid tariff period or pricing configuration',
+                detail=get_texts().t(
+                    'CABINET_PURCHASE_INVALID_PRICING', 'Invalid tariff period or pricing configuration'
+                ),
             )
 
         # Check balance
@@ -864,7 +887,9 @@ async def purchase_tariff(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_funds',
-                    'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
+                    'message': get_texts()
+                    .t('CABINET_PURCHASE_INSUFFICIENT_FUNDS', 'Недостаточно средств. Не хватает {amount}')
+                    .format(amount=settings.format_price(missing, round_kopeks=False)),
                     'missing_amount': missing,
                     'cart_saved': True,
                     'cart_mode': cart_data['cart_mode'],
@@ -903,7 +928,7 @@ async def purchase_tariff(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail='Failed to charge balance',
+                detail=get_texts().t('CABINET_PURCHASE_CHARGE_FAILED', 'Failed to charge balance'),
             )
 
         # Create transaction
@@ -1062,7 +1087,10 @@ async def purchase_tariff(
                     await _refund_charge(f"Возврат: тариф '{refund_tariff_name}' уже активен")
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
-                        detail='You already have an active subscription for this tariff',
+                        detail=get_texts().t(
+                            'CABINET_PURCHASE_TARIFF_ALREADY_ACTIVE',
+                            'You already have an active subscription for this tariff',
+                        ),
                     )
         except HTTPException:
             # 409-ветка выше уже вернула средства; повторная компенсация здесь
@@ -1082,7 +1110,7 @@ async def purchase_tariff(
             await _refund_charge(f"Возврат: ошибка активации тарифа '{refund_tariff_name}'")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='Failed to process tariff purchase',
+                detail=get_texts().t('CABINET_PURCHASE_TARIFF_PROCESS_FAILED', 'Failed to process tariff purchase'),
             )
 
         # Add remaining trial time to paid subscription
@@ -1188,7 +1216,9 @@ async def purchase_tariff(
 
         response: dict[str, Any] = {
             'success': True,
-            'message': f"Тариф '{tariff.name}' успешно активирован",
+            'message': get_texts()
+            .t('CABINET_PURCHASE_TARIFF_ACTIVATED', "Тариф '{name}' успешно активирован")
+            .format(name=tariff.name),
             'subscription': _subscription_to_response(subscription, user=user),
             'tariff_id': tariff.id,
             'tariff_name': tariff.name,
@@ -1282,7 +1312,7 @@ async def purchase_tariff(
         logger.error('Failed to purchase tariff for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to process tariff purchase',
+            detail=get_texts().t('CABINET_PURCHASE_TARIFF_PROCESS_FAILED', 'Failed to process tariff purchase'),
         )
 
 
@@ -1307,7 +1337,10 @@ async def get_trial_info(
             requires_payment=bool(settings.TRIAL_PAYMENT_ENABLED),
             price_kopeks=0,
             price_rubles=0,
-            reason_unavailable='Trial is not available for your account type',
+            reason_unavailable=get_texts().t(
+                'CABINET_TRIAL_UNAVAILABLE_ACCOUNT_TYPE',
+                'Trial is not available for your account type',
+            ),
         )
 
     duration_days = settings.TRIAL_DURATION_DAYS
@@ -1354,7 +1387,10 @@ async def get_trial_info(
             requires_payment=requires_payment,
             price_kopeks=price_kopeks,
             price_rubles=price_kopeks / 100,
-            reason_unavailable='You already have an active subscription',
+            reason_unavailable=get_texts().t(
+                'CABINET_TRIAL_HAVE_ACTIVE_SUBSCRIPTION',
+                'You already have an active subscription',
+            ),
         )
 
     if has_used_trial:
@@ -1366,7 +1402,7 @@ async def get_trial_info(
             requires_payment=requires_payment,
             price_kopeks=price_kopeks,
             price_rubles=price_kopeks / 100,
-            reason_unavailable='Trial already used',
+            reason_unavailable=get_texts().t('CABINET_TRIAL_ALREADY_USED', 'Trial already used'),
         )
 
     return TrialInfoResponse(
@@ -1393,7 +1429,10 @@ async def activate_trial(
     if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Trial is not available for your account type',
+            detail=get_texts().t(
+                'CABINET_TRIAL_UNAVAILABLE_ACCOUNT_TYPE',
+                'Trial is not available for your account type',
+            ),
         )
 
     # Check if user already has an active subscription
@@ -1402,14 +1441,14 @@ async def activate_trial(
     if has_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='You already have an active subscription',
+            detail=get_texts().t('CABINET_TRIAL_HAVE_ACTIVE_SUBSCRIPTION', 'You already have an active subscription'),
         )
 
     # Check if user already used trial
     if user.is_trial_already_used():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Trial already used',
+            detail=get_texts().t('CABINET_TRIAL_ALREADY_USED', 'Trial already used'),
         )
 
     # Check if trial requires payment
@@ -1421,7 +1460,9 @@ async def activate_trial(
         if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Insufficient balance. Need {price_kopeks / 100:.2f} RUB',
+                detail=get_texts()
+                .t('CABINET_TRIAL_INSUFFICIENT_BALANCE', 'Insufficient balance. Need {amount:.2f} RUB')
+                .format(amount=price_kopeks / 100),
             )
         trial_description = 'Активация триальной подписки'
         success = await subtract_user_balance(
@@ -1434,7 +1475,7 @@ async def activate_trial(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail='Failed to charge trial activation fee',
+                detail=get_texts().t('CABINET_TRIAL_CHARGE_FAILED', 'Failed to charge trial activation fee'),
             )
 
         # Persist the request-body CID BEFORE create_transaction. The

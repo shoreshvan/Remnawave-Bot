@@ -13,6 +13,7 @@ from app.database.crud.news_tags import (
     update_tag,
 )
 from app.database.models import User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.news_tags import NewsTagCreate, NewsTagResponse, NewsTagUpdate
@@ -43,9 +44,10 @@ async def create_new_tag(
     try:
         tag = await create_tag(db, name=request.name, color=request.color)
     except IntegrityError:
+        texts = get_texts(admin.language)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Tag already exists',
+            detail=texts.t('ADMIN_NEWS_TAG_ALREADY_EXISTS', 'Tag already exists'),
         )
     return NewsTagResponse.model_validate(tag)
 
@@ -60,16 +62,18 @@ async def update_existing_tag(
     """Update an existing news tag."""
     tag = await get_tag_by_id(db, tag_id)
     if not tag:
+        texts = get_texts(admin.language)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tag not found',
+            detail=texts.t('ADMIN_NEWS_TAG_NOT_FOUND', 'Tag not found'),
         )
     try:
         tag = await update_tag(db, tag, **request.model_dump(exclude_unset=True))
     except IntegrityError:
+        texts = get_texts(admin.language)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Tag name already exists',
+            detail=texts.t('ADMIN_NEWS_TAG_NAME_EXISTS', 'Tag name already exists'),
         )
     return NewsTagResponse.model_validate(tag)
 
@@ -83,8 +87,9 @@ async def remove_tag(
     """Delete a news tag. Articles using it will have tag_id set to NULL."""
     tag = await get_tag_by_id(db, tag_id)
     if not tag:
+        texts = get_texts(admin.language)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tag not found',
+            detail=texts.t('ADMIN_NEWS_TAG_NOT_FOUND', 'Tag not found'),
         )
     await delete_tag(db, tag)

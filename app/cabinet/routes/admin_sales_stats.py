@@ -27,6 +27,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 
@@ -111,13 +112,25 @@ class SalesSummary(BaseModel):
 
 @router.get('/summary', response_model=SalesSummary)
 async def get_sales_summary(
-    days: int | None = Query(default=30, description='Preset period in days (7, 30, 90, 0=all)'),
-    start_date: str | None = Query(default=None, description='Custom start date ISO format'),
-    end_date: str | None = Query(default=None, description='Custom end date ISO format'),
+    days: int | None = Query(
+        default=30,
+        description=get_texts().t(
+            'CABINET_ADMIN_SALES_STATS_PARAM_DAYS', 'Preset period in days (7, 30, 90, 0=all)'
+        ),
+    ),
+    start_date: str | None = Query(
+        default=None,
+        description=get_texts().t('CABINET_ADMIN_SALES_STATS_PARAM_START_DATE', 'Custom start date ISO format'),
+    ),
+    end_date: str | None = Query(
+        default=None,
+        description=get_texts().t('CABINET_ADMIN_SALES_STATS_PARAM_END_DATE', 'Custom end date ISO format'),
+    ),
     admin: User = Depends(require_permission('sales_stats:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> SalesSummary:
     """Get summary statistics for sales dashboard cards."""
+    texts = get_texts(admin.language)
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
 
@@ -341,7 +354,7 @@ async def get_sales_summary(
         logger.error('Failed to get sales summary', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load sales summary',
+            detail=texts.t('CABINET_ADMIN_SALES_STATS_SUMMARY_ERROR', 'Failed to load sales summary'),
         )
 
 
@@ -380,6 +393,7 @@ async def get_trials_stats(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> TrialsStatsResponse:
     """Get trial registration statistics with provider breakdown."""
+    texts = get_texts(admin.language)
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
 
@@ -537,7 +551,7 @@ async def get_trials_stats(
         logger.error('Failed to get trials stats', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load trials statistics',
+            detail=texts.t('CABINET_ADMIN_SALES_STATS_TRIALS_ERROR', 'Failed to load trials statistics'),
         )
 
 
@@ -590,6 +604,7 @@ async def get_sales_stats(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> SalesStatsResponse:
     """Get subscription sales statistics."""
+    texts = get_texts(admin.language)
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
 
@@ -732,7 +747,7 @@ async def get_sales_stats(
         logger.error('Failed to get sales stats', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load sales statistics',
+            detail=texts.t('CABINET_ADMIN_SALES_STATS_SALES_ERROR', 'Failed to load sales statistics'),
         )
 
 
@@ -777,6 +792,7 @@ async def get_renewals_stats(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> RenewalsStatsResponse:
     """Get renewal statistics with period comparison."""
+    texts = get_texts(admin.language)
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
         is_all_time = days is not None and days == 0
@@ -958,7 +974,7 @@ async def get_renewals_stats(
         logger.error('Failed to get renewals stats', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load renewals statistics',
+            detail=texts.t('CABINET_ADMIN_SALES_STATS_RENEWALS_ERROR', 'Failed to load renewals statistics'),
         )
 
 
@@ -1004,6 +1020,7 @@ async def get_addons_stats(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> AddonsStatsResponse:
     """Get add-on purchase statistics."""
+    texts = get_texts(admin.language)
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
 
@@ -1114,7 +1131,7 @@ async def get_addons_stats(
         logger.error('Failed to get addons stats', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load add-ons statistics',
+            detail=texts.t('CABINET_ADMIN_SALES_STATS_ADDONS_ERROR', 'Failed to load add-ons statistics'),
         )
 
 
@@ -1160,6 +1177,7 @@ async def get_deposits_stats(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> DepositsStatsResponse:
     """Get deposit statistics with payment method breakdown."""
+    texts = get_texts(admin.language)
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
 
@@ -1253,7 +1271,7 @@ async def get_deposits_stats(
         logger.error('Failed to get deposits stats', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load deposits statistics',
+            detail=texts.t('CABINET_ADMIN_SALES_STATS_DEPOSITS_ERROR', 'Failed to load deposits statistics'),
         )
 
 
@@ -1293,6 +1311,7 @@ async def get_payment_health(
     (REFUND with no payment_method) — a signal of how often purchases error out,
     NOT money returned to customers.
     """
+    texts = get_texts(admin.language)
     try:
         period_start, period_end = _parse_period(days, start_date, end_date)
 
@@ -1328,5 +1347,5 @@ async def get_payment_health(
         logger.error('Failed to get payment health', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load payment health',
+            detail=texts.t('CABINET_ADMIN_SALES_STATS_HEALTH_ERROR', 'Failed to load payment health'),
         )

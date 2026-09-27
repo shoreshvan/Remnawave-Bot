@@ -21,6 +21,7 @@ from app.database.crud.landing import get_active_landing_by_slug, get_purchase_b
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user import get_user_by_email
 from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff
+from app.localization.texts import get_texts
 from app.services.gift_claim_service import (
     GiftClaimAlreadyOwnedError,
     GiftClaimNotActivatableError,
@@ -707,22 +708,30 @@ async def claim_gift(
 async def get_landing_config(
     raw_request: Request,
     slug: str = Path(max_length=100),
-    lang: str = Query(DEFAULT_LOCALE, max_length=5, description='Locale: ru, en, zh, fa'),
+    lang: str = Query(
+        DEFAULT_LOCALE,
+        max_length=5,
+        description=get_texts().t('CABINET_LANDING_PARAM_LANG', 'Locale: ru, en, zh, fa'),
+    ),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get public landing page configuration with tariffs and payment methods.
 
     No authentication required. Pass ``?lang=en`` to get localized text.
     """
+    texts = get_texts(lang)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'landing_config', limit=60, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=texts.t('CABINET_LANDING_TOO_MANY_REQUESTS', 'Too many requests'),
+        )
 
     landing = await get_active_landing_by_slug(db, slug)
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Landing page not found',
+            detail=texts.t('CABINET_LANDING_NOT_FOUND', 'Landing page not found'),
         )
 
     discount = _get_active_discount(landing, lang)

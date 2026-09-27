@@ -22,6 +22,7 @@ from app.database.crud.tariff import (
     update_tariff,
 )
 from app.database.models import PromoGroup, Subscription, SubscriptionStatus, Tariff, Transaction, TransactionType, User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tariffs import (
@@ -197,12 +198,13 @@ async def update_tariff_order(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update the display order of tariffs."""
+    texts = get_texts(admin.language)
     await reorder_tariffs(db, request.tariff_ids)
     await db.commit()
 
     logger.info('Admin updated tariff order', admin_id=admin.id, tariff_ids=request.tariff_ids)
 
-    return {'message': 'Tariff order updated successfully'}
+    return {'message': texts.t('CABINET_ADMIN_TARIFFS_ORDER_UPDATED', 'Tariff order updated successfully')}
 
 
 @router.get('/{tariff_id}', response_model=TariffDetailResponse)
@@ -212,11 +214,12 @@ async def get_tariff(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed tariff info."""
+    texts = get_texts(admin.language)
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail=texts.t('CABINET_ADMIN_TARIFFS_NOT_FOUND', 'Tariff not found'),
         )
 
     allowed_squads = tariff.allowed_squads or []
@@ -353,11 +356,12 @@ async def update_existing_tariff(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update an existing tariff."""
+    texts = get_texts(admin.language)
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail=texts.t('CABINET_ADMIN_TARIFFS_NOT_FOUND', 'Tariff not found'),
         )
 
     # Capture old values for change detection
@@ -470,11 +474,12 @@ async def delete_existing_tariff(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Delete a tariff."""
+    texts = get_texts(admin.language)
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail=texts.t('CABINET_ADMIN_TARIFFS_NOT_FOUND', 'Tariff not found'),
         )
 
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
@@ -490,7 +495,10 @@ async def delete_existing_tariff(
     # Перезагружаем периоды из БД для синхронизации с ботом
     await load_period_prices_from_db(db)
 
-    return {'message': 'Tariff deleted successfully', 'affected_subscriptions': subs_count}
+    return {
+        'message': texts.t('CABINET_ADMIN_TARIFFS_DELETED', 'Tariff deleted successfully'),
+        'affected_subscriptions': subs_count,
+    }
 
 
 @router.post('/{tariff_id}/toggle', response_model=TariffToggleResponse)
@@ -500,17 +508,22 @@ async def toggle_tariff(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Toggle tariff active status."""
+    texts = get_texts(admin.language)
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail=texts.t('CABINET_ADMIN_TARIFFS_NOT_FOUND', 'Tariff not found'),
         )
 
     new_status = not tariff.is_active
     await update_tariff(db, tariff, is_active=new_status)
 
-    status_text = 'activated' if new_status else 'deactivated'
+    status_text = (
+        texts.t('CABINET_ADMIN_TARIFFS_STATUS_ACTIVATED', 'activated')
+        if new_status
+        else texts.t('CABINET_ADMIN_TARIFFS_STATUS_DEACTIVATED', 'deactivated')
+    )
     logger.info('Admin tariff', admin_id=admin.id, status_text=status_text, tariff_id=tariff_id)
 
     # Перезагружаем периоды из БД для синхронизации с ботом
@@ -519,7 +532,9 @@ async def toggle_tariff(
     return TariffToggleResponse(
         id=tariff_id,
         is_active=new_status,
-        message=f'Tariff {status_text}',
+        message=texts.t(
+            'CABINET_ADMIN_TARIFFS_TOGGLE_MESSAGE', 'Tariff {status_text}'
+        ).format(status_text=status_text),
     )
 
 
@@ -534,11 +549,12 @@ async def toggle_trial_tariff(
     When enabling trial on a tariff, removes trial flag from all other tariffs
     (only one tariff can be the trial tariff at a time).
     """
+    texts = get_texts(admin.language)
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail=texts.t('CABINET_ADMIN_TARIFFS_NOT_FOUND', 'Tariff not found'),
         )
 
     new_status = not tariff.is_trial_available
@@ -553,13 +569,19 @@ async def toggle_trial_tariff(
 
     await update_tariff(db, tariff, is_trial_available=new_status)
 
-    status_text = 'set as trial' if new_status else 'removed from trial'
+    status_text = (
+        texts.t('CABINET_ADMIN_TARIFFS_TRIAL_SET', 'set as trial')
+        if new_status
+        else texts.t('CABINET_ADMIN_TARIFFS_TRIAL_REMOVED', 'removed from trial')
+    )
     logger.info('Admin tariff', admin_id=admin.id, status_text=status_text, tariff_id=tariff_id)
 
     return TariffTrialResponse(
         id=tariff_id,
         is_trial_available=new_status,
-        message=f'Tariff {status_text}',
+        message=texts.t(
+            'CABINET_ADMIN_TARIFFS_TOGGLE_MESSAGE', 'Tariff {status_text}'
+        ).format(status_text=status_text),
     )
 
 
@@ -570,11 +592,12 @@ async def get_tariff_stats(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get tariff statistics."""
+    texts = get_texts(admin.language)
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail=texts.t('CABINET_ADMIN_TARIFFS_NOT_FOUND', 'Tariff not found'),
         )
 
     # Count subscriptions
@@ -726,11 +749,12 @@ async def sync_tariff_squads(
     subscription linked to this tariff.  Only users that have a remnawave_id
     (i.e. already exist in the panel) are touched.
     """
+    texts = get_texts(admin.language)
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Tariff not found',
+            detail=texts.t('CABINET_ADMIN_TARIFFS_NOT_FOUND', 'Tariff not found'),
         )
 
     # Fetch active + trial subscriptions for this tariff whose users exist in Remnawave
@@ -818,7 +842,11 @@ async def sync_tariff_squads(
                 except Exception as e:
                     failed_count += 1
                     consecutive_failures += 1
-                    errors.append(f'user_id={sub.user_id}: sync failed')
+                    errors.append(
+                        texts.t(
+                            'CABINET_ADMIN_TARIFFS_SYNC_USER_FAILED', 'user_id={user_id}: sync failed'
+                        ).format(user_id=sub.user_id)
+                    )
                     logger.warning(
                         'Failed to sync squads for user in Remnawave',
                         user_id=sub.user_id,
@@ -827,7 +855,11 @@ async def sync_tariff_squads(
                     )
                     if consecutive_failures >= _SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES:
                         aborted = True
-                        errors.append(f'Aborted after {_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES} consecutive failures')
+                        errors.append(
+                            texts.t(
+                                'CABINET_ADMIN_TARIFFS_SYNC_ABORTED', 'Aborted after {count} consecutive failures'
+                            ).format(count=_SYNC_SQUADS_MAX_CONSECUTIVE_FAILURES)
+                        )
                     return 'error'
 
         await asyncio.gather(*[_sync_one(sub) for sub in subscriptions])

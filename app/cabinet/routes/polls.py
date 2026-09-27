@@ -15,6 +15,7 @@ from app.database.crud.poll import (
     record_poll_answer,
 )
 from app.database.models import Poll, PollQuestion, PollResponse, User
+from app.localization.texts import get_texts
 from app.services.poll_service import get_next_question, get_question_option, reward_user_for_poll
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
@@ -184,18 +185,19 @@ async def get_poll_details(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get details of a specific poll response."""
+    texts = get_texts(user.language)
     response = await get_poll_response_by_id(db, response_id)
 
     if not response or response.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Poll not found',
+            detail=texts.t('CABINET_POLL_NOT_FOUND', 'Poll not found'),
         )
 
     if not response.poll:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Poll data not available',
+            detail=texts.t('CABINET_POLL_DATA_NOT_AVAILABLE', 'Poll data not available'),
         )
 
     answered_count = len(response.answers) if response.answers else 0
@@ -225,24 +227,25 @@ async def start_poll(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Start or continue a poll."""
+    texts = get_texts(user.language)
     response = await get_poll_response_by_id(db, response_id)
 
     if not response or response.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Poll not found',
+            detail=texts.t('CABINET_POLL_NOT_FOUND', 'Poll not found'),
         )
 
     if response.completed_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This poll has already been completed',
+            detail=texts.t('CABINET_POLL_ALREADY_COMPLETED', 'This poll has already been completed'),
         )
 
     if not response.poll or not response.poll.questions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Poll is not available',
+            detail=texts.t('CABINET_POLL_NOT_AVAILABLE', 'Poll is not available'),
         )
 
     # Mark as started if not already
@@ -256,7 +259,7 @@ async def start_poll(
     if not question:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No questions available',
+            detail=texts.t('CABINET_POLL_NO_QUESTIONS_AVAILABLE', 'No questions available'),
         )
 
     return PollStartResponse(
@@ -276,24 +279,25 @@ async def answer_question(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Submit answer for a poll question."""
+    texts = get_texts(user.language)
     response = await get_poll_response_by_id(db, response_id)
 
     if not response or response.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Poll not found',
+            detail=texts.t('CABINET_POLL_NOT_FOUND', 'Poll not found'),
         )
 
     if response.completed_at:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This poll has already been completed',
+            detail=texts.t('CABINET_POLL_ALREADY_COMPLETED', 'This poll has already been completed'),
         )
 
     if not response.poll:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Poll is not available',
+            detail=texts.t('CABINET_POLL_NOT_AVAILABLE', 'Poll is not available'),
         )
 
     # Find the question
@@ -301,7 +305,7 @@ async def answer_question(
     if not question:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Question not found',
+            detail=texts.t('CABINET_POLL_QUESTION_NOT_FOUND', 'Question not found'),
         )
 
     # Validate option
@@ -309,7 +313,7 @@ async def answer_question(
     if not option:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid answer option',
+            detail=texts.t('CABINET_POLL_INVALID_ANSWER_OPTION', 'Invalid answer option'),
         )
 
     # Record the answer
@@ -328,7 +332,7 @@ async def answer_question(
         if not response:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='Failed to process answer',
+                detail=texts.t('CABINET_POLL_FAILED_TO_PROCESS_ANSWER', 'Failed to process answer'),
             )
 
     # Get next question
@@ -352,9 +356,12 @@ async def answer_question(
     # Award reward if any
     reward_amount = await reward_user_for_poll(db, response)
 
-    message = 'Thank you for completing the poll!'
+    message = texts.t('CABINET_POLL_COMPLETED_THANKS', 'Thank you for completing the poll!')
     if reward_amount:
-        message += f' Reward of {settings.format_price(reward_amount)} has been added to your balance.'
+        message += texts.t(
+            'CABINET_POLL_REWARD_ADDED',
+            ' Reward of {amount} has been added to your balance.',
+        ).format(amount=settings.format_price(reward_amount))
 
     return AnswerResponse(
         success=True,

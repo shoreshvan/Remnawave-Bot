@@ -29,6 +29,7 @@ from app.database.models import (
     Tariff,
     User,
 )
+from app.localization.texts import get_texts
 from app.services.partner_application_service import partner_application_service
 from app.services.partner_stats_service import PartnerStatsService
 from app.services.system_settings_service import bot_configuration_service
@@ -274,10 +275,12 @@ async def approve_application(
             application = await db.get(PartnerApplication, application_id)
             user = await db.get(User, application.user_id) if application else None
             if user:
+                texts = get_texts(user.language)
                 comment_text = f'\n{request.comment}' if request.comment else ''
-                tg_message = (
-                    f'✅ Ваша заявка на партнёрство одобрена!\nКомиссия: {request.commission_percent}%{comment_text}'
-                )
+                tg_message = texts.t(
+                    'CABINET_PARTNERS_APPLICATION_APPROVED_MESSAGE',
+                    '✅ Ваша заявка на партнёрство одобрена!\nКомиссия: {commission_percent}%{comment_text}',
+                ).format(commission_percent=request.commission_percent, comment_text=comment_text)
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_partner_approved(
@@ -326,8 +329,18 @@ async def reject_application(
             application = await db.get(PartnerApplication, application_id)
             user = await db.get(User, application.user_id) if application else None
             if user:
-                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
-                tg_message = f'❌ Ваша заявка на партнёрство отклонена.{comment_text}'
+                texts = get_texts(user.language)
+                comment_text = (
+                    texts.t('CABINET_PARTNERS_REJECTION_REASON', '\nПричина: {comment}').format(
+                        comment=request.comment,
+                    )
+                    if request.comment
+                    else ''
+                )
+                tg_message = texts.t(
+                    'CABINET_PARTNERS_APPLICATION_REJECTED_MESSAGE',
+                    '❌ Ваша заявка на партнёрство отклонена.{comment_text}',
+                ).format(comment_text=comment_text)
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_partner_rejected(
@@ -525,19 +538,31 @@ async def upsert_referral_level(
     всего объекта ради одной галочки затирала бы правку, сделанную параллельно из
     бота — оба интерфейса ходят в одну таблицу.
     """
+    texts = get_texts(admin.language)
     values = request.model_dump(exclude_unset=True)
 
     if 'reward_mode' in values and values['reward_mode'] not in {mode.value for mode in ReferralRewardMode}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Unknown reward_mode')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_PARTNERS_UNKNOWN_REWARD_MODE', 'Unknown reward_mode'),
+        )
     if 'trigger' in values and values['trigger'] not in {trigger.value for trigger in ReferralRewardTrigger}:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Unknown trigger')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_PARTNERS_UNKNOWN_TRIGGER', 'Unknown trigger'),
+        )
 
     for field in ('referrer_tariff_id', 'referee_tariff_id'):
         tariff_id = values.get(field)
         if tariff_id:
             exists = await db.execute(select(Tariff.id).where(Tariff.id == tariff_id))
             if exists.scalar_one_or_none() is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Unknown tariff for {field}')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=texts.t('CABINET_PARTNERS_UNKNOWN_TARIFF_FOR_FIELD', 'Unknown tariff for {field}').format(
+                        field=field,
+                    ),
+                )
 
     try:
         await upsert_reward_level(db, level, **values)
@@ -555,8 +580,12 @@ async def remove_referral_level(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Удалить правило уровня."""
+    texts = get_texts(admin.language)
     if not await delete_reward_level(db, level):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Level not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=texts.t('CABINET_PARTNERS_LEVEL_NOT_FOUND', 'Level not found'),
+        )
 
     logger.info('Правило реферального уровня удалено из кабинета', admin_id=admin.id, level=level)
     return await _levels_payload(db)
@@ -577,17 +606,24 @@ async def update_referral_depth(
     Верхняя граница — число заводимых уровней: глубже них обходить нечего, зато
     каждый лишний шаг это запрос пользователя на пустое звено при каждом пополнении.
     """
+    texts = get_texts(admin.language)
     depth = int(request.max_level_depth)
     if depth < 1 or depth > MAX_SUPPORTED_LEVEL:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'max_level_depth must be between 1 and {MAX_SUPPORTED_LEVEL}',
+            detail=texts.t(
+                'CABINET_PARTNERS_MAX_LEVEL_DEPTH_RANGE',
+                'max_level_depth must be between 1 and {max_supported_level}',
+            ).format(max_supported_level=MAX_SUPPORTED_LEVEL),
         )
 
     if bot_configuration_service.is_env_locked('REFERRAL_MAX_LEVEL_DEPTH'):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='REFERRAL_MAX_LEVEL_DEPTH is pinned in .env and cannot be changed from the cabinet',
+            detail=texts.t(
+                'CABINET_PARTNERS_MAX_LEVEL_DEPTH_ENV_LOCKED',
+                'REFERRAL_MAX_LEVEL_DEPTH is pinned in .env and cannot be changed from the cabinet',
+            ),
         )
 
     await bot_configuration_service.set_value(db, 'REFERRAL_MAX_LEVEL_DEPTH', depth)
@@ -611,8 +647,12 @@ async def import_legacy_referral_settings(
     превратил бы оба разовых бонуса в регулярную выплату. Правило создаётся
     ВЫКЛЮЧЕННЫМ — включает его админ, прочитав.
     """
+    texts = get_texts(admin.language)
     if await get_reward_level(db, 1) is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Level 1 already exists')
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=texts.t('CABINET_PARTNERS_LEVEL_1_EXISTS', 'Level 1 already exists'),
+        )
 
     from app.services.referral_reward_service import legacy_percent_for_import
 
@@ -649,17 +689,24 @@ async def update_referral_levels_mode(
     бы как 'chain' при чтении, и кабинет показывал бы «сохранено» на настройке,
     которая не применилась.
     """
+    texts = get_texts(admin.language)
     mode = str(request.levels_mode or '').strip().lower()
     if mode not in (LEVELS_MODE_CHAIN, LEVELS_MODE_TIERS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"levels_mode must be '{LEVELS_MODE_CHAIN}' or '{LEVELS_MODE_TIERS}'",
+            detail=texts.t(
+                'CABINET_PARTNERS_LEVELS_MODE_INVALID',
+                "levels_mode must be '{chain}' or '{tiers}'",
+            ).format(chain=LEVELS_MODE_CHAIN, tiers=LEVELS_MODE_TIERS),
         )
 
     if bot_configuration_service.is_env_locked('REFERRAL_LEVELS_MODE'):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='REFERRAL_LEVELS_MODE is pinned in .env and cannot be changed from the cabinet',
+            detail=texts.t(
+                'CABINET_PARTNERS_LEVELS_MODE_ENV_LOCKED',
+                'REFERRAL_LEVELS_MODE is pinned in .env and cannot be changed from the cabinet',
+            ),
         )
 
     await bot_configuration_service.set_value(db, 'REFERRAL_LEVELS_MODE', mode)
@@ -680,14 +727,21 @@ async def update_referral_scheme(
     Молча принять такую правку хуже, чем отказать — админ считал бы схему
     переключённой.
     """
+    texts = get_texts(admin.language)
     scheme = (request.scheme or '').strip().lower()
     if scheme not in ('legacy', 'levels'):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='scheme must be legacy or levels')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_PARTNERS_SCHEME_INVALID', 'scheme must be legacy or levels'),
+        )
 
     if bot_configuration_service.is_env_locked('REFERRAL_REWARD_SCHEME'):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='REFERRAL_REWARD_SCHEME is pinned in .env and cannot be changed from the cabinet',
+            detail=texts.t(
+                'CABINET_PARTNERS_REWARD_SCHEME_ENV_LOCKED',
+                'REFERRAL_REWARD_SCHEME is pinned in .env and cannot be changed from the cabinet',
+            ),
         )
 
     await bot_configuration_service.set_value(db, 'REFERRAL_REWARD_SCHEME', scheme)
@@ -708,11 +762,12 @@ async def get_partner_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed partner info."""
+    texts = get_texts(admin.language)
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Пользователь не найден',
+            detail=texts.t('CABINET_PARTNERS_USER_NOT_FOUND', 'Пользователь не найден'),
         )
 
     stats = await PartnerStatsService.get_referrer_detailed_stats(db, user_id)
@@ -774,17 +829,18 @@ async def update_commission(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update partner commission percent."""
+    texts = get_texts(admin.language)
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Пользователь не найден',
+            detail=texts.t('CABINET_PARTNERS_USER_NOT_FOUND', 'Пользователь не найден'),
         )
 
     if user.partner_status != PartnerStatus.APPROVED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Пользователь не является партнёром',
+            detail=texts.t('CABINET_PARTNERS_NOT_A_PARTNER', 'Пользователь не является партнёром'),
         )
 
     old_commission = user.referral_commission_percent
@@ -828,18 +884,19 @@ async def assign_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Assign a campaign to a partner."""
+    texts = get_texts(admin.language)
     campaign = await db.get(AdvertisingCampaign, campaign_id)
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Кампания не найдена',
+            detail=texts.t('CABINET_PARTNERS_CAMPAIGN_NOT_FOUND', 'Кампания не найдена'),
         )
 
     user = await db.get(User, user_id)
     if not user or user.partner_status != PartnerStatus.APPROVED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Пользователь не является партнёром',
+            detail=texts.t('CABINET_PARTNERS_NOT_A_PARTNER', 'Пользователь не является партнёром'),
         )
 
     # Atomic check-and-set to prevent race conditions
@@ -857,7 +914,10 @@ async def assign_campaign(
     if result.rowcount == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Кампания уже привязана к другому партнёру',
+            detail=texts.t(
+                'CABINET_PARTNERS_CAMPAIGN_ALREADY_ASSIGNED',
+                'Кампания уже привязана к другому партнёру',
+            ),
         )
     await db.commit()
 
@@ -878,6 +938,7 @@ async def unassign_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Unassign a campaign from a partner."""
+    texts = get_texts(admin.language)
     # Atomic check-and-unset to prevent race conditions
     result = await db.execute(
         update(AdvertisingCampaign)
@@ -892,11 +953,11 @@ async def unassign_campaign(
         if not campaign:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Кампания не найдена',
+                detail=texts.t('CABINET_PARTNERS_CAMPAIGN_NOT_FOUND', 'Кампания не найдена'),
             )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Кампания не привязана к этому партнёру',
+            detail=texts.t('CABINET_PARTNERS_CAMPAIGN_NOT_ASSIGNED', 'Кампания не привязана к этому партнёру'),
         )
     await db.commit()
 

@@ -21,6 +21,7 @@ from app.database.crud.user import (
     set_user_oauth_provider_id,
 )
 from app.database.models import User, UserStatus
+from app.localization.texts import get_texts
 from app.services.rbac_bootstrap_service import (
     TRUSTED_EMAIL_VERIFICATION_SOURCES,
     is_user_admin_by_env,
@@ -131,14 +132,25 @@ class OAuthAuthorizeResponse(BaseModel):
 
 
 class OAuthCallbackRequest(BaseModel):
-    code: str = Field(..., min_length=1, max_length=2048, description='Authorization code from provider')
-    state: str = Field(..., min_length=1, max_length=128, description='CSRF state token')
-    device_id: str | None = Field(None, max_length=256, description='Device ID from VK ID callback')
+    code: str = Field(
+        ..., min_length=1, max_length=2048,
+        description=get_texts().t('CABINET_OAUTH_FIELD_CODE_DESC', 'Authorization code from provider'),
+    )
+    state: str = Field(
+        ..., min_length=1, max_length=128,
+        description=get_texts().t('CABINET_OAUTH_FIELD_STATE_DESC', 'CSRF state token'),
+    )
+    device_id: str | None = Field(
+        None, max_length=256,
+        description=get_texts().t('CABINET_OAUTH_FIELD_DEVICE_ID_DESC', 'Device ID from VK ID callback'),
+    )
     campaign_slug: str | None = Field(
-        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$', description='Campaign slug from web link'
+        None, min_length=1, max_length=64, pattern=r'^[a-zA-Z0-9_-]+$',
+        description=get_texts().t('CABINET_OAUTH_FIELD_CAMPAIGN_SLUG_DESC', 'Campaign slug from web link'),
     )
     referral_code: str | None = Field(
-        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$', description='Referral code of inviter'
+        None, max_length=32, pattern=r'^[a-zA-Z0-9_-]+$',
+        description=get_texts().t('CABINET_OAUTH_FIELD_REFERRAL_CODE_DESC', 'Referral code of inviter'),
     )
 
 
@@ -165,7 +177,7 @@ async def get_oauth_authorize_url(provider: OAuthProviderName, http_request: Req
     if not oauth_provider:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Requested OAuth provider is not available',
+            detail=get_texts().t('CABINET_OAUTH_PROVIDER_NOT_AVAILABLE', 'Requested OAuth provider is not available'),
         )
 
     # Generate extra state data (e.g., PKCE code_verifier for VK)
@@ -191,7 +203,7 @@ async def oauth_callback(
     if not state_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid or expired OAuth state',
+            detail=get_texts().t('CABINET_OAUTH_INVALID_STATE', 'Invalid or expired OAuth state'),
         )
 
     # 1b. Reject linking-flow state tokens (must use link_provider_callback instead)
@@ -199,7 +211,10 @@ async def oauth_callback(
         logger.warning('Linking-flow state token used in login callback', provider=provider)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='OAuth state was initiated for account linking, not login',
+            detail=get_texts().t(
+                'CABINET_OAUTH_STATE_FOR_LINKING',
+                'OAuth state was initiated for account linking, not login',
+            ),
         )
 
     # 2. Get provider instance (reuse redirect_uri chosen at authorize time)
@@ -207,7 +222,7 @@ async def oauth_callback(
     if not oauth_provider:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Requested OAuth provider is not available',
+            detail=get_texts().t('CABINET_OAUTH_PROVIDER_NOT_AVAILABLE', 'Requested OAuth provider is not available'),
         )
 
     # 3. Exchange code for tokens (pass PKCE code_verifier and device_id if present)
@@ -224,7 +239,7 @@ async def oauth_callback(
         logger.error('OAuth code exchange failed', provider=provider, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Failed to exchange authorization code',
+            detail=get_texts().t('CABINET_OAUTH_CODE_EXCHANGE_FAILED', 'Failed to exchange authorization code'),
         ) from exc
 
     # 4. Fetch user info from provider
@@ -234,7 +249,7 @@ async def oauth_callback(
         logger.error('OAuth user info fetch failed', provider=provider, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Failed to fetch user information from provider',
+            detail=get_texts().t('CABINET_OAUTH_USER_INFO_FAILED', 'Failed to fetch user information from provider'),
         ) from exc
 
     # 5. Find user by provider ID
@@ -277,9 +292,10 @@ async def oauth_callback(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     'code': 'email_unverified_local',
-                    'message': (
+                    'message': get_texts().t(
+                        'CABINET_OAUTH_EMAIL_UNVERIFIED_LOCAL',
                         'An account with this email exists but its email has not been verified yet. '
-                        'Finish email verification (or use the Telegram bot) before linking a social login.'
+                        'Finish email verification (or use the Telegram bot) before linking a social login.',
                     ),
                 },
             )

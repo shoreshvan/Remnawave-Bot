@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from .helpers import resolve_subscription
@@ -31,36 +32,51 @@ router = APIRouter()
 async def enable_lava_recurrent(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t('CABINET_LAVA_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff'),
+    ),
 ):
     """Включает автопродление Lava для выбранной подписки."""
     from app.config import settings
 
     if not settings.is_lava_recurrent_enabled():
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Lava recurrent disabled')
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=get_texts().t('CABINET_LAVA_RECURRENT_DISABLED', 'Lava recurrent disabled'),
+        )
 
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_texts().t('CABINET_LAVA_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
+        )
 
     # Паритет с Platega: триальная подписка не должна авторизовывать реальное
     # рекуррентное списание.
     if getattr(subscription, 'is_trial', False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Trial subscriptions cannot enable auto-payment',
+            detail=get_texts().t('CABINET_LAVA_TRIAL_NO_AUTOPAY', 'Trial subscriptions cannot enable auto-payment'),
         )
 
     # Тариф грузим явно: subscription.tariff — async lazy-load, обращение к
     # нему здесь упало бы MissingGreenlet.
     if not subscription.tariff_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Subscription has no tariff')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_texts().t('CABINET_LAVA_SUBSCRIPTION_NO_TARIFF', 'Subscription has no tariff'),
+        )
 
     from app.database.crud.tariff import get_tariff_by_id
 
     tariff = await get_tariff_by_id(db, subscription.tariff_id)
     if not tariff:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Tariff not found')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_texts().t('CABINET_LAVA_TARIFF_NOT_FOUND', 'Tariff not found'),
+        )
 
     from app.services.payment.lava import enable_lava_recurring
 
@@ -79,7 +95,7 @@ async def enable_lava_recurrent(
         logger.warning('Lava recurrent enable failed', error=str(error), user_id=user.id)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Could not create Lava subscription',
+            detail=get_texts().t('CABINET_LAVA_SUBSCRIPTION_CREATE_FAILED', 'Could not create Lava subscription'),
         ) from error
 
     return {'status': result['status'], 'redirect_url': result['redirect_url']}
@@ -87,7 +103,7 @@ async def enable_lava_recurrent(
 
 @router.post('/lava-recurrent/purchase')
 async def purchase_with_lava_recurrent(
-    tariff_id: int = Query(..., description='Tariff to subscribe to'),
+    tariff_id: int = Query(..., description=get_texts().t('CABINET_LAVA_TARIFF_PARAM', 'Tariff to subscribe to')),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -100,13 +116,19 @@ async def purchase_with_lava_recurrent(
     from app.config import settings
 
     if not settings.is_lava_recurrent_enabled():
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Lava recurrent disabled')
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=get_texts().t('CABINET_LAVA_RECURRENT_DISABLED', 'Lava recurrent disabled'),
+        )
 
     from app.database.crud.tariff import get_tariff_by_id
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not getattr(tariff, 'is_active', False):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Tariff not found')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_texts().t('CABINET_LAVA_TARIFF_NOT_FOUND', 'Tariff not found'),
+        )
 
     from app.services.payment.lava import purchase_tariff_with_lava_recurring
 
@@ -118,7 +140,7 @@ async def purchase_with_lava_recurrent(
         logger.warning('Lava recurrent purchase failed', error=str(error), user_id=user.id)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Could not create Lava subscription',
+            detail=get_texts().t('CABINET_LAVA_SUBSCRIPTION_CREATE_FAILED', 'Could not create Lava subscription'),
         ) from error
 
     return {
@@ -132,17 +154,26 @@ async def purchase_with_lava_recurrent(
 async def get_lava_recurrent(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t('CABINET_LAVA_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff'),
+    ),
 ):
     """Текущее состояние автопродления Lava для подписки."""
     from app.config import settings
 
     if not settings.is_lava_recurrent_enabled():
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Lava recurrent disabled')
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=get_texts().t('CABINET_LAVA_RECURRENT_DISABLED', 'Lava recurrent disabled'),
+        )
 
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_texts().t('CABINET_LAVA_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
+        )
 
     from app.services.payment.lava import get_lava_recurring_status
 
@@ -163,7 +194,10 @@ async def get_lava_recurrent(
 async def cancel_lava_recurrent(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t('CABINET_LAVA_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff'),
+    ),
 ):
     """Отменяет автопродление Lava (best-effort).
 
@@ -171,7 +205,10 @@ async def cancel_lava_recurrent(
     """
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_texts().t('CABINET_LAVA_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
+        )
 
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
 

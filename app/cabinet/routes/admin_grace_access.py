@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import GraceAccessSessionModel, Subscription, User
+from app.localization.texts import get_texts
 from app.services.grace_access_runtime import collect_grace_status, grace_access_runtime
 from app.services.grace_access_service import GraceAccessMode, GraceSessionState
 from app.services.system_settings_service import (
@@ -68,9 +69,10 @@ EXTERNAL_SQUAD_KEEP = 'keep'
 
 _KNOWN_MODES: frozenset[str] = frozenset(mode.value for mode in GraceAccessMode)
 
-_ENV_LOCKED_DETAIL = (
+_ENV_LOCKED_DETAIL = get_texts().t(
+    'CABINET_ADMIN_GRACE_ACCESS_ENV_LOCKED',
     "Setting '{key}' is fixed in the environment (.env) and cannot be changed here. "
-    'Remove it from .env (and restart) to manage it from the cabinet.'
+    'Remove it from .env (and restart) to manage it from the cabinet.',
 )
 
 _OPEN_STATES: tuple[str, ...] = (
@@ -328,12 +330,23 @@ def _validate_for_mode(config: GraceAccessConfig, *, running_mode: str) -> None:
         return
 
     labels = {
-        'squad_required': "'{field}' is required while grace is active",
-        'squad_invalid': "'{field}' must contain a valid UUID",
-        'traffic_required': "'traffic_gb' must be at least 1 while grace is active",
+        'squad_required': get_texts().t(
+            'CABINET_ADMIN_GRACE_ACCESS_SQUAD_REQUIRED', "'{field}' is required while grace is active"
+        ),
+        'squad_invalid': get_texts().t(
+            'CABINET_ADMIN_GRACE_ACCESS_SQUAD_INVALID', "'{field}' must contain a valid UUID"
+        ),
+        'traffic_required': get_texts().t(
+            'CABINET_ADMIN_GRACE_ACCESS_TRAFFIC_REQUIRED', "'traffic_gb' must be at least 1 while grace is active"
+        ),
     }
     reasons = '; '.join(labels[issue.code].format(field=issue.field) for issue in blockers)
-    raise HTTPException(status.HTTP_400_BAD_REQUEST, f'Grace access cannot run with this configuration: {reasons}')
+    raise HTTPException(
+        status.HTTP_400_BAD_REQUEST,
+        get_texts()
+        .t('CABINET_ADMIN_GRACE_ACCESS_CANNOT_RUN', 'Grace access cannot run with this configuration: {reasons}')
+        .format(reasons=reasons),
+    )
 
 
 def _runtime_state(config: GraceAccessConfig) -> GraceAccessRuntimeState:
@@ -505,7 +518,9 @@ async def update_grace_access(
     if nulls:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f'These fields cannot be null: {", ".join(nulls)}',
+            get_texts()
+            .t('CABINET_ADMIN_GRACE_ACCESS_FIELDS_NOT_NULL', 'These fields cannot be null: {fields}')
+            .format(fields=", ".join(nulls)),
         )
 
     for field in ('expired_squad_uuid', 'limited_squad_uuid', 'external_squad_uuid'):

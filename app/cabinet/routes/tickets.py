@@ -15,6 +15,7 @@ from app.database.crud.ticket import TicketCRUD
 from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.models import Ticket, TicketMessage, User
 from app.handlers.tickets import notify_admins_about_new_ticket, notify_admins_about_ticket_reply
+from app.localization.texts import get_texts
 from app.services.support_settings_service import SupportSettingsService
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
@@ -61,10 +62,14 @@ async def _ensure_not_blocked(db: AsyncSession, user: User) -> None:
     blocked_until = await TicketCRUD.is_user_globally_blocked(db, user.id)
     if not blocked_until:
         return
+    texts = get_texts(user.language)
     if blocked_until.year >= _PERMANENT_BLOCK_YEAR:
-        detail = 'You are blocked from contacting support'
+        detail = texts.t('CABINET_TICKETS_BLOCKED', 'You are blocked from contacting support')
     else:
-        detail = f'You are blocked from contacting support until {blocked_until.strftime("%d.%m.%Y %H:%M")} UTC'
+        detail = texts.t(
+            'CABINET_TICKETS_BLOCKED_UNTIL',
+            'You are blocked from contacting support until {until} UTC',
+        ).format(until=blocked_until.strftime('%d.%m.%Y %H:%M'))
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
@@ -118,9 +123,18 @@ def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> Ti
 
 @router.get('', response_model=TicketListResponse)
 async def get_tickets(
-    page: int = Query(1, ge=1, description='Page number'),
-    per_page: int = Query(20, ge=1, le=100, description='Items per page'),
-    status_filter: str | None = Query(None, alias='status', description='Filter by status'),
+    page: int = Query(1, ge=1, description=get_texts().t('CABINET_TICKETS_PARAM_PAGE', 'Page number')),
+    per_page: int = Query(
+        20,
+        ge=1,
+        le=100,
+        description=get_texts().t('CABINET_TICKETS_PARAM_PER_PAGE', 'Items per page'),
+    ),
+    status_filter: str | None = Query(
+        None,
+        alias='status',
+        description=get_texts().t('CABINET_TICKETS_PARAM_STATUS', 'Filter by status'),
+    ),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -168,6 +182,7 @@ async def create_ticket(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new support ticket."""
+    texts = get_texts(user.language)
     _ensure_tickets_enabled()
     await _ensure_not_blocked(db, user)
 
@@ -175,7 +190,7 @@ async def create_ticket(
     if await TicketCRUD.user_has_active_ticket(db, user.id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='You already have an open ticket',
+            detail=texts.t('CABINET_TICKETS_ALREADY_OPEN', 'You already have an open ticket'),
         )
 
     # Create ticket
@@ -278,6 +293,7 @@ async def get_ticket(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get ticket with all messages."""
+    texts = get_texts(user.language)
     _ensure_tickets_enabled()
 
     query = (
@@ -290,7 +306,7 @@ async def get_ticket(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail=texts.t('CABINET_TICKETS_NOT_FOUND', 'Ticket not found'),
         )
 
     messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
@@ -298,7 +314,10 @@ async def get_ticket(
 
     return TicketDetailResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=(
+            ticket.title
+            or texts.t('CABINET_TICKETS_DEFAULT_TITLE', 'Ticket #{ticket_id}').format(ticket_id=ticket.id)
+        ),
         status=ticket.status,
         priority=ticket.priority or 'normal',
         created_at=ticket.created_at,
@@ -317,6 +336,7 @@ async def add_ticket_message(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Add message to existing ticket."""
+    texts = get_texts(user.language)
     _ensure_tickets_enabled()
     await _ensure_not_blocked(db, user)
 
@@ -328,21 +348,21 @@ async def add_ticket_message(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail=texts.t('CABINET_TICKETS_NOT_FOUND', 'Ticket not found'),
         )
 
     # Check if ticket is closed
     if ticket.status == 'closed':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Cannot add message to closed ticket',
+            detail=texts.t('CABINET_TICKETS_CANNOT_ADD_CLOSED', 'Cannot add message to closed ticket'),
         )
 
     # Check if replies are blocked
     if hasattr(ticket, 'is_reply_blocked') and ticket.is_reply_blocked:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Replies to this ticket are blocked',
+            detail=texts.t('CABINET_TICKETS_REPLIES_BLOCKED', 'Replies to this ticket are blocked'),
         )
 
     # Resolve media payload

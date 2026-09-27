@@ -20,6 +20,7 @@ from app.database.crud.coupon import (
 )
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import CouponBatch, CouponStatus, User
+from app.localization.texts import get_texts
 from app.services.coupon_service import build_coupon_deeplink
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -69,7 +70,10 @@ def _serialize_batch(batch: CouponBatch, counts: dict[str, int]) -> CouponBatchR
 async def _get_batch_or_404(db: AsyncSession, batch_id: int) -> CouponBatch:
     batch = await get_coupon_batch_by_id(db, batch_id)
     if batch is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Coupon batch not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_ADMIN_COUPONS_BATCH_NOT_FOUND', 'Coupon batch not found'),
+        )
     return batch
 
 
@@ -102,11 +106,17 @@ async def create_coupon_batch_endpoint(
     """Create a batch of one-time coupons and return the generated links."""
     name = payload.name.strip()
     if not name:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Batch name must not be blank')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            get_texts().t('CABINET_ADMIN_COUPONS_NAME_BLANK', 'Batch name must not be blank'),
+        )
 
     tariff = await get_tariff_by_id(db, payload.tariff_id)
     if not tariff or not tariff.is_active:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Tariff not found or inactive')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            get_texts().t('CABINET_ADMIN_COUPONS_TARIFF_INVALID', 'Tariff not found or inactive'),
+        )
 
     valid_until = datetime.now(UTC) + timedelta(days=payload.valid_days) if payload.valid_days else None
 
