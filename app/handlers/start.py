@@ -167,7 +167,7 @@ async def _answer_registration_denial(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('registration_contact_support'),
+                        text=texts.t('REGISTRATION_CONTACT_SUPPORT', '💬 Связаться с поддержкой'),
                         url=support_url,
                     )
                 ]
