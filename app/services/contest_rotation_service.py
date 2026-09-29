@@ -263,7 +263,7 @@ class ContestRotationService:
 
         from app.localization.texts import get_texts
 
-        texts = get_texts('ru')  # Default to ru for announcements
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
 
         # Format prize display based on prize_type
         prize_type = tpl.prize_type or PrizeType.DAYS.value
@@ -272,7 +272,7 @@ class ContestRotationService:
         if prize_type == PrizeType.DAYS.value:
             prize_display = f'{prize_value} {texts.t("DAYS", "дн. подписки")}'
         elif prize_type == PrizeType.BALANCE.value:
-            prize_display = f'{prize_value} коп.'
+            prize_display = texts.t('CONTEST_PRIZE_BALANCE_AMOUNT', '{value} коп.').format(value=prize_value)
         elif prize_type == PrizeType.CUSTOM.value:
             prize_display = prize_value
         else:
@@ -295,8 +295,10 @@ class ContestRotationService:
     async def _send_channel_announce(self, text: str) -> None:
         if not self.bot:
             return
+        from app.localization.texts import get_texts
         from app.services.channel_subscription_service import channel_subscription_service
 
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         channel_id = await channel_subscription_service.get_first_channel_id()
         if not channel_id:
             return
@@ -316,7 +318,12 @@ class ContestRotationService:
         if bot_username:
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text='🎲 Играть', url=f'https://t.me/{bot_username}?start=contests')]
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('CONTEST_PLAY_BUTTON', '🎲 Играть'),
+                            url=f'https://t.me/{bot_username}?start=contests',
+                        )
+                    ]
                 ]
             )
 
@@ -335,13 +342,22 @@ class ContestRotationService:
         if not self.bot or not settings.is_notifications_enabled():
             return
 
+        from app.localization.texts import get_texts
+
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         try:
             batch_size = 500
             offset = 0
             sent = failed = 0
 
             keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text='🎲 Играть', callback_data='contests_menu')]]
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=texts.t('CONTEST_PLAY_BUTTON', '🎲 Играть'), callback_data='contests_menu'
+                        )
+                    ]
+                ]
             )
 
             while True:

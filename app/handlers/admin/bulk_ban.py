@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.bulk_ban_service import bulk_ban_service
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
@@ -22,23 +23,29 @@ async def start_bulk_ban_process(callback: types.CallbackQuery, db_user: User, s
     """
     Начало процесса массовой блокировки пользователей
     """
+    texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        '🛑 <b>Массовая блокировка пользователей</b>\n\n'
-        'Введите список Telegram ID для блокировки.\n\n'
-        '<b>Форматы ввода:</b>\n'
-        '• По одному ID на строку\n'
-        '• Через запятую\n'
-        '• Через пробел\n\n'
-        'Пример:\n'
-        '<code>123456789\n'
-        '987654321\n'
-        '111222333</code>\n\n'
-        'Или:\n'
-        '<code>123456789, 987654321, 111222333</code>\n\n'
-        'Для отмены используйте команду /cancel',
+        texts.t(
+            'BULK_BAN_INTRO',
+            '🛑 <b>Массовая блокировка пользователей</b>\n\n'
+            'Введите список Telegram ID для блокировки.\n\n'
+            '<b>Форматы ввода:</b>\n'
+            '• По одному ID на строку\n'
+            '• Через запятую\n'
+            '• Через пробел\n\n'
+            'Пример:\n'
+            '<code>123456789\n'
+            '987654321\n'
+            '111222333</code>\n\n'
+            'Или:\n'
+            '<code>123456789, 987654321, 111222333</code>\n\n'
+            'Для отмены используйте команду /cancel',
+        ),
         parse_mode='HTML',
         reply_markup=types.InlineKeyboardMarkup(
-            inline_keyboard=[[types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_users')]]
+            inline_keyboard=[[types.InlineKeyboardButton(
+                text=texts.t('BULK_BAN_BTN_CANCEL', '❌ Отмена'), callback_data='admin_users'
+            )]]
         ),
     )
 
@@ -52,11 +59,14 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
     """
     Обработка списка Telegram ID и выполнение массовой блокировки
     """
+    texts = get_texts(db_user.language)
     if not message.text:
         await message.answer(
-            '❌ Отправьте текстовое сообщение со списком Telegram ID',
+            texts.t('BULK_BAN_NEED_TEXT', '❌ Отправьте текстовое сообщение со списком Telegram ID'),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(
+                    text=texts.t('BULK_BAN_BTN_BACK', '🔙 Назад'), callback_data='admin_users'
+                )]]
             ),
         )
         return
@@ -65,9 +75,11 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
 
     if not input_text:
         await message.answer(
-            '❌ Введите корректный список Telegram ID',
+            texts.t('BULK_BAN_ENTER_VALID_LIST', '❌ Введите корректный список Telegram ID'),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(
+                    text=texts.t('BULK_BAN_BTN_BACK', '🔙 Назад'), callback_data='admin_users'
+                )]]
             ),
         )
         return
@@ -78,27 +90,35 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
     except Exception as e:
         logger.error('Ошибка парсинга Telegram ID', error=e)
         await message.answer(
-            '❌ Ошибка при обработке списка ID. Проверьте формат ввода.',
+            texts.t('BULK_BAN_PARSE_ERROR', '❌ Ошибка при обработке списка ID. Проверьте формат ввода.'),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(
+                    text=texts.t('BULK_BAN_BTN_BACK', '🔙 Назад'), callback_data='admin_users'
+                )]]
             ),
         )
         return
 
     if not telegram_ids:
         await message.answer(
-            '❌ Не найдено корректных Telegram ID в списке',
+            texts.t('BULK_BAN_NO_VALID_IDS', '❌ Не найдено корректных Telegram ID в списке'),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(
+                    text=texts.t('BULK_BAN_BTN_BACK', '🔙 Назад'), callback_data='admin_users'
+                )]]
             ),
         )
         return
 
     if len(telegram_ids) > 1000:  # Ограничение на количество ID за раз
         await message.answer(
-            f'❌ Слишком много ID в списке ({len(telegram_ids)}). Максимум: 1000',
+            texts.t('BULK_BAN_TOO_MANY', '❌ Слишком много ID в списке ({count}). Максимум: 1000').format(
+                count=len(telegram_ids)
+            ),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(
+                    text=texts.t('BULK_BAN_BTN_BACK', '🔙 Назад'), callback_data='admin_users'
+                )]]
             ),
         )
         return
@@ -116,37 +136,51 @@ async def process_bulk_ban_list(message: types.Message, db_user: User, state: FS
         )
 
         # Подготавливаем сообщение с результатами
-        result_text = '✅ <b>Массовая блокировка завершена</b>\n\n'
-        result_text += '📊 <b>Результаты:</b>\n'
-        result_text += f'✅ Успешно заблокировано: {successfully_banned}\n'
-        result_text += f'❌ Не найдено: {not_found}\n'
-        result_text += f'💥 Ошибок: {len(error_ids)}\n\n'
-        result_text += f'📈 Всего обработано: {len(telegram_ids)}'
+        result_text = texts.t('BULK_BAN_RESULT_TITLE', '✅ <b>Массовая блокировка завершена</b>\n\n')
+        result_text += texts.t('BULK_BAN_RESULT_HEADER', '📊 <b>Результаты:</b>\n')
+        result_text += texts.t('BULK_BAN_RESULT_SUCCESS', '✅ Успешно заблокировано: {count}\n').format(
+            count=successfully_banned
+        )
+        result_text += texts.t('BULK_BAN_RESULT_NOT_FOUND', '❌ Не найдено: {count}\n').format(count=not_found)
+        result_text += texts.t('BULK_BAN_RESULT_ERRORS', '💥 Ошибок: {count}\n\n').format(count=len(error_ids))
+        result_text += texts.t('BULK_BAN_RESULT_TOTAL', '📈 Всего обработано: {count}').format(
+            count=len(telegram_ids)
+        )
 
         if successfully_banned > 0:
-            result_text += f'\n🎯 Процент успеха: {round((successfully_banned / len(telegram_ids)) * 100, 1)}%'
+            result_text += texts.t(
+                'BULK_BAN_RESULT_SUCCESS_RATE', '\n🎯 Процент успеха: {percent}%'
+            ).format(percent=round((successfully_banned / len(telegram_ids)) * 100, 1))
 
         # Добавляем информацию об ошибках, если есть
         if error_ids:
-            result_text += '\n\n⚠️ <b>Telegram ID с ошибками:</b>\n'
-            result_text += f'<code>{", ".join(map(str, error_ids[:10]))}</code>'  # Показываем первые 10
+            result_text += texts.t('BULK_BAN_RESULT_ERROR_IDS', '\n\n⚠️ <b>Telegram ID с ошибками:</b>\n')
+            result_text += texts.t('BULK_BAN_RESULT_ERROR_IDS_LIST', '<code>{ids}</code>').format(
+                ids=', '.join(map(str, error_ids[:10]))
+            )  # Показываем первые 10
             if len(error_ids) > 10:
-                result_text += f' и еще {len(error_ids) - 10}...'
+                result_text += texts.t('BULK_BAN_RESULT_ERROR_IDS_MORE', ' и еще {count}...').format(
+                    count=len(error_ids) - 10
+                )
 
         await message.answer(
             result_text,
             parse_mode='HTML',
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='👥 К пользователям', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(
+                    text=texts.t('BULK_BAN_BTN_TO_USERS', '👥 К пользователям'), callback_data='admin_users'
+                )]]
             ),
         )
 
     except Exception as e:
         logger.error('Ошибка при выполнении массовой блокировки', error=e)
         await message.answer(
-            '❌ Произошла ошибка при выполнении массовой блокировки',
+            texts.t('BULK_BAN_EXECUTION_ERROR', '❌ Произошла ошибка при выполнении массовой блокировки'),
             reply_markup=types.InlineKeyboardMarkup(
-                inline_keyboard=[[types.InlineKeyboardButton(text='🔙 Назад', callback_data='admin_users')]]
+                inline_keyboard=[[types.InlineKeyboardButton(
+                    text=texts.t('BULK_BAN_BTN_BACK', '🔙 Назад'), callback_data='admin_users'
+                )]]
             ),
         )
 

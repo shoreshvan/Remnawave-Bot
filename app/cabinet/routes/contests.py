@@ -31,6 +31,7 @@ async def _resolve_subscription_for_prize(db, user_id: int):
     return await get_subscription_by_user_id(db, user_id)
 
 
+from app.localization.texts import get_texts
 from app.services.contest_rotation_service import (
     GAME_ANAGRAM,
     GAME_BLITZ,
@@ -110,11 +111,11 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         try:
             days = int(prize_value)
         except ValueError:
-            return 'Error: invalid prize value'
+            return get_texts().t('CABINET_CONTESTS_ERROR_INVALID_PRIZE_VALUE', 'Error: invalid prize value')
 
         subscription = await _resolve_subscription_for_prize(db, user_id)
         if not subscription:
-            return 'Error: subscription not found'
+            return get_texts().t('CABINET_CONTESTS_ERROR_SUBSCRIPTION_NOT_FOUND', 'Error: subscription not found')
 
         # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
         from app.services.grace_access_echo import undo_grace_overlay_echo
@@ -130,7 +131,9 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         await db.refresh(subscription)
 
         logger.info('🎁 Extended subscription for user by days (contest prize)', user_id=user_id, days=days)
-        return f'Subscription extended by {days} days'
+        return get_texts().t(
+            'CABINET_CONTESTS_PRIZE_DAYS_APPLIED', 'Subscription extended by {days} days'
+        ).format(days=days)
 
     if prize_type == 'balance':
         from app.database.crud.user import get_user_by_id
@@ -138,11 +141,11 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         try:
             amount = float(prize_value)
         except ValueError:
-            return 'Error: invalid prize value'
+            return get_texts().t('CABINET_CONTESTS_ERROR_INVALID_PRIZE_VALUE', 'Error: invalid prize value')
 
         user = await get_user_by_id(db, user_id)
         if not user:
-            return 'Error: user not found'
+            return get_texts().t('CABINET_CONTESTS_ERROR_USER_NOT_FOUND', 'Error: user not found')
 
         from app.database.crud.user import lock_user_for_update
 
@@ -152,10 +155,14 @@ async def _award_prize(db: AsyncSession, user_id: int, prize_type: str, prize_va
         await db.refresh(user)
 
         logger.info('🎁 Added to balance for user (contest prize)', amount=amount, user_id=user_id)
-        return f'Balance increased by {amount}'
+        return get_texts().t(
+            'CABINET_CONTESTS_PRIZE_BALANCE_APPLIED', 'Balance increased by {amount}'
+        ).format(amount=amount)
 
     logger.warning('Unknown prize type', prize_type=prize_type)
-    return f"Prize type '{prize_type}' not supported"
+    return get_texts().t(
+        'CABINET_CONTESTS_PRIZE_TYPE_UNSUPPORTED', "Prize type '{prize_type}' not supported"
+    ).format(prize_type=prize_type)
 
 
 # ============ Routes ============
@@ -210,7 +217,10 @@ async def get_contests(
     if not _user_allowed(subscription):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Contests are only available for users with active or trial subscriptions',
+            detail=get_texts().t(
+                'CABINET_CONTESTS_SUBSCRIPTION_REQUIRED',
+                'Contests are only available for users with active or trial subscriptions',
+            ),
         )
 
     active_rounds = await get_active_rounds(db)
@@ -257,7 +267,10 @@ async def get_contest_game(
     if not _user_allowed(subscription):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Contests are only available for users with active or trial subscriptions',
+            detail=get_texts().t(
+                'CABINET_CONTESTS_SUBSCRIPTION_REQUIRED',
+                'Contests are only available for users with active or trial subscriptions',
+            ),
         )
 
     active_rounds = await get_active_rounds(db)
@@ -266,13 +279,13 @@ async def get_contest_game(
     if not round_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Contest round not found or already finished',
+            detail=get_texts().t('CABINET_CONTESTS_ROUND_NOT_FOUND', 'Contest round not found or already finished'),
         )
 
     if not round_obj.template or not round_obj.template.is_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This contest is disabled',
+            detail=get_texts().t('CABINET_CONTESTS_DISABLED', 'This contest is disabled'),
         )
 
     # Check if already played
@@ -280,7 +293,7 @@ async def get_contest_game(
     if attempt:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='You have already played this round',
+            detail=get_texts().t('CABINET_CONTESTS_ALREADY_PLAYED', 'You have already played this round'),
         )
 
     tpl = round_obj.template
@@ -298,7 +311,9 @@ async def get_contest_game(
             'secret': secret,
             'grid_size': rows * cols,
         }
-        instructions = 'Select one of the nodes in the grid. Find the hidden server!'
+        instructions = get_texts().t(
+            'CABINET_CONTESTS_INSTRUCTIONS_QUEST', 'Select one of the nodes in the grid. Find the hidden server!'
+        )
 
     elif game_type == GAME_LOCKS:
         total = round_obj.payload.get('total', 20)
@@ -307,7 +322,9 @@ async def get_contest_game(
             'total': total,
             'secret': secret,
         }
-        instructions = 'Find the unlocked button among the locks!'
+        instructions = get_texts().t(
+            'CABINET_CONTESTS_INSTRUCTIONS_LOCKS', 'Find the unlocked button among the locks!'
+        )
 
     elif game_type == GAME_SERVER:
         flags = round_obj.payload.get('flags') or []
@@ -316,7 +333,7 @@ async def get_contest_game(
         game_data = {
             'flags': shuffled_flags,
         }
-        instructions = 'Choose a server by clicking on a flag!'
+        instructions = get_texts().t('CABINET_CONTESTS_INSTRUCTIONS_SERVER', 'Choose a server by clicking on a flag!')
 
     elif game_type == GAME_CIPHER:
         question = round_obj.payload.get('question', '')
@@ -324,7 +341,9 @@ async def get_contest_game(
             'question': question,
             'input_type': 'text',
         }
-        instructions = 'Decrypt the cipher and enter the answer!'
+        instructions = get_texts().t(
+            'CABINET_CONTESTS_INSTRUCTIONS_CIPHER', 'Decrypt the cipher and enter the answer!'
+        )
 
     elif game_type == GAME_EMOJI:
         question = round_obj.payload.get('question', '🤔')
@@ -334,7 +353,7 @@ async def get_contest_game(
             'question': ' '.join(emoji_list),
             'input_type': 'text',
         }
-        instructions = 'Guess the service by emojis!'
+        instructions = get_texts().t('CABINET_CONTESTS_INSTRUCTIONS_EMOJI', 'Guess the service by emojis!')
 
     elif game_type == GAME_ANAGRAM:
         letters = round_obj.payload.get('letters', '')
@@ -342,18 +361,18 @@ async def get_contest_game(
             'letters': letters,
             'input_type': 'text',
         }
-        instructions = 'Make a word from the given letters!'
+        instructions = get_texts().t('CABINET_CONTESTS_INSTRUCTIONS_ANAGRAM', 'Make a word from the given letters!')
 
     elif game_type == GAME_BLITZ:
         game_data = {
-            'button_text': "I'm here!",
+            'button_text': get_texts().t('CABINET_CONTESTS_BLITZ_BUTTON', "I'm here!"),
         }
-        instructions = 'Click the button as fast as you can!'
+        instructions = get_texts().t('CABINET_CONTESTS_INSTRUCTIONS_BLITZ', 'Click the button as fast as you can!')
 
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Unknown contest type',
+            detail=get_texts().t('CABINET_CONTESTS_UNKNOWN_TYPE', 'Unknown contest type'),
         )
 
     return ContestGameData(
@@ -377,7 +396,10 @@ async def submit_contest_answer(
     if not _user_allowed(subscription):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Contests are only available for users with active or trial subscriptions',
+            detail=get_texts().t(
+                'CABINET_CONTESTS_SUBSCRIPTION_REQUIRED',
+                'Contests are only available for users with active or trial subscriptions',
+            ),
         )
 
     active_rounds = await get_active_rounds(db)
@@ -386,7 +408,7 @@ async def submit_contest_answer(
     if not round_obj:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Contest round not found or already finished',
+            detail=get_texts().t('CABINET_CONTESTS_ROUND_NOT_FOUND', 'Contest round not found or already finished'),
         )
 
     # Check if already played
@@ -394,7 +416,7 @@ async def submit_contest_answer(
     if attempt:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='You have already played this round',
+            detail=get_texts().t('CABINET_CONTESTS_ALREADY_PLAYED', 'You have already played this round'),
         )
 
     tpl = round_obj.template
@@ -433,16 +455,36 @@ async def submit_contest_answer(
         prize_text = await _award_prize(db, user.id, tpl.prize_type, tpl.prize_value)
         return ContestResult(
             is_winner=True,
-            message=f'🎉 Congratulations! You won! {prize_text}',
+            message=get_texts().t(
+                'CABINET_CONTESTS_WINNER_MESSAGE', '🎉 Congratulations! You won! {prize_text}'
+            ).format(prize_text=prize_text),
             prize_type=tpl.prize_type,
             prize_value=tpl.prize_value,
         )
     lose_messages = {
-        GAME_QUEST: ['Empty node', 'Wrong server', 'Try another'],
-        GAME_LOCKS: ['Locked', 'No access', 'Try again'],
-        GAME_SERVER: ['Server overloaded', 'No response', 'Try tomorrow'],
+        GAME_QUEST: [
+            get_texts().t('CABINET_CONTESTS_LOSE_QUEST_1', 'Empty node'),
+            get_texts().t('CABINET_CONTESTS_LOSE_QUEST_2', 'Wrong server'),
+            get_texts().t('CABINET_CONTESTS_LOSE_QUEST_3', 'Try another'),
+        ],
+        GAME_LOCKS: [
+            get_texts().t('CABINET_CONTESTS_LOSE_LOCKS_1', 'Locked'),
+            get_texts().t('CABINET_CONTESTS_LOSE_LOCKS_2', 'No access'),
+            get_texts().t('CABINET_CONTESTS_LOSE_LOCKS_3', 'Try again'),
+        ],
+        GAME_SERVER: [
+            get_texts().t('CABINET_CONTESTS_LOSE_SERVER_1', 'Server overloaded'),
+            get_texts().t('CABINET_CONTESTS_LOSE_SERVER_2', 'No response'),
+            get_texts().t('CABINET_CONTESTS_LOSE_SERVER_3', 'Try tomorrow'),
+        ],
     }
-    messages = lose_messages.get(tpl.slug, ['Incorrect', 'Try again next round'])
+    messages = lose_messages.get(
+        tpl.slug,
+        [
+            get_texts().t('CABINET_CONTESTS_LOSE_DEFAULT_1', 'Incorrect'),
+            get_texts().t('CABINET_CONTESTS_LOSE_DEFAULT_2', 'Try again next round'),
+        ],
+    )
     return ContestResult(
         is_winner=False,
         message=random.choice(messages),

@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.services.rbac_bootstrap_service import is_user_admin_by_env
 from app.services.registration_access_service import (
     RegistrationAccessContext,
@@ -65,7 +66,7 @@ def raise_for_registration_decision(decision: RegistrationAccessDecision) -> Non
     if decision.reason is RegistrationAccessReason.BLOCKED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='User account is not active',
+            detail=get_texts().t('CABINET_AUTH_ACCOUNT_NOT_ACTIVE', 'User account is not active'),
         )
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

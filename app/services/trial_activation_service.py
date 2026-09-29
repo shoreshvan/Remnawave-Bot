@@ -10,6 +10,7 @@ from app.database.crud.subscription import decrement_subscription_server_counts
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import add_user_balance, subtract_user_balance
 from app.database.models import PaymentMethod, Subscription, TransactionType, User
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -83,7 +84,9 @@ async def charge_trial_activation_if_required(
     if price_kopeks <= 0:
         return 0
 
-    charge_description = description or 'Активация триальной подписки'
+    charge_description = description or get_texts(user.language).t(
+        'TRIAL_ACTIVATION_CHARGE_DESCRIPTION', 'Активация триальной подписки'
+    )
 
     success = await subtract_user_balance(
         db,
@@ -120,7 +123,9 @@ async def refund_trial_activation_charge(
     if amount_kopeks <= 0:
         return True
 
-    refund_description = description or 'Возврат оплаты за активацию триальной подписки'
+    refund_description = description or get_texts(user.language).t(
+        'TRIAL_ACTIVATION_REFUND_DESCRIPTION', 'Возврат оплаты за активацию триальной подписки'
+    )
 
     success = await add_user_balance(
         db,

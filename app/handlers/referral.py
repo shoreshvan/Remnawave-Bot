@@ -971,20 +971,30 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
 
     user_id_display = html_escape(str(db_user.telegram_id or db_user.email or f'#{db_user.id}'))
-    safe_name = html_escape(db_user.full_name or 'Без имени')
+    safe_name = html_escape(db_user.full_name or texts.t('REFERRAL_WITHDRAWAL_NO_NAME', 'Без имени'))
     safe_details = html_escape(payment_details)
-    admin_text = f"""
-🔔 <b>Новая заявка на вывод #{request.id}</b>
+    admin_text = texts.t(
+        'REFERRAL_WITHDRAWAL_ADMIN_NOTIFICATION',
+        """
+🔔 <b>Новая заявка на вывод #{id}</b>
 
-👤 Пользователь: {safe_name}
-🆔 ID: <code>{user_id_display}</code>
-💰 Сумма: <b>{amount_kopeks / 100:.0f}₽</b>
+👤 Пользователь: {name}
+🆔 ID: <code>{user_id}</code>
+💰 Сумма: <b>{amount:.0f}₽</b>
 
 💳 Реквизиты:
-<code>{safe_details}</code>
+<code>{details}</code>
 
-{referral_withdrawal_service.format_analysis_for_admin(analysis)}
-"""
+{analysis}
+""",
+    ).format(
+        id=request.id,
+        name=safe_name,
+        user_id=user_id_display,
+        amount=amount_kopeks / 100,
+        details=safe_details,
+        analysis=referral_withdrawal_service.format_analysis_for_admin(analysis),
+    )
 
     # Кнопки — по роли получателя: в группе только действия, в личке админа ещё
     # профиль (по id из базы: у callback admin_user_<telegram_id> обработчика нет).

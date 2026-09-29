@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services import overpay_certificate_service
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -55,13 +56,15 @@ async def upload_certificate(
     if not data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Empty file',
+            detail=get_texts().t('CABINET_ADMIN_OVERPAY_CERTIFICATE_EMPTY_FILE', 'Empty file'),
         )
 
     if len(data) > overpay_certificate_service.MAX_P12_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail='File too large. Maximum size: 1 MB',
+            detail=get_texts().t(
+                'CABINET_ADMIN_OVERPAY_CERTIFICATE_FILE_TOO_LARGE', 'File too large. Maximum size: 1 MB'
+            ),
         )
 
     try:

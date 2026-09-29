@@ -223,8 +223,8 @@ async def test_builder_single_subscription_structure(monkeypatch):
     assert 'format="r"' in html_out
     # Прогресс-бар остатка дней
     assert '<code>[' in html_out
-    # Баланс из format_price
-    assert '1250' in html_out
+    # Баланс из format_price (с разделителем тысяч)
+    assert '1,250' in html_out
 
 
 async def test_builder_links_username_used_instead_of_name(monkeypatch):

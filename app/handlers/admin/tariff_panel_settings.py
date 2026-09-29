@@ -72,22 +72,42 @@ def get_panel_settings_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text='🏷️ Тег панели', callback_data=f'admin_tariff_edit_panel_tag:{tariff.id}'),
-                InlineKeyboardButton(text='🌐 Внешний сквад', callback_data=f'admin_tariff_edit_ext_squad:{tariff.id}'),
-            ],
-            [
-                InlineKeyboardButton(text='💳 Продукт Lava', callback_data=f'admin_tariff_edit_lava:{tariff.id}'),
-                InlineKeyboardButton(text='🔢 Порядок', callback_data=f'admin_tariff_edit_order:{tariff.id}'),
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_TARIFF_PS_TAG_BUTTON', '🏷️ Тег панели'),
+                    callback_data=f'admin_tariff_edit_panel_tag:{tariff.id}',
+                ),
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_TARIFF_PS_EXT_SQUAD_BUTTON', '🌐 Внешний сквад'),
+                    callback_data=f'admin_tariff_edit_ext_squad:{tariff.id}',
+                ),
             ],
             [
                 InlineKeyboardButton(
-                    text='🎁 В подарках: выключить' if gift else '🎁 В подарках: включить',
+                    text=texts.t('ADMIN_TARIFF_PS_LAVA_BUTTON', '💳 Продукт Lava'),
+                    callback_data=f'admin_tariff_edit_lava:{tariff.id}',
+                ),
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_TARIFF_PS_ORDER_BUTTON', '🔢 Порядок'),
+                    callback_data=f'admin_tariff_edit_order:{tariff.id}',
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text=(
+                        texts.t('ADMIN_TARIFF_PS_GIFT_DISABLE', '🎁 В подарках: выключить')
+                        if gift
+                        else texts.t('ADMIN_TARIFF_PS_GIFT_ENABLE', '🎁 В подарках: включить')
+                    ),
                     callback_data=f'admin_tariff_toggle_gift:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text='📈 Докупка: запретить' if allow_topup else '📈 Докупка: разрешить',
+                    text=(
+                        texts.t('ADMIN_TARIFF_PS_TOPUP_DISABLE', '📈 Докупка: запретить')
+                        if allow_topup
+                        else texts.t('ADMIN_TARIFF_PS_TOPUP_ENABLE', '📈 Докупка: разрешить')
+                    ),
                     callback_data=f'admin_tariff_toggle_allow_topup:{tariff.id}',
                 )
             ],
@@ -109,9 +129,10 @@ async def _show(target: types.Message, tariff: Tariff, language: str, *, edit: b
 @error_handler
 async def show_panel_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     await state.clear()
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     await _show(callback.message, tariff, db_user.language, edit=True)
     await callback.answer()
@@ -123,24 +144,34 @@ async def show_panel_settings(callback: types.CallbackQuery, db_user: User, db: 
 @admin_required
 @error_handler
 async def toggle_show_in_gift(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     tariff = await update_tariff(db, tariff, show_in_gift=not getattr(tariff, 'show_in_gift', True))
-    await callback.answer('Тариф показывается в подарках' if tariff.show_in_gift else 'Тариф скрыт из подарков')
+    await callback.answer(
+        texts.t('ADMIN_TARIFF_PS_GIFT_ON_TOAST', 'Тариф показывается в подарках')
+        if tariff.show_in_gift
+        else texts.t('ADMIN_TARIFF_PS_GIFT_OFF_TOAST', 'Тариф скрыт из подарков')
+    )
     await _show(callback.message, tariff, db_user.language, edit=True)
 
 
 @admin_required
 @error_handler
 async def toggle_allow_traffic_topup(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     tariff = await update_tariff(db, tariff, allow_traffic_topup=not getattr(tariff, 'allow_traffic_topup', True))
-    await callback.answer('Докупка трафика разрешена' if tariff.allow_traffic_topup else 'Докупка трафика запрещена')
+    await callback.answer(
+        texts.t('ADMIN_TARIFF_PS_TOPUP_ON_TOAST', 'Докупка трафика разрешена')
+        if tariff.allow_traffic_topup
+        else texts.t('ADMIN_TARIFF_PS_TOPUP_OFF_TOAST', 'Докупка трафика запрещена')
+    )
     await _show(callback.message, tariff, db_user.language, edit=True)
 
 
@@ -162,7 +193,10 @@ async def _start_field_edit(
     await state.update_data(tariff_id=tariff.id, language=db_user.language)
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        f'{title}\n\nТариф: <b>{html.escape(tariff.name)}</b>\nТекущее значение: <b>{current_value}</b>\n\n{prompt}',
+        texts.t(
+            'ADMIN_TARIFF_CT_FIELD_EDIT_BODY',
+            '{title}\n\nТариф: <b>{tariff_name}</b>\nТекущее значение: <b>{current_value}</b>\n\n{prompt}',
+        ).format(title=title, tariff_name=html.escape(tariff.name), current_value=current_value, prompt=prompt),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_edit_more:{tariff.id}')]
@@ -176,9 +210,10 @@ async def _start_field_edit(
 @admin_required
 @error_handler
 async def start_edit_panel_tag(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     await _start_field_edit(
         callback,
@@ -186,18 +221,22 @@ async def start_edit_panel_tag(callback: types.CallbackQuery, db_user: User, db:
         state,
         tariff,
         state_value=AdminStates.editing_tariff_panel_tag,
-        title='🏷️ <b>Тег панели</b>',
+        title=texts.t('ADMIN_TARIFF_PS_TAG_TITLE', '🏷️ <b>Тег панели</b>'),
         current_value=_tag_display(tariff),
-        prompt=f'Введите тег ({PANEL_TAG_RULES}) или <code>-</code>, чтобы вернуть общий тег из настроек.',
+        prompt=texts.t(
+            'ADMIN_TARIFF_PS_TAG_PROMPT',
+            'Введите тег ({rules}) или <code>-</code>, чтобы вернуть общий тег из настроек.',
+        ).format(rules=PANEL_TAG_RULES),
     )
 
 
 @admin_required
 @error_handler
 async def start_edit_lava_product(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     await _start_field_edit(
         callback,
@@ -205,18 +244,22 @@ async def start_edit_lava_product(callback: types.CallbackQuery, db_user: User, 
         state,
         tariff,
         state_value=AdminStates.editing_tariff_lava_product,
-        title='💳 <b>Продукт Lava (автопродление)</b>',
+        title=texts.t('ADMIN_TARIFF_PS_LAVA_TITLE', '💳 <b>Продукт Lava (автопродление)</b>'),
         current_value=_lava_display(tariff),
-        prompt='Введите UUID продукта из кабинета Lava или <code>-</code>, чтобы отвязать.',
+        prompt=texts.t(
+            'ADMIN_TARIFF_PS_LAVA_PROMPT',
+            'Введите UUID продукта из кабинета Lava или <code>-</code>, чтобы отвязать.',
+        ),
     )
 
 
 @admin_required
 @error_handler
 async def start_edit_display_order(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     await _start_field_edit(
         callback,
@@ -224,9 +267,12 @@ async def start_edit_display_order(callback: types.CallbackQuery, db_user: User,
         state,
         tariff,
         state_value=AdminStates.editing_tariff_display_order,
-        title='🔢 <b>Порядок в списке</b>',
+        title=texts.t('ADMIN_TARIFF_PS_ORDER_TITLE', '🔢 <b>Порядок в списке</b>'),
         current_value=str(getattr(tariff, 'display_order', 0)),
-        prompt='Введите порядок целым числом от 0 — меньше число, выше тариф в списке.',
+        prompt=texts.t(
+            'ADMIN_TARIFF_PS_ORDER_PROMPT',
+            'Введите порядок целым числом от 0 — меньше число, выше тариф в списке.',
+        ),
     )
 
 
@@ -247,6 +293,7 @@ async def _finish(message: types.Message, db_user: User, state: FSMContext, tari
 @admin_required
 @error_handler
 async def process_panel_tag_input(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     tariff = await _load_tariff_from_state(message, db, state)
     if tariff is None:
         return
@@ -254,16 +301,23 @@ async def process_panel_tag_input(message: types.Message, db_user: User, db: Asy
     try:
         tag = None if raw == '-' else normalize_panel_tag(raw)
     except ValueError as error:
-        await message.answer(f'❌ {error}. Попробуйте ещё раз:')
+        await message.answer(
+            texts.t('ADMIN_TARIFF_PS_TAG_INVALID', '❌ {error}. Попробуйте ещё раз:').format(error=error)
+        )
         return
     tariff = await update_tariff(db, tariff, panel_tag=tag)
-    confirmation = f'✅ Тег панели: {html.escape(tag)}' if tag else '✅ Тег панели снят — общий из настроек'
+    confirmation = (
+        texts.t('ADMIN_TARIFF_PS_TAG_SAVED', '✅ Тег панели: {tag}').format(tag=html.escape(tag))
+        if tag
+        else texts.t('ADMIN_TARIFF_PS_TAG_CLEARED', '✅ Тег панели снят — общий из настроек')
+    )
     await _finish(message, db_user, state, tariff, confirmation)
 
 
 @admin_required
 @error_handler
 async def process_lava_product_input(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     tariff = await _load_tariff_from_state(message, db, state)
     if tariff is None:
         return
@@ -271,13 +325,18 @@ async def process_lava_product_input(message: types.Message, db_user: User, db: 
     # Пустая строка для CRUD значит «отвязать» — так же, как в кабинете.
     value = '' if raw == '-' else raw
     tariff = await update_tariff(db, tariff, lava_product_id=value)
-    confirmation = f'✅ Продукт Lava: {html.escape(value)}' if value else '✅ Продукт Lava отвязан'
+    confirmation = (
+        texts.t('ADMIN_TARIFF_PS_LAVA_SAVED', '✅ Продукт Lava: {value}').format(value=html.escape(value))
+        if value
+        else texts.t('ADMIN_TARIFF_PS_LAVA_CLEARED', '✅ Продукт Lava отвязан')
+    )
     await _finish(message, db_user, state, tariff, confirmation)
 
 
 @admin_required
 @error_handler
 async def process_display_order_input(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     tariff = await _load_tariff_from_state(message, db, state)
     if tariff is None:
         return
@@ -286,10 +345,16 @@ async def process_display_order_input(message: types.Message, db_user: User, db:
         if order < 0:
             raise ValueError
     except ValueError:
-        await message.answer('❌ Введите целое число от 0. Попробуйте ещё раз:')
+        await message.answer(texts.t('ADMIN_TARIFF_PS_ORDER_INVALID', '❌ Введите целое число от 0. Попробуйте ещё раз:'))
         return
     tariff = await update_tariff(db, tariff, display_order=order)
-    await _finish(message, db_user, state, tariff, f'✅ Порядок в списке: {order}')
+    await _finish(
+        message,
+        db_user,
+        state,
+        tariff,
+        texts.t('ADMIN_TARIFF_PS_ORDER_SAVED', '✅ Порядок в списке: {order}').format(order=order),
+    )
 
 
 # ---- внешний сквад ----
@@ -314,7 +379,9 @@ def _external_squad_keyboard(tariff: Tariff, squads: list, language: str) -> Inl
     buttons = [
         [
             InlineKeyboardButton(
-                text=f'{"✅" if current is None else "⬜"} Без внешнего сквада',
+                text=texts.t('ADMIN_TARIFF_PS_NO_EXT_SQUAD', '{mark} Без внешнего сквада').format(
+                    mark='✅' if current is None else '⬜'
+                ),
                 callback_data=f'admin_tariff_set_ext_squad:{tariff.id}:{_NO_EXTERNAL_SQUAD}',
             )
         ]
@@ -346,9 +413,10 @@ def _external_squad_text(tariff: Tariff, squads: list) -> str:
 @error_handler
 async def start_edit_external_squad(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     await state.clear()
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     squads = await load_external_squads()
     await callback.message.edit_text(
@@ -362,20 +430,23 @@ async def start_edit_external_squad(callback: types.CallbackQuery, db_user: User
 @admin_required
 @error_handler
 async def set_external_squad(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     _, tariff_id, chosen = callback.data.split(':', 2)
     tariff = await get_tariff_by_id(db, int(tariff_id))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
 
     new_uuid = None if chosen == _NO_EXTERNAL_SQUAD else chosen
     if new_uuid == getattr(tariff, 'external_squad_uuid', None):
-        await callback.answer('Без изменений')
+        await callback.answer(texts.t('ADMIN_TARIFF_PS_NO_CHANGES', 'Без изменений'))
     else:
         tariff = await update_tariff(db, tariff, external_squad_uuid=new_uuid)
         # Как в кабинете: живые подписки тарифа получают новый сквад в фоне.
         schedule_tariff_squad_sync(tariff.id, db_user.id)
-        await callback.answer('Внешний сквад обновлён, подписки синхронизируются в фоне')
+        await callback.answer(
+            texts.t('ADMIN_TARIFF_PS_EXT_SQUAD_UPDATED', 'Внешний сквад обновлён, подписки синхронизируются в фоне')
+        )
 
     squads = await load_external_squads()
     await callback.message.edit_text(

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import ReachabilityBatch, ReachabilityJob, User
 from app.external.bschek_api import BschekAPIError
+from app.localization.texts import get_texts
 from app.services.permission_service import PermissionService
 from app.services.reachability.batches import BatchPreview, batch_done_targets
 from app.services.reachability.geo_catalog import MAX_CITIES_LIMIT, names_from_catalog
@@ -104,15 +105,26 @@ def _http(exc: Exception) -> HTTPException:
     if isinstance(exc, ReachabilityDisabled | PanelUnavailable):
         return HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, exc.reason)
     if isinstance(exc, ReachabilityUnhealthy):
-        return HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f'{exc.reason} (повтор после {exc.until:%H:%M} UTC)')
+        return HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            get_texts()
+            .t('CABINET_ADMIN_REACHABILITY_UNHEALTHY_RETRY', '{reason} (повтор после {until} UTC)')
+            .format(reason=exc.reason, until=f'{exc.until:%H:%M}'),
+        )
     if isinstance(exc, ReachabilityBusy):
         job = exc.job
-        detail = f'Уже идёт задача #{job.id} ({job.kind}), запустил пользователь {job.started_by_user_id}'
+        detail = get_texts().t(
+            'CABINET_ADMIN_REACHABILITY_BUSY',
+            'Уже идёт задача #{job_id} ({kind}), запустил пользователь {user_id}',
+        ).format(job_id=job.id, kind=job.kind, user_id=job.started_by_user_id)
         return HTTPException(status.HTTP_409_CONFLICT, detail)
     if isinstance(exc, JobNotCancellable):
         return HTTPException(status.HTTP_409_CONFLICT, str(exc))
     if isinstance(exc, JobNotFound):
-        return HTTPException(status.HTTP_404_NOT_FOUND, 'Задача не найдена')
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_ADMIN_REACHABILITY_JOB_NOT_FOUND', 'Задача не найдена'),
+        )
     if isinstance(exc, BAD_REQUEST_ERRORS):
         return HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     if isinstance(exc, BschekAPIError) and exc.status in REQUEST_REFUSED_STATUSES:
@@ -121,7 +133,10 @@ def _http(exc: Exception) -> HTTPException:
     if isinstance(exc, BschekAPIError):
         return HTTPException(status.HTTP_502_BAD_GATEWAY, f'bschekbot: {exc.message} [{exc.code}]')
     logger.error('Неожиданная ошибка раздела reachability', error=str(exc), error_type=type(exc).__name__)
-    return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, 'Внутренняя ошибка')
+    return HTTPException(
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+        get_texts().t('CABINET_ADMIN_REACHABILITY_INTERNAL_ERROR', 'Внутренняя ошибка'),
+    )
 
 
 # ============ Сборка ответов ============

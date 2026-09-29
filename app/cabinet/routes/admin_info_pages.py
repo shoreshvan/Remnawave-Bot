@@ -15,6 +15,7 @@ from app.database.crud.info_pages import (
     update_info_page,
 )
 from app.database.models import User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.info_pages import (
@@ -38,6 +39,7 @@ async def list_all_info_pages(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> list[InfoPageListItem]:
     """Get all info pages (admin view, includes inactive)."""
+    texts = get_texts(admin.language)
     try:
         pages = await get_all_info_pages(db, include_inactive=True, page_type=page_type)
         return [InfoPageListItem.model_validate(p) for p in pages]
@@ -47,7 +49,7 @@ async def list_all_info_pages(
         logger.exception('Failed to list info pages')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load info pages',
+            detail=texts.t('CABINET_INFO_PAGES_LOAD_FAILED', 'Failed to load info pages'),
         )
 
 
@@ -58,11 +60,12 @@ async def get_info_page_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Get a single info page by ID (admin view)."""
+    texts = get_texts(admin.language)
     page = await get_info_page_by_id(db, page_id)
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
         )
     return InfoPageResponse.model_validate(page)
 
@@ -74,6 +77,7 @@ async def create_page(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Create a new info page."""
+    texts = get_texts(admin.language)
     try:
         if request.replaces_tab:
             await clear_replaces_tab(db, request.replaces_tab)
@@ -93,13 +97,13 @@ async def create_page(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='An info page with this slug already exists',
+            detail=texts.t('CABINET_INFO_PAGES_SLUG_EXISTS', 'An info page with this slug already exists'),
         )
     except Exception:
         logger.exception('Failed to create info page')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to create info page',
+            detail=texts.t('CABINET_INFO_PAGES_CREATE_FAILED', 'Failed to create info page'),
         )
 
     return InfoPageResponse.model_validate(page)
@@ -113,11 +117,12 @@ async def update_page(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Update an existing info page."""
+    texts = get_texts(admin.language)
     existing = await get_info_page_by_id(db, page_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
         )
 
     try:
@@ -131,19 +136,19 @@ async def update_page(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='An info page with this slug already exists',
+            detail=texts.t('CABINET_INFO_PAGES_SLUG_EXISTS', 'An info page with this slug already exists'),
         )
     except Exception:
         logger.exception('Failed to update info page', page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to update info page',
+            detail=texts.t('CABINET_INFO_PAGES_UPDATE_FAILED', 'Failed to update info page'),
         )
 
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found after update',
+            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND_AFTER_UPDATE', 'Info page not found after update'),
         )
     return InfoPageResponse.model_validate(page)
 
@@ -155,11 +160,12 @@ async def remove_page(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Delete an info page."""
+    texts = get_texts(admin.language)
     existing = await get_info_page_by_id(db, page_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
         )
 
     try:
@@ -168,7 +174,7 @@ async def remove_page(
         logger.exception('Failed to delete info page', page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to delete info page',
+            detail=texts.t('CABINET_INFO_PAGES_DELETE_FAILED', 'Failed to delete info page'),
         )
 
 
@@ -179,13 +185,14 @@ async def reorder_pages(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Bulk update sort_order for info pages."""
+    texts = get_texts(admin.language)
     try:
         await reorder_info_pages(db, request.items)
     except Exception:
         logger.exception('Failed to reorder info pages')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reorder info pages',
+            detail=texts.t('CABINET_INFO_PAGES_REORDER_FAILED', 'Failed to reorder info pages'),
         )
 
 
@@ -196,11 +203,12 @@ async def toggle_active(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Toggle the active status of an info page."""
+    texts = get_texts(admin.language)
     existing = await get_info_page_by_id(db, page_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
         )
 
     try:
@@ -209,12 +217,12 @@ async def toggle_active(
         logger.exception('Failed to toggle info page active status', page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to toggle active status',
+            detail=texts.t('CABINET_INFO_PAGES_TOGGLE_FAILED', 'Failed to toggle active status'),
         )
 
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found after toggle',
+            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND_AFTER_TOGGLE', 'Info page not found after toggle'),
         )
     return InfoPageResponse.model_validate(page)

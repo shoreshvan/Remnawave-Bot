@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.localization.texts import get_texts
 from app.services.severpay_service import severpay_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
@@ -425,7 +426,12 @@ class SeverPayPaymentMixin:
             external_id=transaction_external_id,
         )
 
-        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
+        status_texts = get_texts()
+        topup_status = (
+            status_texts.t('SEVERPAY_TOPUP_STATUS_FIRST', '🆕 Первое пополнение')
+            if was_first_topup
+            else status_texts.t('SEVERPAY_TOPUP_STATUS_REPEAT', '🔄 Пополнение')
+        )
 
         try:
             from app.services.referral_service import process_referral_topup
@@ -465,14 +471,20 @@ class SeverPayPaymentMixin:
         if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
+                user_texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                 await self.bot.send_message(
                     user.telegram_id,
-                    (
+                    user_texts.t(
+                        'SEVERPAY_TOPUP_SUCCESS',
                         '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'💰 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'💳 Способ: {display_name}\n'
-                        f'🆔 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
+                        '💰 Сумма: {amount}\n'
+                        '💳 Способ: {method}\n'
+                        '🆔 Транзакция: {transaction_id}\n\n'
+                        'Баланс пополнен автоматически!',
+                    ).format(
+                        amount=settings.format_price(payment.amount_kopeks),
+                        method=display_name,
+                        transaction_id=transaction.id,
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,

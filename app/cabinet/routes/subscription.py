@@ -11,6 +11,8 @@ so all existing API paths remain unchanged.
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.localization.texts import get_texts
+
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.subscription import SubscriptionStatusResponse
 from .subscription_modules import (
@@ -38,7 +40,10 @@ router = APIRouter(prefix='/subscription', tags=['Cabinet Subscription'])
 async def get_subscription(
     user=Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t('CABINET_SUBSCRIPTION_ID_PARAM_DESC', 'Subscription ID for multi-tariff'),
+    ),
 ):
     return await _get_subscription_handler(user=user, db=db, subscription_id=subscription_id)
 

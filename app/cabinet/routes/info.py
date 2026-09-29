@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.rules import get_current_rules_content, get_rules_by_language
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services import legal_consent_service
 from app.services.faq_service import FaqService
 from app.services.privacy_policy_service import PrivacyPolicyService
@@ -163,7 +164,7 @@ async def get_faq_page(
     if not is_visible_in_web(settings.FAQ_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='FAQ is not available',
+            detail=get_texts(language).t('CABINET_INFO_FAQ_UNAVAILABLE', 'FAQ is not available'),
         )
     requested_lang = FaqService.normalize_language(language)
     page = await FaqService.get_page(
@@ -177,7 +178,7 @@ async def get_faq_page(
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='FAQ page not found',
+            detail=get_texts(language).t('CABINET_INFO_FAQ_PAGE_NOT_FOUND', 'FAQ page not found'),
         )
 
     return FaqPageResponse(
@@ -197,7 +198,7 @@ async def get_rules(
     if not is_visible_in_web(settings.SERVICE_RULES_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Rules are not available',
+            detail=get_texts(language).t('CABINET_INFO_RULES_UNAVAILABLE', 'Rules are not available'),
         )
     requested_lang = language.split('-', maxsplit=1)[0].lower()
 
@@ -222,7 +223,7 @@ async def get_privacy_policy(
     if not is_visible_in_web(settings.PRIVACY_POLICY_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Privacy policy is not available',
+            detail=get_texts(language).t('CABINET_INFO_PRIVACY_UNAVAILABLE', 'Privacy policy is not available'),
         )
     requested_lang = PrivacyPolicyService.normalize_language(language)
     policy = await PrivacyPolicyService.get_policy(db, requested_lang, fallback=True)
@@ -233,10 +234,13 @@ async def get_privacy_policy(
 
     # Return default policy if none found
     return PrivacyPolicyResponse(
-        content="""# Политика конфиденциальности
+        content=get_texts(language).t(
+            'CABINET_INFO_PRIVACY_DEFAULT_CONTENT',
+            """# Политика конфиденциальности
 
 Мы уважаем вашу конфиденциальность и защищаем ваши персональные данные.
 """,
+        ),
         updated_at=None,
     )
 
@@ -250,7 +254,7 @@ async def get_public_offer(
     if not is_visible_in_web(settings.PUBLIC_OFFER_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Public offer is not available',
+            detail=get_texts(language).t('CABINET_INFO_OFFER_UNAVAILABLE', 'Public offer is not available'),
         )
     requested_lang = PublicOfferService.normalize_language(language)
     offer = await PublicOfferService.get_offer(db, requested_lang, fallback=True)
@@ -261,10 +265,13 @@ async def get_public_offer(
 
     # Return default offer if none found
     return PublicOfferResponse(
-        content="""# Публичная оферта
+        content=get_texts(language).t(
+            'CABINET_INFO_OFFER_DEFAULT_CONTENT',
+            """# Публичная оферта
 
 Условия использования сервиса.
 """,
+        ),
         updated_at=None,
     )
 
@@ -278,7 +285,9 @@ async def get_recurrent_payments(
     if not is_visible_in_web(settings.RECURRENT_PAYMENTS_DISPLAY_MODE):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Recurring-payments document is not available',
+            detail=get_texts(language).t(
+                'CABINET_INFO_RECURRENT_UNAVAILABLE', 'Recurring-payments document is not available'
+            ),
         )
     requested_lang = RecurrentPaymentsService.normalize_language(language)
     document = await RecurrentPaymentsService.get_document(db, requested_lang, fallback=True)
@@ -289,10 +298,13 @@ async def get_recurrent_payments(
 
     # Return default document if none found
     return RecurrentPaymentsResponse(
-        content="""# Рекуррентные платежи
+        content=get_texts(language).t(
+            'CABINET_INFO_RECURRENT_DEFAULT_CONTENT',
+            """# Рекуррентные платежи
 
 Условия автоматических регулярных списаний.
 """,
+        ),
         updated_at=None,
     )
 
@@ -365,7 +377,9 @@ async def update_user_language(
     if requested_language not in available_languages:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid language. Supported: {", ".join(available_languages)}',
+            detail=get_texts(user.language)
+            .t('CABINET_INFO_INVALID_LANGUAGE', 'Invalid language. Supported: {languages}')
+            .format(languages=', '.join(available_languages)),
         )
 
     user.language = requested_language

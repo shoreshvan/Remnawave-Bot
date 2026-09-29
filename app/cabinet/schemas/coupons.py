@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.localization.texts import get_texts
+
 
 class CouponBatchResponse(BaseModel):
     """Coupon batch with redemption stats."""
@@ -34,15 +36,35 @@ class CouponBatchListResponse(BaseModel):
 
 
 class CouponBatchCreateRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255, description='Batch label, e.g. the partner name')
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description=get_texts().t('CABINET_COUPON_BATCH_NAME_DESCRIPTION', 'Batch label, e.g. the partner name'),
+    )
     tariff_id: int = Field(..., ge=1)
     period_days: int = Field(..., ge=1, le=3650)
     coupons_count: int = Field(..., ge=1, le=500)
-    wholesale_price_kopeks: int = Field(0, ge=0, description='Bookkeeping-only price per coupon')
-    max_per_user: int = Field(
-        0, ge=0, le=500, description='How many coupons of this batch one user may redeem; 0 — unlimited'
+    wholesale_price_kopeks: int = Field(
+        0,
+        ge=0,
+        description=get_texts().t('CABINET_COUPON_WHOLESALE_PRICE_DESCRIPTION', 'Bookkeeping-only price per coupon'),
     )
-    valid_days: int = Field(0, ge=0, le=3650, description='Coupon lifetime in days; 0 — perpetual')
+    max_per_user: int = Field(
+        0,
+        ge=0,
+        le=500,
+        description=get_texts().t(
+            'CABINET_COUPON_MAX_PER_USER_DESCRIPTION',
+            'How many coupons of this batch one user may redeem; 0 — unlimited',
+        ),
+    )
+    valid_days: int = Field(
+        0,
+        ge=0,
+        le=3650,
+        description=get_texts().t('CABINET_COUPON_VALID_DAYS_DESCRIPTION', 'Coupon lifetime in days; 0 — perpetual'),
+    )
 
 
 class CouponBatchCreatedResponse(CouponBatchResponse):
@@ -67,7 +89,12 @@ class CouponBatchRevokeResponse(BaseModel):
 
 
 class CouponRedeemRequest(BaseModel):
-    token: str = Field(..., min_length=1, max_length=64, description='Coupon token from the one-time link')
+    token: str = Field(
+        ...,
+        min_length=1,
+        max_length=64,
+        description=get_texts().t('CABINET_COUPON_TOKEN_DESCRIPTION', 'Coupon token from the one-time link'),
+    )
 
 
 class CouponRedeemResponse(BaseModel):

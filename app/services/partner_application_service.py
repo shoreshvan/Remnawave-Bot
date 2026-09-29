@@ -6,7 +6,9 @@ import structlog
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.models import AdvertisingCampaign, PartnerApplication, PartnerStatus, User
+from app.localization.texts import get_texts
 from app.utils.user_utils import generate_unique_referral_code
 
 
@@ -33,13 +35,15 @@ class PartnerApplicationService:
         """
         user = await db.get(User, user_id)
         if not user:
-            return None, 'Пользователь не найден'
+            return None, get_texts(settings.DEFAULT_LANGUAGE).t('PARTNER_APP_USER_NOT_FOUND', 'Пользователь не найден')
 
         if user.partner_status == PartnerStatus.APPROVED.value:
-            return None, 'Вы уже являетесь партнёром'
+            return None, get_texts(user.language).t('PARTNER_APP_ALREADY_PARTNER', 'Вы уже являетесь партнёром')
 
         if user.partner_status == PartnerStatus.PENDING.value:
-            return None, 'У вас уже есть заявка на рассмотрении'
+            return None, get_texts(user.language).t(
+                'PARTNER_APP_ALREADY_PENDING', 'У вас уже есть заявка на рассмотрении'
+            )
 
         application = PartnerApplication(
             user_id=user_id,
@@ -81,16 +85,17 @@ class PartnerApplicationService:
             select(PartnerApplication).where(PartnerApplication.id == application_id).with_for_update()
         )
         application = result.scalar_one_or_none()
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         if not application:
-            return False, 'Заявка не найдена'
+            return False, texts.t('PARTNER_APP_NOT_FOUND', 'Заявка не найдена')
 
         if application.status != PartnerStatus.PENDING.value:
-            return False, 'Заявка уже обработана'
+            return False, texts.t('PARTNER_APP_ALREADY_PROCESSED', 'Заявка уже обработана')
 
         user_result = await db.execute(select(User).where(User.id == application.user_id).with_for_update())
         user = user_result.scalar_one_or_none()
         if not user:
-            return False, 'Пользователь не найден'
+            return False, texts.t('PARTNER_APP_USER_NOT_FOUND', 'Пользователь не найден')
 
         # Генерируем реферальный код, если его нет
         if not user.referral_code:
@@ -129,11 +134,12 @@ class PartnerApplicationService:
             select(PartnerApplication).where(PartnerApplication.id == application_id).with_for_update()
         )
         application = result.scalar_one_or_none()
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         if not application:
-            return False, 'Заявка не найдена'
+            return False, texts.t('PARTNER_APP_NOT_FOUND', 'Заявка не найдена')
 
         if application.status != PartnerStatus.PENDING.value:
-            return False, 'Заявка уже обработана'
+            return False, texts.t('PARTNER_APP_ALREADY_PROCESSED', 'Заявка уже обработана')
 
         user_result = await db.execute(select(User).where(User.id == application.user_id).with_for_update())
         user = user_result.scalar_one_or_none()
@@ -164,11 +170,12 @@ class PartnerApplicationService:
     ) -> tuple[bool, str]:
         """Отзывает партнёрский статус."""
         user = await db.get(User, user_id)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         if not user:
-            return False, 'Пользователь не найден'
+            return False, texts.t('PARTNER_APP_USER_NOT_FOUND', 'Пользователь не найден')
 
         if user.partner_status != PartnerStatus.APPROVED.value:
-            return False, 'Пользователь не является партнёром'
+            return False, texts.t('PARTNER_APP_NOT_A_PARTNER', 'Пользователь не является партнёром')
 
         user.partner_status = PartnerStatus.NONE.value
         user.referral_commission_percent = None

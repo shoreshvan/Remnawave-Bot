@@ -20,6 +20,7 @@ from app.database.crud.coupon import (
 from app.database.crud.tariff import get_all_active_tariffs, get_tariff_by_id
 from app.database.models import CouponBatch, CouponStatus, User
 from app.keyboards.admin import get_admin_pagination_keyboard
+from app.localization.texts import get_texts
 from app.services.coupon_service import build_coupon_deeplink
 from app.states import AdminStates
 from app.utils.decorators import admin_required, error_handler
@@ -148,18 +149,23 @@ async def _render_coupons_menu(
     limit = 10
     offset = (page - 1) * limit
 
+    texts = get_texts(language)
+
     batches = await get_coupon_batches(db, offset=offset, limit=limit)
     total_count = await get_coupon_batches_count(db)
     total_pages = max(1, (total_count + limit - 1) // limit)
 
-    text = (
-        f'🎟 <b>Купоны</b>\n\n'
-        f'Оптовая продажа подписок через партнёров: партия одноразовых ссылок '
-        f'на тариф, каждая выдаёт или продлевает подписку на N дней.\n\n'
-        f'📊 Партий: {total_count}'
-    )
+    text = texts.t(
+        'ADMIN_COUPONS_MENU_TEXT',
+        '🎟 <b>Купоны</b>\n\n'
+        'Оптовая продажа подписок через партнёров: партия одноразовых ссылок '
+        'на тариф, каждая выдаёт или продлевает подписку на N дней.\n\n'
+        '📊 Партий: {total_count}',
+    ).format(total_count=total_count)
     if total_pages > 1:
-        text += f' (стр. {page}/{total_pages})'
+        text += texts.t('ADMIN_COUPONS_MENU_PAGE', ' (стр. {page}/{total_pages})').format(
+            page=page, total_pages=total_pages
+        )
 
     keyboard = [
         [types.InlineKeyboardButton(text=_format_batch_button(batch), callback_data=f'admin_coupon_manage_{batch.id}')]
@@ -174,8 +180,13 @@ async def _render_coupons_menu(
 
     keyboard.extend(
         [
-            [types.InlineKeyboardButton(text='➕ Создать партию', callback_data='admin_coupon_create')],
-            [types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_submenu_promo')],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_COUPONS_CREATE_BATCH_BTN', '➕ Создать партию'),
+                    callback_data='admin_coupon_create',
+                )
+            ],
+            [types.InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data='admin_submenu_promo')],
         ]
     )
 
@@ -206,19 +217,28 @@ async def handle_coupon_list_page(callback: types.CallbackQuery, db_user: User, 
 @admin_required
 @error_handler
 async def start_coupon_batch_creation(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     tariffs = await get_all_active_tariffs(db)
     if not tariffs:
-        await callback.answer('❌ Нет активных тарифов. Сначала создайте тариф.', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_COUPONS_NO_ACTIVE_TARIFFS', '❌ Нет активных тарифов. Сначала создайте тариф.'),
+            show_alert=True,
+        )
         return
 
     keyboard = [
         [types.InlineKeyboardButton(text=tariff.name, callback_data=f'coupon_batch_tariff_{tariff.id}')]
         for tariff in tariffs
     ]
-    keyboard.append([types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_coupons')])
+    keyboard.append(
+        [types.InlineKeyboardButton(text=texts.t('ADMIN_CANCEL', '❌ Отмена'), callback_data='admin_coupons')]
+    )
 
     await callback.message.edit_text(
-        '🎟 <b>Создание партии купонов</b>\n\nВыберите тариф, который будут выдавать купоны:',
+        texts.t(
+            'ADMIN_COUPONS_CREATE_SELECT_TARIFF',
+            '🎟 <b>Создание партии купонов</b>\n\nВыберите тариф, который будут выдавать купоны:',
+        ),
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
     )
     await callback.answer()
@@ -227,23 +247,29 @@ async def start_coupon_batch_creation(callback: types.CallbackQuery, db_user: Us
 @admin_required
 @error_handler
 async def select_coupon_batch_tariff(callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession):
+    texts = get_texts(db_user.language)
     try:
         tariff_id = int(callback.data.split('_')[-1])
     except ValueError:
-        await callback.answer('❌ Ошибка получения ID тарифа', show_alert=True)
+        await callback.answer(texts.t('ADMIN_COUPONS_TARIFF_ID_ERROR', '❌ Ошибка получения ID тарифа'), show_alert=True)
         return
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not tariff.is_active:
-        await callback.answer('❌ Тариф не найден или неактивен', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_COUPONS_TARIFF_NOT_FOUND', '❌ Тариф не найден или неактивен'), show_alert=True
+        )
         return
 
     await state.update_data(coupon_tariff_id=tariff.id, coupon_tariff_name=tariff.name)
 
     await callback.message.edit_text(
-        f'🎟 <b>Создание партии купонов</b>\n\n'
-        f'Тариф: {html.escape(tariff.name)}\n\n'
-        f'📅 Введите количество дней подписки на купон (1-{MAX_PERIOD_DAYS}):',
+        texts.t(
+            'ADMIN_COUPONS_CREATE_ENTER_DAYS',
+            '🎟 <b>Создание партии купонов</b>\n\n'
+            'Тариф: {tariff_name}\n\n'
+            '📅 Введите количество дней подписки на купон (1-{max_days}):',
+        ).format(tariff_name=html.escape(tariff.name), max_days=MAX_PERIOD_DAYS),
         reply_markup=_CANCEL_KEYBOARD,
     )
     await state.set_state(AdminStates.creating_coupon_batch_days)
@@ -253,13 +279,23 @@ async def select_coupon_batch_tariff(callback: types.CallbackQuery, db_user: Use
 @admin_required
 @error_handler
 async def process_coupon_batch_days(message: types.Message, db_user: User, state: FSMContext):
-    days = await _read_int(message, 1, MAX_PERIOD_DAYS, f'❌ Введите целое число дней от 1 до {MAX_PERIOD_DAYS}')
+    texts = get_texts(db_user.language)
+    days = await _read_int(
+        message,
+        1,
+        MAX_PERIOD_DAYS,
+        texts.t('ADMIN_COUPONS_DAYS_INVALID', '❌ Введите целое число дней от 1 до {max_days}').format(
+            max_days=MAX_PERIOD_DAYS
+        ),
+    )
     if days is None:
         return
 
     await state.update_data(coupon_period_days=days)
     await message.answer(
-        f'🎫 Введите количество купонов в партии (1-{MAX_COUPONS_PER_BATCH}):',
+        texts.t('ADMIN_COUPONS_ENTER_COUNT', '🎫 Введите количество купонов в партии (1-{max_count}):').format(
+            max_count=MAX_COUPONS_PER_BATCH
+        ),
         reply_markup=_CANCEL_KEYBOARD,
     )
     await state.set_state(AdminStates.creating_coupon_batch_count)
@@ -268,15 +304,21 @@ async def process_coupon_batch_days(message: types.Message, db_user: User, state
 @admin_required
 @error_handler
 async def process_coupon_batch_count(message: types.Message, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     count = await _read_int(
-        message, 1, MAX_COUPONS_PER_BATCH, f'❌ Введите целое число купонов от 1 до {MAX_COUPONS_PER_BATCH}'
+        message,
+        1,
+        MAX_COUPONS_PER_BATCH,
+        texts.t('ADMIN_COUPONS_COUNT_INVALID', '❌ Введите целое число купонов от 1 до {max_count}').format(
+            max_count=MAX_COUPONS_PER_BATCH
+        ),
     )
     if count is None:
         return
 
     await state.update_data(coupon_count=count)
     await message.answer(
-        '📌 Введите название партии (например, имя партнёра):',
+        texts.t('ADMIN_COUPONS_ENTER_NAME', '📌 Введите название партии (например, имя партнёра):'),
         reply_markup=_CANCEL_KEYBOARD,
     )
     await state.set_state(AdminStates.creating_coupon_batch_name)
@@ -285,14 +327,21 @@ async def process_coupon_batch_count(message: types.Message, db_user: User, stat
 @admin_required
 @error_handler
 async def process_coupon_batch_name(message: types.Message, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     name = (message.text or '').strip()
     if not name or len(name) > 255:
-        await message.answer('❌ Название должно быть от 1 до 255 символов', reply_markup=_CANCEL_KEYBOARD)
+        await message.answer(
+            texts.t('ADMIN_COUPONS_NAME_INVALID', '❌ Название должно быть от 1 до 255 символов'),
+            reply_markup=_CANCEL_KEYBOARD,
+        )
         return
 
     await state.update_data(coupon_batch_name=name)
     await message.answer(
-        '💰 Введите оптовую цену за купон в рублях — только для учёта (0 — не указывать):',
+        texts.t(
+            'ADMIN_COUPONS_ENTER_PRICE',
+            '💰 Введите оптовую цену за купон в рублях — только для учёта (0 — не указывать):',
+        ),
         reply_markup=_CANCEL_KEYBOARD,
     )
     await state.set_state(AdminStates.creating_coupon_batch_price)
@@ -301,21 +350,28 @@ async def process_coupon_batch_name(message: types.Message, db_user: User, state
 @admin_required
 @error_handler
 async def process_coupon_batch_price(message: types.Message, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     try:
         rubles = float((message.text or '').strip().replace(',', '.').replace(' ', ''))
     except ValueError:
-        await message.answer('❌ Введите цену числом (например, 150 или 99.50)', reply_markup=_CANCEL_KEYBOARD)
+        await message.answer(
+            texts.t('ADMIN_COUPONS_PRICE_INVALID', '❌ Введите цену числом (например, 150 или 99.50)'),
+            reply_markup=_CANCEL_KEYBOARD,
+        )
         return
     # Inverted range check: also rejects NaN (all comparisons with NaN are False)
     if not 0 <= rubles <= MAX_WHOLESALE_PRICE_RUBLES:
         await message.answer(
-            f'❌ Цена должна быть от 0 до {MAX_WHOLESALE_PRICE_RUBLES} рублей', reply_markup=_CANCEL_KEYBOARD
+            texts.t('ADMIN_COUPONS_PRICE_RANGE', '❌ Цена должна быть от 0 до {max_price} рублей').format(
+                max_price=MAX_WHOLESALE_PRICE_RUBLES
+            ),
+            reply_markup=_CANCEL_KEYBOARD,
         )
         return
 
     await state.update_data(coupon_price_kopeks=int(round(rubles * 100)))
     await message.answer(
-        '⏰ Введите срок действия купонов в днях (0 — бессрочно):',
+        texts.t('ADMIN_COUPONS_ENTER_EXPIRY', '⏰ Введите срок действия купонов в днях (0 — бессрочно):'),
         reply_markup=_CANCEL_KEYBOARD,
     )
     await state.set_state(AdminStates.creating_coupon_batch_expiry)
@@ -324,17 +380,26 @@ async def process_coupon_batch_price(message: types.Message, db_user: User, stat
 @admin_required
 @error_handler
 async def process_coupon_batch_expiry(message: types.Message, db_user: User, state: FSMContext):
+    texts = get_texts(db_user.language)
     expiry_days = await _read_int(
-        message, 0, MAX_PERIOD_DAYS, f'❌ Введите число дней от 0 до {MAX_PERIOD_DAYS} (0 — бессрочно)'
+        message,
+        0,
+        MAX_PERIOD_DAYS,
+        texts.t('ADMIN_COUPONS_EXPIRY_INVALID', '❌ Введите число дней от 0 до {max_days} (0 — бессрочно)').format(
+            max_days=MAX_PERIOD_DAYS
+        ),
     )
     if expiry_days is None:
         return
 
     await state.update_data(coupon_expiry_days=expiry_days)
     await message.answer(
-        '👤 Сколько купонов из партии может активировать ОДИН пользователь?\n\n'
-        '<i>0 — без ограничения. Для раздач и конкурсов ставьте 1, чтобы один '
-        'человек не забрал всю партию.</i>',
+        texts.t(
+            'ADMIN_COUPONS_ENTER_PER_USER',
+            '👤 Сколько купонов из партии может активировать ОДИН пользователь?\n\n'
+            '<i>0 — без ограничения. Для раздач и конкурсов ставьте 1, чтобы один '
+            'человек не забрал всю партию.</i>',
+        ),
         reply_markup=_CANCEL_KEYBOARD,
     )
     await state.set_state(AdminStates.creating_coupon_batch_per_user)
@@ -343,7 +408,13 @@ async def process_coupon_batch_expiry(message: types.Message, db_user: User, sta
 @admin_required
 @error_handler
 async def process_coupon_batch_per_user(message: types.Message, db_user: User, state: FSMContext):
-    max_per_user = await _read_int(message, 0, MAX_COUPONS_PER_BATCH, '❌ Введите число от 0 (без ограничения)')
+    texts = get_texts(db_user.language)
+    max_per_user = await _read_int(
+        message,
+        0,
+        MAX_COUPONS_PER_BATCH,
+        texts.t('ADMIN_COUPONS_PER_USER_INVALID', '❌ Введите число от 0 (без ограничения)'),
+    )
     if max_per_user is None:
         return
 
@@ -352,24 +423,50 @@ async def process_coupon_batch_per_user(message: types.Message, db_user: User, s
     data = await state.get_data()
     expiry_days = data.get('coupon_expiry_days', 0)
     price_kopeks = data.get('coupon_price_kopeks', 0)
-    price_line = f'💰 Опт: {settings.format_price(price_kopeks)}/шт\n' if price_kopeks > 0 else ''
-    expiry_line = f'⏰ Срок: {expiry_days} дн.\n' if expiry_days > 0 else '⏰ Срок: бессрочно\n'
+    price_line = (
+        texts.t('ADMIN_COUPONS_SUMMARY_PRICE', '💰 Опт: {price}/шт\n').format(price=settings.format_price(price_kopeks))
+        if price_kopeks > 0
+        else ''
+    )
+    expiry_line = (
+        texts.t('ADMIN_COUPONS_SUMMARY_EXPIRY', '⏰ Срок: {days} дн.\n').format(days=expiry_days)
+        if expiry_days > 0
+        else texts.t('ADMIN_COUPONS_SUMMARY_EXPIRY_UNLIMITED', '⏰ Срок: бессрочно\n')
+    )
     per_user_line = (
-        f'👤 На пользователя: {max_per_user} шт.\n' if max_per_user > 0 else '👤 На пользователя: без ограничения\n'
+        texts.t('ADMIN_COUPONS_SUMMARY_PER_USER', '👤 На пользователя: {count} шт.\n').format(count=max_per_user)
+        if max_per_user > 0
+        else texts.t('ADMIN_COUPONS_SUMMARY_PER_USER_UNLIMITED', '👤 На пользователя: без ограничения\n')
     )
 
     await message.answer(
-        f'🎟 <b>Подтвердите создание партии</b>\n\n'
-        f'📌 Название: {html.escape(data.get("coupon_batch_name", ""))}\n'
-        f'📦 Тариф: {html.escape(data.get("coupon_tariff_name", ""))} — {data.get("coupon_period_days")} дн.\n'
-        f'🎫 Купонов: {data.get("coupon_count")}\n'
-        f'{price_line}'
-        f'{expiry_line}'
-        f'{per_user_line}',
+        texts.t(
+            'ADMIN_COUPONS_CONFIRM_CREATE',
+            '🎟 <b>Подтвердите создание партии</b>\n\n'
+            '📌 Название: {name}\n'
+            '📦 Тариф: {tariff} — {days} дн.\n'
+            '🎫 Купонов: {count}\n'
+            '{price_line}'
+            '{expiry_line}'
+            '{per_user_line}',
+        ).format(
+            name=html.escape(data.get('coupon_batch_name', '')),
+            tariff=html.escape(data.get('coupon_tariff_name', '')),
+            days=data.get('coupon_period_days'),
+            count=data.get('coupon_count'),
+            price_line=price_line,
+            expiry_line=expiry_line,
+            per_user_line=per_user_line,
+        ),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='✅ Создать', callback_data='admin_coupon_create_confirm')],
-                [types.InlineKeyboardButton(text='❌ Отмена', callback_data='admin_coupons')],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_COUPONS_CONFIRM_CREATE_BTN', '✅ Создать'),
+                        callback_data='admin_coupon_create_confirm',
+                    )
+                ],
+                [types.InlineKeyboardButton(text=texts.t('ADMIN_CANCEL', '❌ Отмена'), callback_data='admin_coupons')],
             ]
         ),
     )
@@ -380,11 +477,14 @@ async def process_coupon_batch_per_user(message: types.Message, db_user: User, s
 async def confirm_coupon_batch_creation(
     callback: types.CallbackQuery, db_user: User, state: FSMContext, db: AsyncSession
 ):
+    texts = get_texts(db_user.language)
     # Synchronous double-submit guard: the check+add run with no await between
     # them, so two concurrently-dispatched taps can't both pass (the FSM
     # check→clear below is not atomic on its own).
     if db_user.id in _batch_creation_in_progress:
-        await callback.answer('⏳ Партия уже создаётся, подождите', show_alert=True)
+        await callback.answer(
+            texts.t('ADMIN_COUPONS_ALREADY_CREATING', '⏳ Партия уже создаётся, подождите'), show_alert=True
+        )
         return
     _batch_creation_in_progress.add(db_user.id)
     try:
@@ -393,7 +493,9 @@ async def confirm_coupon_batch_creation(
         # would create a batch from half-entered state of a NEW wizard run.
         current_state = await state.get_state()
         if current_state != AdminStates.creating_coupon_batch_expiry.state:
-            await callback.answer('❌ Данные создания устарели, начните заново', show_alert=True)
+            await callback.answer(
+                texts.t('ADMIN_COUPONS_DATA_STALE', '❌ Данные создания устарели, начните заново'), show_alert=True
+            )
             return
 
         data = await state.get_data()
@@ -404,7 +506,9 @@ async def confirm_coupon_batch_creation(
         expiry_days = data.get('coupon_expiry_days')
 
         if not all([tariff_id, period_days, count, name]) or expiry_days is None:
-            await callback.answer('❌ Данные создания устарели, начните заново', show_alert=True)
+            await callback.answer(
+                texts.t('ADMIN_COUPONS_DATA_STALE', '❌ Данные создания устарели, начните заново'), show_alert=True
+            )
             await state.clear()
             return
 
@@ -414,7 +518,9 @@ async def confirm_coupon_batch_creation(
 
         tariff = await get_tariff_by_id(db, tariff_id)
         if not tariff or not tariff.is_active:
-            await callback.answer('❌ Тариф не найден или неактивен', show_alert=True)
+            await callback.answer(
+                texts.t('ADMIN_COUPONS_TARIFF_NOT_FOUND', '❌ Тариф не найден или неактивен'), show_alert=True
+            )
             return
 
         valid_until = datetime.now(UTC) + timedelta(days=expiry_days) if expiry_days else None
@@ -442,7 +548,7 @@ async def confirm_coupon_batch_creation(
 
         await _show_batch_card(callback, db, batch)
         await _send_batch_links_file(callback, db, batch)
-        await callback.answer('✅ Партия создана')
+        await callback.answer(texts.t('ADMIN_COUPONS_BATCH_CREATED', '✅ Партия создана'))
     finally:
         _batch_creation_in_progress.discard(db_user.id)
 
@@ -497,6 +603,7 @@ async def export_coupon_batch(callback: types.CallbackQuery, db_user: User, db: 
 @admin_required
 @error_handler
 async def ask_revoke_coupon_batch(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     batch = await _load_batch(callback, db)
     if batch is None:
         return
@@ -505,18 +612,27 @@ async def ask_revoke_coupon_batch(callback: types.CallbackQuery, db_user: User, 
     active = counts.get(CouponStatus.ACTIVE.value, 0)
 
     await callback.message.edit_text(
-        f'⛔ <b>Отзыв партии #{batch.id}</b>\n\n'
-        f'«{html.escape(batch.name)}»: будет отозвано {active} непогашенных купонов. '
-        f'Их ссылки перестанут работать. Действие необратимо.\n\n'
-        f'Подтвердить?',
+        texts.t(
+            'ADMIN_COUPONS_REVOKE_CONFIRM',
+            '⛔ <b>Отзыв партии #{batch_id}</b>\n\n'
+            '«{name}»: будет отозвано {active} непогашенных купонов. '
+            'Их ссылки перестанут работать. Действие необратимо.\n\n'
+            'Подтвердить?',
+        ).format(batch_id=batch.id, name=html.escape(batch.name), active=active),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='⛔ Да, отозвать', callback_data=f'admin_coupon_revoke_confirm_{batch.id}'
+                        text=texts.t('ADMIN_COUPONS_REVOKE_YES_BTN', '⛔ Да, отозвать'),
+                        callback_data=f'admin_coupon_revoke_confirm_{batch.id}',
                     )
                 ],
-                [types.InlineKeyboardButton(text='❌ Отмена', callback_data=f'admin_coupon_manage_{batch.id}')],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_CANCEL', '❌ Отмена'),
+                        callback_data=f'admin_coupon_manage_{batch.id}',
+                    )
+                ],
             ]
         ),
     )
@@ -526,6 +642,7 @@ async def ask_revoke_coupon_batch(callback: types.CallbackQuery, db_user: User, 
 @admin_required
 @error_handler
 async def confirm_revoke_coupon_batch(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     batch = await _load_batch(callback, db)
     if batch is None:
         return
@@ -539,12 +656,15 @@ async def confirm_revoke_coupon_batch(callback: types.CallbackQuery, db_user: Us
     )
 
     await _show_batch_card(callback, db, batch)
-    await callback.answer(f'⛔ Отозвано купонов: {revoked_count}')
+    await callback.answer(
+        texts.t('ADMIN_COUPONS_REVOKED_COUNT', '⛔ Отозвано купонов: {count}').format(count=revoked_count)
+    )
 
 
 @admin_required
 @error_handler
 async def ask_delete_coupon_batch(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     batch = await _load_batch(callback, db)
     if batch is None:
         return
@@ -555,25 +675,35 @@ async def ask_delete_coupon_batch(callback: types.CallbackQuery, db_user: User, 
 
     warning = ''
     if redeemed:
-        warning = (
-            f'\n⚠️ Среди них {redeemed} уже погашенных: пропадёт история, кто чем воспользовался. '
-            f'Выданные подписки при этом НЕ отзываются.\n'
-        )
+        warning = texts.t(
+            'ADMIN_COUPONS_DELETE_WARNING',
+            '\n⚠️ Среди них {redeemed} уже погашенных: пропадёт история, кто чем воспользовался. '
+            'Выданные подписки при этом НЕ отзываются.\n',
+        ).format(redeemed=redeemed)
 
     await callback.message.edit_text(
-        f'🗑 <b>Удаление партии #{batch.id}</b>\n\n'
-        f'«{html.escape(batch.name)}»: будет удалено {total} купонов вместе с самой партией.\n'
-        f'{warning}\n'
-        f'Если нужно просто закрыть раздачу — используйте «Отозвать»: он гасит ссылки, но сохраняет историю.\n\n'
-        f'Подтвердить удаление?',
+        texts.t(
+            'ADMIN_COUPONS_DELETE_CONFIRM',
+            '🗑 <b>Удаление партии #{batch_id}</b>\n\n'
+            '«{name}»: будет удалено {total} купонов вместе с самой партией.\n'
+            '{warning}\n'
+            'Если нужно просто закрыть раздачу — используйте «Отозвать»: он гасит ссылки, но сохраняет историю.\n\n'
+            'Подтвердить удаление?',
+        ).format(batch_id=batch.id, name=html.escape(batch.name), total=total, warning=warning),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='🗑 Да, удалить', callback_data=f'admin_coupon_delete_confirm_{batch.id}'
+                        text=texts.t('ADMIN_COUPONS_DELETE_YES_BTN', '🗑 Да, удалить'),
+                        callback_data=f'admin_coupon_delete_confirm_{batch.id}',
                     )
                 ],
-                [types.InlineKeyboardButton(text='❌ Отмена', callback_data=f'admin_coupon_manage_{batch.id}')],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_CANCEL', '❌ Отмена'),
+                        callback_data=f'admin_coupon_manage_{batch.id}',
+                    )
+                ],
             ]
         ),
     )
@@ -583,6 +713,7 @@ async def ask_delete_coupon_batch(callback: types.CallbackQuery, db_user: User, 
 @admin_required
 @error_handler
 async def confirm_delete_coupon_batch(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
+    texts = get_texts(db_user.language)
     batch = await _load_batch(callback, db)
     if batch is None:
         return
@@ -591,7 +722,10 @@ async def confirm_delete_coupon_batch(callback: types.CallbackQuery, db_user: Us
     total = await delete_coupon_batch(db, batch)
     logger.info('Админ удалил партию купонов', admin_id=db_user.id, batch_id=batch_id, deleted_coupons=total)
 
-    await callback.answer(f'🗑 Партия #{batch_id} удалена', show_alert=True)
+    await callback.answer(
+        texts.t('ADMIN_COUPONS_BATCH_DELETED', '🗑 Партия #{batch_id} удалена').format(batch_id=batch_id),
+        show_alert=True,
+    )
     await show_coupons_menu(callback, db_user, db, None)
 
 

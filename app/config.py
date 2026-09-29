@@ -1279,8 +1279,15 @@ class Settings(BaseSettings):
     SERVICE_RULES_DISPLAY_MODE: str = 'both'
     FAQ_DISPLAY_MODE: str = 'both'
 
-    # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
+    # Округление цен при отображении (дробная часть ≤0.50 вниз, >0.50 вверх)
     PRICE_ROUNDING_ENABLED: bool = True
+
+    # Домашняя валюта сервиса — иранский туман.
+    # Все внутренние суммы хранятся в минорных единицах (1/100 тумана) —
+    # та же конвенция, что раньше была с копейками.
+    HOME_CURRENCY_CODE: str = 'IRT'
+    CURRENCY_SYMBOL: str = 'تومان'
+    PRICE_THOUSANDS_SEPARATOR: str = ','
 
     LOG_LEVEL: str = 'INFO'
     LOG_FILE: str = 'logs/bot.log'
@@ -2292,35 +2299,38 @@ class Settings(BaseSettings):
 
     def format_price(self, price_kopeks: int, round_kopeks: bool | None = None) -> str:
         """
-        Форматирует цену в копейках для отображения пользователю.
+        Форматирует цену из минорных единиц (1/100 тумана) для отображения.
 
         Args:
-            price_kopeks: Сумма в копейках
-            round_kopeks: Если True, округляет копейки (≤50 вниз, >50 вверх).
-                         Если None, использует настройку PRICE_ROUNDING_ENABLED.
+            price_kopeks: Сумма в минорных единицах (100 = 1 туман)
+            round_kopeks: Если True, отбрасывает дробную часть (≤0.50 вниз,
+                         >0.50 вверх). Если None, использует настройку
+                         PRICE_ROUNDING_ENABLED.
 
         Returns:
-            Отформатированная строка цены (например, "150 ₽")
+            Отформатированная строка цены (например, "1,500 تومان")
         """
         # Используем настройку если не передано явно
         should_round = round_kopeks if round_kopeks is not None else self.PRICE_ROUNDING_ENABLED
 
         sign = '-' if price_kopeks < 0 else ''
-        abs_kopeks = abs(price_kopeks)
-        rubles, kopeks = divmod(abs_kopeks, 100)
+        abs_minor = abs(price_kopeks)
+        tomans, minor = divmod(abs_minor, 100)
+        symbol = self.CURRENCY_SYMBOL
+        separator = self.PRICE_THOUSANDS_SEPARATOR
 
         if should_round:
-            # Округление: ≤50 коп вниз, >50 коп вверх
-            if kopeks > 50:
-                rubles += 1
-            return f'{sign}{rubles} ₽'
+            # Округление: ≤0.50 вниз, >0.50 вверх
+            if minor > 50:
+                tomans += 1
+            return f'{sign}{tomans:,} {symbol}'.replace(',', separator)
 
-        # Без округления - показываем точное значение
-        if kopeks:
-            value = f'{sign}{rubles}.{kopeks:02d}'.rstrip('0').rstrip('.')
-            return f'{value} ₽'
+        # Без округления - показываем точное значение с дробной частью
+        if minor:
+            fraction = f'{minor:02d}'.rstrip('0')
+            return f'{sign}{tomans:,}.{fraction} {symbol}'.replace(',', separator)
 
-        return f'{sign}{rubles} ₽'
+        return f'{sign}{tomans:,} {symbol}'.replace(',', separator)
 
     def get_reports_chat_id(self) -> str | None:
         if self.ADMIN_REPORTS_CHAT_ID:

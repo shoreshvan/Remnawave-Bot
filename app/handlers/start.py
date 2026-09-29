@@ -167,7 +167,7 @@ async def _answer_registration_denial(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('registration_contact_support'),
+                        text=texts.t('REGISTRATION_CONTACT_SUPPORT', '💬 Связаться с поддержкой'),
                         url=support_url,
                     )
                 ]
@@ -550,7 +550,10 @@ async def _redeem_pending_coupon(
     try:
         tariff_name = html.escape(result.tariff_name)
         await answer_func(
-            f'🎟 <b>Купон активирован!</b>\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
+            get_texts(user.language).t(
+                'COUPON_REDEEMED',
+                '🎟 <b>Купон активирован!</b>\n{tariff} — {days} дн.\n\nВаша подписка обновлена.',
+            ).format(tariff=tariff_name, days=result.period_days),
             parse_mode=ParseMode.HTML,
         )
     except Exception:
@@ -983,7 +986,7 @@ async def _apply_campaign_bonus_if_needed(
             'CAMPAIGN_BONUS_TARIFF',
             "🎁 Вам выдан тариф '{tariff_name}' на {days} дней!\n📊 Трафик: {traffic}\n📱 Устройств: {devices}",
         ).format(
-            tariff_name=result.tariff_name or 'Подарочный',
+            tariff_name=result.tariff_name or texts.t('CAMPAIGN_BONUS_DEFAULT_TARIFF_NAME', 'Подарочный'),
             days=result.tariff_duration_days,
             traffic=traffic_text,
             devices=result.subscription_device_limit,
@@ -3346,7 +3349,11 @@ async def process_webauth_confirm(
 
     user = await get_user_by_telegram_id(db, callback.from_user.id)
     if not user or user.status != UserStatus.ACTIVE.value:
-        await callback.message.edit_text('❌ Учётная запись неактивна.')
+        await callback.message.edit_text(
+            get_texts(user.language if user else DEFAULT_LANGUAGE).t(
+                'WEB_AUTH_ACCOUNT_INACTIVE', '❌ Учётная запись неактивна.'
+            )
+        )
         return
 
     linked = await link_web_auth_token(token, callback.from_user.id, user.id)

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.payment_method_config_service import (
     DEFAULT_QUICK_AMOUNTS,
     _get_method_defaults,
@@ -65,7 +66,10 @@ class PaymentMethodConfigResponse(BaseModel):
 
 class PaymentMethodConfigUpdateRequest(BaseModel):
     is_enabled: bool | None = None
-    display_name: str | None = Field(default=None, description='Null to reset to default')
+    display_name: str | None = Field(
+        default=None,
+        description=get_texts().t('CABINET_PAYMENT_METHOD_NULL_RESET_DESCRIPTION', 'Null to reset to default'),
+    )
     sub_options: dict[str, bool] | None = None
     min_amount_kopeks: int | None = Field(default=None, ge=0)
     max_amount_kopeks: int | None = Field(default=None, ge=0)
@@ -77,10 +81,20 @@ class PaymentMethodConfigUpdateRequest(BaseModel):
         if not v:
             return None
         if len(v) > 20:
-            raise ValueError('sub_options cannot have more than 20 keys')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_PAYMENT_METHOD_SUB_OPTIONS_TOO_MANY',
+                    'sub_options cannot have more than 20 keys',
+                )
+            )
         for key in v:
             if not isinstance(key, str) or len(key) > 50:
-                raise ValueError('sub_options keys must be strings of at most 50 characters')
+                raise ValueError(
+                    get_texts().t(
+                        'CABINET_PAYMENT_METHOD_SUB_OPTIONS_KEY_INVALID',
+                        'sub_options keys must be strings of at most 50 characters',
+                    )
+                )
         return v
 
     quick_amounts: list[int] | None = None
@@ -95,7 +109,10 @@ class PaymentMethodConfigUpdateRequest(BaseModel):
     promo_group_filter_mode: str | None = Field(default=None, pattern='^(all|selected)$')
     allowed_promo_group_ids: list[int] | None = None
     open_url_direct: bool | None = None
-    description: str | None = Field(default=None, description='Null to reset to default')
+    description: str | None = Field(
+        default=None,
+        description=get_texts().t('CABINET_PAYMENT_METHOD_NULL_RESET_DESCRIPTION', 'Null to reset to default'),
+    )
     # Allow explicitly resetting display_name to null
     reset_display_name: bool = False
     reset_description: bool = False
@@ -187,7 +204,9 @@ async def get_payment_method(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Payment method not found: {method_id}',
+            detail=get_texts()
+            .t('CABINET_PAYMENT_METHOD_NOT_FOUND', 'Payment method not found: {method_id}')
+            .format(method_id=method_id),
         )
     defaults = _get_method_defaults()
     return _enrich_config(config, defaults)
@@ -268,7 +287,9 @@ async def update_payment_method(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Payment method not found: {method_id}',
+            detail=get_texts()
+            .t('CABINET_PAYMENT_METHOD_NOT_FOUND', 'Payment method not found: {method_id}')
+            .format(method_id=method_id),
         )
 
     logger.info('Admin updated payment method config', admin_id=admin.id, method_id=method_id)

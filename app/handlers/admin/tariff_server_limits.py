@@ -56,7 +56,11 @@ def get_server_limits_keyboard(tariff: Tariff, squads: list, language: str) -> I
     buttons = []
     for squad in _visible_squads(tariff, squads):
         limit = limit_for(tariff, squad.squad_uuid)
-        label = f'{squad.display_name}: {limit} ГБ' if limit else f'{squad.display_name}: по тарифу'
+        label = (
+            texts.t('ADMIN_TARIFF_SL_SQUAD_LIMIT', '{name}: {limit} ГБ').format(name=squad.display_name, limit=limit)
+            if limit
+            else texts.t('ADMIN_TARIFF_SL_SQUAD_DEFAULT', '{name}: по тарифу').format(name=squad.display_name)
+        )
         buttons.append(
             [InlineKeyboardButton(text=label, callback_data=f'admin_tariff_srv_limit:{tariff.id}:{squad.squad_uuid}')]
         )
@@ -80,9 +84,10 @@ async def _render_screen(
 @error_handler
 async def show_server_limits(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     await state.clear()
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     await _render_screen(callback.message, tariff, db, db_user.language, edit=True)
     await callback.answer()
@@ -92,18 +97,22 @@ async def show_server_limits(callback: types.CallbackQuery, db_user: User, db: A
 @error_handler
 async def start_edit_server_limit(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     _, tariff_id, squad_uuid = callback.data.split(':', 2)
+    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(tariff_id))
     if not tariff:
-        await callback.answer('Тариф не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
     await state.set_state(AdminStates.editing_tariff_server_limit)
     await state.update_data(tariff_id=tariff.id, squad_uuid=squad_uuid, language=db_user.language)
-    texts = get_texts(db_user.language)
     current = limit_for(tariff, squad_uuid)
+    suffix = '' if current else texts.t('ADMIN_TARIFF_SL_EDIT_DEFAULT_SUFFIX', ' (по тарифу)')
     await callback.message.edit_text(
-        f'🗄️ <b>Лимит сервера</b>\n\nТариф: <b>{html.escape(tariff.name)}</b>\n'
-        f'Текущее значение: <b>{current} ГБ</b>{"" if current else " (по тарифу)"}\n\n'
-        'Введите лимит в ГБ целым числом. <code>0</code> — по тарифу.',
+        texts.t(
+            'ADMIN_TARIFF_SL_EDIT_BODY',
+            '🗄️ <b>Лимит сервера</b>\n\nТариф: <b>{name}</b>\n'
+            'Текущее значение: <b>{current} ГБ</b>{suffix}\n\n'
+            'Введите лимит в ГБ целым числом. <code>0</code> — по тарифу.',
+        ).format(name=html.escape(tariff.name), current=current, suffix=suffix),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_edit_server_limits:{tariff.id}')]
@@ -117,11 +126,12 @@ async def start_edit_server_limit(callback: types.CallbackQuery, db_user: User, 
 @admin_required
 @error_handler
 async def process_server_limit_input(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff = await get_tariff_by_id(db, data.get('tariff_id')) if data.get('tariff_id') is not None else None
     squad_uuid = data.get('squad_uuid')
     if tariff is None or not squad_uuid:
-        await message.answer('Тариф не найден')
+        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -131,7 +141,11 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
             raise ValueError
     except ValueError:
         await message.answer(
-            '❌ Введите целое число гигабайт, не меньше нуля. <code>0</code> — по тарифу.', parse_mode='HTML'
+            texts.t(
+                'ADMIN_TARIFF_SL_INVALID',
+                '❌ Введите целое число гигабайт, не меньше нуля. <code>0</code> — по тарифу.',
+            ),
+            parse_mode='HTML',
         )
         return
 
@@ -141,7 +155,11 @@ async def process_server_limit_input(message: types.Message, db_user: User, db: 
         limits[squad_uuid] = {'traffic_limit_gb': limit}
     tariff = await update_tariff(db, tariff, server_traffic_limits=limits)
     await state.clear()
-    confirmation = f'✅ Лимит установлен: {limit} ГБ' if limit else '✅ Лимит снят — по тарифу'
+    confirmation = (
+        texts.t('ADMIN_TARIFF_SL_SAVED', '✅ Лимит установлен: {limit} ГБ').format(limit=limit)
+        if limit
+        else texts.t('ADMIN_TARIFF_SL_CLEARED', '✅ Лимит снят — по тарифу')
+    )
     await _render_screen(message, tariff, db, db_user.language, edit=False, prefix=f'{confirmation}\n\n')
 
 

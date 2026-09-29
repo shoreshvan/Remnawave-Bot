@@ -125,7 +125,12 @@ class QuestButtonsStrategy(BaseGameStrategy):
         except (ValueError, IndexError):
             is_correct = False
 
-        responses = ['Пусто', 'Ложный сервер', 'Найди другой узел']
+        texts = self._get_texts(language)
+        responses = [
+            texts.t('CONTEST_QUEST_RESPONSE_EMPTY', 'Пусто'),
+            texts.t('CONTEST_QUEST_RESPONSE_FAKE_SERVER', 'Ложный сервер'),
+            texts.t('CONTEST_QUEST_RESPONSE_FIND_ANOTHER', 'Найди другой узел'),
+        ]
         return AnswerCheckResult(
             is_correct=is_correct,
             response_text='' if is_correct else random.choice(responses),
@@ -189,7 +194,12 @@ class LockHackStrategy(BaseGameStrategy):
         except (ValueError, IndexError):
             is_correct = False
 
-        responses = ['Заблокировано', 'Попробуй ещё', 'Нет доступа']
+        texts = self._get_texts(language)
+        responses = [
+            texts.t('CONTEST_LOCKS_RESPONSE_BLOCKED', 'Заблокировано'),
+            texts.t('CONTEST_LOCKS_RESPONSE_TRY_AGAIN', 'Попробуй ещё'),
+            texts.t('CONTEST_LOCKS_RESPONSE_NO_ACCESS', 'Нет доступа'),
+        ]
         return AnswerCheckResult(
             is_correct=is_correct,
             response_text='' if is_correct else random.choice(responses),
@@ -252,7 +262,12 @@ class ServerLotteryStrategy(BaseGameStrategy):
         correct_flag = flags[secret_idx] if secret_idx is not None and secret_idx < len(flags) else ''
         is_correct = user_answer == correct_flag
 
-        responses = ['Сервер перегружен', 'Нет ответа', 'Попробуй завтра']
+        texts = self._get_texts(language)
+        responses = [
+            texts.t('CONTEST_SERVER_RESPONSE_OVERLOADED', 'Сервер перегружен'),
+            texts.t('CONTEST_SERVER_RESPONSE_NO_ANSWER', 'Нет ответа'),
+            texts.t('CONTEST_SERVER_RESPONSE_TRY_TOMORROW', 'Попробуй завтра'),
+        ]
         return AnswerCheckResult(
             is_correct=is_correct,
             response_text='' if is_correct else random.choice(responses),
@@ -300,9 +315,10 @@ class BlitzReactionStrategy(BaseGameStrategy):
         language: str,
     ) -> AnswerCheckResult:
         is_correct = user_answer == 'blitz'
+        texts = self._get_texts(language)
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text='' if is_correct else 'Время вышло',
+            response_text='' if is_correct else texts.t('CONTEST_BLITZ_TIMEOUT', 'Время вышло'),
         )
 
 
@@ -344,10 +360,13 @@ class LetterCipherStrategy(BaseGameStrategy):
     ) -> AnswerCheckResult:
         correct = (payload.get('answer') or '').upper()
         is_correct = correct and user_answer.strip().upper() == correct
+        texts = self._get_texts(language)
 
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text='' if is_correct else 'Неверно, попробуй в следующем раунде',
+            response_text=''
+            if is_correct
+            else texts.t('CONTEST_ANSWER_WRONG_NEXT_ROUND', 'Неверно, попробуй в следующем раунде'),
         )
 
 
@@ -389,10 +408,13 @@ class EmojiGuessStrategy(BaseGameStrategy):
     ) -> AnswerCheckResult:
         correct = (payload.get('answer') or '').upper()
         is_correct = correct and user_answer.strip().upper() == correct
+        texts = self._get_texts(language)
 
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text='' if is_correct else 'Неверно, попробуй в следующем раунде',
+            response_text=''
+            if is_correct
+            else texts.t('CONTEST_ANSWER_WRONG_NEXT_ROUND', 'Неверно, попробуй в следующем раунде'),
         )
 
 
@@ -434,10 +456,13 @@ class AnagramStrategy(BaseGameStrategy):
     ) -> AnswerCheckResult:
         correct = (payload.get('answer') or '').upper()
         is_correct = correct and user_answer.strip().upper() == correct
+        texts = self._get_texts(language)
 
         return AnswerCheckResult(
             is_correct=is_correct,
-            response_text='' if is_correct else 'Неверно, попробуй в следующем раунде',
+            response_text=''
+            if is_correct
+            else texts.t('CONTEST_ANSWER_WRONG_NEXT_ROUND', 'Неверно, попробуй в следующем раунде'),
         )
 
 

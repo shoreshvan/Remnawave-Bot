@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.localization.texts import get_texts
+
 
 class GiftConfigSubOption(BaseModel):
     id: str
@@ -67,7 +69,11 @@ class GiftPurchaseRequest(BaseModel):
     @model_validator(mode='after')
     def validate_payment(self) -> GiftPurchaseRequest:
         if self.payment_mode == 'gateway' and not self.payment_method:
-            raise ValueError('payment_method is required for gateway mode')
+            raise ValueError(
+                get_texts().t(
+                    'CABINET_GIFT_PAYMENT_METHOD_REQUIRED_FOR_GATEWAY', 'payment_method is required for gateway mode'
+                )
+            )
         return self
 
 

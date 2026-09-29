@@ -23,6 +23,7 @@ from aiogram import Bot
 from aiogram.types import FSInputFile
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.utils.timezone import get_local_timezone
 
 
@@ -288,12 +289,11 @@ class LogRotationService:
 
         try:
             file_size_kb = (await asyncio.to_thread(archive_path.stat)).st_size / 1024
-            caption = (
-                f'<b>Логи бота</b>\n'
-                f'Дата: {date_str}\n'
-                f'Файл: <code>{archive_path.name}</code>\n'
-                f'Размер: {file_size_kb:.1f} KB'
-            )
+            texts = get_texts(settings.DEFAULT_LANGUAGE)
+            caption = texts.t(
+                'LOG_ROTATION_ARCHIVE_CAPTION',
+                '<b>Логи бота</b>\nДата: {date}\nФайл: <code>{filename}</code>\nРазмер: {size:.1f} KB',
+            ).format(date=date_str, filename=archive_path.name, size=file_size_kb)
 
             send_kwargs = {
                 'chat_id': chat_id,

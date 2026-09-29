@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import BroadcastHistory, PromoGroup, Subscription, SubscriptionStatus, Tariff, User
 from app.handlers.admin.messages import get_target_users_count
 from app.keyboards.admin import BROADCAST_BUTTONS, DEFAULT_BROADCAST_BUTTONS
+from app.localization.texts import get_texts
 from app.services.broadcast_service import (
     EMAIL_TARGET_PROMO_GROUP_PREFIX,
     BroadcastConfig,
@@ -52,15 +53,15 @@ router = APIRouter(prefix='/admin/broadcasts', tags=['Cabinet Admin Broadcasts']
 # ============ Filter Labels ============
 
 FILTER_LABELS = {
-    'all': 'Все пользователи',
-    'active': 'Активные подписки',
-    'trial': 'Триальные',
-    'no': 'Без подписки',
-    'expiring': 'Истекают (3 дня)',
-    'expired': 'Истекшие',
-    'zero': 'Нулевой трафик',
-    'active_zero': 'Активные с нулевым трафиком',
-    'trial_zero': 'Триальные с нулевым трафиком',
+    'all': get_texts().t('BROADCAST_FILTER_ALL', 'Все пользователи'),
+    'active': get_texts().t('BROADCAST_FILTER_ACTIVE', 'Активные подписки'),
+    'trial': get_texts().t('BROADCAST_FILTER_TRIAL', 'Триальные'),
+    'no': get_texts().t('BROADCAST_FILTER_NO_SUBSCRIPTION', 'Без подписки'),
+    'expiring': get_texts().t('BROADCAST_FILTER_EXPIRING', 'Истекают (3 дня)'),
+    'expired': get_texts().t('BROADCAST_FILTER_EXPIRED', 'Истекшие'),
+    'zero': get_texts().t('BROADCAST_FILTER_ZERO_TRAFFIC', 'Нулевой трафик'),
+    'active_zero': get_texts().t('BROADCAST_FILTER_ACTIVE_ZERO', 'Активные с нулевым трафиком'),
+    'trial_zero': get_texts().t('BROADCAST_FILTER_TRIAL_ZERO', 'Триальные с нулевым трафиком'),
 }
 
 FILTER_GROUPS = {
@@ -76,14 +77,14 @@ FILTER_GROUPS = {
 }
 
 CUSTOM_FILTER_LABELS = {
-    'custom_today': 'Регистрация сегодня',
-    'custom_week': 'Регистрация за неделю',
-    'custom_month': 'Регистрация за месяц',
-    'custom_active_today': 'Активны сегодня',
-    'custom_inactive_week': 'Неактивны 7+ дней',
-    'custom_inactive_month': 'Неактивны 30+ дней',
-    'custom_referrals': 'Пришли по рефералу',
-    'custom_direct': 'Прямая регистрация',
+    'custom_today': get_texts().t('BROADCAST_FILTER_CUSTOM_TODAY', 'Регистрация сегодня'),
+    'custom_week': get_texts().t('BROADCAST_FILTER_CUSTOM_WEEK', 'Регистрация за неделю'),
+    'custom_month': get_texts().t('BROADCAST_FILTER_CUSTOM_MONTH', 'Регистрация за месяц'),
+    'custom_active_today': get_texts().t('BROADCAST_FILTER_CUSTOM_ACTIVE_TODAY', 'Активны сегодня'),
+    'custom_inactive_week': get_texts().t('BROADCAST_FILTER_CUSTOM_INACTIVE_WEEK', 'Неактивны 7+ дней'),
+    'custom_inactive_month': get_texts().t('BROADCAST_FILTER_CUSTOM_INACTIVE_MONTH', 'Неактивны 30+ дней'),
+    'custom_referrals': get_texts().t('BROADCAST_FILTER_CUSTOM_REFERRALS', 'Пришли по рефералу'),
+    'custom_direct': get_texts().t('BROADCAST_FILTER_CUSTOM_DIRECT', 'Прямая регистрация'),
 }
 
 CUSTOM_FILTER_GROUPS = {
@@ -101,11 +102,11 @@ CUSTOM_FILTER_GROUPS = {
 # ============ Email Filter Labels ============
 
 EMAIL_FILTER_LABELS = {
-    'all_email': 'Все с email',
-    'email_only': 'Только email-регистрация',
-    'telegram_with_email': 'Telegram с email',
-    'active_email': 'С активной подпиской',
-    'expired_email': 'С истекшей подпиской',
+    'all_email': get_texts().t('BROADCAST_EMAIL_FILTER_ALL', 'Все с email'),
+    'email_only': get_texts().t('BROADCAST_EMAIL_FILTER_EMAIL_ONLY', 'Только email-регистрация'),
+    'telegram_with_email': get_texts().t('BROADCAST_EMAIL_FILTER_TELEGRAM_WITH_EMAIL', 'Telegram с email'),
+    'active_email': get_texts().t('BROADCAST_EMAIL_FILTER_ACTIVE', 'С активной подпиской'),
+    'expired_email': get_texts().t('BROADCAST_EMAIL_FILTER_EXPIRED', 'С истекшей подпиской'),
 }
 
 EMAIL_FILTER_GROUPS = {
@@ -266,10 +267,13 @@ def _ensure_media_caption_fits(caption: str) -> None:
     if len(caption) > _MEDIA_CAPTION_LIMIT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f'Текст слишком длинный для сообщения с медиа. Максимум {_MEDIA_CAPTION_LIMIT} символов, '
-                f'сейчас {len(caption)}. Сократите текст или уберите медиафайл.'
-            ),
+            detail=get_texts()
+            .t(
+                'BROADCAST_MEDIA_TEXT_TOO_LONG',
+                'Текст слишком длинный для сообщения с медиа. Максимум 1024 символов, '
+                'сейчас {count}. Сократите текст или уберите медиафайл.',
+            )
+            .format(count=len(caption)),
         )
 
 
@@ -414,7 +418,7 @@ async def preview_broadcast(
     if not _validate_target(request.target, tariff_ids):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid target: {request.target}',
+            detail=get_texts().t('BROADCAST_INVALID_TARGET', 'Invalid target: {target}').format(target=request.target),
         )
 
     try:
@@ -423,7 +427,7 @@ async def preview_broadcast(
         logger.error('Failed to get count for target', target=request.target, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to count recipients',
+            detail=get_texts().t('BROADCAST_COUNT_RECIPIENTS_FAILED', 'Failed to count recipients'),
         )
 
     return BroadcastPreviewResponse(target=request.target, count=count)
@@ -443,21 +447,21 @@ async def create_broadcast(
     if not _validate_target(request.target, tariff_ids):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid target: {request.target}',
+            detail=get_texts().t('BROADCAST_INVALID_TARGET', 'Invalid target: {target}').format(target=request.target),
         )
 
     # Validate buttons
     if not _validate_buttons(request.selected_buttons):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid button key',
+            detail=get_texts().t('BROADCAST_INVALID_BUTTON_KEY', 'Invalid button key'),
         )
 
     message_text = request.message_text.strip()
     if not message_text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Message text must not be empty',
+            detail=get_texts().t('BROADCAST_MESSAGE_TEXT_EMPTY', 'Message text must not be empty'),
         )
 
     media_payload = request.media
@@ -606,7 +610,9 @@ async def preview_email_broadcast(
     if not _validate_email_target(request.target):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid email target: {request.target}',
+            detail=get_texts()
+            .t('BROADCAST_INVALID_EMAIL_TARGET', 'Invalid email target: {target}')
+            .format(target=request.target),
         )
 
     try:
@@ -615,7 +621,7 @@ async def preview_email_broadcast(
         logger.error('Failed to get email count for target', target=request.target, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to count email recipients',
+            detail=get_texts().t('BROADCAST_COUNT_EMAIL_RECIPIENTS_FAILED', 'Failed to count email recipients'),
         )
 
     return EmailPreviewResponse(target=request.target, count=count)
@@ -665,14 +671,18 @@ async def create_combined_broadcast(
         if not _validate_target(request.target, tariff_ids):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Invalid target: {request.target}',
+                detail=get_texts()
+                .t('BROADCAST_INVALID_TARGET', 'Invalid target: {target}')
+                .format(target=request.target),
             )
 
         # Validate telegram message
         if not request.message_text or not request.message_text.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Message text is required for Telegram broadcast',
+                detail=get_texts().t(
+                    'BROADCAST_TELEGRAM_MESSAGE_REQUIRED', 'Message text is required for Telegram broadcast'
+                ),
             )
 
         # Та же граница, что у POST '' выше: именно этот эндпоинт использует кабинет.
@@ -683,7 +693,7 @@ async def create_combined_broadcast(
         if not _validate_buttons(request.selected_buttons):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid button key',
+                detail=get_texts().t('BROADCAST_INVALID_BUTTON_KEY', 'Invalid button key'),
             )
 
     if request.channel in ('email', 'both'):
@@ -691,7 +701,9 @@ async def create_combined_broadcast(
         if request.channel == 'email' and not _validate_email_target(request.target):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Invalid email target: {request.target}',
+                detail=get_texts()
+                .t('BROADCAST_INVALID_EMAIL_TARGET', 'Invalid email target: {target}')
+                .format(target=request.target),
             )
         if request.channel == 'email':
             await _ensure_email_scoped_target_exists(db, request.target)
@@ -700,13 +712,17 @@ async def create_combined_broadcast(
         if not request.email_subject or not request.email_subject.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Email subject is required for email broadcast',
+                detail=get_texts().t(
+                    'BROADCAST_EMAIL_SUBJECT_REQUIRED', 'Email subject is required for email broadcast'
+                ),
             )
 
         if not request.email_html_content or not request.email_html_content.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Email HTML content is required for email broadcast',
+                detail=get_texts().t(
+                    'BROADCAST_EMAIL_CONTENT_REQUIRED', 'Email HTML content is required for email broadcast'
+                ),
             )
 
     media_payload = request.media
@@ -798,7 +814,7 @@ async def get_broadcast(
     if not broadcast:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Broadcast not found',
+            detail=get_texts().t('BROADCAST_NOT_FOUND', 'Broadcast not found'),
         )
     return _serialize_broadcast(broadcast)
 
@@ -814,13 +830,13 @@ async def stop_broadcast(
     if not broadcast:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Broadcast not found',
+            detail=get_texts().t('BROADCAST_NOT_FOUND', 'Broadcast not found'),
         )
 
     if broadcast.status not in {'queued', 'in_progress', 'cancelling'}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Broadcast is not running',
+            detail=get_texts().t('BROADCAST_NOT_RUNNING', 'Broadcast is not running'),
         )
 
     # Try to stop both telegram and email broadcasts (one or both may be running)
