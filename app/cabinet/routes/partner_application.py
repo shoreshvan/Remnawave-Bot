@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cabinet.utils.links import get_campaign_deep_link, get_campaign_web_link
 from app.config import settings
 from app.database.models import AdvertisingCampaign, User
+from app.localization.texts import get_texts
 from app.services.partner_application_service import partner_application_service
 from app.services.partner_stats_service import PartnerStatsService
 
@@ -112,7 +113,7 @@ async def get_campaign_stats(
     if not user.is_partner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Partner status required',
+            detail=get_texts(user.language).t('CABINET_PARTNER_STATUS_REQUIRED', 'Partner status required'),
         )
 
     # Verify campaign belongs to this partner
@@ -126,7 +127,9 @@ async def get_campaign_stats(
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Campaign not found or not assigned to you',
+            detail=get_texts(user.language).t(
+                'CABINET_PARTNER_CAMPAIGN_NOT_FOUND', 'Campaign not found or not assigned to you'
+            ),
         )
 
     raw = await PartnerStatsService.get_campaign_detailed_stats(db, user.id, campaign_id)

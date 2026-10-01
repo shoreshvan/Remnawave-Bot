@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
@@ -26,7 +27,12 @@ router = APIRouter()
 
 @router.post('/revoke')
 async def revoke_subscription(
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t(
+            'CABINET_REVOKE_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
+        ),
+    ),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict:
@@ -34,7 +40,7 @@ async def revoke_subscription(
     if not settings.is_subscription_revoke_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Subscription reissue is not available',
+            detail=get_texts().t('CABINET_REVOKE_NOT_AVAILABLE', 'Subscription reissue is not available'),
         )
 
     # Reload user from current session
@@ -42,16 +48,22 @@ async def revoke_subscription(
 
     fresh_user = await get_user_by_id(db, user.id)
     if not fresh_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_texts().t('CABINET_REVOKE_USER_NOT_FOUND', 'User not found'),
+        )
 
     subscription = await resolve_subscription(db, fresh_user, subscription_id)
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_texts().t('CABINET_REVOKE_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+        )
 
     if not subscription.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Only active subscriptions can be reissued',
+            detail=get_texts().t('CABINET_REVOKE_ONLY_ACTIVE', 'Only active subscriptions can be reissued'),
         )
 
     # Check cooldown
@@ -62,7 +74,9 @@ async def revoke_subscription(
             remaining = int(cooldown - elapsed)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f'Cooldown active. Try again in {remaining} seconds.',
+                detail=get_texts().t(
+                    'CABINET_REVOKE_COOLDOWN_ACTIVE', 'Cooldown active. Try again in {remaining} seconds.'
+                ).format(remaining=remaining),
                 headers={'Retry-After': str(remaining)},
             )
 
@@ -73,7 +87,7 @@ async def revoke_subscription(
     if not new_url:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reissue subscription',
+            detail=get_texts().t('CABINET_REVOKE_FAILED', 'Failed to reissue subscription'),
         )
 
     # Update cooldown timestamp

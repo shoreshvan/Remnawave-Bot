@@ -321,16 +321,21 @@ def _format_period_label(days: int, lang_code: str, short: bool = False) -> str:
     if short:
         suffix = 'д' if lang_code == 'ru' else 'd'
         return f'{days}{suffix}'
+    texts = get_texts(lang_code)
     if lang_code == 'ru':
-        return f'{days} дней'
+        return texts.t('ADMIN_PRICING_PERIOD_LABEL_RU', '{days} дней').format(days=days)
     if days == 1:
-        return '1 day'
-    return f'{days}-day plan'
+        return texts.t('ADMIN_PRICING_PERIOD_LABEL_SINGLE_DAY', '1 day')
+    return texts.t('ADMIN_PRICING_PERIOD_LABEL_PLAN', '{days}-day plan').format(days=days)
 
 
 def _format_traffic_label(gb: int, lang_code: str, short: bool = False) -> str:
     if gb == 0:
-        return '∞' if short else ('Безлимит' if lang_code == 'ru' else 'Unlimited')
+        texts = get_texts(lang_code)
+        return '∞' if short else texts.t(
+            'ADMIN_PRICING_TRAFFIC_UNLIMITED',
+            'Безлимит' if lang_code == 'ru' else 'Unlimited',
+        )
     unit = 'ГБ' if lang_code == 'ru' else 'GB'
     if short:
         return f'{gb}{unit}' if lang_code == 'ru' else f'{gb}{unit}'
@@ -396,7 +401,11 @@ def _get_extra_items(lang_code: str) -> list[PriceItem]:
     items: list[PriceItem] = []
 
     if hasattr(settings, 'PRICE_PER_DEVICE'):
-        label = 'Дополнительное устройство' if lang_code == 'ru' else 'Extra device'
+        texts = get_texts(lang_code)
+        label = texts.t(
+            'ADMIN_PRICING_EXTRA_DEVICE',
+            'Дополнительное устройство' if lang_code == 'ru' else 'Extra device',
+        )
         items.append(('PRICE_PER_DEVICE', label, settings.PRICE_PER_DEVICE))
 
     return items
@@ -437,12 +446,19 @@ def _build_traffic_summary(lang_code: str, fallback: str) -> str:
 
 
 def _build_period_options_summary(lang_code: str) -> str:
+    texts = get_texts(lang_code)
     suffix = 'д' if lang_code == 'ru' else 'd'
     available = ', '.join(f'{days}{suffix}' for days in settings.get_available_subscription_periods())
     renewal = ', '.join(f'{days}{suffix}' for days in settings.get_available_renewal_periods())
     if lang_code == 'ru':
-        return f'Подписки: {available or "—"} | Продления: {renewal or "—"}'
-    return f'Subscriptions: {available or "-"} | Renewals: {renewal or "-"}'
+        return texts.t(
+            'ADMIN_PRICING_PERIOD_OPTIONS_SUMMARY',
+            'Подписки: {available} | Продления: {renewal}',
+        ).format(available=available or '—', renewal=renewal or '—')
+    return texts.t(
+        'ADMIN_PRICING_PERIOD_OPTIONS_SUMMARY',
+        'Subscriptions: {available} | Renewals: {renewal}',
+    ).format(available=available or '-', renewal=renewal or '-')
 
 
 def _build_extra_summary(items: Iterable[PriceItem], fallback: str) -> str:
@@ -901,7 +917,11 @@ def _resolve_label(section: str, key: str, language: str) -> str:
             return _format_traffic_label(gb, lang_code)
 
     if key == 'PRICE_PER_DEVICE':
-        return 'Дополнительное устройство' if lang_code == 'ru' else 'Extra device'
+        texts = get_texts(lang_code)
+        return texts.t(
+            'ADMIN_PRICING_EXTRA_DEVICE',
+            'Дополнительное устройство' if lang_code == 'ru' else 'Extra device',
+        )
 
     return key
 

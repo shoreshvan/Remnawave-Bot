@@ -280,14 +280,19 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         texts = get_texts(db_user.language)
         # Ограничим длину подтверждения чтобы не упереться в лимиты
         safe_title = html.escape(title if len(title) <= 200 else (title[:197] + '...'))
-        creation_text = (
-            f'✅ <b>Тикет #{ticket.id} создан</b>\n\n'
-            f'📝 Заголовок: {safe_title}\n'
-            f'📊 Статус: {ticket.status_emoji} '
-            f'{texts.t("TICKET_STATUS_OPEN", "Открыт")}\n'
-            f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
-            + ('📎 Вложение: фото\n' if media_type == 'photo' else '')
-        )
+        creation_text = texts.t(
+            'TICKET_CREATED',
+            '✅ <b>Тикет #{id} создан</b>\n\n'
+            '📝 Заголовок: {title}\n'
+            '📊 Статус: {emoji} {status}\n'
+            '📅 Создан: {date}\n',
+        ).format(
+            id=ticket.id,
+            title=safe_title,
+            emoji=ticket.status_emoji,
+            status=texts.t('TICKET_STATUS_OPEN', 'Открыт'),
+            date=format_local_datetime(ticket.created_at, '%d.%m.%Y %H:%M'),
+        ) + (texts.t('TICKET_ATTACHMENT_PHOTO', '📎 Вложение: фото\n') if media_type == 'photo' else '')
 
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
@@ -506,20 +511,37 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
         TicketStatus.PENDING.value: texts.t('TICKET_STATUS_PENDING', 'В ожидании'),
     }.get(ticket.status, ticket.status)
 
-    header = (
-        f'🎫 Тикет #{ticket.id}\n\n'
-        f'📝 Заголовок: {html.escape(ticket.title or "")}\n'
-        f'📊 Статус: {ticket.status_emoji} {status_text}\n'
-        f'📅 Создан: {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n\n'
+    header = texts.t(
+        'TICKET_VIEW_HEADER',
+        '🎫 Тикет #{id}\n\n'
+        '📝 Заголовок: {title}\n'
+        '📊 Статус: {emoji} {status}\n'
+        '📅 Создан: {date}\n\n',
+    ).format(
+        id=ticket.id,
+        title=html.escape(ticket.title or ''),
+        emoji=ticket.status_emoji,
+        status=status_text,
+        date=format_local_datetime(ticket.created_at, '%d.%m.%Y %H:%M'),
     )
     message_blocks: list[str] = []
     if ticket.messages:
-        message_blocks.append(f'💬 Сообщения ({len(ticket.messages)}):\n\n')
+        message_blocks.append(
+            texts.t('TICKET_MESSAGES_HEADER', '💬 Сообщения ({count}):\n\n').format(count=len(ticket.messages))
+        )
         for msg in ticket.messages:
-            sender = '👤 Вы' if msg.is_user_message else '🛠️ Поддержка'
-            block = f'{sender} ({format_local_datetime(msg.created_at, "%d.%m %H:%M")}):\n{html.escape(msg.message_text or "")}\n\n'
+            sender = (
+                texts.t('TICKET_SENDER_YOU', '👤 Вы')
+                if msg.is_user_message
+                else texts.t('TICKET_SENDER_SUPPORT', '🛠️ Поддержка')
+            )
+            block = texts.t('TICKET_MESSAGE_BLOCK', '{sender} ({date}):\n{text}\n\n').format(
+                sender=sender,
+                date=format_local_datetime(msg.created_at, '%d.%m %H:%M'),
+                text=html.escape(msg.message_text or ''),
+            )
             if getattr(msg, 'has_media', False) and getattr(msg, 'media_type', None) == 'photo':
-                block += '📎 Вложение: фото\n\n'
+                block += texts.t('TICKET_ATTACHMENT_PHOTO_BLOCK', '📎 Вложение: фото\n\n')
             message_blocks.append(block)
     pages = build_ticket_pages(header, message_blocks, max_len=TICKET_PAGE_MAX_LEN)
     total_pages = len(pages)
@@ -1011,7 +1033,7 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
             )
             return
 
-        get_texts(settings.DEFAULT_LANGUAGE)
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         title = (ticket.title or '').strip()
         if len(title) > 60:
             title = title[:57] + '...'
@@ -1022,7 +1044,9 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
             user = None
         full_name = html.escape(user.full_name or '') if user else 'Unknown'
         telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = format_username_link(user.username if user else None, 'отсутствует')
+        username_display = format_username_link(
+            user.username if user else None, texts.t('TICKET_USERNAME_MISSING', 'отсутствует')
+        )
 
         # Загружаем первое сообщение для получения медиа и превью текста
         first_message = await TicketMessageCRUD.get_first_message(db, ticket.id)
@@ -1038,19 +1062,30 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
 
         safe_title = html.escape(title) if title else '—'
 
-        notification_text = (
-            f'🎫 <b>НОВЫЙ ТИКЕТ</b>\n\n'
-            f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
-            f'👤 <b>Пользователь:</b> {full_name}\n'
-            f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> {username_display}\n'
-            f'📝 <b>Заголовок:</b> {safe_title}\n'
+        notification_text = texts.t(
+            'TICKET_ADMIN_NEW',
+            '🎫 <b>НОВЫЙ ТИКЕТ</b>\n\n'
+            '🆔 <b>ID:</b> <code>{id}</code>\n'
+            '👤 <b>Пользователь:</b> {full_name}\n'
+            '🆔 <b>ID:</b> <code>{telegram_id}</code>\n'
+            '📱 <b>Username:</b> {username}\n'
+            '📝 <b>Заголовок:</b> {title}\n',
+        ).format(
+            id=ticket.id,
+            full_name=full_name,
+            telegram_id=telegram_id_display,
+            username=username_display,
+            title=safe_title,
         )
 
         if message_preview:
-            notification_text += f'\n📩 <b>Сообщение:</b>\n{html.escape(message_preview)}\n'
+            notification_text += texts.t(
+                'TICKET_ADMIN_MESSAGE_PART', '\n📩 <b>Сообщение:</b>\n{message}\n'
+            ).format(message=html.escape(message_preview))
 
-        notification_text += f'\n📅 <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
+        notification_text += texts.t('TICKET_ADMIN_CREATED_PART', '\n📅 <b>Создан:</b> {date}\n').format(
+            date=format_local_datetime(ticket.created_at, '%d.%m.%Y %H:%M')
+        )
 
         from app.services.maintenance_service import maintenance_service
 
@@ -1099,19 +1134,30 @@ async def notify_admins_about_ticket_reply(
             user = None
         full_name = html.escape(user.full_name or '') if user else 'Unknown'
         telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = format_username_link(user.username if user else None, 'отсутствует')
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        username_display = format_username_link(
+            user.username if user else None, texts.t('TICKET_USERNAME_MISSING', 'отсутствует')
+        )
 
         reply_preview = preview_text(reply_text)
         safe_title = html.escape(title) if title else '—'
 
-        notification_text = (
-            f'💬 <b>ОТВЕТ НА ТИКЕТ</b>\n\n'
-            f'🆔 <b>ID тикета:</b> <code>{ticket.id}</code>\n'
-            f'📝 <b>Заголовок:</b> {safe_title}\n'
-            f'👤 <b>Пользователь:</b> {full_name}\n'
-            f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> {username_display}\n\n'
-            f'📩 <b>Сообщение:</b>\n{html.escape(reply_preview)}\n'
+        notification_text = texts.t(
+            'TICKET_ADMIN_REPLY',
+            '💬 <b>ОТВЕТ НА ТИКЕТ</b>\n\n'
+            '🆔 <b>ID тикета:</b> <code>{id}</code>\n'
+            '📝 <b>Заголовок:</b> {title}\n'
+            '👤 <b>Пользователь:</b> {full_name}\n'
+            '🆔 <b>ID:</b> <code>{telegram_id}</code>\n'
+            '📱 <b>Username:</b> {username}\n\n'
+            '📩 <b>Сообщение:</b>\n{message}\n',
+        ).format(
+            id=ticket.id,
+            title=safe_title,
+            full_name=full_name,
+            telegram_id=telegram_id_display,
+            username=username_display,
+            message=html.escape(reply_preview),
         )
 
         from app.services.maintenance_service import maintenance_service

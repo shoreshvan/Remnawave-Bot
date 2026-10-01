@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.localization.texts import get_texts
+
 
 class UserStatusEnum(StrEnum):
     """User status enum."""
@@ -328,10 +330,20 @@ class UpdateBalanceRequest(BaseModel):
     """Request to update user balance."""
 
     amount_kopeks: int = Field(
-        ..., ge=-2_000_000_000, le=2_000_000_000, description='Amount in kopeks (positive to add, negative to subtract)'
+        ..., ge=-2_000_000_000, le=2_000_000_000,
+        description=get_texts().t(
+            'CABINET_USER_BALANCE_AMOUNT_DESCRIPTION',
+            'Amount in kopeks (positive to add, negative to subtract)',
+        ),
     )
-    description: str = Field(default='Admin balance adjustment', max_length=500)
-    create_transaction: bool = Field(default=True, description='Create transaction record')
+    description: str = Field(
+        default=get_texts().t('CABINET_USER_BALANCE_ADJUSTMENT_DEFAULT', 'Admin balance adjustment'),
+        max_length=500,
+    )
+    create_transaction: bool = Field(
+        default=True,
+        description=get_texts().t('CABINET_USER_BALANCE_CREATE_TRANSACTION_DESCRIPTION', 'Create transaction record'),
+    )
 
 
 class UpdateBalanceResponse(BaseModel):
@@ -348,40 +360,80 @@ class UpdateSubscriptionRequest(BaseModel):
 
     action: str = Field(
         ...,
-        description=(
+        description=get_texts().t(
+            'CABINET_USER_SUBSCRIPTION_ACTION_DESCRIPTION',
             'Action: extend, shorten, set_end_date, change_tariff, set_traffic, '
-            'toggle_autopay, cancel, reset (zero out the subscription, keep user+tickets)'
+            'toggle_autopay, cancel, reset (zero out the subscription, keep user+tickets)',
         ),
     )
 
     # Target subscription (required in multi-tariff mode for non-create actions)
-    subscription_id: int | None = Field(None, description='Subscription ID to target (multi-tariff)')
+    subscription_id: int | None = Field(
+        None,
+        description=get_texts().t(
+            'CABINET_USER_SUBSCRIPTION_TARGET_ID_DESCRIPTION',
+            'Subscription ID to target (multi-tariff)',
+        ),
+    )
 
     # For extend action
-    days: int | None = Field(None, ge=1, le=3650, description='Days to extend')
+    days: int | None = Field(
+        None, ge=1, le=3650,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_EXTEND_DAYS_DESCRIPTION', 'Days to extend'),
+    )
 
     # For set_end_date action
-    end_date: datetime | None = Field(None, description='New end date')
+    end_date: datetime | None = Field(
+        None,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_END_DATE_DESCRIPTION', 'New end date'),
+    )
 
     # For change_tariff action
-    tariff_id: int | None = Field(None, description='New tariff ID')
+    tariff_id: int | None = Field(
+        None,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_TARIFF_ID_DESCRIPTION', 'New tariff ID'),
+    )
 
     # For set_traffic action
-    traffic_limit_gb: int | None = Field(None, ge=0, description='New traffic limit in GB')
-    traffic_used_gb: float | None = Field(None, ge=0, description='Set traffic used in GB')
+    traffic_limit_gb: int | None = Field(
+        None, ge=0,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_TRAFFIC_LIMIT_DESCRIPTION', 'New traffic limit in GB'),
+    )
+    traffic_used_gb: float | None = Field(
+        None, ge=0,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_TRAFFIC_USED_DESCRIPTION', 'Set traffic used in GB'),
+    )
 
     # For toggle_autopay
-    autopay_enabled: bool | None = Field(None, description='Enable/disable autopay')
+    autopay_enabled: bool | None = Field(
+        None,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_AUTOPAY_DESCRIPTION', 'Enable/disable autopay'),
+    )
 
     # For add_traffic action
-    traffic_gb: int | None = Field(None, ge=1, description='Traffic GB to add')
+    traffic_gb: int | None = Field(
+        None, ge=1,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_TRAFFIC_ADD_DESCRIPTION', 'Traffic GB to add'),
+    )
 
     # For remove_traffic action
-    traffic_purchase_id: int | None = Field(None, description='Traffic purchase ID to remove')
+    traffic_purchase_id: int | None = Field(
+        None,
+        description=get_texts().t(
+            'CABINET_USER_SUBSCRIPTION_TRAFFIC_PURCHASE_REMOVE_DESCRIPTION',
+            'Traffic purchase ID to remove',
+        ),
+    )
 
     # For create new subscription
-    is_trial: bool | None = Field(None, description='Is trial subscription')
-    device_limit: int | None = Field(None, ge=1, description='Device limit')
+    is_trial: bool | None = Field(
+        None,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_IS_TRIAL_DESCRIPTION', 'Is trial subscription'),
+    )
+    device_limit: int | None = Field(
+        None, ge=1,
+        description=get_texts().t('CABINET_USER_SUBSCRIPTION_DEVICE_LIMIT_DESCRIPTION', 'Device limit'),
+    )
 
 
 class UpdateSubscriptionResponse(BaseModel):
@@ -396,7 +448,10 @@ class UpdateUserStatusRequest(BaseModel):
     """Request to update user status."""
 
     status: UserStatusEnum
-    reason: str | None = Field(None, max_length=500, description='Reason for status change')
+    reason: str | None = Field(
+        None, max_length=500,
+        description=get_texts().t('CABINET_USER_STATUS_REASON_DESCRIPTION', 'Reason for status change'),
+    )
 
 
 class UpdateUserStatusResponse(BaseModel):
@@ -413,7 +468,10 @@ class SendUserMessageRequest(BaseModel):
     bot's «Отправить сообщение» action in the admin user card)."""
 
     # 4096 — лимит Telegram на текст сообщения
-    text: str = Field(..., min_length=1, max_length=4096, description='Message text (HTML)')
+    text: str = Field(
+        ..., min_length=1, max_length=4096,
+        description=get_texts().t('CABINET_USER_MESSAGE_TEXT_DESCRIPTION', 'Message text (HTML)'),
+    )
 
 
 class SendUserMessageResponse(BaseModel):
@@ -426,9 +484,21 @@ class SendUserMessageResponse(BaseModel):
 class UpdateRestrictionsRequest(BaseModel):
     """Request to update user restrictions."""
 
-    restriction_topup: bool | None = Field(None, description='Block balance top-up')
-    restriction_subscription: bool | None = Field(None, description='Block subscription purchase/renewal')
-    restriction_reason: str | None = Field(None, max_length=500, description='Reason for restrictions')
+    restriction_topup: bool | None = Field(
+        None,
+        description=get_texts().t('CABINET_USER_RESTRICTION_TOPUP_DESCRIPTION', 'Block balance top-up'),
+    )
+    restriction_subscription: bool | None = Field(
+        None,
+        description=get_texts().t(
+            'CABINET_USER_RESTRICTION_SUBSCRIPTION_DESCRIPTION',
+            'Block subscription purchase/renewal',
+        ),
+    )
+    restriction_reason: str | None = Field(
+        None, max_length=500,
+        description=get_texts().t('CABINET_USER_RESTRICTION_REASON_DESCRIPTION', 'Reason for restrictions'),
+    )
 
 
 class UpdateRestrictionsResponse(BaseModel):
@@ -444,7 +514,10 @@ class UpdateRestrictionsResponse(BaseModel):
 class UpdatePromoGroupRequest(BaseModel):
     """Request to update user promo group."""
 
-    promo_group_id: int | None = Field(None, description='New promo group ID (null to remove)')
+    promo_group_id: int | None = Field(
+        None,
+        description=get_texts().t('CABINET_USER_PROMO_GROUP_ID_DESCRIPTION', 'New promo group ID (null to remove)'),
+    )
 
 
 class UpdatePromoGroupResponse(BaseModel):
@@ -461,7 +534,11 @@ class UpdateReferralCommissionRequest(BaseModel):
     """Request to update user referral commission percent."""
 
     commission_percent: int | None = Field(
-        None, ge=0, le=100, description='Referral commission percent (null for default)'
+        None, ge=0, le=100,
+        description=get_texts().t(
+            'CABINET_USER_REFERRAL_COMMISSION_DESCRIPTION',
+            'Referral commission percent (null for default)',
+        ),
     )
 
 
@@ -477,7 +554,10 @@ class UpdateReferralCommissionResponse(BaseModel):
 class AssignReferrerRequest(BaseModel):
     """Request to manually assign a referrer to a user."""
 
-    referrer_id: int = Field(..., gt=0, description='ID of the referrer user')
+    referrer_id: int = Field(
+        ..., gt=0,
+        description=get_texts().t('CABINET_USER_REFERRER_ID_DESCRIPTION', 'ID of the referrer user'),
+    )
 
 
 class AssignReferrerResponse(BaseModel):
@@ -557,8 +637,17 @@ class ResetDevicesResponse(BaseModel):
 class DeleteUserRequest(BaseModel):
     """Request to delete user."""
 
-    soft_delete: bool = Field(default=True, description='Soft delete (mark as deleted) or hard delete')
-    reason: str | None = Field(None, max_length=500, description='Reason for deletion')
+    soft_delete: bool = Field(
+        default=True,
+        description=get_texts().t(
+            'CABINET_USER_SOFT_DELETE_DESCRIPTION',
+            'Soft delete (mark as deleted) or hard delete',
+        ),
+    )
+    reason: str | None = Field(
+        None, max_length=500,
+        description=get_texts().t('CABINET_USER_DELETE_REASON_DESCRIPTION', 'Reason for deletion'),
+    )
 
 
 class DeleteUserResponse(BaseModel):
@@ -607,7 +696,8 @@ class UserSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=255)
     search_by: list[str] = Field(
-        default=['telegram_id', 'username', 'first_name', 'last_name', 'email'], description='Fields to search in'
+        default=['telegram_id', 'username', 'first_name', 'last_name', 'email'],
+        description=get_texts().t('CABINET_USER_SEARCH_FIELDS_DESCRIPTION', 'Fields to search in'),
     )
     limit: int = Field(default=20, ge=1, le=100)
 
@@ -696,10 +786,20 @@ class PanelUserInfo(BaseModel):
 class SyncFromPanelRequest(BaseModel):
     """Request to sync user from panel."""
 
-    update_subscription: bool = Field(default=True, description='Update subscription data')
-    update_traffic: bool = Field(default=True, description='Update traffic usage')
+    update_subscription: bool = Field(
+        default=True,
+        description=get_texts().t('CABINET_USER_SYNC_UPDATE_SUBSCRIPTION_DESCRIPTION', 'Update subscription data'),
+    )
+    update_traffic: bool = Field(
+        default=True,
+        description=get_texts().t('CABINET_USER_SYNC_UPDATE_TRAFFIC_DESCRIPTION', 'Update traffic usage'),
+    )
     create_if_missing: bool = Field(
-        default=False, description='Create subscription if user exists in panel but not in bot'
+        default=False,
+        description=get_texts().t(
+            'CABINET_USER_SYNC_CREATE_IF_MISSING_DESCRIPTION',
+            'Create subscription if user exists in panel but not in bot',
+        ),
     )
 
 
@@ -716,11 +816,26 @@ class SyncFromPanelResponse(BaseModel):
 class SyncToPanelRequest(BaseModel):
     """Request to sync user to panel."""
 
-    create_if_missing: bool = Field(default=True, description='Create user in panel if not exists')
-    update_status: bool = Field(default=True, description='Update user status in panel')
-    update_traffic_limit: bool = Field(default=True, description='Update traffic limit in panel')
-    update_expire_date: bool = Field(default=True, description='Update expire date in panel')
-    update_squads: bool = Field(default=True, description='Update connected squads in panel')
+    create_if_missing: bool = Field(
+        default=True,
+        description=get_texts().t('CABINET_USER_SYNC_PANEL_CREATE_DESCRIPTION', 'Create user in panel if not exists'),
+    )
+    update_status: bool = Field(
+        default=True,
+        description=get_texts().t('CABINET_USER_SYNC_PANEL_STATUS_DESCRIPTION', 'Update user status in panel'),
+    )
+    update_traffic_limit: bool = Field(
+        default=True,
+        description=get_texts().t('CABINET_USER_SYNC_PANEL_TRAFFIC_LIMIT_DESCRIPTION', 'Update traffic limit in panel'),
+    )
+    update_expire_date: bool = Field(
+        default=True,
+        description=get_texts().t('CABINET_USER_SYNC_PANEL_EXPIRE_DESCRIPTION', 'Update expire date in panel'),
+    )
+    update_squads: bool = Field(
+        default=True,
+        description=get_texts().t('CABINET_USER_SYNC_PANEL_SQUADS_DESCRIPTION', 'Update connected squads in panel'),
+    )
 
 
 class SyncToPanelResponse(BaseModel):
@@ -780,8 +895,17 @@ class PanelSyncStatusResponse(BaseModel):
 class FullDeleteUserRequest(BaseModel):
     """Request for full user deletion (bot + panel)."""
 
-    delete_from_panel: bool = Field(default=True, description='Also delete user from Remnawave panel')
-    reason: str | None = Field(None, max_length=500, description='Reason for deletion')
+    delete_from_panel: bool = Field(
+        default=True,
+        description=get_texts().t(
+            'CABINET_USER_FULL_DELETE_PANEL_DESCRIPTION',
+            'Also delete user from Remnawave panel',
+        ),
+    )
+    reason: str | None = Field(
+        None, max_length=500,
+        description=get_texts().t('CABINET_USER_DELETE_REASON_DESCRIPTION', 'Reason for deletion'),
+    )
 
 
 class FullDeleteUserResponse(BaseModel):
@@ -797,7 +921,10 @@ class FullDeleteUserResponse(BaseModel):
 class ResetTrialRequest(BaseModel):
     """Request to reset user trial."""
 
-    reason: str | None = Field(None, max_length=500, description='Reason for trial reset')
+    reason: str | None = Field(
+        None, max_length=500,
+        description=get_texts().t('CABINET_USER_TRIAL_RESET_REASON_DESCRIPTION', 'Reason for trial reset'),
+    )
 
 
 class ResetTrialResponse(BaseModel):
@@ -815,8 +942,20 @@ class ResetTrialResponse(BaseModel):
 class ResetSubscriptionRequest(BaseModel):
     """Request to reset user subscription."""
 
-    deactivate_in_panel: bool = Field(default=True, description='Also deactivate in Remnawave panel')
-    reason: str | None = Field(None, max_length=500, description='Reason for subscription reset')
+    deactivate_in_panel: bool = Field(
+        default=True,
+        description=get_texts().t(
+            'CABINET_USER_SUBSCRIPTION_RESET_DEACTIVATE_DESCRIPTION',
+            'Also deactivate in Remnawave panel',
+        ),
+    )
+    reason: str | None = Field(
+        None, max_length=500,
+        description=get_texts().t(
+            'CABINET_USER_SUBSCRIPTION_RESET_REASON_DESCRIPTION',
+            'Reason for subscription reset',
+        ),
+    )
 
 
 class ResetSubscriptionResponse(BaseModel):
@@ -832,7 +971,10 @@ class ResetSubscriptionResponse(BaseModel):
 class DisableUserRequest(BaseModel):
     """Request to disable user."""
 
-    reason: str | None = Field(None, max_length=500, description='Reason for disabling')
+    reason: str | None = Field(
+        None, max_length=500,
+        description=get_texts().t('CABINET_USER_DISABLE_REASON_DESCRIPTION', 'Reason for disabling'),
+    )
 
 
 class DisableUserResponse(BaseModel):

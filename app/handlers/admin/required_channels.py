@@ -15,6 +15,7 @@ from app.database.crud.required_channel import (
     validate_channel_id,
 )
 from app.database.database import AsyncSessionLocal
+from app.localization.texts import get_texts
 from app.services.channel_subscription_service import channel_subscription_service
 from app.utils.decorators import admin_required
 
@@ -65,13 +66,17 @@ def _channel_detail_keyboard(channel_id: int, is_active: bool) -> InlineKeyboard
 @router.callback_query(F.data == 'reqch:list')
 @admin_required
 async def show_channels_list(callback: CallbackQuery, **kwargs) -> None:
+    texts = get_texts(kwargs['db_user'].language)
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
 
     if not channels:
-        text = '<b>📢 Обязательные каналы</b>\n\nКаналы не настроены. Нажмите «Добавить» чтобы создать.'
+        text = texts.t(
+            'ADMIN_REQUIRED_CHANNELS_EMPTY',
+            '<b>📢 Обязательные каналы</b>\n\nКаналы не настроены. Нажмите «Добавить» чтобы создать.',
+        )
     else:
-        lines = ['<b>📢 Обязательные каналы</b>\n']
+        lines = [texts.t('ADMIN_REQUIRED_CHANNELS_LIST_HEADER', '<b>📢 Обязательные каналы</b>\n')]
         for ch in channels:
             status = '✅' if ch.is_active else '❌'
             title = ch.title or ch.channel_id
@@ -85,25 +90,37 @@ async def show_channels_list(callback: CallbackQuery, **kwargs) -> None:
 @router.callback_query(F.data.startswith('reqch:view:'))
 @admin_required
 async def view_channel(callback: CallbackQuery, **kwargs) -> None:
+    texts = get_texts(kwargs['db_user'].language)
     try:
         channel_db_id = int(callback.data.split(':')[2])
     except (ValueError, IndexError):
-        await callback.answer('Неверный ID канала', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REQUIRED_CHANNELS_INVALID_ID', 'Неверный ID канала'), show_alert=True)
         return
     async with AsyncSessionLocal() as db:
         ch = await get_channel_by_id(db, channel_db_id)
 
     if not ch:
-        await callback.answer('Канал не найден', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REQUIRED_CHANNELS_NOT_FOUND', 'Канал не найден'), show_alert=True)
         return
 
-    status = '✅ Активен' if ch.is_active else '❌ Отключён'
-    text = (
-        f'<b>{ch.title or "Без названия"}</b>\n\n'
-        f'<b>ID:</b> <code>{ch.channel_id}</code>\n'
-        f'<b>Ссылка:</b> {ch.channel_link or "—"}\n'
-        f'<b>Статус:</b> {status}\n'
-        f'<b>Порядок:</b> {ch.sort_order}'
+    status = (
+        texts.t('ADMIN_REQUIRED_CHANNELS_STATUS_ACTIVE', '✅ Активен')
+        if ch.is_active
+        else texts.t('ADMIN_REQUIRED_CHANNELS_STATUS_INACTIVE', '❌ Отключён')
+    )
+    text = texts.t(
+        'ADMIN_REQUIRED_CHANNELS_DETAIL',
+        '<b>{title}</b>\n\n'
+        '<b>ID:</b> <code>{channel_id}</code>\n'
+        '<b>Ссылка:</b> {link}\n'
+        '<b>Статус:</b> {status}\n'
+        '<b>Порядок:</b> {sort_order}',
+    ).format(
+        title=ch.title or texts.t('ADMIN_REQUIRED_CHANNELS_NO_TITLE', 'Без названия'),
+        channel_id=ch.channel_id,
+        link=ch.channel_link or '—',
+        status=status,
+        sort_order=ch.sort_order,
     )
 
     await callback.message.edit_text(text, reply_markup=_channel_detail_keyboard(ch.id, ch.is_active))
@@ -116,24 +133,32 @@ async def view_channel(callback: CallbackQuery, **kwargs) -> None:
 @router.callback_query(F.data.startswith('reqch:toggle:'))
 @admin_required
 async def toggle_channel_handler(callback: CallbackQuery, **kwargs) -> None:
+    texts = get_texts(kwargs['db_user'].language)
     try:
         channel_db_id = int(callback.data.split(':')[2])
     except (ValueError, IndexError):
-        await callback.answer('Неверный ID канала', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REQUIRED_CHANNELS_INVALID_ID', 'Неверный ID канала'), show_alert=True)
         return
     async with AsyncSessionLocal() as db:
         ch = await toggle_channel(db, channel_db_id)
 
     if ch:
         await channel_subscription_service.invalidate_channels_cache()
-        status = 'включён' if ch.is_active else 'отключён'
-        await callback.answer(f'Канал {status}', show_alert=True)
+        status = (
+            texts.t('ADMIN_REQUIRED_CHANNELS_ENABLED_WORD', 'включён')
+            if ch.is_active
+            else texts.t('ADMIN_REQUIRED_CHANNELS_DISABLED_WORD', 'отключён')
+        )
+        await callback.answer(
+            texts.t('ADMIN_REQUIRED_CHANNELS_TOGGLED', 'Канал {status}').format(status=status),
+            show_alert=True,
+        )
 
     # Refresh list
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
     await callback.message.edit_text(
-        '<b>📢 Обязательные каналы</b>',
+        texts.t('ADMIN_REQUIRED_CHANNELS_TITLE', '<b>📢 Обязательные каналы</b>'),
         reply_markup=_channels_keyboard(channels),
     )
 
@@ -141,24 +166,25 @@ async def toggle_channel_handler(callback: CallbackQuery, **kwargs) -> None:
 @router.callback_query(F.data.startswith('reqch:delete:'))
 @admin_required
 async def delete_channel_handler(callback: CallbackQuery, **kwargs) -> None:
+    texts = get_texts(kwargs['db_user'].language)
     try:
         channel_db_id = int(callback.data.split(':')[2])
     except (ValueError, IndexError):
-        await callback.answer('Неверный ID канала', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REQUIRED_CHANNELS_INVALID_ID', 'Неверный ID канала'), show_alert=True)
         return
     async with AsyncSessionLocal() as db:
         ok = await delete_channel(db, channel_db_id)
 
     if ok:
         await channel_subscription_service.invalidate_channels_cache()
-        await callback.answer('Канал удалён', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REQUIRED_CHANNELS_DELETED', 'Канал удалён'), show_alert=True)
     else:
-        await callback.answer('Ошибка удаления', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REQUIRED_CHANNELS_DELETE_ERROR', 'Ошибка удаления'), show_alert=True)
 
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
     await callback.message.edit_text(
-        '<b>📢 Обязательные каналы</b>',
+        texts.t('ADMIN_REQUIRED_CHANNELS_TITLE', '<b>📢 Обязательные каналы</b>'),
         reply_markup=_channels_keyboard(channels),
     )
 
@@ -169,11 +195,15 @@ async def delete_channel_handler(callback: CallbackQuery, **kwargs) -> None:
 @router.callback_query(F.data == 'reqch:add')
 @admin_required
 async def start_add_channel(callback: CallbackQuery, state: FSMContext, **kwargs) -> None:
+    texts = get_texts(kwargs['db_user'].language)
     await state.set_state(AddChannelStates.waiting_channel_id)
     await callback.message.edit_text(
-        '<b>➕ Добавить канал</b>\n\n'
-        'Отправьте числовой ID канала (например <code>1234567890</code>).\n'
-        'Префикс <code>-100</code> добавляется автоматически.'
+        texts.t(
+            'ADMIN_REQUIRED_CHANNELS_ADD_PROMPT_ID',
+            '<b>➕ Добавить канал</b>\n\n'
+            'Отправьте числовой ID канала (например <code>1234567890</code>).\n'
+            'Префикс <code>-100</code> добавляется автоматически.',
+        )
     )
     await callback.answer()
 
@@ -181,8 +211,9 @@ async def start_add_channel(callback: CallbackQuery, state: FSMContext, **kwargs
 @router.message(AddChannelStates.waiting_channel_id)
 @admin_required
 async def process_channel_id(message: Message, state: FSMContext, **kwargs) -> None:
+    texts = get_texts(kwargs['db_user'].language)
     if not message.text:
-        await message.answer('Отправьте текстовое сообщение.')
+        await message.answer(texts.t('ADMIN_REQUIRED_CHANNELS_SEND_TEXT', 'Отправьте текстовое сообщение.'))
         return
     channel_id = message.text.strip()
 
@@ -190,23 +221,32 @@ async def process_channel_id(message: Message, state: FSMContext, **kwargs) -> N
     try:
         channel_id = validate_channel_id(channel_id)
     except ValueError as e:
-        await message.answer(f'Неверный формат. {e}\n\nПопробуйте ещё раз:')
+        await message.answer(
+            texts.t(
+                'ADMIN_REQUIRED_CHANNELS_INVALID_FORMAT',
+                'Неверный формат. {error}\n\nПопробуйте ещё раз:',
+            ).format(error=e)
+        )
         return
 
     await state.update_data(channel_id=channel_id)
     await state.set_state(AddChannelStates.waiting_channel_link)
     await message.answer(
-        f'Канал: <code>{channel_id}</code>\n\n'
-        'Теперь отправьте ссылку на канал (например <code>https://t.me/mychannel</code>)\n'
-        'Или отправьте <code>-</code> чтобы пропустить:'
+        texts.t(
+            'ADMIN_REQUIRED_CHANNELS_ADD_PROMPT_LINK',
+            'Канал: <code>{channel_id}</code>\n\n'
+            'Теперь отправьте ссылку на канал (например <code>https://t.me/mychannel</code>)\n'
+            'Или отправьте <code>-</code> чтобы пропустить:',
+        ).format(channel_id=channel_id)
     )
 
 
 @router.message(AddChannelStates.waiting_channel_link)
 @admin_required
 async def process_channel_link(message: Message, state: FSMContext, **kwargs) -> None:
+    texts = get_texts(kwargs['db_user'].language)
     if not message.text:
-        await message.answer('Отправьте текстовое сообщение.')
+        await message.answer(texts.t('ADMIN_REQUIRED_CHANNELS_SEND_TEXT', 'Отправьте текстовое сообщение.'))
         return
     link = message.text.strip()
     if link == '-':
@@ -215,7 +255,12 @@ async def process_channel_link(message: Message, state: FSMContext, **kwargs) ->
     if link is not None:
         # Validate and normalize channel link
         if not link.startswith(('https://t.me/', 'http://t.me/', '@')):
-            await message.answer('Ссылка должна быть URL вида t.me или @username. Попробуйте ещё раз:')
+            await message.answer(
+                texts.t(
+                    'ADMIN_REQUIRED_CHANNELS_INVALID_LINK',
+                    'Ссылка должна быть URL вида t.me или @username. Попробуйте ещё раз:',
+                )
+            )
             return
         if link.startswith('@'):
             link = f'https://t.me/{link[1:]}'
@@ -225,16 +270,20 @@ async def process_channel_link(message: Message, state: FSMContext, **kwargs) ->
     await state.update_data(channel_link=link)
     await state.set_state(AddChannelStates.waiting_channel_title)
     await message.answer(
-        'Отправьте название канала (например <code>Новости проекта</code>)\n'
-        'Или отправьте <code>-</code> чтобы пропустить:'
+        texts.t(
+            'ADMIN_REQUIRED_CHANNELS_ADD_PROMPT_TITLE',
+            'Отправьте название канала (например <code>Новости проекта</code>)\n'
+            'Или отправьте <code>-</code> чтобы пропустить:',
+        )
     )
 
 
 @router.message(AddChannelStates.waiting_channel_title)
 @admin_required
 async def process_channel_title(message: Message, state: FSMContext, **kwargs) -> None:
+    texts = get_texts(kwargs['db_user'].language)
     if not message.text:
-        await message.answer('Отправьте текстовое сообщение.')
+        await message.answer(texts.t('ADMIN_REQUIRED_CHANNELS_SEND_TEXT', 'Отправьте текстовое сообщение.'))
         return
     title = message.text.strip()
     if title == '-':
@@ -253,14 +302,19 @@ async def process_channel_title(message: Message, state: FSMContext, **kwargs) -
             )
             await channel_subscription_service.invalidate_channels_cache()
 
-            text = (
+            text = texts.t(
+                'ADMIN_REQUIRED_CHANNELS_ADDED',
                 '✅ Канал добавлен!\n\n'
-                f'<b>ID:</b> <code>{ch.channel_id}</code>\n'
-                f'<b>Ссылка:</b> {ch.channel_link or "—"}\n'
-                f'<b>Название:</b> {ch.title or "—"}'
+                '<b>ID:</b> <code>{channel_id}</code>\n'
+                '<b>Ссылка:</b> {link}\n'
+                '<b>Название:</b> {title}',
+            ).format(
+                channel_id=ch.channel_id,
+                link=ch.channel_link or '—',
+                title=ch.title or '—',
             )
         except Exception as e:
-            text = '❌ Ошибка добавления канала. Попробуйте ещё раз.'
+            text = texts.t('ADMIN_REQUIRED_CHANNELS_ADD_ERROR', '❌ Ошибка добавления канала. Попробуйте ещё раз.')
             logger.error('Error adding channel', error=e)
 
     async with AsyncSessionLocal() as db:

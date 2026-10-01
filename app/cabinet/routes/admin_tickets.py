@@ -16,6 +16,7 @@ from app.config import settings
 from app.database.crud.ticket import TicketCRUD
 from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.models import Ticket, TicketMessage, User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.tickets import TicketMediaItem, TicketMessageResponse, _validate_media_bundle
@@ -91,11 +92,25 @@ class AdminTicketListResponse(BaseModel):
 class AdminReplyRequest(BaseModel):
     """Admin reply to ticket."""
 
-    message: str = Field(default='', max_length=4000, description='Reply message')
-    media_type: str | None = Field(None, description='Media type: photo, video, or document')
-    media_file_id: str | None = Field(None, max_length=255, description='Telegram file_id from media upload')
-    media_caption: str | None = Field(None, max_length=1000, description='Caption for media')
-    media_items: list[TicketMediaItem] | None = Field(None, description='Multi-media gallery attachments')
+    message: str = Field(
+        default='', max_length=4000,
+        description=get_texts().t('CABINET_ADMIN_TICKETS_REPLY_MESSAGE_DESC', 'Reply message'),
+    )
+    media_type: str | None = Field(
+        None,
+        description=get_texts().t('CABINET_ADMIN_TICKETS_MEDIA_TYPE_DESC', 'Media type: photo, video, or document'),
+    )
+    media_file_id: str | None = Field(
+        None, max_length=255,
+        description=get_texts().t('CABINET_ADMIN_TICKETS_MEDIA_FILE_ID_DESC', 'Telegram file_id from media upload'),
+    )
+    media_caption: str | None = Field(
+        None, max_length=1000,
+        description=get_texts().t('CABINET_ADMIN_TICKETS_MEDIA_CAPTION_DESC', 'Caption for media'),
+    )
+    media_items: list[TicketMediaItem] | None = Field(
+        None, description=get_texts().t('CABINET_ADMIN_TICKETS_MEDIA_ITEMS_DESC', 'Multi-media gallery attachments')
+    )
 
     @model_validator(mode='after')
     def validate_media_fields(self) -> 'AdminReplyRequest':
@@ -103,20 +118,34 @@ class AdminReplyRequest(BaseModel):
         has_text = bool(self.message.strip())
         has_media = bool(self.media_file_id) or bool(self.media_items)
         if not has_text and not has_media:
-            raise ValueError('message or media is required')
+            raise ValueError(
+                get_texts().t('CABINET_ADMIN_TICKETS_MESSAGE_OR_MEDIA_REQUIRED', 'message or media is required')
+            )
         return self
 
 
 class AdminStatusUpdateRequest(BaseModel):
     """Update ticket status."""
 
-    status: str = Field(..., description='New status: open, answered, pending, closed')
+    status: str = Field(
+        ...,
+        description=get_texts().t(
+            'CABINET_ADMIN_TICKETS_STATUS_UPDATE_DESC',
+            'New status: open, answered, pending, closed',
+        ),
+    )
 
 
 class AdminPriorityUpdateRequest(BaseModel):
     """Update ticket priority."""
 
-    priority: str = Field(..., description='New priority: low, normal, high, urgent')
+    priority: str = Field(
+        ...,
+        description=get_texts().t(
+            'CABINET_ADMIN_TICKETS_PRIORITY_UPDATE_DESC',
+            'New priority: low, normal, high, urgent',
+        ),
+    )
 
 
 class AdminStatsResponse(BaseModel):
@@ -157,15 +186,33 @@ class TicketSettingsUpdateRequest(BaseModel):
     """Update ticket settings."""
 
     sla_enabled: bool | None = None
-    sla_minutes: int | None = Field(None, ge=1, le=1440, description='SLA time in minutes (1-1440)')
-    sla_check_interval_seconds: int | None = Field(None, ge=30, le=600, description='Check interval (30-600 seconds)')
-    sla_reminder_cooldown_minutes: int | None = Field(
-        None, ge=1, le=120, description='Reminder cooldown (1-120 minutes)'
+    sla_minutes: int | None = Field(
+        None, ge=1, le=1440,
+        description=get_texts().t('CABINET_ADMIN_TICKETS_SLA_MINUTES_DESC', 'SLA time in minutes (1-1440)'),
     )
-    support_system_mode: str | None = Field(None, description='Support mode: tickets, contact, both')
+    sla_check_interval_seconds: int | None = Field(
+        None, ge=30, le=600,
+        description=get_texts().t('CABINET_ADMIN_TICKETS_SLA_CHECK_INTERVAL_DESC', 'Check interval (30-600 seconds)'),
+    )
+    sla_reminder_cooldown_minutes: int | None = Field(
+        None, ge=1, le=120,
+        description=get_texts().t(
+            'CABINET_ADMIN_TICKETS_SLA_REMINDER_COOLDOWN_DESC',
+            'Reminder cooldown (1-120 minutes)',
+        ),
+    )
+    support_system_mode: str | None = Field(
+        None,
+        description=get_texts().t('CABINET_ADMIN_TICKETS_SUPPORT_MODE_DESC', 'Support mode: tickets, contact, both'),
+    )
     # Cabinet notifications settings
-    cabinet_user_notifications_enabled: bool | None = Field(None, description='Enable user notifications in cabinet')
-    cabinet_admin_notifications_enabled: bool | None = Field(None, description='Enable admin notifications in cabinet')
+    cabinet_user_notifications_enabled: bool | None = Field(
+        None, description=get_texts().t('CABINET_ADMIN_TICKETS_USER_NOTIF_DESC', 'Enable user notifications in cabinet')
+    )
+    cabinet_admin_notifications_enabled: bool | None = Field(
+        None,
+        description=get_texts().t('CABINET_ADMIN_TICKETS_ADMIN_NOTIF_DESC', 'Enable admin notifications in cabinet'),
+    )
 
 
 def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
@@ -221,7 +268,7 @@ def _ticket_to_admin_response(ticket: Ticket, include_messages: bool = False) ->
 
     return AdminTicketResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or get_texts().t('CABINET_ADMIN_TICKETS_DEFAULT_TITLE', 'Ticket #{id}').format(id=ticket.id),
         status=ticket.status,
         priority=ticket.priority or 'normal',
         created_at=ticket.created_at,
@@ -293,7 +340,10 @@ async def update_ticket_settings(
         if mode not in {'tickets', 'contact', 'both'}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid support_system_mode. Must be: tickets, contact, or both',
+                detail=get_texts().t(
+                    'CABINET_ADMIN_TICKETS_INVALID_SUPPORT_MODE',
+                    'Invalid support_system_mode. Must be: tickets, contact, or both',
+                ),
             )
 
     updates = form_updates(TICKET_SETTING_KEYS, request.model_dump(exclude_none=True))
@@ -326,11 +376,20 @@ async def update_ticket_settings(
 
 @router.get('', response_model=AdminTicketListResponse)
 async def get_all_tickets(
-    page: int = Query(1, ge=1, description='Page number'),
-    per_page: int = Query(20, ge=1, le=100, description='Items per page'),
-    status_filter: str | None = Query(None, alias='status', description='Filter by status'),
-    priority_filter: str | None = Query(None, alias='priority', description='Filter by priority'),
-    user_id: int | None = Query(None, description='Filter by user ID'),
+    page: int = Query(1, ge=1, description=get_texts().t('CABINET_ADMIN_TICKETS_PAGE_NUMBER_DESC', 'Page number')),
+    per_page: int = Query(
+        20, ge=1, le=100, description=get_texts().t('CABINET_ADMIN_TICKETS_PER_PAGE_DESC', 'Items per page')
+    ),
+    status_filter: str | None = Query(
+        None, alias='status', description=get_texts().t('CABINET_ADMIN_TICKETS_FILTER_STATUS_DESC', 'Filter by status')
+    ),
+    priority_filter: str | None = Query(
+        None, alias='priority',
+        description=get_texts().t('CABINET_ADMIN_TICKETS_FILTER_PRIORITY_DESC', 'Filter by priority'),
+    ),
+    user_id: int | None = Query(
+        None, description=get_texts().t('CABINET_ADMIN_TICKETS_FILTER_USER_ID_DESC', 'Filter by user ID')
+    ),
     admin: User = Depends(require_permission('tickets:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -394,7 +453,7 @@ async def get_ticket_detail(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail=get_texts().t('CABINET_ADMIN_TICKETS_NOT_FOUND', 'Ticket not found'),
         )
 
     messages = sorted(ticket.messages or [], key=lambda m: m.created_at)
@@ -406,7 +465,7 @@ async def get_ticket_detail(
 
     return AdminTicketDetailResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or get_texts().t('CABINET_ADMIN_TICKETS_DEFAULT_TITLE', 'Ticket #{id}').format(id=ticket.id),
         status=ticket.status,
         priority=ticket.priority or 'normal',
         created_at=ticket.created_at,
@@ -432,7 +491,7 @@ async def reply_to_ticket(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail=get_texts().t('CABINET_ADMIN_TICKETS_NOT_FOUND', 'Ticket not found'),
         )
 
     # Resolve media payload: prefer media_items, fall back to legacy single-media fields
@@ -536,7 +595,10 @@ async def update_ticket_status(
     if request.status not in allowed_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid status. Allowed: {", ".join(allowed_statuses)}',
+            detail=get_texts().t(
+                'CABINET_ADMIN_TICKETS_INVALID_STATUS',
+                'Invalid status. Allowed: {statuses}',
+            ).format(statuses=', '.join(allowed_statuses)),
         )
 
     query = (
@@ -549,7 +611,7 @@ async def update_ticket_status(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail=get_texts().t('CABINET_ADMIN_TICKETS_NOT_FOUND', 'Ticket not found'),
         )
 
     ticket.status = request.status
@@ -571,7 +633,7 @@ async def update_ticket_status(
 
     return AdminTicketDetailResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or get_texts().t('CABINET_ADMIN_TICKETS_DEFAULT_TITLE', 'Ticket #{id}').format(id=ticket.id),
         status=ticket.status,
         priority=ticket.priority or 'normal',
         created_at=ticket.created_at,
@@ -595,7 +657,10 @@ async def update_ticket_priority(
     if request.priority not in allowed_priorities:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid priority. Allowed: {", ".join(allowed_priorities)}',
+            detail=get_texts().t(
+                'CABINET_ADMIN_TICKETS_INVALID_PRIORITY',
+                'Invalid priority. Allowed: {priorities}',
+            ).format(priorities=', '.join(allowed_priorities)),
         )
 
     query = (
@@ -608,7 +673,7 @@ async def update_ticket_priority(
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Ticket not found',
+            detail=get_texts().t('CABINET_ADMIN_TICKETS_NOT_FOUND', 'Ticket not found'),
         )
 
     ticket.priority = request.priority
@@ -626,7 +691,7 @@ async def update_ticket_priority(
 
     return AdminTicketDetailResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or get_texts().t('CABINET_ADMIN_TICKETS_DEFAULT_TITLE', 'Ticket #{id}').format(id=ticket.id),
         status=ticket.status,
         priority=ticket.priority or 'normal',
         created_at=ticket.created_at,

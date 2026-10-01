@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Subscription, User
+from app.localization.texts import get_texts
 
 from ...schemas.subscription import (
     ServerInfo,
@@ -51,7 +52,11 @@ async def resolve_subscription(
     if subscription_id and settings.is_multi_tariff_enabled():
         subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
         if not subscription:
-            raise HTTPException(status_code=404, detail='Subscription not found')
+            texts = get_texts(user.language)
+            raise HTTPException(
+                status_code=404,
+                detail=texts.t('CABINET_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+            )
         return subscription
 
     if settings.is_multi_tariff_enabled() and not subscription_id:

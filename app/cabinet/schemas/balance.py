@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.localization.texts import get_texts
+
 
 class BalanceResponse(BaseModel):
     """User balance data."""
@@ -67,9 +69,22 @@ class PaymentMethodResponse(BaseModel):
 class TopUpRequest(BaseModel):
     """Request to create payment for balance top-up."""
 
-    amount_kopeks: int = Field(..., ge=1000, le=2_000_000_000, description='Amount in kopeks (min 10 rubles)')
-    payment_method: str = Field(..., description='Payment method ID')
-    payment_option: str | None = Field(None, description='Payment option (e.g. Platega method code)')
+    amount_kopeks: int = Field(
+        ...,
+        ge=1000,
+        le=2_000_000_000,
+        description=get_texts().t('CABINET_TOPUP_AMOUNT_KOPEKS_DESCRIPTION', 'Amount in kopeks (min 10 rubles)'),
+    )
+    payment_method: str = Field(
+        ..., description=get_texts().t('CABINET_TOPUP_PAYMENT_METHOD_DESCRIPTION', 'Payment method ID')
+    )
+    payment_option: str | None = Field(
+        None,
+        description=get_texts().t(
+            'CABINET_TOPUP_PAYMENT_OPTION_DESCRIPTION',
+            'Payment option (e.g. Platega method code)',
+        ),
+    )
 
 
 class TopUpResponse(BaseModel):
@@ -89,7 +104,12 @@ class TopUpResponse(BaseModel):
 class StarsInvoiceRequest(BaseModel):
     """Request to create Telegram Stars invoice for balance top-up."""
 
-    amount_kopeks: int = Field(..., ge=100, le=2_000_000_000, description='Amount in kopeks (min 1 ruble)')
+    amount_kopeks: int = Field(
+        ...,
+        ge=100,
+        le=2_000_000_000,
+        description=get_texts().t('CABINET_STARS_INVOICE_AMOUNT_KOPEKS_DESCRIPTION', 'Amount in kopeks (min 1 ruble)'),
+    )
 
 
 class StarsInvoiceResponse(BaseModel):

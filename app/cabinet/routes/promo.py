@@ -17,6 +17,7 @@ from app.database.crud.promo_group import get_auto_assign_promo_groups
 from app.database.crud.promo_offer_template import get_promo_offer_template_by_id
 from app.database.crud.transaction import get_user_total_spent_kopeks
 from app.database.models import DiscountOffer, User
+from app.localization.texts import get_texts
 from app.services.promo_offer_service import promo_offer_service
 from app.utils.timezone import format_local_datetime
 
@@ -282,12 +283,13 @@ async def claim_promo_offer(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Claim a promo offer."""
+    texts = get_texts(user.language)
     offer = await get_offer_by_id(db, request.offer_id)
 
     if not offer or offer.user_id != user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Offer not found',
+            detail=texts.t('CABINET_PROMO_OFFER_NOT_FOUND', 'Offer not found'),
         )
 
     now = datetime.now(UTC)
@@ -295,7 +297,7 @@ async def claim_promo_offer(
     if offer.claimed_at is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This offer has already been claimed',
+            detail=texts.t('CABINET_PROMO_ALREADY_CLAIMED', 'This offer has already been claimed'),
         )
 
     if not offer.is_active or offer.expires_at <= now:
@@ -303,7 +305,7 @@ async def claim_promo_offer(
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This offer has expired',
+            detail=texts.t('CABINET_PROMO_OFFER_EXPIRED', 'This offer has expired'),
         )
 
     effect_type = (offer.effect_type or 'percent_discount').lower()
@@ -319,14 +321,28 @@ async def claim_promo_offer(
 
         if not success:
             error_messages = {
-                'subscription_missing': 'Active subscription required for this offer',
-                'squads_missing': 'Could not determine servers for test access',
-                'already_connected': 'These servers are already connected',
-                'remnawave_sync_failed': 'Failed to connect servers. Please try again later',
+                'subscription_missing': texts.t(
+                    'CABINET_PROMO_TEST_SUBSCRIPTION_MISSING',
+                    'Active subscription required for this offer',
+                ),
+                'squads_missing': texts.t(
+                    'CABINET_PROMO_TEST_SQUADS_MISSING',
+                    'Could not determine servers for test access',
+                ),
+                'already_connected': texts.t(
+                    'CABINET_PROMO_TEST_ALREADY_CONNECTED',
+                    'These servers are already connected',
+                ),
+                'remnawave_sync_failed': texts.t(
+                    'CABINET_PROMO_TEST_SYNC_FAILED',
+                    'Failed to connect servers. Please try again later',
+                ),
             }
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_messages.get(error_code, 'Failed to activate offer'),
+                detail=error_messages.get(
+                    error_code, texts.t('CABINET_PROMO_TEST_ACTIVATE_FAILED', 'Failed to activate offer')
+                ),
             )
 
         await mark_offer_claimed(
@@ -341,7 +357,14 @@ async def claim_promo_offer(
 
         return ClaimOfferResponse(
             success=True,
-            message=f'Test access activated until {format_local_datetime(expires_at, "%Y-%m-%d %H:%M") if expires_at else "unlimited"}',
+            message=texts.t(
+                'CABINET_PROMO_TEST_ACCESS_ACTIVATED_UNTIL',
+                'Test access activated until {until}',
+            ).format(
+                until=format_local_datetime(expires_at, '%Y-%m-%d %H:%M')
+                if expires_at
+                else texts.t('CABINET_PROMO_UNLIMITED', 'unlimited')
+            ),
             expires_at=expires_at,
         )
 
@@ -350,7 +373,7 @@ async def claim_promo_offer(
     if discount_percent <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid offer',
+            detail=texts.t('CABINET_PROMO_INVALID_OFFER', 'Invalid offer'),
         )
 
     user.promo_offer_discount_percent = discount_percent
@@ -395,11 +418,16 @@ async def claim_promo_offer(
 
     expires_text = ''
     if discount_expires_at:
-        expires_text = f' Valid until {format_local_datetime(discount_expires_at, "%Y-%m-%d %H:%M")}'
+        expires_text = texts.t('CABINET_PROMO_VALID_UNTIL', ' Valid until {date}').format(
+            date=format_local_datetime(discount_expires_at, '%Y-%m-%d %H:%M')
+        )
 
     return ClaimOfferResponse(
         success=True,
-        message=f'Discount of {discount_percent}% activated!{expires_text}',
+        message=texts.t(
+            'CABINET_PROMO_DISCOUNT_ACTIVATED',
+            'Discount of {discount_percent}% activated!{expires_text}',
+        ).format(discount_percent=discount_percent, expires_text=expires_text),
         discount_percent=discount_percent,
         expires_at=discount_expires_at,
     )
@@ -411,6 +439,7 @@ async def clear_active_discount(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Clear user's active discount."""
+    texts = get_texts(user.language)
     user.promo_offer_discount_percent = 0
     user.promo_offer_discount_source = None
     user.promo_offer_discount_expires_at = None
@@ -418,4 +447,4 @@ async def clear_active_discount(
 
     await db.commit()
 
-    return {'message': 'Active discount cleared'}
+    return {'message': texts.t('CABINET_PROMO_ACTIVE_DISCOUNT_CLEARED', 'Active discount cleared')}

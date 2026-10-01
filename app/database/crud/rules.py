@@ -5,6 +5,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import ServiceRule
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -70,7 +71,10 @@ async def get_current_rules_content(db: AsyncSession, language: str = 'ru') -> s
 
     if rules:
         return rules.content
-    return """
+    texts = get_texts(language)
+    return texts.t(
+        'RULES_DEFAULT_CONTENT',
+        """
 🔒 <b>Правила использования сервиса</b>
 
 1. Сервис предоставляется "как есть" без каких-либо гарантий.
@@ -86,7 +90,8 @@ async def get_current_rules_content(db: AsyncSession, language: str = 'ru') -> s
 6. При возникновении вопросов обращайтесь в техническую поддержку.
 
 Используя сервис, вы соглашаетесь с данными правилами.
-"""
+""",
+    )
 
 
 async def get_all_rules_versions(db: AsyncSession, language: str = 'ru', limit: int = 10) -> list[ServiceRule]:

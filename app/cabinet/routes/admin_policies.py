@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.rbac import AccessPolicyCRUD, AdminRoleCRUD
 from app.database.models import User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 
@@ -118,13 +119,14 @@ async def create_policy(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new access policy (ABAC rule)."""
+    texts = get_texts(admin.language)
     # Validate role_id if provided
     if payload.role_id is not None:
         role = await AdminRoleCRUD.get_by_id(db, payload.role_id)
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Referenced role not found',
+                detail=texts.t('CABINET_POLICIES_REFERENCED_ROLE_NOT_FOUND', 'Referenced role not found'),
             )
 
     policy = await AccessPolicyCRUD.create(
@@ -159,11 +161,12 @@ async def update_policy(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update an existing access policy."""
+    texts = get_texts(admin.language)
     existing = await AccessPolicyCRUD.get_by_id(db, policy_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Policy not found',
+            detail=texts.t('CABINET_POLICIES_POLICY_NOT_FOUND', 'Policy not found'),
         )
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -174,14 +177,14 @@ async def update_policy(
         if not role:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Referenced role not found',
+                detail=texts.t('CABINET_POLICIES_REFERENCED_ROLE_NOT_FOUND', 'Referenced role not found'),
             )
 
     updated = await AccessPolicyCRUD.update(db, policy_id, **update_data)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Policy not found',
+            detail=texts.t('CABINET_POLICIES_POLICY_NOT_FOUND', 'Policy not found'),
         )
 
     await db.commit()
@@ -202,18 +205,19 @@ async def delete_policy(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Delete an access policy."""
+    texts = get_texts(admin.language)
     existing = await AccessPolicyCRUD.get_by_id(db, policy_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Policy not found',
+            detail=texts.t('CABINET_POLICIES_POLICY_NOT_FOUND', 'Policy not found'),
         )
 
     deleted = await AccessPolicyCRUD.delete(db, policy_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Failed to delete policy',
+            detail=texts.t('CABINET_POLICIES_DELETE_FAILED', 'Failed to delete policy'),
         )
 
     await db.commit()
@@ -224,4 +228,4 @@ async def delete_policy(
         policy_id=policy_id,
         policy_name=existing.name,
     )
-    return {'message': 'Policy deleted', 'policy_id': policy_id}
+    return {'message': texts.t('CABINET_POLICIES_DELETED', 'Policy deleted'), 'policy_id': policy_id}

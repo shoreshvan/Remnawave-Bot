@@ -8,6 +8,7 @@ from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import PaymentMethod, TransactionType
 from app.external.tribute import TributeService
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -63,7 +64,9 @@ async def tribute_webhook(request):
                             db,
                             user,
                             processed_data['amount_kopeks'],
-                            f'Пополнение через Tribute: {processed_data["payment_id"]}',
+                            get_texts(user.language)
+                            .t('TRIBUTE_DEPOSIT_DESCRIPTION', 'Пополнение через Tribute: {payment_id}')
+                            .format(payment_id=processed_data['payment_id']),
                             create_transaction=False,
                             commit=False,
                         )
@@ -73,7 +76,9 @@ async def tribute_webhook(request):
                             user_id=user.id,
                             type=TransactionType.DEPOSIT,
                             amount_kopeks=processed_data['amount_kopeks'],
-                            description='Пополнение через Tribute',
+                            description=get_texts(user.language).t(
+                                'TRIBUTE_DEPOSIT_DESCRIPTION_SHORT', 'Пополнение через Tribute'
+                            ),
                             payment_method=PaymentMethod.TRIBUTE,
                             external_id=processed_data['payment_id'],
                             commit=False,
@@ -125,7 +130,7 @@ async def handle_successful_payment(message: types.Message):
                             db,
                             user,
                             amount_kopeks,
-                            'Пополнение через Telegram Stars',
+                            get_texts(user.language).t('STARS_DEPOSIT_DESCRIPTION', 'Пополнение через Telegram Stars'),
                             create_transaction=False,
                             commit=False,
                         )
@@ -135,15 +140,22 @@ async def handle_successful_payment(message: types.Message):
                             user_id=user.id,
                             type=TransactionType.DEPOSIT,
                             amount_kopeks=amount_kopeks,
-                            description='Пополнение через Telegram Stars',
+                            description=get_texts(user.language).t(
+                                'STARS_DEPOSIT_DESCRIPTION', 'Пополнение через Telegram Stars'
+                            ),
                             payment_method=PaymentMethod.TELEGRAM_STARS,
                             external_id=payment.telegram_payment_charge_id,
                             commit=False,
                         )
 
                         await message.answer(
-                            f'✅ Баланс успешно пополнен на {settings.format_price(amount_kopeks)}!\n\n'
-                            'Средства зачислены на ваш баланс!'
+                            get_texts(user.language)
+                            .t(
+                                'STARS_BALANCE_TOPPED_UP',
+                                '✅ Баланс успешно пополнен на {amount}!\n\n'
+                                'Средства зачислены на ваш баланс!',
+                            )
+                            .format(amount=settings.format_price(amount_kopeks))
                         )
 
                         logger.info(

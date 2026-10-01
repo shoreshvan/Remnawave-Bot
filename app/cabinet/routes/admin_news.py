@@ -20,6 +20,7 @@ from app.database.crud.news import (
 from app.database.crud.news_categories import get_category_by_id
 from app.database.crud.news_tags import get_tag_by_id
 from app.database.models import NewsArticle, User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.news import (
@@ -77,6 +78,7 @@ async def list_all_news(
     offset: int = Query(0, ge=0),
 ) -> NewsListResponse:
     """Get all news articles (admin view, includes unpublished)."""
+    texts = get_texts(admin.language)
     try:
         articles = await get_all_news(db, limit=limit, offset=offset)
         total = await get_all_news_count(db)
@@ -90,7 +92,7 @@ async def list_all_news(
         logger.exception('Failed to list all news')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load news articles',
+            detail=texts.t('CABINET_NEWS_LOAD_FAILED', 'Failed to load news articles'),
         )
 
 
@@ -101,11 +103,12 @@ async def get_article_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsArticleResponse:
     """Get a single news article by ID (admin view)."""
+    texts = get_texts(admin.language)
     article = await get_news_article_by_id(db, article_id)
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail=texts.t('CABINET_NEWS_ARTICLE_NOT_FOUND', 'Article not found'),
         )
 
     return NewsArticleResponse(**_article_to_detail(article))
@@ -118,6 +121,7 @@ async def create_article(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsArticleResponse:
     """Create a new news article."""
+    texts = get_texts(admin.language)
     try:
         # Resolve category from FK -- sync legacy string fields from the managed entity
         category_name = request.category
@@ -127,7 +131,10 @@ async def create_article(
             if not cat:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f'Category with id={request.category_id} not found',
+                    detail=texts.t(
+                        'CABINET_NEWS_CATEGORY_ID_NOT_FOUND',
+                        'Category with id={category_id} not found',
+                    ).format(category_id=request.category_id),
                 )
             category_name = cat.name
             category_color = cat.color
@@ -139,7 +146,10 @@ async def create_article(
             if not tag_obj:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f'Tag with id={request.tag_id} not found',
+                    detail=texts.t(
+                        'CABINET_NEWS_TAG_ID_NOT_FOUND',
+                        'Tag with id={tag_id} not found',
+                    ).format(tag_id=request.tag_id),
                 )
             tag_name = tag_obj.name
 
@@ -165,13 +175,13 @@ async def create_article(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='An article with this slug already exists',
+            detail=texts.t('CABINET_NEWS_SLUG_EXISTS', 'An article with this slug already exists'),
         )
     except Exception:
         logger.exception('Failed to create news article')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to create article',
+            detail=texts.t('CABINET_NEWS_CREATE_FAILED', 'Failed to create article'),
         )
 
     # Reload with author relationship
@@ -179,7 +189,7 @@ async def create_article(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reload article after creation',
+            detail=texts.t('CABINET_NEWS_RELOAD_AFTER_CREATE_FAILED', 'Failed to reload article after creation'),
         )
     return NewsArticleResponse(**_article_to_detail(article))
 
@@ -192,11 +202,12 @@ async def update_article(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsArticleResponse:
     """Update an existing news article."""
+    texts = get_texts(admin.language)
     article = await get_news_article_by_id(db, article_id)
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail=texts.t('CABINET_NEWS_ARTICLE_NOT_FOUND', 'Article not found'),
         )
 
     try:
@@ -208,7 +219,10 @@ async def update_article(
             if not cat:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f'Category with id={update_data["category_id"]} not found',
+                    detail=texts.t(
+                        'CABINET_NEWS_CATEGORY_ID_NOT_FOUND',
+                        'Category with id={category_id} not found',
+                    ).format(category_id=update_data['category_id']),
                 )
             update_data['category'] = cat.name
             update_data['category_color'] = cat.color
@@ -219,7 +233,10 @@ async def update_article(
             if not tag_obj:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f'Tag with id={update_data["tag_id"]} not found',
+                    detail=texts.t(
+                        'CABINET_NEWS_TAG_ID_NOT_FOUND',
+                        'Tag with id={tag_id} not found',
+                    ).format(tag_id=update_data['tag_id']),
                 )
             update_data['tag'] = tag_obj.name
 
@@ -229,13 +246,13 @@ async def update_article(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='An article with this slug already exists',
+            detail=texts.t('CABINET_NEWS_SLUG_EXISTS', 'An article with this slug already exists'),
         )
     except Exception:
         logger.exception('Failed to update news article', article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to update article',
+            detail=texts.t('CABINET_NEWS_UPDATE_FAILED', 'Failed to update article'),
         )
 
     # Reload with author relationship (update used bulk UPDATE, author not populated)
@@ -243,7 +260,7 @@ async def update_article(
     if not article:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to reload article after update',
+            detail=texts.t('CABINET_NEWS_RELOAD_AFTER_UPDATE_FAILED', 'Failed to reload article after update'),
         )
     return NewsArticleResponse(**_article_to_detail(article))
 
@@ -255,11 +272,12 @@ async def remove_article(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Delete a news article."""
+    texts = get_texts(admin.language)
     article = await get_news_article_by_id(db, article_id)
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail=texts.t('CABINET_NEWS_ARTICLE_NOT_FOUND', 'Article not found'),
         )
 
     try:
@@ -268,7 +286,7 @@ async def remove_article(
         logger.exception('Failed to delete news article', article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to delete article',
+            detail=texts.t('CABINET_NEWS_DELETE_FAILED', 'Failed to delete article'),
         )
 
 
@@ -279,11 +297,12 @@ async def toggle_publish(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsToggleResponse:
     """Toggle the published status of a news article."""
+    texts = get_texts(admin.language)
     article = await get_news_article_by_id(db, article_id)
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail=texts.t('CABINET_NEWS_ARTICLE_NOT_FOUND', 'Article not found'),
         )
 
     new_published = not article.is_published
@@ -305,7 +324,7 @@ async def toggle_publish(
         logger.exception('Failed to toggle publish', article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to toggle publish status',
+            detail=texts.t('CABINET_NEWS_TOGGLE_PUBLISH_FAILED', 'Failed to toggle publish status'),
         )
 
 
@@ -316,11 +335,12 @@ async def toggle_featured(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsToggleResponse:
     """Toggle the featured status of a news article."""
+    texts = get_texts(admin.language)
     article = await get_news_article_by_id(db, article_id)
     if not article:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail=texts.t('CABINET_NEWS_ARTICLE_NOT_FOUND', 'Article not found'),
         )
 
     try:
@@ -339,5 +359,5 @@ async def toggle_featured(
         logger.exception('Failed to toggle featured', article_id=article_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to toggle featured status',
+            detail=texts.t('CABINET_NEWS_TOGGLE_FEATURED_FAILED', 'Failed to toggle featured status'),
         )

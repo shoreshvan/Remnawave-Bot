@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import ServerSquad, User
+from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.system_settings_service import bot_configuration_service
 from app.utils.incy_crypt1 import wrap_incy_deep_link
@@ -43,7 +44,12 @@ router = APIRouter()
 async def get_subscription(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t(
+            'CABINET_STATUS_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
+        ),
+    ),
 ):
     """Get current user's subscription details."""
     # Reload user from current session to get fresh data
@@ -125,7 +131,12 @@ async def get_subscription(
 async def get_connection_link(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t(
+            'CABINET_STATUS_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
+        ),
+    ),
 ) -> dict[str, Any]:
     """Get subscription connection link and instructions."""
     from app.utils.subscription_utils import (
@@ -139,14 +150,16 @@ async def get_connection_link(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No subscription found',
+            detail=get_texts().t('CABINET_STATUS_NO_SUBSCRIPTION', 'No subscription found'),
         )
 
     subscription_url = subscription.subscription_url
     if not subscription_url:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Subscription link not yet generated',
+            detail=get_texts().t(
+                'CABINET_STATUS_LINK_NOT_GENERATED', 'Subscription link not yet generated'
+            ),
         )
 
     display_link = get_display_subscription_link(subscription)
@@ -171,10 +184,12 @@ async def get_connection_link(
         'hide_link': hide_subscription_link,
         'instructions': {
             'steps': [
-                'Copy the subscription link',
-                'Open your VPN application',
-                "Find 'Add subscription' or 'Import' option",
-                'Paste the copied link',
+                get_texts().t('CABINET_STATUS_INSTRUCTION_COPY_LINK', 'Copy the subscription link'),
+                get_texts().t('CABINET_STATUS_INSTRUCTION_OPEN_APP', 'Open your VPN application'),
+                get_texts().t(
+                    'CABINET_STATUS_INSTRUCTION_FIND_IMPORT', "Find 'Add subscription' or 'Import' option"
+                ),
+                get_texts().t('CABINET_STATUS_INSTRUCTION_PASTE_LINK', 'Paste the copied link'),
             ]
         },
     }
@@ -419,7 +434,12 @@ def _resolve_button_url(
 async def get_app_config(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t(
+            'CABINET_STATUS_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
+        ),
+    ),
 ) -> dict[str, Any]:
     """Get app configuration for connection with deep links."""
     subscription = await resolve_subscription(db, user, subscription_id)
@@ -454,7 +474,7 @@ async def get_app_config(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='App configuration not set up.',
+            detail=get_texts().t('CABINET_STATUS_APP_CONFIG_NOT_SETUP', 'App configuration not set up.'),
         )
 
     config.pop('_isRemnawave', None)

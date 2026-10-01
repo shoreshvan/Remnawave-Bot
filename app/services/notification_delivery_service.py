@@ -18,6 +18,7 @@ from app.services.notification_types import (
     MARKETING_NOTIFICATION_TYPES,
     NotificationType,
 )
+from app.localization.texts import get_texts
 from app.utils.timezone import format_email_datetime
 
 
@@ -628,7 +629,8 @@ class NotificationDeliveryService:
     ) -> bool:
         """Notify user about account ban."""
         context = {
-            'reason': reason or 'Нарушение правил использования',
+            'reason': reason
+            or get_texts(user.language).t('NOTIFY_BAN_DEFAULT_REASON', 'Нарушение правил использования'),
         }
 
         return await self.send_notification(
@@ -676,12 +678,21 @@ class NotificationDeliveryService:
         честно нулевая, потому что дни в неё и не должны попадать, а выданные дни
         назвать нечем. ``formatted_reward`` поэтому описывает награду целиком.
         """
+        texts = get_texts(user.language)
         reward_parts = []
         if bonus_kopeks > 0:
             reward_parts.append(settings.format_price(bonus_kopeks))
         if bonus_days > 0:
-            tariff_suffix = f' тарифа «{tariff_name}»' if tariff_name else ''
-            reward_parts.append(f'{bonus_days} дн. подписки{tariff_suffix}')
+            tariff_suffix = (
+                texts.t('NOTIFY_REFERRAL_TARIFF_SUFFIX', ' тарифа «{tariff_name}»').format(tariff_name=tariff_name)
+                if tariff_name
+                else ''
+            )
+            reward_parts.append(
+                texts.t('NOTIFY_REFERRAL_DAYS_REWARD', '{bonus_days} дн. подписки{tariff_suffix}').format(
+                    bonus_days=bonus_days, tariff_suffix=tariff_suffix
+                )
+            )
 
         context = {
             'bonus_kopeks': bonus_kopeks,

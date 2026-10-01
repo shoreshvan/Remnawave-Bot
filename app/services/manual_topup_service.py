@@ -33,6 +33,7 @@ from app.database.crud.transaction import (
 )
 from app.database.crud.user import get_user_by_id, lock_user_for_update
 from app.database.models import PaymentMethod, Transaction, TransactionType, User
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -289,7 +290,7 @@ async def _notify_admins(
             user,
             transaction,
             old_balance,
-            topup_status='🧾 Ручное пополнение',
+            topup_status=get_texts(settings.DEFAULT_LANGUAGE).t('MANUAL_TOPUP_STATUS', '🧾 Ручное пополнение'),
             referrer_info=format_referrer_info(user),
             subscription=getattr(user, 'subscription', None),
             promo_group=user.get_primary_promo_group(),
@@ -319,13 +320,17 @@ async def _notify_user(
             logger.warning('Не удалось собрать клавиатуру уведомления о пополнении', user_id=user.id, error=error)
 
         try:
+            texts = get_texts(user.language)
             await bot.send_message(
                 user.telegram_id,
-                (
-                    '✅ <b>Баланс пополнен</b>\n\n'
-                    f'💰 Сумма: {settings.format_price(amount_kopeks)}\n'
-                    f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n'
-                    f'🆔 Транзакция: {transaction.id}'
+                texts.t(
+                    'MANUAL_TOPUP_USER_NOTIFICATION',
+                    '✅ <b>Баланс пополнен</b>\n\n💰 Сумма: {amount}\n💳 Текущий баланс: {balance}'
+                    '\n🆔 Транзакция: {transaction_id}',
+                ).format(
+                    amount=settings.format_price(amount_kopeks),
+                    balance=settings.format_price(user.balance_kopeks),
+                    transaction_id=transaction.id,
                 ),
                 parse_mode='HTML',
                 reply_markup=keyboard,

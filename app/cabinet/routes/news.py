@@ -15,6 +15,7 @@ from app.database.crud.news import (
     increment_views,
 )
 from app.database.models import NewsArticle, User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..schemas.news import (
@@ -111,7 +112,7 @@ async def list_categories(
         logger.exception('Failed to get news categories')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load categories',
+            detail=get_texts().t('CABINET_NEWS_CATEGORIES_LOAD_FAILED', 'Failed to load categories'),
         )
 
 
@@ -142,7 +143,7 @@ async def list_published_news(
         logger.exception('Failed to list published news')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load news',
+            detail=get_texts().t('CABINET_NEWS_LIST_LOAD_FAILED', 'Failed to load news'),
         )
 
 
@@ -158,7 +159,7 @@ async def get_article_by_slug(
     if not article or not article.is_published:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Article not found',
+            detail=get_texts().t('CABINET_NEWS_ARTICLE_NOT_FOUND', 'Article not found'),
         )
 
     # Build response dict while session attributes are still loaded.

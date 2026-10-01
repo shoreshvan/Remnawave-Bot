@@ -11,6 +11,7 @@ import aiohttp
 import structlog
 
 from app.config import settings
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -102,7 +103,9 @@ class BlacklistService:
 
                         # 2. Обрабатываем контент: вычленяем username, если он есть в начале
                         username = ''
-                        reason = 'Занесен в черный список'
+                        reason = get_texts(settings.DEFAULT_LANGUAGE).t(
+                            'BLACKLIST_DEFAULT_REASON', 'Занесен в черный список'
+                        )
 
                         if content:
                             if content.startswith('@'):
@@ -250,8 +253,12 @@ class BlacklistService:
         """
         success = await self.update_blacklist()
         if success:
-            return True, f'Черный список обновлен успешно. Записей: {len(self.blacklist_data)}'
-        return False, 'Ошибка обновления черного списка'
+            return True, get_texts(settings.DEFAULT_LANGUAGE).t(
+                'BLACKLIST_UPDATE_SUCCESS', 'Черный список обновлен успешно. Записей: {count}'
+            ).format(count=len(self.blacklist_data))
+        return False, get_texts(settings.DEFAULT_LANGUAGE).t(
+            'BLACKLIST_UPDATE_ERROR', 'Ошибка обновления черного списка'
+        )
 
 
 # Глобальный экземпляр сервиса

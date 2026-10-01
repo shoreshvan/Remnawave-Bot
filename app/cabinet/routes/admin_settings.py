@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.system_settings_service import (
     ReadOnlySettingError,
     bot_configuration_service,
@@ -256,10 +257,13 @@ async def get_setting(
     admin: User = Depends(require_permission('settings:read')),
 ):
     """Get a specific setting by key."""
+    texts = get_texts(admin.language)
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, texts.t('CABINET_SETTINGS_NOT_FOUND', 'Setting not found')
+        ) from error
 
     return _serialize_definition(definition)
 
@@ -272,13 +276,18 @@ async def update_setting(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update a setting value."""
+    texts = get_texts(admin.language)
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, texts.t('CABINET_SETTINGS_NOT_FOUND', 'Setting not found')
+        ) from error
 
     if bot_configuration_service.is_env_locked(key):
-        raise HTTPException(status.HTTP_409_CONFLICT, _ENV_LOCKED_DETAIL.format(key=key))
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, texts.t('CABINET_SETTINGS_ENV_LOCKED', _ENV_LOCKED_DETAIL).format(key=key)
+        )
 
     # The masked sentinel is what we return for secrets; if it comes back unchanged the
     # admin didn't edit the field, so preserve the stored secret instead of overwriting
@@ -307,13 +316,18 @@ async def reset_setting(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reset a setting to its default value."""
+    texts = get_texts(admin.language)
     try:
         definition = bot_configuration_service.get_definition(key)
     except KeyError as error:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Setting not found') from error
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, texts.t('CABINET_SETTINGS_NOT_FOUND', 'Setting not found')
+        ) from error
 
     if bot_configuration_service.is_env_locked(key):
-        raise HTTPException(status.HTTP_409_CONFLICT, _ENV_LOCKED_DETAIL.format(key=key))
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, texts.t('CABINET_SETTINGS_ENV_LOCKED', _ENV_LOCKED_DETAIL).format(key=key)
+        )
 
     try:
         await bot_configuration_service.reset_value(db, key)

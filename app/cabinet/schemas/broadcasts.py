@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.localization.texts import get_texts
+
 from .media import TELEGRAM_FILE_ID_PATTERN
 
 
@@ -114,11 +116,21 @@ class CustomBroadcastButton(BaseModel):
         action_type = info.data.get('action_type', 'callback')
         if action_type == 'url':
             if not v.startswith(('https://', 'tg://')):
-                raise ValueError('URL must start with https:// or tg://')
+                raise ValueError(
+                    get_texts().t(
+                        'CABINET_BROADCAST_BUTTON_URL_INVALID_SCHEME',
+                        'URL must start with https:// or tg://',
+                    )
+                )
         elif action_type == 'callback':
             # Telegram API limits callback_data to 64 bytes
             if len(v.encode('utf-8')) > 64:
-                raise ValueError('Callback data must be at most 64 bytes')
+                raise ValueError(
+                    get_texts().t(
+                        'CABINET_BROADCAST_BUTTON_CALLBACK_DATA_TOO_LONG',
+                        'Callback data must be at most 64 bytes',
+                    )
+                )
         return v
 
 

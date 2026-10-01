@@ -13,6 +13,7 @@ from app.database.crud.news_categories import (
     update_category,
 )
 from app.database.models import User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.news_categories import NewsCategoryCreate, NewsCategoryResponse, NewsCategoryUpdate
@@ -40,12 +41,13 @@ async def create_new_category(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsCategoryResponse:
     """Create a new news category."""
+    texts = get_texts(admin.language)
     try:
         category = await create_category(db, name=request.name, color=request.color)
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Category already exists',
+            detail=texts.t('CABINET_NEWS_CATEGORIES_EXISTS', 'Category already exists'),
         )
     return NewsCategoryResponse.model_validate(category)
 
@@ -58,18 +60,19 @@ async def update_existing_category(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NewsCategoryResponse:
     """Update an existing news category."""
+    texts = get_texts(admin.language)
     category = await get_category_by_id(db, category_id)
     if not category:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Category not found',
+            detail=texts.t('CABINET_NEWS_CATEGORIES_NOT_FOUND', 'Category not found'),
         )
     try:
         category = await update_category(db, category, **request.model_dump(exclude_unset=True))
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Category name already exists',
+            detail=texts.t('CABINET_NEWS_CATEGORIES_NAME_EXISTS', 'Category name already exists'),
         )
     return NewsCategoryResponse.model_validate(category)
 
@@ -81,10 +84,11 @@ async def remove_category(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Delete a news category. Articles using it will have category_id set to NULL."""
+    texts = get_texts(admin.language)
     category = await get_category_by_id(db, category_id)
     if not category:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Category not found',
+            detail=texts.t('CABINET_NEWS_CATEGORIES_NOT_FOUND', 'Category not found'),
         )
     await delete_category(db, category)

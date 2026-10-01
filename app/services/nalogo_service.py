@@ -6,6 +6,7 @@ from typing import Any
 import structlog
 
 from app.config import settings
+from app.localization.texts import get_texts
 
 # Используем локальную исправленную версию библиотеки
 from app.lib.nalogo import Client
@@ -297,7 +298,9 @@ class NaloGoService:
                         receipt_uuid=receipt_uuid,
                         amount_kopeks=amount_kopeks,
                         telegram_user_id=target_receipt.get('telegram_user_id'),
-                        context_label='Источник: ручная пересылка чека из админки',
+                        context_label=get_texts(settings.DEFAULT_LANGUAGE).t(
+                            'NALOGO_RECEIPT_MANUAL_CONTEXT', 'Источник: ручная пересылка чека из админки'
+                        ),
                         user_email=target_receipt.get('user_email'),
                     )
                 except Exception as notify_error:
@@ -822,8 +825,11 @@ async def send_nalogo_receipt_notifications(
 
     from aiogram import types
 
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='🧾 Открыть чек', url=receipt_url)]]
+        inline_keyboard=[
+            [types.InlineKeyboardButton(text=texts.t('NALOGO_RECEIPT_OPEN_BUTTON', '🧾 Открыть чек'), url=receipt_url)]
+        ]
     )
     amount_text = settings.format_price(amount_kopeks)
 
@@ -907,11 +913,12 @@ async def send_nalogo_receipt_notifications(
         try:
             file_delivered = await _deliver(
                 telegram_user_id,
-                (
+                texts.t(
+                    'NALOGO_RECEIPT_USER_MSG',
                     '🧾 <b>Чек по вашему платежу сформирован</b>\n\n'
-                    f'💰 Сумма: {amount_text}\n\n'
-                    'Чек зарегистрирован в ФНС через сервис «Мой налог».'
-                ),
+                    '💰 Сумма: {amount}\n\n'
+                    'Чек зарегистрирован в ФНС через сервис «Мой налог».',
+                ).format(amount=amount_text),
             )
             # Ссылка вместо файла — для клиента под VPN это не доставка:
             # lknpd.nalog.ru у него не открывается (см. _download_receipt_file).
@@ -1014,32 +1021,61 @@ async def send_nalogo_receipt_notifications(
                 if db_user:
                     from html import escape as html_escape
 
-                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                    recipient_lines.append(
+                        texts.t(
+                            'NALOGO_RECEIPT_ADMIN_TELEGRAM_ID', '🆔 Telegram ID: <code>{telegram_id}</code>'
+                        ).format(telegram_id=telegram_user_id)
+                    )
                     full_name = ' '.join(filter(None, [db_user.first_name, db_user.last_name])).strip()
                     if full_name:
-                        recipient_lines.append(f'📛 Имя: <code>{html_escape(full_name)}</code>')
+                        recipient_lines.append(
+                            texts.t('NALOGO_RECEIPT_ADMIN_NAME', '📛 Имя: <code>{name}</code>').format(
+                                name=html_escape(full_name)
+                            )
+                        )
                     if db_user.username:
-                        recipient_lines.append(f'👤 Username: @{db_user.username}')
+                        recipient_lines.append(
+                            texts.t('NALOGO_RECEIPT_ADMIN_USERNAME', '👤 Username: @{username}').format(
+                                username=db_user.username
+                            )
+                        )
                     if db_user.email:
-                        recipient_lines.append(f'📧 Почта: <code>{html_escape(db_user.email)}</code>')
+                        recipient_lines.append(
+                            texts.t('NALOGO_RECEIPT_ADMIN_EMAIL', '📧 Почта: <code>{email}</code>').format(
+                                email=html_escape(db_user.email)
+                            )
+                        )
                 else:
-                    recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                    recipient_lines.append(
+                        texts.t(
+                            'NALOGO_RECEIPT_ADMIN_TELEGRAM_ID', '🆔 Telegram ID: <code>{telegram_id}</code>'
+                        ).format(telegram_id=telegram_user_id)
+                    )
             except Exception as user_error:
                 logger.warning(
                     'Не удалось загрузить данные пользователя для уведомления о чеке',
                     telegram_user_id=telegram_user_id,
                     error=user_error,
                 )
-                recipient_lines.append(f'🆔 Telegram ID: <code>{telegram_user_id}</code>')
+                recipient_lines.append(
+                        texts.t(
+                            'NALOGO_RECEIPT_ADMIN_TELEGRAM_ID', '🆔 Telegram ID: <code>{telegram_id}</code>'
+                        ).format(telegram_id=telegram_user_id)
+                    )
         else:
-            recipient_lines.append('👤 Получатель: без Telegram (email/гость)')
+            recipient_lines.append(
+                texts.t('NALOGO_RECEIPT_ADMIN_NO_TELEGRAM', '👤 Получатель: без Telegram (email/гость)')
+            )
 
         recipient_block = '\n'.join(recipient_lines)
         context_line = f'\nℹ️ {context_label}' if context_label else ''
         try:
             await _deliver(
                 chat_id,
-                f'🧾 <b>Новый чек NaloGO создан</b>\n\n💰 Сумма: {amount_text}\n{recipient_block}{context_line}',
+                texts.t(
+                    'NALOGO_RECEIPT_ADMIN_MSG',
+                    '🧾 <b>Новый чек NaloGO создан</b>\n\n💰 Сумма: {amount}\n{recipient_block}{context_line}',
+                ).format(amount=amount_text, recipient_block=recipient_block, context_line=context_line),
                 thread_id=topic_id,
             )
         except Exception as error:

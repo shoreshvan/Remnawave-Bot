@@ -263,9 +263,12 @@ def _get_group_meta(group_key: str) -> dict[str, object]:
     return CATEGORY_GROUP_METADATA.get(group_key, {})
 
 
-def _get_group_description(group_key: str) -> str:
+def _get_group_description(group_key: str, texts=None) -> str:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     meta = _get_group_meta(group_key)
-    return str(meta.get('description', ''))
+    default = str(meta.get('description', ''))
+    return texts.t(f'BOT_CONFIG_GROUP_{group_key.upper()}_DESC', default)
 
 
 def _get_group_icon(group_key: str) -> str:
@@ -273,7 +276,9 @@ def _get_group_icon(group_key: str) -> str:
     return str(meta.get('icon', '⚙️'))
 
 
-def _get_group_status(group_key: str) -> tuple[str, str]:
+def _get_group_status(group_key: str, texts=None) -> tuple[str, str]:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     key = group_key
     if key == 'payments':
         payment_statuses = {
@@ -292,45 +297,51 @@ def _get_group_status(group_key: str) -> tuple[str, str]:
         active = sum(1 for value in payment_statuses.values() if value)
         total = len(payment_statuses)
         if active == 0:
-            return '🔴', 'Нет активных платежей'
+            return '🔴', texts.t('BOT_CONFIG_STATUS_NO_ACTIVE_PAYMENTS', 'Нет активных платежей')
         if active < total:
-            return '🟡', f'Активно {active} из {total}'
-        return '🟢', 'Все системы активны'
+            return '🟡', texts.t('BOT_CONFIG_STATUS_PAYMENTS_PARTIAL', 'Активно {active} из {total}').format(
+                active=active, total=total
+            )
+        return '🟢', texts.t('BOT_CONFIG_STATUS_ALL_SYSTEMS_ACTIVE', 'Все системы активны')
 
     if key == 'remnawave':
         api_ready = bool(
             settings.REMNAWAVE_API_URL
             and (settings.REMNAWAVE_API_KEY or (settings.REMNAWAVE_USERNAME and settings.REMNAWAVE_PASSWORD))
         )
-        return ('🟢', 'API подключено') if api_ready else ('🟡', 'Нужно указать URL и ключи')
+        if api_ready:
+            return '🟢', texts.t('BOT_CONFIG_STATUS_API_CONNECTED', 'API подключено')
+        return '🟡', texts.t('BOT_CONFIG_STATUS_API_NEED_KEYS', 'Нужно указать URL и ключи')
 
     if key == 'server':
         mode = (settings.SERVER_STATUS_MODE or '').lower()
         monitoring_active = mode not in {'', 'disabled'}
         if monitoring_active:
-            return '🟢', 'Мониторинг активен'
+            return '🟢', texts.t('BOT_CONFIG_STATUS_MONITORING_ACTIVE', 'Мониторинг активен')
         if settings.MONITORING_INTERVAL:
-            return '🟡', 'Доступны только отчеты'
-        return '⚪', 'Мониторинг выключен'
+            return '🟡', texts.t('BOT_CONFIG_STATUS_ONLY_REPORTS', 'Доступны только отчеты')
+        return '⚪', texts.t('BOT_CONFIG_STATUS_MONITORING_OFF', 'Мониторинг выключен')
 
     if key == 'maintenance':
         if settings.MAINTENANCE_MODE:
-            return '🟡', 'Режим ТО включен'
-        return '🟢', 'Рабочий режим'
+            return '🟡', texts.t('BOT_CONFIG_STATUS_MAINTENANCE_ON', 'Режим ТО включен')
+        return '🟢', texts.t('BOT_CONFIG_STATUS_WORKING_MODE', 'Рабочий режим')
 
     if key == 'notifications':
         user_on = settings.is_notifications_enabled()
         admin_on = settings.is_admin_notifications_enabled()
         if user_on and admin_on:
-            return '🟢', 'Все уведомления включены'
+            return '🟢', texts.t('BOT_CONFIG_STATUS_ALL_NOTIFICATIONS_ON', 'Все уведомления включены')
         if user_on or admin_on:
-            return '🟡', 'Часть уведомлений включена'
-        return '⚪', 'Уведомления отключены'
+            return '🟡', texts.t('BOT_CONFIG_STATUS_SOME_NOTIFICATIONS_ON', 'Часть уведомлений включена')
+        return '⚪', texts.t('BOT_CONFIG_STATUS_NOTIFICATIONS_OFF', 'Уведомления отключены')
 
     if key == 'trial':
         if settings.TRIAL_DURATION_DAYS > 0:
-            return '🟢', f'{settings.TRIAL_DURATION_DAYS} дней пробного периода'
-        return '⚪', 'Триал отключен'
+            return '🟢', texts.t('BOT_CONFIG_STATUS_TRIAL_DAYS', '{days} дней пробного периода').format(
+                days=settings.TRIAL_DURATION_DAYS
+            )
+        return '⚪', texts.t('BOT_CONFIG_STATUS_TRIAL_OFF', 'Триал отключен')
 
     if key == 'referral':
         active = (
@@ -338,33 +349,39 @@ def _get_group_status(group_key: str) -> tuple[str, str]:
             or settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS
             or settings.REFERRAL_INVITER_BONUS_KOPEKS
         )
-        return ('🟢', 'Программа активна') if active else ('⚪', 'Бонусы не заданы')
+        if active:
+            return '🟢', texts.t('BOT_CONFIG_STATUS_REFERRAL_ACTIVE', 'Программа активна')
+        return '⚪', texts.t('BOT_CONFIG_STATUS_REFERRAL_NO_BONUS', 'Бонусы не заданы')
 
     if key == 'core':
         token_ok = bool(getattr(settings, 'BOT_TOKEN', ''))
         # Channel subscription channels are now managed via DB (admin panel),
         # not a single CHANNEL_LINK setting. Dashboard cannot async-query DB here.
         if token_ok:
-            return '🟢', 'Бот готов к работе'
-        return '🟡', 'Проверьте токен бота'
+            return '🟢', texts.t('BOT_CONFIG_STATUS_BOT_READY', 'Бот готов к работе')
+        return '🟡', texts.t('BOT_CONFIG_STATUS_CHECK_TOKEN', 'Проверьте токен бота')
 
     if key == 'subscriptions':
         price_ready = settings.PRICE_30_DAYS > 0 and settings.AVAILABLE_SUBSCRIPTION_PERIODS
-        return ('🟢', 'Тарифы настроены') if price_ready else ('⚪', 'Нужно задать цены')
+        if price_ready:
+            return '🟢', texts.t('BOT_CONFIG_STATUS_PRICES_READY', 'Тарифы настроены')
+        return '⚪', texts.t('BOT_CONFIG_STATUS_PRICES_NEEDED', 'Нужно задать цены')
 
     if key == 'database':
         mode = (settings.DATABASE_MODE or 'auto').lower()
         if mode == 'postgresql':
             return '🟢', 'PostgreSQL'
         if mode == 'sqlite':
-            return '🟡', 'SQLite режим'
-        return '🟢', 'Авто режим'
+            return '🟡', texts.t('BOT_CONFIG_STATUS_SQLITE_MODE', 'SQLite режим')
+        return '🟢', texts.t('BOT_CONFIG_STATUS_AUTO_MODE', 'Авто режим')
 
     if key == 'interface':
         branding = bool(settings.ENABLE_LOGO_MODE or settings.MINIAPP_CUSTOM_URL)
-        return ('🟢', 'Брендинг настроен') if branding else ('⚪', 'Настройки по умолчанию')
+        if branding:
+            return '🟢', texts.t('BOT_CONFIG_STATUS_BRANDING_READY', 'Брендинг настроен')
+        return '⚪', texts.t('BOT_CONFIG_STATUS_DEFAULT_SETTINGS', 'Настройки по умолчанию')
 
-    return '🟢', 'Готово к работе'
+    return '🟢', texts.t('BOT_CONFIG_STATUS_READY', 'Готово к работе')
 
 
 def _get_setting_icon(definition, current_value: object) -> str:
@@ -397,8 +414,10 @@ def _get_setting_icon(definition, current_value: object) -> str:
     return '⚙️'
 
 
-def _render_dashboard_overview() -> str:
-    grouped = _get_grouped_categories()
+def _render_dashboard_overview(texts=None) -> str:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+    grouped = _get_grouped_categories(texts)
     total_settings = 0
     total_overrides = 0
 
@@ -411,22 +430,34 @@ def _render_dashboard_overview() -> str:
             )
 
     lines: list[str] = [
-        '⚙️ <b>ПАНЕЛЬ УПРАВЛЕНИЯ БОТОМ</b>',
+        texts.t('BOT_CONFIG_DASHBOARD_TITLE', '⚙️ <b>ПАНЕЛЬ УПРАВЛЕНИЯ БОТОМ</b>'),
         '',
-        f'Всего параметров: <b>{total_settings}</b> • Переопределено: <b>{total_overrides}</b>',
+        texts.t(
+            'BOT_CONFIG_DASHBOARD_TOTALS',
+            'Всего параметров: <b>{total}</b> • Переопределено: <b>{overrides}</b>',
+        ).format(total=total_settings, overrides=total_overrides),
         '',
-        '<b>Группы настроек</b>',
+        texts.t('BOT_CONFIG_DASHBOARD_GROUPS_HEADER', '<b>Группы настроек</b>'),
         '',
     ]
 
     for group_key, title, items in grouped:
-        status_icon, status_text = _get_group_status(group_key)
+        status_icon, status_text = _get_group_status(group_key, texts)
         total = sum(count for _, _, count in items)
-        lines.append(f'{status_icon} <b>{title}</b> — {status_text}')
-        lines.append(f'└ Настроек: {total}')
+        lines.append(
+            texts.t('BOT_CONFIG_DASHBOARD_GROUP_LINE', '{status_icon} <b>{title}</b> — {status_text}').format(
+                status_icon=status_icon, title=title, status_text=status_text
+            )
+        )
+        lines.append(texts.t('BOT_CONFIG_DASHBOARD_GROUP_COUNT', '└ Настроек: {total}').format(total=total))
         lines.append('')
 
-    lines.append('🔍 Используйте поиск, чтобы быстро найти нужный параметр по ключу или названию.')
+    lines.append(
+        texts.t(
+            'BOT_CONFIG_DASHBOARD_SEARCH_HINT',
+            '🔍 Используйте поиск, чтобы быстро найти нужный параметр по ключу или названию.',
+        )
+    )
     return '\n'.join(lines).strip()
 
 
@@ -492,7 +523,9 @@ def _perform_settings_search(query: str) -> list[dict[str, object]]:
     return results[:20]
 
 
-def _build_search_results_keyboard(results: list[dict[str, object]]) -> types.InlineKeyboardMarkup:
+def _build_search_results_keyboard(results: list[dict[str, object]], texts=None) -> types.InlineKeyboardMarkup:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     rows: list[list[types.InlineKeyboardButton]] = []
     for result in results:
         group_key = str(result['group_key'])
@@ -514,7 +547,7 @@ def _build_search_results_keyboard(results: list[dict[str, object]]) -> types.In
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅️ В главное меню',
+                text=texts.t('BOT_CONFIG_BTN_TO_MAIN_MENU', '⬅️ В главное меню'),
                 callback_data='admin_bot_config',
             )
         ]
@@ -543,21 +576,32 @@ async def start_settings_search(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     await state.set_state(BotConfigStates.waiting_for_search_query)
     await state.update_data(botcfg_origin='bot_config')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ В главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_BTN_TO_MAIN_MENU', '⬅️ В главное меню'),
+                    callback_data='admin_bot_config',
+                )
+            ]
+        ]
     )
 
     await callback.message.edit_text(
-        '🔍 <b>Поиск по настройкам</b>\n\n'
-        'Отправьте часть ключа или названия настройки. \n'
-        'Например: <code>yookassa</code> или <code>уведомления</code>.',
+        texts.t(
+            'BOT_CONFIG_SEARCH_PROMPT',
+            '🔍 <b>Поиск по настройкам</b>\n\n'
+            'Отправьте часть ключа или названия настройки. \n'
+            'Например: <code>yookassa</code> или <code>уведомления</code>.',
+        ),
         reply_markup=keyboard,
         parse_mode='HTML',
     )
-    await callback.answer('Введите запрос', show_alert=False)
+    await callback.answer(texts.t('BOT_CONFIG_SEARCH_ENTER_QUERY', 'Введите запрос'), show_alert=False)
 
 
 @admin_required
@@ -575,36 +619,55 @@ async def handle_search_query(
     if data.get('botcfg_origin') != 'bot_config':
         return
 
+    texts = get_texts(db_user.language)
     query = (message.text or '').strip()
     results = _perform_settings_search(query)
 
     if results:
-        keyboard = _build_search_results_keyboard(results)
+        keyboard = _build_search_results_keyboard(results, texts)
         lines = [
-            '🔍 <b>Результаты поиска</b>',
-            f'Запрос: <code>{html.escape(query)}</code>',
+            texts.t('BOT_CONFIG_SEARCH_RESULTS_TITLE', '🔍 <b>Результаты поиска</b>'),
+            texts.t('BOT_CONFIG_SEARCH_QUERY_LABEL', 'Запрос: <code>{query}</code>').format(
+                query=html.escape(query)
+            ),
             '',
         ]
         for index, item in enumerate(results, start=1):
-            lines.append(f'{index}. {item["name"]} — {item["value"]} ({item["category_label"]})')
+            lines.append(
+                texts.t(
+                    'BOT_CONFIG_SEARCH_RESULT_ROW',
+                    '{index}. {name} — {value} ({category_label})',
+                ).format(
+                    index=index,
+                    name=item['name'],
+                    value=item['value'],
+                    category_label=item['category_label'],
+                )
+            )
         text = '\n'.join(lines)
     else:
         keyboard = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='⬅️ Попробовать снова',
+                        text=texts.t('BOT_CONFIG_SEARCH_RETRY', '⬅️ Попробовать снова'),
                         callback_data='botcfg_action:search',
                     )
                 ],
-                [types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='admin_bot_config')],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('BOT_CONFIG_BTN_MAIN_MENU', '🏠 Главное меню'),
+                        callback_data='admin_bot_config',
+                    )
+                ],
             ]
         )
-        text = (
+        text = texts.t(
+            'BOT_CONFIG_SEARCH_NO_RESULTS',
             '🔍 <b>Результаты поиска</b>\n\n'
-            f'Запрос: <code>{html.escape(query)}</code>\n\n'
-            'Ничего не найдено. Попробуйте изменить формулировку.'
-        )
+            'Запрос: <code>{query}</code>\n\n'
+            'Ничего не найдено. Попробуйте изменить формулировку.',
+        ).format(query=html.escape(query))
 
     await message.answer(text, parse_mode='HTML', reply_markup=keyboard)
     await state.clear()
@@ -618,24 +681,35 @@ async def show_presets(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     lines = [
-        '🎯 <b>Готовые пресеты</b>',
+        texts.t('BOT_CONFIG_PRESETS_TITLE', '🎯 <b>Готовые пресеты</b>'),
         '',
-        'Выберите набор параметров, чтобы быстро применить его к боту.',
+        texts.t('BOT_CONFIG_PRESETS_INTRO', 'Выберите набор параметров, чтобы быстро применить его к боту.'),
         '',
     ]
     for key, meta in PRESET_METADATA.items():
-        lines.append(f'• <b>{meta["title"]}</b> — {meta["description"]}')
+        preset_title = texts.t(f'BOT_CONFIG_PRESET_{key.upper()}_TITLE', str(meta['title']))
+        preset_description = texts.t(f'BOT_CONFIG_PRESET_{key.upper()}_DESC', str(meta['description']))
+        lines.append(f'• <b>{preset_title}</b> — {preset_description}')
     text = '\n'.join(lines)
 
     buttons: list[types.InlineKeyboardButton] = []
     for key, meta in PRESET_METADATA.items():
-        buttons.append(types.InlineKeyboardButton(text=meta['title'], callback_data=f'botcfg_preset:{key}'))
+        button_title = texts.t(f'BOT_CONFIG_PRESET_{key.upper()}_TITLE', str(meta['title']))
+        buttons.append(types.InlineKeyboardButton(text=button_title, callback_data=f'botcfg_preset:{key}'))
 
     rows: list[list[types.InlineKeyboardButton]] = []
     for chunk in _chunk(buttons, 2):
         rows.append(list(chunk))
-    rows.append([types.InlineKeyboardButton(text='⬅️ Главное меню', callback_data='admin_bot_config')])
+    rows.append(
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('BOT_CONFIG_BTN_MAIN_MENU_BACK', '⬅️ Главное меню'),
+                callback_data='admin_bot_config',
+            )
+        ]
+    )
 
     await callback.message.edit_text(
         text,
@@ -645,23 +719,30 @@ async def show_presets(
     await callback.answer()
 
 
-def _format_preset_preview(preset_key: str) -> tuple[str, list[str]]:
+def _format_preset_preview(preset_key: str, texts=None) -> tuple[str, list[str]]:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     config = PRESET_CONFIGS.get(preset_key, {})
     meta = PRESET_METADATA.get(preset_key, {'title': preset_key, 'description': ''})
-    title = meta['title']
-    description = meta.get('description', '')
+    title = texts.t(f'BOT_CONFIG_PRESET_{preset_key.upper()}_TITLE', str(meta['title']))
+    description = texts.t(f'BOT_CONFIG_PRESET_{preset_key.upper()}_DESC', str(meta.get('description', '')))
 
     lines = [f'🎯 <b>{title}</b>']
     if description:
         lines.append(description)
     lines.append('')
-    lines.append('Будут установлены следующие значения:')
+    lines.append(texts.t('BOT_CONFIG_PRESET_PREVIEW_HEADER', 'Будут установлены следующие значения:'))
 
     for index, (setting_key, new_value) in enumerate(config.items(), start=1):
         current_value = bot_configuration_service.get_current_value(setting_key)
         current_pretty = bot_configuration_service.format_value_human(setting_key, current_value)
         new_pretty = bot_configuration_service.format_value_human(setting_key, new_value)
-        lines.append(f'{index}. <code>{setting_key}</code>\n   Текущее: {current_pretty}\n   Новое: {new_pretty}')
+        lines.append(
+            texts.t(
+                'BOT_CONFIG_PRESET_PREVIEW_ITEM',
+                '{index}. <code>{setting_key}</code>\n   Текущее: {current}\n   Новое: {new}',
+            ).format(index=index, setting_key=setting_key, current=current_pretty, new=new_pretty)
+        )
 
     return title, lines
 
@@ -674,17 +755,28 @@ async def preview_preset(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 1)
     preset_key = parts[1] if len(parts) > 1 else ''
     if preset_key not in PRESET_CONFIGS:
-        await callback.answer('Этот пресет недоступен', show_alert=True)
+        await callback.answer(texts.t('BOT_CONFIG_PRESET_UNAVAILABLE', 'Этот пресет недоступен'), show_alert=True)
         return
 
-    title, lines = _format_preset_preview(preset_key)
+    title, lines = _format_preset_preview(preset_key, texts)
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text='✅ Применить', callback_data=f'botcfg_preset_apply:{preset_key}')],
-            [types.InlineKeyboardButton(text='⬅️ Назад', callback_data='botcfg_action:presets')],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_PRESET_APPLY', '✅ Применить'),
+                    callback_data=f'botcfg_preset_apply:{preset_key}',
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_BTN_BACK', '⬅️ Назад'),
+                    callback_data='botcfg_action:presets',
+                )
+            ],
         ]
     )
 
@@ -704,11 +796,12 @@ async def apply_preset(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 1)
     preset_key = parts[1] if len(parts) > 1 else ''
     config = PRESET_CONFIGS.get(preset_key)
     if not config:
-        await callback.answer('Этот пресет недоступен', show_alert=True)
+        await callback.answer(texts.t('BOT_CONFIG_PRESET_UNAVAILABLE', 'Этот пресет недоступен'), show_alert=True)
         return
 
     applied: list[str] = []
@@ -728,17 +821,27 @@ async def apply_preset(
 
     title = PRESET_METADATA.get(preset_key, {}).get('title', preset_key)
     summary_lines = [
-        f'✅ Пресет <b>{title}</b> применен',
+        texts.t('BOT_CONFIG_PRESET_APPLIED', '✅ Пресет <b>{title}</b> применен').format(title=title),
         '',
-        f'Изменено параметров: <b>{len(applied)}</b>',
+        texts.t('BOT_CONFIG_PRESET_APPLIED_COUNT', 'Изменено параметров: <b>{count}</b>').format(count=len(applied)),
     ]
     if applied:
         summary_lines.append('\n'.join(f'• <code>{key}</code>' for key in applied))
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
-            [types.InlineKeyboardButton(text='⬅️ К пресетам', callback_data='botcfg_action:presets')],
-            [types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='admin_bot_config')],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_PRESET_BACK_TO_PRESETS', '⬅️ К пресетам'),
+                    callback_data='botcfg_action:presets',
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_BTN_MAIN_MENU', '🏠 Главное меню'),
+                    callback_data='admin_bot_config',
+                )
+            ],
         ]
     )
 
@@ -747,7 +850,7 @@ async def apply_preset(
         parse_mode='HTML',
         reply_markup=keyboard,
     )
-    await callback.answer('Настройки обновлены', show_alert=False)
+    await callback.answer(texts.t('BOT_CONFIG_SETTINGS_UPDATED', 'Настройки обновлены'), show_alert=False)
 
 
 @admin_required
@@ -781,12 +884,13 @@ async def export_settings(
     filename = f'bot-settings-{datetime.now(UTC).strftime("%Y%m%d-%H%M%S")}.env'
     file = types.BufferedInputFile(content.encode('utf-8'), filename=filename)
 
+    texts = get_texts(db_user.language)
     await callback.message.answer_document(
         document=file,
-        caption='📤 Экспорт текущих настроек',
+        caption=texts.t('BOT_CONFIG_EXPORT_CAPTION', '📤 Экспорт текущих настроек'),
         parse_mode='HTML',
     )
-    await callback.answer('Файл готов', show_alert=False)
+    await callback.answer(texts.t('BOT_CONFIG_EXPORT_READY', 'Файл готов'), show_alert=False)
 
 
 @admin_required
@@ -797,21 +901,32 @@ async def start_import_settings(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     await state.set_state(BotConfigStates.waiting_for_import_file)
     await state.update_data(botcfg_origin='bot_config')
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_BTN_MAIN_MENU_BACK', '⬅️ Главное меню'),
+                    callback_data='admin_bot_config',
+                )
+            ]
+        ]
     )
 
     await callback.message.edit_text(
-        '📥 <b>Импорт настроек</b>\n\n'
-        'Прикрепите .env файл или отправьте текстом пары <code>KEY=value</code>.\n'
-        'Неизвестные параметры будут проигнорированы.',
+        texts.t(
+            'BOT_CONFIG_IMPORT_PROMPT',
+            '📥 <b>Импорт настроек</b>\n\n'
+            'Прикрепите .env файл или отправьте текстом пары <code>KEY=value</code>.\n'
+            'Неизвестные параметры будут проигнорированы.',
+        ),
         parse_mode='HTML',
         reply_markup=keyboard,
     )
-    await callback.answer('Загрузите файл .env', show_alert=False)
+    await callback.answer(texts.t('BOT_CONFIG_IMPORT_UPLOAD_HINT', 'Загрузите файл .env'), show_alert=False)
 
 
 @admin_required
@@ -829,6 +944,7 @@ async def handle_import_message(
     if data.get('botcfg_origin') != 'bot_config':
         return
 
+    texts = get_texts(db_user.language)
     content = ''
     if message.document:
         buffer = io.BytesIO()
@@ -841,7 +957,10 @@ async def handle_import_message(
     parsed = _parse_env_content(content)
     if not parsed:
         await message.answer(
-            '❌ Не удалось найти параметры в файле. Убедитесь, что используется формат KEY=value.',
+            texts.t(
+                'BOT_CONFIG_IMPORT_NO_PARAMS',
+                '❌ Не удалось найти параметры в файле. Убедитесь, что используется формат KEY=value.',
+            ),
             parse_mode='HTML',
         )
         await state.clear()
@@ -880,22 +999,29 @@ async def handle_import_message(
     await db.commit()
 
     summary_lines = [
-        '📥 <b>Импорт завершен</b>',
-        f'Обновлено параметров: <b>{len(applied)}</b>',
+        texts.t('BOT_CONFIG_IMPORT_DONE_TITLE', '📥 <b>Импорт завершен</b>'),
+        texts.t('BOT_CONFIG_IMPORT_DONE_COUNT', 'Обновлено параметров: <b>{count}</b>').format(count=len(applied)),
     ]
     if applied:
         summary_lines.append('\n'.join(f'• <code>{key}</code>' for key in applied))
 
     if skipped:
-        summary_lines.append('\nПропущено (неизвестные ключи):')
+        summary_lines.append(texts.t('BOT_CONFIG_IMPORT_SKIPPED', '\nПропущено (неизвестные ключи):'))
         summary_lines.append('\n'.join(f'• <code>{key}</code>' for key in skipped))
 
     if errors:
-        summary_lines.append('\nОшибки разбора:')
+        summary_lines.append(texts.t('BOT_CONFIG_IMPORT_ERRORS', '\nОшибки разбора:'))
         summary_lines.append('\n'.join(f'• {html.escape(err)}' for err in errors))
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_BTN_MAIN_MENU', '🏠 Главное меню'),
+                    callback_data='admin_bot_config',
+                )
+            ]
+        ]
     )
 
     await message.answer('\n'.join(summary_lines), parse_mode='HTML', reply_markup=keyboard)
@@ -910,10 +1036,11 @@ async def show_settings_history(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     result = await db.execute(select(SystemSetting).order_by(SystemSetting.updated_at.desc()).limit(10))
     rows = result.scalars().all()
 
-    lines = ['🕘 <b>История изменений</b>', '']
+    lines = [texts.t('BOT_CONFIG_HISTORY_TITLE', '🕘 <b>История изменений</b>'), '']
     if rows:
         for row in rows:
             timestamp = row.updated_at or row.created_at
@@ -925,10 +1052,17 @@ async def show_settings_history(
                 formatted_value = row.value or '—'
             lines.append(f'{ts_text} • <code>{row.key}</code> = {formatted_value}')
     else:
-        lines.append('История изменений пуста.')
+        lines.append(texts.t('BOT_CONFIG_HISTORY_EMPTY', 'История изменений пуста.'))
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_BTN_MAIN_MENU_BACK', '⬅️ Главное меню'),
+                    callback_data='admin_bot_config',
+                )
+            ]
+        ]
     )
 
     await callback.message.edit_text('\n'.join(lines), parse_mode='HTML', reply_markup=keyboard)
@@ -943,18 +1077,27 @@ async def show_help(
     db: AsyncSession,
     state: FSMContext,
 ):
-    text = (
+    texts = get_texts(db_user.language)
+    text = texts.t(
+        'BOT_CONFIG_HELP_TEXT',
         '❓ <b>Как работать с панелью</b>\n\n'
         '• Навигируйте по категориям, чтобы увидеть связанные настройки.\n'
         '• Значок ✳️ рядом с параметром означает, что значение переопределено.\n'
         '• Используйте 🔍 поиск для быстрого доступа к нужной настройке.\n'
         '• Экспортируйте .env перед крупными изменениями, чтобы иметь резервную копию.\n'
         '• Импорт позволяет восстановить конфигурацию или применить шаблон.\n'
-        '• Все секретные ключи скрываются в интерфейсе автоматически.'
+        '• Все секретные ключи скрываются в интерфейсе автоматически.',
     )
 
     keyboard = types.InlineKeyboardMarkup(
-        inline_keyboard=[[types.InlineKeyboardButton(text='🏠 Главное меню', callback_data='admin_bot_config')]]
+        inline_keyboard=[
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('BOT_CONFIG_BTN_MAIN_MENU', '🏠 Главное меню'),
+                    callback_data='admin_bot_config',
+                )
+            ]
+        ]
     )
 
     await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
@@ -1044,7 +1187,9 @@ def _parse_group_payload(payload: str) -> tuple[str, int]:
     return group_key, page
 
 
-def _get_grouped_categories() -> list[tuple[str, str, list[tuple[str, str, int]]]]:
+def _get_grouped_categories(texts=None) -> list[tuple[str, str, list[tuple[str, str, int]]]]:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     categories = bot_configuration_service.get_categories()
     categories_map = {key: (label, count) for key, label, count in categories}
     used: set[str] = set()
@@ -1058,25 +1203,31 @@ def _get_grouped_categories() -> list[tuple[str, str, list[tuple[str, str, int]]
                 items.append((category_key, label, count))
                 used.add(category_key)
         if items:
-            grouped.append((group_key, title, items))
+            translated_title = texts.t(f'BOT_CONFIG_GROUP_{group_key.upper()}_TITLE', title)
+            grouped.append((group_key, translated_title, items))
 
     remaining = [(key, label, count) for key, (label, count) in categories_map.items() if key not in used]
 
     if remaining:
         remaining.sort(key=lambda item: item[1])
-        grouped.append((CATEGORY_FALLBACK_KEY, CATEGORY_FALLBACK_TITLE, remaining))
+        fallback_title = texts.t('BOT_CONFIG_GROUP_OTHER_TITLE', CATEGORY_FALLBACK_TITLE)
+        grouped.append((CATEGORY_FALLBACK_KEY, fallback_title, remaining))
 
     return grouped
 
 
-def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
-    grouped = _get_grouped_categories()
+def _build_groups_keyboard(texts=None) -> types.InlineKeyboardMarkup:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+    grouped = _get_grouped_categories(texts)
     rows: list[list[types.InlineKeyboardButton]] = []
 
     for group_key, title, items in grouped:
         sum(count for _, _, count in items)
-        status_icon, status_text = _get_group_status(group_key)
-        button_text = f'{status_icon} {title} — {status_text}'
+        status_icon, status_text = _get_group_status(group_key, texts)
+        button_text = texts.t('BOT_CONFIG_GROUP_BUTTON', '{status_icon} {title} — {status_text}').format(
+            status_icon=status_icon, title=title, status_text=status_text
+        )
         rows.append(
             [
                 types.InlineKeyboardButton(
@@ -1089,11 +1240,11 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='🔍 Найти настройку',
+                text=texts.t('BOT_CONFIG_BTN_SEARCH', '🔍 Найти настройку'),
                 callback_data='botcfg_action:search',
             ),
             types.InlineKeyboardButton(
-                text='🎯 Пресеты',
+                text=texts.t('BOT_CONFIG_BTN_PRESETS', '🎯 Пресеты'),
                 callback_data='botcfg_action:presets',
             ),
         ]
@@ -1102,11 +1253,11 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='📤 Экспорт .env',
+                text=texts.t('BOT_CONFIG_BTN_EXPORT_ENV', '📤 Экспорт .env'),
                 callback_data='botcfg_action:export',
             ),
             types.InlineKeyboardButton(
-                text='📥 Импорт .env',
+                text=texts.t('BOT_CONFIG_BTN_IMPORT_ENV', '📥 Импорт .env'),
                 callback_data='botcfg_action:import',
             ),
         ]
@@ -1115,11 +1266,11 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='🕘 История',
+                text=texts.t('BOT_CONFIG_BTN_HISTORY', '🕘 История'),
                 callback_data='botcfg_action:history',
             ),
             types.InlineKeyboardButton(
-                text='❓ Помощь',
+                text=texts.t('BOT_CONFIG_BTN_HELP', '❓ Помощь'),
                 callback_data='botcfg_action:help',
             ),
         ]
@@ -1128,7 +1279,7 @@ def _build_groups_keyboard() -> types.InlineKeyboardMarkup:
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅️ Назад в админку',
+                text=texts.t('BOT_CONFIG_BTN_BACK_TO_ADMIN', '⬅️ Назад в админку'),
                 callback_data='admin_submenu_settings',
             )
         ]
@@ -1142,7 +1293,10 @@ def _build_categories_keyboard(
     group_title: str,
     categories: list[tuple[str, str, int]],
     page: int = 1,
+    texts=None,
 ) -> types.InlineKeyboardMarkup:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     total_pages = max(1, math.ceil(len(categories) / CATEGORY_PAGE_SIZE))
     page = max(1, min(page, total_pages))
 
@@ -1197,7 +1351,7 @@ def _build_categories_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅️ К разделам',
+                text=texts.t('BOT_CONFIG_BTN_TO_SECTIONS', '⬅️ К разделам'),
                 callback_data='admin_bot_config',
             )
         ]
@@ -1228,7 +1382,7 @@ def _build_settings_keyboard(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='🔌 Проверить подключение',
+                    text=texts.t('BOT_CONFIG_TEST_CONNECTION', '🔌 Проверить подключение'),
                     callback_data=(f'botcfg_test_remnawave:{group_key}:{category_key}:{category_page}:{page}'),
                 )
             ]
@@ -1244,52 +1398,157 @@ def _build_settings_keyboard(
 
     if category_key == 'YOOKASSA':
         label = texts.t('PAYMENT_CARD_YOOKASSA', '💳 Банковская карта (YooKassa)')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'yookassa')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'yookassa',
+                )
+            ]
+        )
     elif category_key == 'TRIBUTE':
         label = texts.t('PAYMENT_CARD_TRIBUTE', '💳 Банковская карта (Tribute)')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'tribute')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'tribute',
+                )
+            ]
+        )
     elif category_key == 'MULENPAY':
         label = texts.t(
             'PAYMENT_CARD_MULENPAY',
             '💳 Банковская карта ({mulenpay_name})',
         ).format(mulenpay_name=settings.get_mulenpay_display_name())
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'mulenpay')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'mulenpay',
+                )
+            ]
+        )
     elif category_key == 'WATA':
         label = texts.t('PAYMENT_CARD_WATA', '💳 Банковская карта (WATA)')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'wata')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'wata',
+                )
+            ]
+        )
     elif category_key == 'PAL24':
         label = texts.t('PAYMENT_CARD_PAL24', '💳 Банковская карта (PayPalych)')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'pal24')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'pal24',
+                )
+            ]
+        )
     elif category_key == 'TELEGRAM':
         label = texts.t('PAYMENT_TELEGRAM_STARS', '⭐ Telegram Stars')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'stars')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'stars',
+                )
+            ]
+        )
     elif category_key == 'CRYPTOBOT':
         label = texts.t('PAYMENT_CRYPTOBOT', '🪙 Криптовалюта (CryptoBot)')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'cryptobot')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'cryptobot',
+                )
+            ]
+        )
     elif category_key == 'FREEKASSA':
         label = texts.t('PAYMENT_FREEKASSA', '💳 Freekassa')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'freekassa')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'freekassa',
+                )
+            ]
+        )
     elif category_key == 'KASSA_AI':
         label = texts.t('PAYMENT_KASSA_AI', f'💳 {settings.get_kassa_ai_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'kassa_ai')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'kassa_ai',
+                )
+            ]
+        )
     elif category_key == 'RIOPAY':
         label = texts.t('PAYMENT_RIOPAY', f'💳 {settings.get_riopay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'riopay')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'riopay',
+                )
+            ]
+        )
     elif category_key == 'SEVERPAY':
         label = texts.t('PAYMENT_SEVERPAY', f'💳 {settings.get_severpay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'severpay')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'severpay',
+                )
+            ]
+        )
     elif category_key == 'PAYPEAR':
         label = texts.t('PAYMENT_PAYPEAR', f'💳 {settings.get_paypear_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'paypear')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'paypear',
+                )
+            ]
+        )
     elif category_key == 'ROLLYPAY':
         label = texts.t('PAYMENT_ROLLYPAY', f'💳 {settings.get_rollypay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'rollypay')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'rollypay',
+                )
+            ]
+        )
     elif category_key == 'OVERPAY':
         label = texts.t('PAYMENT_OVERPAY', f'💳 {settings.get_overpay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'overpay')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'overpay',
+                )
+            ]
+        )
     elif category_key == 'AURAPAY':
         label = texts.t('PAYMENT_AURAPAY', f'💳 {settings.get_aurapay_display_name()}')
-        test_payment_buttons.append([_test_button(f'{label} · тест', 'aurapay')])
+        test_payment_buttons.append(
+            [
+                _test_button(
+                    texts.t('BOT_CONFIG_PAYMENT_TEST_SUFFIX', '{label} · тест').format(label=label),
+                    'aurapay',
+                )
+            ]
+        )
 
     if test_payment_buttons:
         rows.extend(test_payment_buttons)
@@ -1336,7 +1595,7 @@ def _build_settings_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅️ К категориям',
+                text=texts.t('BOT_CONFIG_BTN_TO_CATEGORIES', '⬅️ К категориям'),
                 callback_data=f'botcfg_group:{group_key}:{category_page}',
             )
         ]
@@ -1350,7 +1609,10 @@ def _build_setting_keyboard(
     group_key: str,
     category_page: int,
     settings_page: int,
+    texts=None,
 ) -> types.InlineKeyboardMarkup:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     definition = bot_configuration_service.get_definition(key)
     rows: list[list[types.InlineKeyboardButton]] = []
     callback_token = bot_configuration_service.get_callback_token(key)
@@ -1389,7 +1651,7 @@ def _build_setting_keyboard(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='🌍 Выбрать сквад',
+                    text=texts.t('BOT_CONFIG_BTN_SELECT_SQUAD', '🌍 Выбрать сквад'),
                     callback_data=(
                         f'botcfg_simple_squad:{group_key}:{category_page}:{settings_page}:{callback_token}:1'
                     ),
@@ -1401,7 +1663,7 @@ def _build_setting_keyboard(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='🔁 Переключить',
+                    text=texts.t('BOT_CONFIG_BTN_TOGGLE', '🔁 Переключить'),
                     callback_data=(f'botcfg_toggle:{group_key}:{category_page}:{settings_page}:{callback_token}'),
                 )
             ]
@@ -1411,7 +1673,7 @@ def _build_setting_keyboard(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='✏️ Изменить',
+                    text=texts.t('BOT_CONFIG_BTN_EDIT', '✏️ Изменить'),
                     callback_data=(f'botcfg_edit:{group_key}:{category_page}:{settings_page}:{callback_token}'),
                 )
             ]
@@ -1421,7 +1683,7 @@ def _build_setting_keyboard(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='♻️ Сбросить',
+                    text=texts.t('BOT_CONFIG_BTN_RESET', '♻️ Сбросить'),
                     callback_data=(f'botcfg_reset:{group_key}:{category_page}:{settings_page}:{callback_token}'),
                 )
             ]
@@ -1431,7 +1693,7 @@ def _build_setting_keyboard(
         rows.append(
             [
                 types.InlineKeyboardButton(
-                    text='🔒 Только для чтения',
+                    text=texts.t('BOT_CONFIG_BTN_READ_ONLY', '🔒 Только для чтения'),
                     callback_data='botcfg_group:noop',
                 )
             ]
@@ -1440,7 +1702,7 @@ def _build_setting_keyboard(
     rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅️ Назад',
+                text=texts.t('BOT_CONFIG_BTN_BACK', '⬅️ Назад'),
                 callback_data=(f'botcfg_cat:{group_key}:{definition.category_key}:{category_page}:{settings_page}'),
             )
         ]
@@ -1449,7 +1711,9 @@ def _build_setting_keyboard(
     return types.InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _render_setting_text(key: str) -> str:
+def _render_setting_text(key: str, texts=None) -> str:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     summary = bot_configuration_service.get_setting_summary(key)
     guidance = bot_configuration_service.get_setting_guidance(key)
 
@@ -1464,38 +1728,49 @@ def _render_setting_text(key: str) -> str:
 
     lines = [
         f'🧩 <b>{summary["name"]}</b>',
-        f'🔑 Ключ: <code>{summary["key"]}</code>',
-        f'📁 Категория: {summary["category_label"]}',
-        f'📝 Тип: {type_label}',
-        f'📌 Текущее: {summary["current"]}',
+        texts.t('BOT_CONFIG_SETTING_KEY_LABEL', '🔑 Ключ: <code>{value}</code>').format(value=summary["key"]),
+        texts.t('BOT_CONFIG_SETTING_CATEGORY_LABEL', '📁 Категория: {value}').format(value=summary["category_label"]),
+        texts.t('BOT_CONFIG_SETTING_TYPE_LABEL', '📝 Тип: {value}').format(value=type_label),
+        texts.t('BOT_CONFIG_SETTING_CURRENT_LABEL', '📌 Текущее: {value}').format(value=summary["current"]),
     ]
 
     original_value = summary.get('original')
     if original_value not in {None, ''}:
-        lines.append(f'📦 По умолчанию: {original_value}')
+        lines.append(
+            texts.t('BOT_CONFIG_SETTING_DEFAULT_LABEL', '📦 По умолчанию: {value}').format(value=original_value)
+        )
 
-    lines.append(f'✳️ Переопределено: {"Да" if summary["has_override"] else "Нет"}')
+    override_value = texts.t('BOT_CONFIG_YES', 'Да') if summary['has_override'] else texts.t('BOT_CONFIG_NO', 'Нет')
+    override_line = texts.t('BOT_CONFIG_SETTING_OVERRIDE_LABEL', '✳️ Переопределено: {value}')
+    lines.append(override_line.format(value=override_value))
 
     if summary.get('is_read_only'):
-        lines.append('🔒 Режим: Только для чтения (управляется автоматически)')
+        lines.append(
+            texts.t(
+                'BOT_CONFIG_SETTING_READONLY_MODE',
+                '🔒 Режим: Только для чтения (управляется автоматически)',
+            )
+        )
 
     lines.append('')
     if description:
-        lines.append(f'📘 Описание: {description}')
+        lines.append(texts.t('BOT_CONFIG_SETTING_DESCRIPTION_LABEL', '📘 Описание: {value}').format(value=description))
     if format_hint:
-        lines.append(f'📐 Формат: {format_hint}')
+        lines.append(texts.t('BOT_CONFIG_SETTING_FORMAT_LABEL', '📐 Формат: {value}').format(value=format_hint))
     if example:
-        lines.append(f'💡 Пример: {example}')
+        lines.append(texts.t('BOT_CONFIG_SETTING_EXAMPLE_LABEL', '💡 Пример: {value}').format(value=example))
     if warning:
-        lines.append(f'⚠️ Важно: {warning}')
+        lines.append(texts.t('BOT_CONFIG_SETTING_WARNING_LABEL', '⚠️ Важно: {value}').format(value=warning))
     if dependencies:
-        lines.append(f'🔗 Связанные: {dependencies}')
+        lines.append(
+            texts.t('BOT_CONFIG_SETTING_DEPENDENCIES_LABEL', '🔗 Связанные: {value}').format(value=dependencies)
+        )
 
     choices = bot_configuration_service.get_choice_options(key)
     if choices:
         current_raw = bot_configuration_service.get_current_value(key)
         lines.append('')
-        lines.append('📋 Доступные значения:')
+        lines.append(texts.t('BOT_CONFIG_SETTING_AVAILABLE_VALUES', '📋 Доступные значения:'))
         for option in choices:
             marker = '✅' if current_raw == option.value else '•'
             value_display = bot_configuration_service.format_value_human(key, option.value)
@@ -1517,8 +1792,9 @@ async def show_bot_config_menu(
     state: FSMContext,
 ):
     await state.clear()
-    keyboard = _build_groups_keyboard()
-    overview = _render_dashboard_overview()
+    texts = get_texts(db_user.language)
+    keyboard = _build_groups_keyboard(texts)
+    overview = _render_dashboard_overview(texts)
     await callback.message.edit_text(
         overview,
         reply_markup=keyboard,
@@ -1534,18 +1810,19 @@ async def show_bot_config_group(
     db_user: User,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
     group_key, page = _parse_group_payload(callback.data)
-    grouped = _get_grouped_categories()
+    grouped = _get_grouped_categories(texts)
     group_lookup = {key: (title, items) for key, title, items in grouped}
 
     if group_key not in group_lookup:
-        await callback.answer('Эта группа больше недоступна', show_alert=True)
+        await callback.answer(texts.t('BOT_CONFIG_GROUP_UNAVAILABLE', 'Эта группа больше недоступна'), show_alert=True)
         return
 
     group_title, items = group_lookup[group_key]
-    keyboard = _build_categories_keyboard(group_key, group_title, items, page)
-    status_icon, status_text = _get_group_status(group_key)
-    description = _get_group_description(group_key)
+    keyboard = _build_categories_keyboard(group_key, group_title, items, page, texts=texts)
+    status_icon, status_text = _get_group_status(group_key, texts)
+    description = _get_group_description(group_key, texts)
     icon = _get_group_icon(group_key)
     raw_title = str(group_title).strip()
     clean_title = raw_title
@@ -1558,13 +1835,18 @@ async def show_bot_config_group(
             clean_title = remainder.strip()
     lines = [f'{icon} <b>{clean_title}</b>']
     if status_text:
-        lines.append(f'Статус: {status_icon} {status_text}')
+        lines.append(
+            texts.t('BOT_CONFIG_GROUP_STATUS', 'Статус: {status_icon} {status_text}').format(
+                status_icon=status_icon,
+                status_text=status_text,
+            )
+        )
     lines.append(f'🏠 → {clean_title}')
     if description:
         lines.append('')
         lines.append(description)
     lines.append('')
-    lines.append('📂 Категории группы:')
+    lines.append(texts.t('BOT_CONFIG_GROUP_CATEGORIES', '📂 Категории группы:'))
     await callback.message.edit_text(
         '\n'.join(lines),
         reply_markup=keyboard,
@@ -1580,17 +1862,21 @@ async def show_bot_config_category(
     db_user: User,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
     group_key, category_key, category_page, settings_page = _parse_category_payload(callback.data)
     definitions = bot_configuration_service.get_settings_for_category(category_key)
 
     if not definitions:
-        await callback.answer('В этой категории пока нет настроек', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_CATEGORY_EMPTY', 'В этой категории пока нет настроек'),
+            show_alert=True,
+        )
         return
 
     category_label = definitions[0].category_label
     category_description = bot_configuration_service.get_category_description(category_key)
     group_meta = _get_group_meta(group_key)
-    group_title = str(group_meta.get('title', group_key))
+    group_title = texts.t(f'BOT_CONFIG_GROUP_{group_key.upper()}_TITLE', str(group_meta.get('title', group_key)))
     group_icon = _get_group_icon(group_key)
     raw_group_title = group_title.strip()
     if group_icon and raw_group_title.startswith(group_icon):
@@ -1616,7 +1902,7 @@ async def show_bot_config_category(
     if category_description:
         text_lines.append(category_description)
     text_lines.append('')
-    text_lines.append('📋 Список настроек категории:')
+    text_lines.append(texts.t('BOT_CONFIG_CATEGORY_LIST', '📋 Список настроек категории:'))
     await callback.message.edit_text(
         '\n'.join(text_lines),
         reply_markup=keyboard,
@@ -1633,6 +1919,7 @@ async def show_simple_subscription_squad_selector(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 5)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
     try:
@@ -1648,11 +1935,15 @@ async def show_simple_subscription_squad_selector(
     try:
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
-        await callback.answer('Эта настройка больше недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_UNAVAILABLE', 'Эта настройка больше недоступна'), show_alert=True
+        )
         return
 
     if key != 'SIMPLE_SUBSCRIPTION_SQUAD_UUID':
-        await callback.answer('Эта настройка больше недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_UNAVAILABLE', 'Эта настройка больше недоступна'), show_alert=True
+        )
         return
 
     try:
@@ -1680,7 +1971,7 @@ async def show_simple_subscription_squad_selector(
         )
 
     current_uuid = bot_configuration_service.get_current_value(key) or ''
-    current_display = 'Любой доступный'
+    current_display = texts.t('BOT_CONFIG_SQUAD_ANY_AVAILABLE', 'Любой доступный')
 
     if current_uuid:
         selected_server = next((srv for srv in squads if srv.squad_uuid == current_uuid), None)
@@ -1692,18 +1983,26 @@ async def show_simple_subscription_squad_selector(
             current_display = current_uuid
 
     lines = [
-        '🌍 <b>Выберите сквад для простой покупки</b>',
+        texts.t('BOT_CONFIG_SQUAD_SELECTOR_TITLE', '🌍 <b>Выберите сквад для простой покупки</b>'),
         '',
-        f'Текущий выбор: {html.escape(current_display)}' if current_display else 'Текущий выбор: —',
+        (
+            texts.t('BOT_CONFIG_SQUAD_CURRENT_CHOICE', 'Текущий выбор: {value}').format(
+                value=html.escape(current_display)
+            )
+            if current_display
+            else texts.t('BOT_CONFIG_SQUAD_CURRENT_CHOICE_EMPTY', 'Текущий выбор: —')
+        ),
         '',
     ]
 
     if total_count == 0:
-        lines.append('❌ Доступные сервера не найдены.')
+        lines.append(texts.t('BOT_CONFIG_SQUAD_NONE_FOUND', '❌ Доступные сервера не найдены.'))
     else:
-        lines.append('Выберите сервер из списка ниже.')
+        lines.append(texts.t('BOT_CONFIG_SQUAD_PICK_HINT', 'Выберите сервер из списка ниже.'))
         if total_pages > 1:
-            lines.append(f'Страница {page}/{total_pages}')
+            lines.append(
+                texts.t('BOT_CONFIG_SQUAD_PAGE', 'Страница {page}/{total}').format(page=page, total=total_pages)
+            )
 
     text = '\n'.join(lines)
 
@@ -1758,7 +2057,7 @@ async def show_simple_subscription_squad_selector(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text='⬅️ Назад',
+                text=texts.t('BOT_CONFIG_BTN_BACK', '⬅️ Назад'),
                 callback_data=(f'botcfg_setting:{group_key}:{category_page}:{settings_page}:{token}'),
             )
         ]
@@ -1780,6 +2079,7 @@ async def select_simple_subscription_squad(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 6)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
     try:
@@ -1797,34 +2097,42 @@ async def select_simple_subscription_squad(
         server_id = None
 
     if server_id is None:
-        await callback.answer('Не удалось определить сервер', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SQUAD_SERVER_UNDETECTED', 'Не удалось определить сервер'), show_alert=True
+        )
         return
 
     try:
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
-        await callback.answer('Эта настройка больше недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_UNAVAILABLE', 'Эта настройка больше недоступна'), show_alert=True
+        )
         return
 
     if bot_configuration_service.is_read_only(key):
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
 
     server = await get_server_squad_by_id(db, server_id)
     if not server:
-        await callback.answer('Сервер не найден', show_alert=True)
+        await callback.answer(texts.t('BOT_CONFIG_SQUAD_SERVER_NOT_FOUND', 'Сервер не найден'), show_alert=True)
         return
 
     try:
         await bot_configuration_service.set_value(db, key, server.squad_uuid)
     except ReadOnlySettingError:
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
 
     await db.commit()
 
-    text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    text = _render_setting_text(key, texts)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page, texts)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await _store_setting_context(
         state,
@@ -1833,7 +2141,7 @@ async def select_simple_subscription_squad(
         category_page=category_page,
         settings_page=settings_page,
     )
-    await callback.answer('Сквад выбран')
+    await callback.answer(texts.t('BOT_CONFIG_SQUAD_SELECTED', 'Сквад выбран'))
 
 
 @admin_required
@@ -1843,6 +2151,7 @@ async def test_remnawave_connection(
     db_user: User,
     db: AsyncSession,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 5)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
     category_key = parts[2] if len(parts) > 2 else 'REMNAWAVE'
@@ -1864,11 +2173,11 @@ async def test_remnawave_connection(
     message: str
 
     if status == 'connected':
-        message = '✅ Подключение успешно'
+        message = texts.t('BOT_CONFIG_REMNA_CONNECTION_OK', '✅ Подключение успешно')
     elif status == 'not_configured':
-        message = f'⚠️ {result.get("message", "RemnaWave API не настроен")}'
+        message = f'⚠️ {result.get("message", texts.t("BOT_CONFIG_REMNA_NOT_CONFIGURED", "RemnaWave API не настроен"))}'
     else:
-        base_message = result.get('message', 'Ошибка подключения')
+        base_message = result.get('message', texts.t('BOT_CONFIG_REMNA_CONNECTION_ERROR', 'Ошибка подключения'))
         status_code = result.get('status_code')
         if status_code:
             message = f'❌ {base_message} (HTTP {status_code})'
@@ -1938,7 +2247,9 @@ async def test_payment_provider(
 
     if method == 'yookassa':
         if not settings.is_yookassa_enabled():
-            await callback.answer('❌ YooKassa отключена', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_YOOKASSA_DISABLED', '❌ YooKassa отключена'), show_alert=True
+            )
             return
 
         amount_kopeks = 10 * 100
@@ -1947,7 +2258,10 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=f'Тестовый платеж (админ): {description}',
+            description=texts.t(
+                'BOT_CONFIG_PAY_YOOKASSA_TEST_DESC',
+                'Тестовый платеж (админ): {description}',
+            ).format(description=description),
             metadata={
                 'user_telegram_id': str(db_user.telegram_id),
                 'purpose': 'admin_test_payment',
@@ -1956,40 +2270,44 @@ async def test_payment_provider(
         )
 
         if not payment_result or not payment_result.get('confirmation_url'):
-            await callback.answer('❌ Не удалось создать тестовый платеж YooKassa', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_YOOKASSA_CREATE_FAILED', '❌ Не удалось создать тестовый платеж YooKassa'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
         confirmation_url = payment_result['confirmation_url']
-        message_text = (
-            '🧪 <b>Тестовый платеж YooKassa</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 ID: {payment_result["yookassa_payment_id"]}'
-        )
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_YOOKASSA_TEST',
+            '🧪 <b>Тестовый платеж YooKassa</b>\n\n💰 Сумма: {amount}\n🆔 ID: {payment_id}',
+        ).format(amount=texts.format_price(amount_kopeks), payment_id=payment_result['yookassa_payment_id'])
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='💳 Оплатить картой',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_CARD', '💳 Оплатить картой'),
                         url=confirmation_url,
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text='📊 Проверить статус',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_CHECK_STATUS', '📊 Проверить статус'),
                         callback_data=f'check_yookassa_{payment_result["local_payment_id"]}',
                     )
                 ],
             ]
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж YooKassa отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_PAY_YOOKASSA_SENT', '✅ Ссылка на платеж YooKassa отправлена'), show_alert=True
+        )
         await _refresh_markup()
         return
 
     if method == 'tribute':
         if not settings.TRIBUTE_ENABLED:
-            await callback.answer('❌ Tribute отключен', show_alert=True)
+            await callback.answer(texts.t('BOT_CONFIG_PAY_TRIBUTE_DISABLED', '❌ Tribute отключен'), show_alert=True)
             return
 
         tribute_service = TributeService(callback.bot)
@@ -1997,33 +2315,38 @@ async def test_payment_provider(
             payment_url = await tribute_service.create_payment_link(
                 user_id=db_user.telegram_id,
                 amount_kopeks=10 * 100,
-                description='Тестовый платеж Tribute (админ)',
+                description=texts.t('BOT_CONFIG_PAY_TRIBUTE_TEST_DESC', 'Тестовый платеж Tribute (админ)'),
             )
         except Exception:
             payment_url = None
 
         if not payment_url:
-            await callback.answer('❌ Не удалось создать платеж Tribute', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_TRIBUTE_CREATE_FAILED', '❌ Не удалось создать платеж Tribute'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
-        message_text = (
-            '🧪 <b>Тестовый платеж Tribute</b>\n\n'
-            f'💰 Сумма: {texts.format_price(10 * 100)}\n'
-            '🔗 Нажмите кнопку ниже, чтобы открыть ссылку на оплату.'
-        )
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_TRIBUTE_TEST',
+            '🧪 <b>Тестовый платеж Tribute</b>\n\n💰 Сумма: {amount}\n'
+            '🔗 Нажмите кнопку ниже, чтобы открыть ссылку на оплату.',
+        ).format(amount=texts.format_price(10 * 100))
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_GO_TO_PAY', '💳 Перейти к оплате'),
                         url=payment_url,
                     )
                 ]
             ]
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж Tribute отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_PAY_TRIBUTE_SENT', '✅ Ссылка на платеж Tribute отправлена'), show_alert=True
+        )
         await _refresh_markup()
         return
 
@@ -2032,7 +2355,7 @@ async def test_payment_provider(
         mulenpay_name_html = settings.get_mulenpay_display_name_html()
         if not settings.is_mulenpay_enabled():
             await callback.answer(
-                f'❌ {mulenpay_name} отключен',
+                texts.t('BOT_CONFIG_PAY_MULENPAY_DISABLED', '❌ {name} отключен').format(name=mulenpay_name),
                 show_alert=True,
             )
             return
@@ -2042,35 +2365,43 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description=f'Тестовый платеж {mulenpay_name} (админ)',
+            description=texts.t(
+                'BOT_CONFIG_PAY_MULENPAY_TEST_DESC',
+                'Тестовый платеж {name} (админ)',
+            ).format(name=mulenpay_name),
             language=language,
         )
 
         if not payment_result or not payment_result.get('payment_url'):
             await callback.answer(
-                f'❌ Не удалось создать платеж {mulenpay_name}',
+                texts.t('BOT_CONFIG_PAY_MULENPAY_CREATE_FAILED', '❌ Не удалось создать платеж {name}').format(
+                    name=mulenpay_name
+                ),
                 show_alert=True,
             )
             await _refresh_markup()
             return
 
         payment_url = payment_result['payment_url']
-        message_text = (
-            f'🧪 <b>Тестовый платеж {mulenpay_name_html}</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 ID: {payment_result["mulen_payment_id"]}'
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_MULENPAY_TEST',
+            '🧪 <b>Тестовый платеж {name}</b>\n\n💰 Сумма: {amount}\n🆔 ID: {payment_id}',
+        ).format(
+            name=mulenpay_name_html,
+            amount=texts.format_price(amount_kopeks),
+            payment_id=payment_result['mulen_payment_id'],
         )
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_GO_TO_PAY', '💳 Перейти к оплате'),
                         url=payment_url,
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text='📊 Проверить статус',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_CHECK_STATUS', '📊 Проверить статус'),
                         callback_data=f'check_mulenpay_{payment_result["local_payment_id"]}',
                     )
                 ],
@@ -2078,7 +2409,9 @@ async def test_payment_provider(
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
         await callback.answer(
-            f'✅ Ссылка на платеж {mulenpay_name} отправлена',
+            texts.t('BOT_CONFIG_PAY_MULENPAY_SENT', '✅ Ссылка на платеж {name} отправлена').format(
+                name=mulenpay_name
+            ),
             show_alert=True,
         )
         await _refresh_markup()
@@ -2086,7 +2419,9 @@ async def test_payment_provider(
 
     if method == 'pal24':
         if not settings.is_pal24_enabled():
-            await callback.answer('❌ PayPalych отключен', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_PAL24_DISABLED', '❌ PayPalych отключен'), show_alert=True
+            )
             return
 
         amount_kopeks = 10 * 100
@@ -2094,12 +2429,15 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description='Тестовый платеж PayPalych (админ)',
+            description=texts.t('BOT_CONFIG_PAY_PAL24_TEST_DESC', 'Тестовый платеж PayPalych (админ)'),
             language=language or 'ru',
         )
 
         if not payment_result:
-            await callback.answer('❌ Не удалось создать платеж PayPalych', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_PAL24_CREATE_FAILED', '❌ Не удалось создать платеж PayPalych'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
@@ -2108,7 +2446,10 @@ async def test_payment_provider(
         fallback_url = payment_result.get('link_page_url') or payment_result.get('link_url')
 
         if not (sbp_url or card_url or fallback_url):
-            await callback.answer('❌ Не удалось создать платеж PayPalych', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_PAL24_CREATE_FAILED', '❌ Не удалось создать платеж PayPalych'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
@@ -2158,15 +2499,14 @@ async def test_payment_provider(
                 ]
             )
 
-        message_text = (
-            '🧪 <b>Тестовый платеж PayPalych</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 Bill ID: {payment_result["bill_id"]}'
-        )
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_PAL24_TEST',
+            '🧪 <b>Тестовый платеж PayPalych</b>\n\n💰 Сумма: {amount}\n🆔 Bill ID: {bill_id}',
+        ).format(amount=texts.format_price(amount_kopeks), bill_id=payment_result['bill_id'])
         keyboard_rows = pay_rows + [
             [
                 types.InlineKeyboardButton(
-                    text='📊 Проверить статус',
+                    text=texts.t('BOT_CONFIG_PAY_BTN_CHECK_STATUS', '📊 Проверить статус'),
                     callback_data=f'check_pal24_{payment_result["local_payment_id"]}',
                 )
             ],
@@ -2174,13 +2514,17 @@ async def test_payment_provider(
 
         reply_markup = types.InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж PayPalych отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_PAY_PAL24_SENT', '✅ Ссылка на платеж PayPalych отправлена'), show_alert=True
+        )
         await _refresh_markup()
         return
 
     if method == 'stars':
         if not settings.TELEGRAM_STARS_ENABLED:
-            await callback.answer('❌ Telegram Stars отключены', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_STARS_DISABLED', '❌ Telegram Stars отключены'), show_alert=True
+            )
             return
 
         stars_rate = settings.get_stars_rate()
@@ -2189,23 +2533,25 @@ async def test_payment_provider(
         try:
             invoice_link = await payment_service.create_stars_invoice(
                 amount_kopeks=amount_kopeks,
-                description='Тестовый платеж Telegram Stars (админ)',
+                description=texts.t('BOT_CONFIG_PAY_STARS_TEST_DESC', 'Тестовый платеж Telegram Stars (админ)'),
                 payload=payload,
             )
         except Exception:
             invoice_link = None
 
         if not invoice_link:
-            await callback.answer('❌ Не удалось создать платеж Telegram Stars', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_STARS_CREATE_FAILED', '❌ Не удалось создать платеж Telegram Stars'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
         stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_kopeks / 100)
-        message_text = (
-            '🧪 <b>Тестовый платеж Telegram Stars</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'⭐ К оплате: {stars_amount}'
-        )
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_STARS_TEST',
+            '🧪 <b>Тестовый платеж Telegram Stars</b>\n\n💰 Сумма: {amount}\n⭐ К оплате: {stars}',
+        ).format(amount=texts.format_price(amount_kopeks), stars=stars_amount)
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -2217,13 +2563,17 @@ async def test_payment_provider(
             ]
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж Stars отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_PAY_STARS_SENT', '✅ Ссылка на платеж Stars отправлена'), show_alert=True
+        )
         await _refresh_markup()
         return
 
     if method == 'cryptobot':
         if not settings.is_cryptobot_enabled():
-            await callback.answer('❌ CryptoBot отключен', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_CRYPTOBOT_DISABLED', '❌ CryptoBot отключен'), show_alert=True
+            )
             return
 
         amount_rubles = 100.0
@@ -2244,12 +2594,18 @@ async def test_payment_provider(
             user_id=db_user.id,
             amount_usd=amount_usd,
             asset=settings.CRYPTOBOT_DEFAULT_ASSET,
-            description=f'Тестовый платеж CryptoBot {amount_rubles:.0f} ₽ ({amount_usd:.2f} USD)',
+            description=texts.t(
+                'BOT_CONFIG_PAY_CRYPTOBOT_TEST_DESC',
+                'Тестовый платеж CryptoBot {rubles:.0f} ₽ ({usd:.2f} USD)',
+            ).format(rubles=amount_rubles, usd=amount_usd),
             payload=f'admin_cryptobot_test_{db_user.id}_{int(time.time())}',
         )
 
         if not payment_result:
-            await callback.answer('❌ Не удалось создать платеж CryptoBot', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_CRYPTOBOT_CREATE_FAILED', '❌ Не удалось создать платеж CryptoBot'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
@@ -2260,36 +2616,47 @@ async def test_payment_provider(
         )
 
         if not payment_url:
-            await callback.answer('❌ Не удалось получить ссылку на оплату CryptoBot', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_CRYPTOBOT_NO_URL', '❌ Не удалось получить ссылку на оплату CryptoBot'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
         amount_kopeks = int(amount_rubles * 100)
-        message_text = (
-            '🧪 <b>Тестовый платеж CryptoBot</b>\n\n'
-            f'💰 Сумма к зачислению: {texts.format_price(amount_kopeks)}\n'
-            f'💵 К оплате: {amount_usd:.2f} USD\n'
-            f'🪙 Актив: {payment_result["asset"]}'
-        )
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_CRYPTOBOT_TEST',
+            '🧪 <b>Тестовый платеж CryptoBot</b>\n\n💰 Сумма к зачислению: {amount}\n'
+            '💵 К оплате: {usd:.2f} USD\n🪙 Актив: {asset}',
+        ).format(amount=texts.format_price(amount_kopeks), usd=amount_usd, asset=payment_result['asset'])
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
-                [types.InlineKeyboardButton(text='🪙 Открыть счет', url=payment_url)],
                 [
                     types.InlineKeyboardButton(
-                        text='📊 Проверить статус',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_OPEN_INVOICE', '🪙 Открыть счет'),
+                        url=payment_url,
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('BOT_CONFIG_PAY_BTN_CHECK_STATUS', '📊 Проверить статус'),
                         callback_data=f'check_cryptobot_{payment_result["local_payment_id"]}',
                     )
                 ],
             ]
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж CryptoBot отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_PAY_CRYPTOBOT_SENT', '✅ Ссылка на платеж CryptoBot отправлена'), show_alert=True
+        )
         await _refresh_markup()
         return
 
     if method == 'freekassa':
         if not settings.is_freekassa_enabled():
-            await callback.answer('❌ Freekassa отключена', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_FREEKASSA_DISABLED', '❌ Freekassa отключена'), show_alert=True
+            )
             return
 
         amount_kopeks = settings.FREEKASSA_MIN_AMOUNT_KOPEKS
@@ -2297,40 +2664,46 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description='Тестовый платеж Freekassa (админ)',
+            description=texts.t('BOT_CONFIG_PAY_FREEKASSA_TEST_DESC', 'Тестовый платеж Freekassa (админ)'),
             email=getattr(db_user, 'email', None),
             language=db_user.language or settings.DEFAULT_LANGUAGE,
         )
 
         if not payment_result or not payment_result.get('payment_url'):
-            await callback.answer('❌ Не удалось создать тестовый платеж Freekassa', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_FREEKASSA_CREATE_FAILED', '❌ Не удалось создать тестовый платеж Freekassa'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
         payment_url = payment_result['payment_url']
-        message_text = (
-            '🧪 <b>Тестовый платеж Freekassa</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 Order ID: {payment_result["order_id"]}'
-        )
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_FREEKASSA_TEST',
+            '🧪 <b>Тестовый платеж Freekassa</b>\n\n💰 Сумма: {amount}\n🆔 Order ID: {order_id}',
+        ).format(amount=texts.format_price(amount_kopeks), order_id=payment_result['order_id'])
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_GO_TO_PAY', '💳 Перейти к оплате'),
                         url=payment_url,
                     )
                 ]
             ]
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer('✅ Ссылка на платеж Freekassa отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_PAY_FREEKASSA_SENT', '✅ Ссылка на платеж Freekassa отправлена'), show_alert=True
+        )
         await _refresh_markup()
         return
 
     if method == 'kassa_ai':
         if not settings.is_kassa_ai_enabled():
-            await callback.answer('❌ Kassa AI отключена', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_KASSA_AI_DISABLED', '❌ Kassa AI отключена'), show_alert=True
+            )
             return
 
         amount_kopeks = settings.KASSA_AI_MIN_AMOUNT_KOPEKS
@@ -2338,41 +2711,48 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description='Тестовый платеж Kassa AI (админ)',
+            description=texts.t('BOT_CONFIG_PAY_KASSA_AI_TEST_DESC', 'Тестовый платеж Kassa AI (админ)'),
             email=getattr(db_user, 'email', None),
             language=db_user.language or settings.DEFAULT_LANGUAGE,
         )
 
         if not payment_result or not payment_result.get('payment_url'):
-            await callback.answer('❌ Не удалось создать тестовый платеж Kassa AI', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_KASSA_AI_CREATE_FAILED', '❌ Не удалось создать тестовый платеж Kassa AI'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
         payment_url = payment_result['payment_url']
         display_name = settings.get_kassa_ai_display_name()
-        message_text = (
-            f'🧪 <b>Тестовый платеж {display_name}</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 Order ID: {payment_result["order_id"]}'
-        )
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_KASSA_AI_TEST',
+            '🧪 <b>Тестовый платеж {name}</b>\n\n💰 Сумма: {amount}\n🆔 Order ID: {order_id}',
+        ).format(name=display_name, amount=texts.format_price(amount_kopeks), order_id=payment_result['order_id'])
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_GO_TO_PAY', '💳 Перейти к оплате'),
                         url=payment_url,
                     )
                 ]
             ]
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer(f'✅ Ссылка на платеж {display_name} отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_PAY_KASSA_AI_SENT', '✅ Ссылка на платеж {name} отправлена').format(name=display_name),
+            show_alert=True,
+        )
         await _refresh_markup()
         return
 
     if method == 'riopay':
         if not settings.is_riopay_enabled():
-            await callback.answer('❌ RioPay отключена', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_RIOPAY_DISABLED', '❌ RioPay отключена'), show_alert=True
+            )
             return
 
         amount_kopeks = settings.RIOPAY_MIN_AMOUNT_KOPEKS
@@ -2380,39 +2760,46 @@ async def test_payment_provider(
             db=db,
             user_id=db_user.id,
             amount_kopeks=amount_kopeks,
-            description='Тестовый платеж RioPay (админ)',
+            description=texts.t('BOT_CONFIG_PAY_RIOPAY_TEST_DESC', 'Тестовый платеж RioPay (админ)'),
             email=getattr(db_user, 'email', None),
             language=db_user.language or settings.DEFAULT_LANGUAGE,
         )
 
         if not payment_result or not payment_result.get('payment_url'):
-            await callback.answer('❌ Не удалось создать тестовый платеж RioPay', show_alert=True)
+            await callback.answer(
+                texts.t('BOT_CONFIG_PAY_RIOPAY_CREATE_FAILED', '❌ Не удалось создать тестовый платеж RioPay'),
+                show_alert=True,
+            )
             await _refresh_markup()
             return
 
         payment_url = payment_result['payment_url']
         display_name = settings.get_riopay_display_name()
-        message_text = (
-            f'🧪 <b>Тестовый платеж {display_name}</b>\n\n'
-            f'💰 Сумма: {texts.format_price(amount_kopeks)}\n'
-            f'🆔 Order ID: {payment_result["order_id"]}'
-        )
+        message_text = texts.t(
+            'BOT_CONFIG_PAY_RIOPAY_TEST',
+            '🧪 <b>Тестовый платеж {name}</b>\n\n💰 Сумма: {amount}\n🆔 Order ID: {order_id}',
+        ).format(name=display_name, amount=texts.format_price(amount_kopeks), order_id=payment_result['order_id'])
         reply_markup = types.InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text='💳 Перейти к оплате',
+                        text=texts.t('BOT_CONFIG_PAY_BTN_GO_TO_PAY', '💳 Перейти к оплате'),
                         url=payment_url,
                     )
                 ]
             ]
         )
         await callback.message.answer(message_text, reply_markup=reply_markup, parse_mode='HTML')
-        await callback.answer(f'✅ Ссылка на платеж {display_name} отправлена', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_PAY_RIOPAY_SENT', '✅ Ссылка на платеж {name} отправлена').format(name=display_name),
+            show_alert=True,
+        )
         await _refresh_markup()
         return
 
-    await callback.answer('❌ Неизвестный способ тестирования платежа', show_alert=True)
+    await callback.answer(
+        texts.t('BOT_CONFIG_PAY_UNKNOWN_METHOD', '❌ Неизвестный способ тестирования платежа'), show_alert=True
+    )
     await _refresh_markup()
 
 
@@ -2424,6 +2811,7 @@ async def show_bot_config_setting(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
     try:
@@ -2438,10 +2826,12 @@ async def show_bot_config_setting(
     try:
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
-        await callback.answer('Эта настройка больше недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_UNAVAILABLE', 'Эта настройка больше недоступна'), show_alert=True
+        )
         return
-    text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    text = _render_setting_text(key, texts)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page, texts)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await _store_setting_context(
         state,
@@ -2461,6 +2851,7 @@ async def start_edit_setting(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
     try:
@@ -2475,29 +2866,37 @@ async def start_edit_setting(
     try:
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
-        await callback.answer('Эта настройка больше недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_UNAVAILABLE', 'Эта настройка больше недоступна'), show_alert=True
+        )
         return
     if bot_configuration_service.is_read_only(key):
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
     definition = bot_configuration_service.get_definition(key)
 
     summary = bot_configuration_service.get_setting_summary(key)
-    texts = get_texts(db_user.language)
 
     instructions = [
-        '✏️ <b>Редактирование настройки</b>',
-        f'Название: {summary["name"]}',
-        f'Ключ: <code>{summary["key"]}</code>',
-        f'Тип: {summary["type"]}',
-        f'Текущее значение: {summary["current"]}',
-        '\nОтправьте новое значение сообщением.',
+        texts.t('BOT_CONFIG_EDIT_TITLE', '✏️ <b>Редактирование настройки</b>'),
+        texts.t('BOT_CONFIG_EDIT_NAME', 'Название: {name}').format(name=summary['name']),
+        texts.t('BOT_CONFIG_EDIT_KEY', 'Ключ: <code>{key}</code>').format(key=summary['key']),
+        texts.t('BOT_CONFIG_EDIT_TYPE', 'Тип: {type}').format(type=summary['type']),
+        texts.t('BOT_CONFIG_EDIT_CURRENT', 'Текущее значение: {current}').format(current=summary['current']),
+        texts.t('BOT_CONFIG_EDIT_SEND_HINT', '\nОтправьте новое значение сообщением.'),
     ]
 
     if definition.is_optional:
-        instructions.append("Отправьте 'none' или оставьте пустым для сброса на значение по умолчанию.")
+        instructions.append(
+            texts.t(
+                'BOT_CONFIG_EDIT_RESET_HINT',
+                "Отправьте 'none' или оставьте пустым для сброса на значение по умолчанию.",
+            )
+        )
 
-    instructions.append("Для отмены отправьте 'cancel'.")
+    instructions.append(texts.t('BOT_CONFIG_EDIT_CANCEL_HINT', "Для отмены отправьте 'cancel'."))
 
     await callback.message.edit_text(
         '\n'.join(instructions),
@@ -2524,7 +2923,7 @@ async def start_edit_setting(
     await callback.answer()
 
 
-def _build_save_confirmation(key: str) -> str:
+def _build_save_confirmation(key: str, texts=None) -> str:
     """Сообщение после сохранения настройки.
 
     set_value всегда пишет значение в БД, но для ключей, заданных через
@@ -2533,13 +2932,16 @@ def _build_save_confirmation(key: str) -> str:
     бота не меняется (#2749, вся секция рефералки из .env.example). Говорим
     честно, какая переменная блокирует применение и что с ней сделать.
     """
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     if bot_configuration_service.is_env_overridden(key):
-        return (
+        return texts.t(
+            'BOT_CONFIG_SAVE_ENV_OVERRIDE',
             '💾 Сохранено в БД, но <b>не применено</b>: значение задаётся переменной '
-            f'окружения <code>{html.escape(key)}</code> из .env.\n'
-            'Уберите её из .env и перезапустите бота, чтобы управлять этой настройкой отсюда.'
-        )
-    return '✅ Настройка обновлена'
+            'окружения <code>{key}</code> из .env.\n'
+            'Уберите её из .env и перезапустите бота, чтобы управлять этой настройкой отсюда.',
+        ).format(key=html.escape(key))
+    return texts.t('BOT_CONFIG_SAVE_SUCCESS', '✅ Настройка обновлена')
 
 
 @admin_required
@@ -2550,6 +2952,7 @@ async def handle_edit_setting(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
     key = data.get('setting_key')
     group_key = data.get('setting_group_key', CATEGORY_FALLBACK_KEY)
@@ -2557,12 +2960,16 @@ async def handle_edit_setting(
     settings_page = data.get('setting_settings_page', 1)
 
     if not key:
-        await message.answer('Не удалось определить редактируемую настройку. Попробуйте снова.')
+        await message.answer(
+            texts.t('BOT_CONFIG_SETTING_UNDETECTED', 'Не удалось определить редактируемую настройку. Попробуйте снова.')
+        )
         await state.clear()
         return
 
     if bot_configuration_service.is_read_only(key):
-        await message.answer('⚠️ Эта настройка доступна только для чтения.')
+        await message.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY_ALERT', '⚠️ Эта настройка доступна только для чтения.')
+        )
         await state.clear()
         return
 
@@ -2575,14 +2982,16 @@ async def handle_edit_setting(
     try:
         await bot_configuration_service.set_value(db, key, value)
     except ReadOnlySettingError:
-        await message.answer('⚠️ Эта настройка доступна только для чтения.')
+        await message.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY_ALERT', '⚠️ Эта настройка доступна только для чтения.')
+        )
         await state.clear()
         return
     await db.commit()
 
-    text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
-    await message.answer(_build_save_confirmation(key))
+    text = _render_setting_text(key, texts)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page, texts)
+    await message.answer(_build_save_confirmation(key, texts))
     await message.answer(text, reply_markup=keyboard)
     await state.clear()
     await _store_setting_context(
@@ -2602,6 +3011,7 @@ async def handle_direct_setting_input(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     data = await state.get_data()
 
     key = data.get('setting_key')
@@ -2613,7 +3023,9 @@ async def handle_direct_setting_input(
         return
 
     if bot_configuration_service.is_read_only(key):
-        await message.answer('⚠️ Эта настройка доступна только для чтения.')
+        await message.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY_ALERT', '⚠️ Эта настройка доступна только для чтения.')
+        )
         await state.clear()
         return
 
@@ -2626,14 +3038,16 @@ async def handle_direct_setting_input(
     try:
         await bot_configuration_service.set_value(db, key, value)
     except ReadOnlySettingError:
-        await message.answer('⚠️ Эта настройка доступна только для чтения.')
+        await message.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY_ALERT', '⚠️ Эта настройка доступна только для чтения.')
+        )
         await state.clear()
         return
     await db.commit()
 
-    text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
-    await message.answer(_build_save_confirmation(key))
+    text = _render_setting_text(key, texts)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page, texts)
+    await message.answer(_build_save_confirmation(key, texts))
     await message.answer(text, reply_markup=keyboard)
 
     await state.clear()
@@ -2654,6 +3068,7 @@ async def reset_setting(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
     try:
@@ -2668,20 +3083,26 @@ async def reset_setting(
     try:
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
-        await callback.answer('Эта настройка больше недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_UNAVAILABLE', 'Эта настройка больше недоступна'), show_alert=True
+        )
         return
     if bot_configuration_service.is_read_only(key):
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
     try:
         await bot_configuration_service.reset_value(db, key)
     except ReadOnlySettingError:
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
     await db.commit()
 
-    text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    text = _render_setting_text(key, texts)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page, texts)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await _store_setting_context(
         state,
@@ -2690,7 +3111,7 @@ async def reset_setting(
         category_page=category_page,
         settings_page=settings_page,
     )
-    await callback.answer('Сброшено к значению по умолчанию')
+    await callback.answer(texts.t('BOT_CONFIG_RESET_DONE', 'Сброшено к значению по умолчанию'))
 
 
 @admin_required
@@ -2701,6 +3122,7 @@ async def toggle_setting(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 4)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
     try:
@@ -2715,22 +3137,28 @@ async def toggle_setting(
     try:
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
-        await callback.answer('Эта настройка больше недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_UNAVAILABLE', 'Эта настройка больше недоступна'), show_alert=True
+        )
         return
     if bot_configuration_service.is_read_only(key):
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
     current = bot_configuration_service.get_current_value(key)
     new_value = not bool(current)
     try:
         await bot_configuration_service.set_value(db, key, new_value)
     except ReadOnlySettingError:
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
     await db.commit()
 
-    text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    text = _render_setting_text(key, texts)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page, texts)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await _store_setting_context(
         state,
@@ -2739,7 +3167,7 @@ async def toggle_setting(
         category_page=category_page,
         settings_page=settings_page,
     )
-    await callback.answer('Обновлено')
+    await callback.answer(texts.t('BOT_CONFIG_UPDATED', 'Обновлено'))
 
 
 @admin_required
@@ -2750,6 +3178,7 @@ async def apply_setting_choice(
     db: AsyncSession,
     state: FSMContext,
 ):
+    texts = get_texts(db_user.language)
     parts = callback.data.split(':', 5)
     group_key = parts[1] if len(parts) > 1 else CATEGORY_FALLBACK_KEY
     try:
@@ -2766,27 +3195,35 @@ async def apply_setting_choice(
     try:
         key = bot_configuration_service.resolve_callback_token(token)
     except KeyError:
-        await callback.answer('Эта настройка больше недоступна', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_UNAVAILABLE', 'Эта настройка больше недоступна'), show_alert=True
+        )
         return
     if bot_configuration_service.is_read_only(key):
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
 
     try:
         value = bot_configuration_service.resolve_choice_token(key, choice_token)
     except KeyError:
-        await callback.answer('Это значение больше недоступно', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_VALUE_UNAVAILABLE', 'Это значение больше недоступно'), show_alert=True
+        )
         return
 
     try:
         await bot_configuration_service.set_value(db, key, value)
     except ReadOnlySettingError:
-        await callback.answer('Эта настройка доступна только для чтения', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_SETTING_READ_ONLY', 'Эта настройка доступна только для чтения'), show_alert=True
+        )
         return
     await db.commit()
 
-    text = _render_setting_text(key)
-    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page)
+    text = _render_setting_text(key, texts)
+    keyboard = _build_setting_keyboard(key, group_key, category_page, settings_page, texts)
     await callback.message.edit_text(text, reply_markup=keyboard)
     await _store_setting_context(
         state,
@@ -2795,7 +3232,7 @@ async def apply_setting_choice(
         category_page=category_page,
         settings_page=settings_page,
     )
-    await callback.answer('Значение обновлено')
+    await callback.answer(texts.t('BOT_CONFIG_VALUE_UPDATED', 'Значение обновлено'))
 
 
 # ── Remnawave App Config Selector ──
@@ -2805,6 +3242,7 @@ async def apply_setting_choice(
 @error_handler
 async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, db: AsyncSession, **kwargs):
     """Show available Remnawave subscription page configs for selection."""
+    texts = get_texts(db_user.language)
     current_uuid = bot_configuration_service.get_current_value('CABINET_REMNA_SUB_CONFIG')
 
     try:
@@ -2813,29 +3251,34 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
             configs = await api.get_subscription_page_configs()
     except Exception as e:
         logger.error('Failed to load Remnawave configs', error=e)
-        await callback.answer('Ошибка загрузки конфигов', show_alert=True)
+        await callback.answer(texts.t('BOT_CONFIG_REMNA_LOAD_ERROR', 'Ошибка загрузки конфигов'), show_alert=True)
         return
 
     keyboard: list[list[types.InlineKeyboardButton]] = []
 
     if not configs:
-        text = (
+        text = texts.t(
+            'BOT_CONFIG_REMNA_EMPTY',
             '📱 <b>Конфиг приложений (Remnawave)</b>\n\n'
             'В Remnawave не найдено конфигураций страниц подписки.\n\n'
-            'Создайте конфигурацию в панели Remnawave, затем вернитесь сюда для выбора.'
+            'Создайте конфигурацию в панели Remnawave, затем вернитесь сюда для выбора.',
         )
     else:
-        text = '📱 <b>Конфиг приложений (Remnawave)</b>\n\n'
+        text = texts.t('BOT_CONFIG_REMNA_TITLE', '📱 <b>Конфиг приложений (Remnawave)</b>\n\n')
         if current_uuid:
             current_name = next((c.name for c in configs if c.uuid == current_uuid), None)
             if current_name:
-                text += f'✅ Текущий: <b>{html.escape(current_name)}</b>\n\n'
+                text += texts.t('BOT_CONFIG_REMNA_CURRENT', '✅ Текущий: <b>{name}</b>\n\n').format(
+                    name=html.escape(current_name)
+                )
             else:
-                text += f'⚠️ Текущий UUID не найден: <code>{html.escape(str(current_uuid))}</code>\n\n'
+                text += texts.t(
+                    'BOT_CONFIG_REMNA_UUID_NOT_FOUND', '⚠️ Текущий UUID не найден: <code>{uuid}</code>\n\n'
+                ).format(uuid=html.escape(str(current_uuid)))
         else:
-            text += 'ℹ️ Конфиг не выбран (гайд-режим отключён)\n\n'
+            text += texts.t('BOT_CONFIG_REMNA_NONE_SELECTED', 'ℹ️ Конфиг не выбран (гайд-режим отключён)\n\n')
 
-        text += 'Выберите конфигурацию для гайд-режима:'
+        text += texts.t('BOT_CONFIG_REMNA_PICK_HINT', 'Выберите конфигурацию для гайд-режима:')
 
         for config in configs:
             prefix = '✅ ' if config.uuid == current_uuid else ''
@@ -2852,13 +3295,19 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text='🗑 Сбросить (отключить гайд-режим)',
+                    text=texts.t('BOT_CONFIG_REMNA_BTN_RESET', '🗑 Сбросить (отключить гайд-режим)'),
                     callback_data='admin_remna_clear',
                 )
             ]
         )
 
-    keyboard.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_submenu_settings')])
+    keyboard.append(
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('BOT_CONFIG_BTN_BACK', '⬅️ Назад'), callback_data='admin_submenu_settings'
+            )
+        ]
+    )
 
     await callback.message.edit_text(
         text,
@@ -2872,13 +3321,16 @@ async def show_remna_config_menu(callback: types.CallbackQuery, db_user: User, d
 @error_handler
 async def select_remna_config(callback: types.CallbackQuery, db_user: User, db: AsyncSession, **kwargs):
     """Select a Remnawave subscription page config."""
+    texts = get_texts(db_user.language)
     uuid = callback.data.replace('admin_remna_select_', '')
 
     # Validate UUID format
     import re as _re
 
     if not _re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', uuid):
-        await callback.answer('Некорректный UUID конфигурации', show_alert=True)
+        await callback.answer(
+            texts.t('BOT_CONFIG_REMNA_INVALID_UUID', 'Некорректный UUID конфигурации'), show_alert=True
+        )
         return
 
     try:
@@ -2886,7 +3338,7 @@ async def select_remna_config(callback: types.CallbackQuery, db_user: User, db: 
         await db.commit()
     except Exception as e:
         logger.error('Failed to save Remnawave config UUID', error=e)
-        await callback.answer('Ошибка сохранения', show_alert=True)
+        await callback.answer(texts.t('BOT_CONFIG_REMNA_SAVE_ERROR', 'Ошибка сохранения'), show_alert=True)
         return
 
     # Invalidate app config cache
@@ -2894,7 +3346,7 @@ async def select_remna_config(callback: types.CallbackQuery, db_user: User, db: 
 
     invalidate_app_config_cache()
 
-    await callback.answer('✅ Конфиг выбран', show_alert=True)
+    await callback.answer(texts.t('BOT_CONFIG_REMNA_SELECTED', '✅ Конфиг выбран'), show_alert=True)
 
     # Re-render the menu
     await show_remna_config_menu(callback, db_user=db_user, db=db)
@@ -2904,19 +3356,20 @@ async def select_remna_config(callback: types.CallbackQuery, db_user: User, db: 
 @error_handler
 async def clear_remna_config(callback: types.CallbackQuery, db_user: User, db: AsyncSession, **kwargs):
     """Clear the Remnawave config, disabling guide mode until new config is selected."""
+    texts = get_texts(db_user.language)
     try:
         await bot_configuration_service.set_value(db, 'CABINET_REMNA_SUB_CONFIG', '')
         await db.commit()
     except Exception as e:
         logger.error('Failed to clear Remnawave config', error=e)
-        await callback.answer('Ошибка сброса', show_alert=True)
+        await callback.answer(texts.t('BOT_CONFIG_REMNA_CLEAR_ERROR', 'Ошибка сброса'), show_alert=True)
         return
 
     from app.handlers.subscription.common import invalidate_app_config_cache
 
     invalidate_app_config_cache()
 
-    await callback.answer('✅ Конфиг сброшен', show_alert=True)
+    await callback.answer(texts.t('BOT_CONFIG_REMNA_CLEARED', '✅ Конфиг сброшен'), show_alert=True)
     await show_remna_config_menu(callback, db_user=db_user, db=db)
 
 

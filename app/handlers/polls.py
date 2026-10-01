@@ -95,12 +95,12 @@ async def handle_poll_start(
     try:
         response_id = int(callback.data.split(':')[1])
     except (IndexError, ValueError):
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND', '❌ Опрос не найден'), show_alert=True)
         return
 
     response = await get_poll_response_by_id(db, response_id)
     if not response or response.user_id != db_user.id:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND', '❌ Опрос не найден'), show_alert=True)
         return
 
     texts = get_texts(db_user.language)
@@ -151,14 +151,17 @@ async def handle_poll_answer(
         question_id = int(question_id)
         option_id = int(option_id)
     except (ValueError, IndexError):
-        await callback.answer('❌ Некорректные данные', show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('POLL_INVALID_DATA', '❌ Некорректные данные'),
+            show_alert=True,
+        )
         return
 
     response = await get_poll_response_by_id(db, response_id)
     texts = get_texts(db_user.language)
 
     if not response or response.user_id != db_user.id:
-        await callback.answer('❌ Опрос не найден', show_alert=True)
+        await callback.answer(texts.t('POLL_NOT_FOUND', '❌ Опрос не найден'), show_alert=True)
         return
 
     if not response.poll:

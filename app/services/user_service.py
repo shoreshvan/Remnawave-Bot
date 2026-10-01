@@ -93,10 +93,14 @@ class UserService:
 
         if has_active_subscription:
             # У пользователя есть активная подписка - обычное сообщение
-            message = (
-                f'✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Спасибо за использование нашего сервиса! 🎉'
+            message = texts.t(
+                'BALANCE_TOPUP_SUCCESS',
+                '✅ <b>Баланс пополнен на {amount}!</b>\n\n'
+                '💳 Текущий баланс: {balance}\n\n'
+                'Спасибо за использование нашего сервиса! 🎉',
+            ).format(
+                amount=settings.format_price(amount_kopeks),
+                balance=settings.format_price(user.balance_kopeks),
             )
             extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
@@ -111,23 +115,39 @@ class UserService:
             )
         else:
             # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
-            message = (
-                f'✅ <b>Баланс пополнен на {settings.format_price(amount_kopeks)}!</b>\n\n'
-                f'💳 Текущий баланс: {settings.format_price(user.balance_kopeks)}\n\n'
-                f'{"─" * 25}\n\n'
-                f'⚠️ <b>ВАЖНО!</b> ⚠️\n\n'
-                f'🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
-                f'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
-                f'👇 <b>Выберите действие:</b>'
+            message = texts.t(
+                'BALANCE_TOPUP_SUCCESS_NO_SUBSCRIPTION',
+                '✅ <b>Баланс пополнен на {amount}!</b>\n\n'
+                '💳 Текущий баланс: {balance}\n\n'
+                '{separator}\n\n'
+                '⚠️ <b>ВАЖНО!</b> ⚠️\n\n'
+                '🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
+                'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
+                '👇 <b>Выберите действие:</b>',
+            ).format(
+                amount=settings.format_price(amount_kopeks),
+                balance=settings.format_price(user.balance_kopeks),
+                separator='─' * 25,
             )
             extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [types.InlineKeyboardButton(text='🚀 АКТИВИРОВАТЬ ПОДПИСКУ', callback_data='subscription_buy')],
-                    [types.InlineKeyboardButton(text='💎 ПРОДЛИТЬ ПОДПИСКУ', callback_data=extend_callback)],
                     [
                         types.InlineKeyboardButton(
-                            text='📱 ДОБАВИТЬ УСТРОЙСТВА', callback_data='subscription_add_devices'
+                            text=texts.t('BALANCE_BTN_ACTIVATE_SUBSCRIPTION', '🚀 АКТИВИРОВАТЬ ПОДПИСКУ'),
+                            callback_data='subscription_buy',
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('BALANCE_BTN_EXTEND_SUBSCRIPTION', '💎 ПРОДЛИТЬ ПОДПИСКУ'),
+                            callback_data=extend_callback,
+                        )
+                    ],
+                    [
+                        types.InlineKeyboardButton(
+                            text=texts.t('BALANCE_BTN_ADD_DEVICES', '📱 ДОБАВИТЬ УСТРОЙСТВА'),
+                            callback_data='subscription_add_devices',
                         )
                     ],
                 ]
@@ -152,22 +172,24 @@ class UserService:
             # Пополнение
             emoji = '💰'
             amount_text = f'+{settings.format_price(amount_kopeks)}'
-            message = (
-                f'{emoji} <b>Баланс пополнен!</b>\n\n'
-                f'💵 <b>Сумма:</b> {amount_text}\n'
-                f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Спасибо за использование нашего сервиса! 🎉'
-            )
+            message = get_texts(user.language).t(
+                'BALANCE_TOPUP_SIMPLE',
+                '{emoji} <b>Баланс пополнен!</b>\n\n'
+                '💵 <b>Сумма:</b> {amount_text}\n'
+                '💳 <b>Текущий баланс:</b> {balance}\n\n'
+                'Спасибо за использование нашего сервиса! 🎉',
+            ).format(emoji=emoji, amount_text=amount_text, balance=settings.format_price(user.balance_kopeks))
         else:
             # Списание
             emoji = '💸'
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
-            message = (
-                f'{emoji} <b>Средства списаны с баланса</b>\n\n'
-                f'💵 <b>Сумма:</b> {amount_text}\n'
-                f'💳 <b>Текущий баланс:</b> {settings.format_price(user.balance_kopeks)}\n\n'
-                f'Если у вас есть вопросы, обратитесь в поддержку.'
-            )
+            message = get_texts(user.language).t(
+                'BALANCE_CHARGE_SIMPLE',
+                '{emoji} <b>Средства списаны с баланса</b>\n\n'
+                '💵 <b>Сумма:</b> {amount_text}\n'
+                '💳 <b>Текущий баланс:</b> {balance}\n\n'
+                'Если у вас есть вопросы, обратитесь в поддержку.',
+            ).format(emoji=emoji, amount_text=amount_text, balance=settings.format_price(user.balance_kopeks))
 
         keyboard_rows = []
         subs = getattr(user, 'subscriptions', None) or []

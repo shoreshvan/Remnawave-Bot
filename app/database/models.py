@@ -222,7 +222,7 @@ class YooKassaPayment(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=True)
     yookassa_payment_id = Column(String(255), unique=True, nullable=False, index=True)
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(3), default='RUB', nullable=False)
     description = Column(Text, nullable=True)
     status = Column(String(50), nullable=False)
@@ -357,7 +357,7 @@ class AppleTransaction(Base):
     original_transaction_id = Column(String(64), nullable=True, index=True)
     product_id = Column(String(128), nullable=False)
     bundle_id = Column(String(255), nullable=False)
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     environment = Column(String(16), nullable=False)
     app_account_token = Column(String(36), nullable=True, index=True)
     web_order_line_item_id = Column(String(64), unique=True, nullable=True, index=True)
@@ -524,7 +524,7 @@ class MulenPayPayment(Base):
 
     mulen_payment_id = Column(Integer, nullable=True, index=True)
     uuid = Column(String(255), unique=True, nullable=False, index=True)
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -560,7 +560,7 @@ class Pal24Payment(Base):
 
     bill_id = Column(String(255), unique=True, nullable=False, index=True)
     order_id = Column(String(255), nullable=True, index=True)
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
     type = Column(String(20), nullable=False, default='normal')
@@ -617,7 +617,7 @@ class WataPayment(Base):
 
     payment_link_id = Column(String(64), unique=True, nullable=False, index=True)
     order_id = Column(String(255), nullable=True, index=True)
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
     type = Column(String(50), nullable=True)
@@ -660,7 +660,7 @@ class PlategaPayment(Base):
 
     platega_transaction_id = Column(String(255), unique=True, nullable=True, index=True)
     correlation_id = Column(String(64), unique=True, nullable=False, index=True)
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -705,7 +705,7 @@ class PlategaSubscription(Base):
     platega_subscription_id = Column(String(255), unique=True, nullable=True, index=True)
     interval = Column(Integer, nullable=False)  # 1=day,2=week,3=month,4=year
     charge_days = Column(Integer, nullable=False)  # шаг продления за одно списание
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
 
     status = Column(String(20), nullable=False, default='PENDING')  # PENDING/ACTIVE/PAST_DUE/CANCELLED/FAILED
@@ -763,7 +763,7 @@ class LavaSubscription(Base):
     order_id = Column(String(255), unique=True, nullable=False, index=True)
 
     charge_days = Column(Integer, nullable=False)  # шаг продления за одно списание
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
 
     status = Column(String(20), nullable=False, default='PENDING')  # PENDING/ACTIVE/PAST_DUE/CANCELLED/FAILED
@@ -864,7 +864,7 @@ class CloudPaymentsPayment(Base):
     transaction_id_cp = Column(BigInteger, unique=True, nullable=True, index=True)  # TransactionId от CloudPayments
     invoice_id = Column(String(255), unique=True, nullable=False, index=True)  # Наш InvoiceId
 
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -934,7 +934,7 @@ class FreekassaPayment(Base):
     freekassa_order_id = Column(String(64), unique=True, nullable=True, index=True)  # intid от Freekassa
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -996,7 +996,7 @@ class KassaAiPayment(Base):
     kassa_ai_order_id = Column(String(64), unique=True, nullable=True, index=True)  # orderId от KassaAI
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1058,7 +1058,7 @@ class RioPayPayment(Base):
     riopay_order_id = Column(String(64), unique=True, nullable=True, index=True)  # UUID от RioPay
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1121,7 +1121,7 @@ class SeverPayPayment(Base):
     severpay_uid = Column(String(64), unique=True, nullable=True, index=True)  # UID от SeverPay
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1183,7 +1183,7 @@ class PayPearPayment(Base):
     paypear_id = Column(String(64), unique=True, nullable=True, index=True)  # ID от PayPear
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1245,7 +1245,7 @@ class RollyPayPayment(Base):
     rollypay_payment_id = Column(String(128), unique=True, nullable=True, index=True)  # pay_uuid от RollyPay
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1307,7 +1307,7 @@ class OverpayPayment(Base):
     overpay_payment_id = Column(String(128), unique=True, nullable=True, index=True)  # ID от Overpay
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1369,7 +1369,7 @@ class AuraPayPayment(Base):
     aurapay_invoice_id = Column(String(128), unique=True, nullable=True, index=True)  # UUID от AuraPay
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1431,7 +1431,7 @@ class EtoplatezhiPayment(Base):
     etoplatezhi_payment_id = Column(String(128), unique=True, nullable=True, index=True)  # ID от Etoplatezhi
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1493,7 +1493,7 @@ class AntilopayPayment(Base):
     antilopay_payment_id = Column(String(128), unique=True, nullable=True, index=True)  # ID от Antilopay (APAY...)
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1555,7 +1555,7 @@ class JupiterPayment(Base):
     jupiter_transaction_id = Column(String(128), unique=True, nullable=True, index=True)  # transaction_id от Jupiter
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1617,7 +1617,7 @@ class DonutPayment(Base):
     donut_transaction_id = Column(String(128), unique=True, nullable=True, index=True)  # transaction_id от Donut
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1679,7 +1679,7 @@ class LavaPayment(Base):
     lava_invoice_id = Column(String(128), unique=True, nullable=True, index=True)  # invoice_id (UUID) от Lava
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -1743,9 +1743,9 @@ class CisPayPayment(Base):
     cispay_payment_id = Column(String(64), unique=True, nullable=True, index=True)  # id (UUIDv7) от cisPay
 
     # Суммы
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     # Сумма к оплате покупателем (может включать комиссию, если её платит покупатель)
-    charged_amount_kopeks = Column(Integer, nullable=True)
+    charged_amount_kopeks = Column(BigInteger, nullable=True)
     currency = Column(String(10), nullable=False, default='RUB')
     description = Column(Text, nullable=True)
 
@@ -2019,7 +2019,7 @@ class PromoGroup(Base):
     traffic_discount_percent = Column(Integer, nullable=False, default=0)
     device_discount_percent = Column(Integer, nullable=False, default=0)
     period_discounts = Column(JSON, nullable=True, default=dict)
-    auto_assign_total_spent_kopeks = Column(Integer, nullable=True, default=None)
+    auto_assign_total_spent_kopeks = Column(BigInteger, nullable=True, default=None)
     apply_discounts_to_addons = Column(Boolean, nullable=False, default=True)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(AwareDateTime(), default=func.now())
@@ -2128,7 +2128,7 @@ class Tariff(Base):
     traffic_limit_gb = Column(Integer, nullable=False, default=100)  # 0 = безлимит
     device_limit = Column(Integer, nullable=False, default=1)
     device_price_kopeks = Column(
-        Integer, nullable=True, default=None
+        BigInteger, nullable=True, default=None
     )  # Цена за доп. устройство (None = нельзя докупить)
     max_device_limit = Column(Integer, nullable=True, default=None)  # Макс. устройств (None = без ограничений)
 
@@ -2168,7 +2168,7 @@ class Tariff(Base):
 
     # Суточный тариф - ежедневное списание
     is_daily = Column(Boolean, default=False, nullable=False)  # Является ли тариф суточным
-    daily_price_kopeks = Column(Integer, default=0, nullable=False)  # Цена за день в копейках
+    daily_price_kopeks = Column(BigInteger, default=0, nullable=False)  # Цена за день в копейках
 
     # UUID продукта Lava для рекуррентных подписок: цена и периодичность списаний
     # задаются в кабинете Lava, здесь только привязка тарифа к продукту.
@@ -2176,13 +2176,13 @@ class Tariff(Base):
 
     # Произвольное количество дней
     custom_days_enabled = Column(Boolean, default=False, nullable=False)  # Разрешить произвольное кол-во дней
-    price_per_day_kopeks = Column(Integer, default=0, nullable=False)  # Цена за 1 день в копейках
+    price_per_day_kopeks = Column(BigInteger, default=0, nullable=False)  # Цена за 1 день в копейках
     min_days = Column(Integer, default=1, nullable=False)  # Минимальное количество дней
     max_days = Column(Integer, default=365, nullable=False)  # Максимальное количество дней
 
     # Произвольный трафик при покупке
     custom_traffic_enabled = Column(Boolean, default=False, nullable=False)  # Разрешить произвольный трафик
-    traffic_price_per_gb_kopeks = Column(Integer, default=0, nullable=False)  # Цена за 1 ГБ в копейках
+    traffic_price_per_gb_kopeks = Column(BigInteger, default=0, nullable=False)  # Цена за 1 ГБ в копейках
     min_traffic_gb = Column(Integer, default=1, nullable=False)  # Минимальный трафик в ГБ
     max_traffic_gb = Column(Integer, default=1000, nullable=False)  # Максимальный трафик в ГБ
 
@@ -2390,7 +2390,7 @@ class User(Base):
     last_name = Column(String(255), nullable=True)
     status = Column(String(20), default=UserStatus.ACTIVE.value)
     language = Column(String(5), default='ru')
-    balance_kopeks = Column(Integer, default=0)
+    balance_kopeks = Column(BigInteger, default=0)
     used_promocodes = Column(Integer, default=0)
     has_had_paid_subscription = Column(Boolean, default=False, nullable=False)
     # Когда админ последний раз открыл человеку триал заново (кнопка «Сбросить триал»).
@@ -3035,7 +3035,7 @@ class Transaction(Base):
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
 
     type = Column(String(50), nullable=False)
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     description = Column(Text, nullable=True)
 
     payment_method = Column(String(50), nullable=True)
@@ -3073,7 +3073,7 @@ class SubscriptionConversion(Base):
 
     payment_method = Column(String(50), nullable=True)
 
-    first_payment_amount_kopeks = Column(Integer, nullable=True)
+    first_payment_amount_kopeks = Column(BigInteger, nullable=True)
 
     first_paid_period_days = Column(Integer, nullable=True)
 
@@ -3097,7 +3097,7 @@ class PromoCode(Base):
     code = Column(String(50), unique=True, nullable=False, index=True)
     type = Column(String(50), nullable=False)
 
-    balance_bonus_kopeks = Column(Integer, default=0)
+    balance_bonus_kopeks = Column(BigInteger, default=0)
     subscription_days = Column(Integer, default=0)
     # Гигабайты к подписке. Часть набора бонусов наравне с балансом и днями;
     # 0 — трафик не начисляется.
@@ -3174,7 +3174,7 @@ class CouponBatch(Base):
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True, index=True)
     period_days = Column(Integer, nullable=False)
     coupons_total = Column(Integer, nullable=False)
-    wholesale_price_kopeks = Column(Integer, nullable=False, default=0)  # за купон; 0 — не указана
+    wholesale_price_kopeks = Column(BigInteger, nullable=False, default=0)  # за купон; 0 — не указана
     # Сколько купонов ЭТОЙ партии может активировать один пользователь.
     # 0 — без ограничения (прежнее поведение); для раздач/конкурсов ставится 1,
     # чтобы один человек не забрал всю партию.
@@ -3270,12 +3270,12 @@ class ReferralRewardLevel(Base):
 
     # Пригласивший
     referrer_percent = Column(Integer, nullable=True)
-    referrer_fixed_kopeks = Column(Integer, nullable=True)
+    referrer_fixed_kopeks = Column(BigInteger, nullable=True)
     referrer_days = Column(Integer, nullable=False, default=0, server_default='0')
     referrer_tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
 
     # Приглашённый
-    referee_fixed_kopeks = Column(Integer, nullable=True)
+    referee_fixed_kopeks = Column(BigInteger, nullable=True)
     referee_days = Column(Integer, nullable=False, default=0, server_default='0')
     referee_tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
 
@@ -3311,7 +3311,7 @@ class ReferralEarning(Base):
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     referral_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
 
-    amount_kopeks = Column(Integer, nullable=False)
+    amount_kopeks = Column(BigInteger, nullable=False)
     reason = Column(String(100), nullable=False)
 
     # Награда может быть выдана днями подписки, а не деньгами. Без этих колонок
@@ -3361,7 +3361,7 @@ class WithdrawalRequest(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
 
-    amount_kopeks = Column(Integer, nullable=False)  # Сумма к выводу
+    amount_kopeks = Column(BigInteger, nullable=False)  # Сумма к выводу
     status = Column(String(50), default=WithdrawalRequestStatus.PENDING.value, nullable=False, index=True)
 
     # Данные для вывода (заполняет пользователь)
@@ -3468,7 +3468,7 @@ class ReferralContestEvent(Base):
     referrer_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     referral_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     event_type = Column(String(50), nullable=False)
-    amount_kopeks = Column(Integer, nullable=False, default=0)
+    amount_kopeks = Column(BigInteger, nullable=False, default=0)
     occurred_at = Column(AwareDateTime(), nullable=False, default=func.now())
 
     contest = relationship('ReferralContest', back_populates='events')
@@ -3488,7 +3488,7 @@ class ReferralContestVirtualParticipant(Base):
     contest_id = Column(Integer, ForeignKey('referral_contests.id', ondelete='CASCADE'), nullable=False)
     display_name = Column(String(255), nullable=False)
     referral_count = Column(Integer, nullable=False, default=0)
-    total_amount_kopeks = Column(Integer, nullable=False, default=0)
+    total_amount_kopeks = Column(BigInteger, nullable=False, default=0)
     created_at = Column(AwareDateTime(), default=func.now())
 
     contest = relationship('ReferralContest')
@@ -3574,7 +3574,7 @@ class Squad(Base):
     country_code = Column(String(5), nullable=True)
 
     is_available = Column(Boolean, default=True)
-    price_kopeks = Column(Integer, default=0)
+    price_kopeks = Column(BigInteger, default=0)
 
     description = Column(Text, nullable=True)
 
@@ -3751,7 +3751,7 @@ class SubscriptionEvent(Base):
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='SET NULL'), nullable=True)
     transaction_id = Column(Integer, ForeignKey('transactions.id', ondelete='SET NULL'), nullable=True)
-    amount_kopeks = Column(Integer, nullable=True)
+    amount_kopeks = Column(BigInteger, nullable=True)
     currency = Column(String(16), nullable=True)
     message = Column(Text, nullable=True)
     occurred_at = Column(AwareDateTime(), nullable=False, default=func.now())
@@ -3772,7 +3772,7 @@ class DiscountOffer(Base):
     subscription_id = Column(Integer, ForeignKey('subscriptions.id', ondelete='SET NULL'), nullable=True)
     notification_type = Column(String(50), nullable=False)
     discount_percent = Column(Integer, nullable=False, default=0)
-    bonus_amount_kopeks = Column(Integer, nullable=False, default=0)
+    bonus_amount_kopeks = Column(BigInteger, nullable=False, default=0)
     expires_at = Column(AwareDateTime(), nullable=False)
     claimed_at = Column(AwareDateTime(), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
@@ -3797,7 +3797,7 @@ class PromoOfferTemplate(Base):
     button_text = Column(String(255), nullable=False)
     valid_hours = Column(Integer, nullable=False, default=24)
     discount_percent = Column(Integer, nullable=False, default=0)
-    bonus_amount_kopeks = Column(Integer, nullable=False, default=0)
+    bonus_amount_kopeks = Column(BigInteger, nullable=False, default=0)
     active_discount_hours = Column(Integer, nullable=True)
     test_duration_hours = Column(Integer, nullable=True)
     test_squad_uuids = Column(JSON, default=list)
@@ -3882,7 +3882,7 @@ class Poll(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     reward_enabled = Column(Boolean, nullable=False, default=False)
-    reward_amount_kopeks = Column(Integer, nullable=False, default=0)
+    reward_amount_kopeks = Column(BigInteger, nullable=False, default=0)
     created_by = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
     created_at = Column(AwareDateTime(), default=func.now(), nullable=False)
     updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now(), nullable=False)
@@ -3941,7 +3941,7 @@ class PollResponse(Base):
     started_at = Column(AwareDateTime(), nullable=True)
     completed_at = Column(AwareDateTime(), nullable=True)
     reward_given = Column(Boolean, nullable=False, default=False)
-    reward_amount_kopeks = Column(Integer, nullable=False, default=0)
+    reward_amount_kopeks = Column(BigInteger, nullable=False, default=0)
 
     poll = relationship('Poll', back_populates='responses')
     user = relationship('User', back_populates='poll_responses')
@@ -3986,7 +3986,7 @@ class ServerSquad(Base):
     is_available = Column(Boolean, default=True)
     is_trial_eligible = Column(Boolean, default=False, nullable=False)
 
-    price_kopeks = Column(Integer, default=0)
+    price_kopeks = Column(BigInteger, default=0)
 
     description = Column(Text, nullable=True)
 
@@ -4033,7 +4033,7 @@ class SubscriptionServer(Base):
 
     connected_at = Column(AwareDateTime(), default=func.now())
 
-    paid_price_kopeks = Column(Integer, default=0)
+    paid_price_kopeks = Column(BigInteger, default=0)
 
     subscription = relationship('Subscription', backref=backref('subscription_servers', passive_deletes=True))
     server_squad = relationship('ServerSquad', backref='subscription_servers')
@@ -4110,7 +4110,7 @@ class AdvertisingCampaign(Base):
     start_parameter = Column(String(64), nullable=False, unique=True, index=True)
     bonus_type = Column(String(20), nullable=False)
 
-    balance_bonus_kopeks = Column(Integer, default=0)
+    balance_bonus_kopeks = Column(BigInteger, default=0)
 
     subscription_duration_days = Column(Integer, nullable=True)
     subscription_traffic_gb = Column(Integer, nullable=True)
@@ -4165,7 +4165,7 @@ class AdvertisingCampaignRegistration(Base):
     user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
 
     bonus_type = Column(String(20), nullable=False)
-    balance_bonus_kopeks = Column(Integer, default=0)
+    balance_bonus_kopeks = Column(BigInteger, default=0)
     subscription_duration_days = Column(Integer, nullable=True)
 
     # Поля для типа "tariff"
@@ -4240,9 +4240,9 @@ class Ticket(Base):
     @property
     def status_emoji(self) -> str:
         status_emojis = {
-            TicketStatus.OPEN.value: '🔴',
+            TicketStatus.OPEN.value: '🟢',
             TicketStatus.ANSWERED.value: '🟡',
-            TicketStatus.CLOSED.value: '🟢',
+            TicketStatus.CLOSED.value: '🔴',
             TicketStatus.PENDING.value: '⏳',
         }
         return status_emojis.get(self.status, '❓')
@@ -4542,7 +4542,7 @@ class WheelPrize(Base):
     color = Column(String(20), default='#3B82F6', nullable=False)  # HEX цвет сектора
 
     # Стоимость приза для расчета RTP (в копейках)
-    prize_value_kopeks = Column(Integer, default=0, nullable=False)
+    prize_value_kopeks = Column(BigInteger, default=0, nullable=False)
 
     # Порядок и вероятность
     sort_order = Column(Integer, default=0, nullable=False)
@@ -4550,7 +4550,7 @@ class WheelPrize(Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Настройки генерируемого промокода (только для prize_type=promocode)
-    promo_balance_bonus_kopeks = Column(Integer, default=0)
+    promo_balance_bonus_kopeks = Column(BigInteger, default=0)
     promo_subscription_days = Column(Integer, default=0)
     promo_traffic_gb = Column(Integer, default=0)
 
@@ -4577,13 +4577,13 @@ class WheelSpin(Base):
     # Способ оплаты
     payment_type = Column(String(50), nullable=False)  # WheelSpinPaymentType
     payment_amount = Column(Integer, nullable=False)  # Stars или дни
-    payment_value_kopeks = Column(Integer, nullable=False)  # Эквивалент в копейках для статистики
+    payment_value_kopeks = Column(BigInteger, nullable=False)  # Эквивалент в копейках для статистики
 
     # Результат
     prize_type = Column(String(50), nullable=False)  # Копируем из WheelPrize на момент спина
     prize_value = Column(Integer, nullable=False)
     prize_display_name = Column(String(100), nullable=False)
-    prize_value_kopeks = Column(Integer, nullable=False)  # Стоимость приза в копейках
+    prize_value_kopeks = Column(BigInteger, nullable=False)  # Стоимость приза в копейках
 
     # Сгенерированный промокод (если приз - промокод)
     generated_promocode_id = Column(Integer, ForeignKey('promocodes.id'), nullable=True)
@@ -4682,8 +4682,8 @@ class PaymentMethodConfig(Base):
     quick_amounts = Column(JSON, nullable=True, default=None)
 
     # Переопределение мин/макс сумм (null = из env)
-    min_amount_kopeks = Column(Integer, nullable=True)
-    max_amount_kopeks = Column(Integer, nullable=True)
+    min_amount_kopeks = Column(BigInteger, nullable=True)
+    max_amount_kopeks = Column(BigInteger, nullable=True)
 
     # --- Условия отображения ---
 
@@ -4970,8 +4970,8 @@ class GuestPurchase(Base):
     gift_message = Column(Text, nullable=True)
     tariff_id = Column(Integer, ForeignKey('tariffs.id', ondelete='SET NULL'), nullable=True)
     period_days = Column(Integer, nullable=False)
-    amount_kopeks = Column(Integer, nullable=False)
-    currency = Column(String(3), nullable=False, default='RUB')
+    amount_kopeks = Column(BigInteger, nullable=False)
+    currency = Column(String(3), nullable=False, default='IRT')  # IRT = туман (домашняя валюта)
     payment_method = Column(String(50), nullable=True)
     payment_id = Column(String(255), nullable=True)
     status = Column(String(20), nullable=False, default=GuestPurchaseStatus.PENDING.value)

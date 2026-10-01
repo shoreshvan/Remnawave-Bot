@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, stat
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
@@ -29,7 +30,9 @@ router = APIRouter()
 async def get_available_countries(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = QueryParam(
+        None, description=get_texts().t('CABINET_COUNTRIES_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff')
+    ),
 ) -> dict[str, Any]:
     """Get available countries/servers for the user."""
     from app.database.crud.server_squad import get_available_server_squads
@@ -101,7 +104,9 @@ async def update_countries(
     request: dict[str, Any],
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = QueryParam(
+        None, description=get_texts().t('CABINET_COUNTRIES_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff')
+    ),
 ) -> dict[str, Any]:
     """Update subscription countries/servers."""
     from app.database.crud.server_squad import add_user_to_servers, get_available_server_squads, get_server_ids_by_uuids
@@ -116,20 +121,23 @@ async def update_countries(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No subscription found',
+            detail=get_texts().t('CABINET_COUNTRIES_NO_SUBSCRIPTION', 'No subscription found'),
         )
 
     if subscription.is_trial:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Country management is not available for trial subscriptions',
+            detail=get_texts().t(
+                'CABINET_COUNTRIES_TRIAL_NOT_AVAILABLE',
+                'Country management is not available for trial subscriptions',
+            ),
         )
 
     selected_countries = request.get('countries', [])
     if not selected_countries:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='At least one country must be selected',
+            detail=get_texts().t('CABINET_COUNTRIES_MIN_ONE_REQUIRED', 'At least one country must be selected'),
         )
 
     current_countries = subscription.connected_squads or []
@@ -143,7 +151,9 @@ async def update_countries(
         if country_uuid not in allowed_country_ids:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Country {country_uuid} is not available',
+                detail=get_texts()
+                .t('CABINET_COUNTRIES_COUNTRY_NOT_AVAILABLE', 'Country {country_uuid} is not available')
+                .format(country_uuid=country_uuid),
             )
 
     added = [c for c in selected_countries if c not in current_countries]
@@ -151,7 +161,7 @@ async def update_countries(
 
     if not added and not removed:
         return {
-            'message': 'No changes detected',
+            'message': get_texts().t('CABINET_COUNTRIES_NO_CHANGES', 'No changes detected'),
             'connected_squads': current_countries,
         }
 
@@ -198,7 +208,12 @@ async def update_countries(
     if total_cost > 0 and user.balance_kopeks < total_cost:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f'Insufficient balance. Need {total_cost / 100:.2f} RUB, have {user.balance_kopeks / 100:.2f} RUB',
+            detail=get_texts()
+            .t(
+                'CABINET_COUNTRIES_INSUFFICIENT_BALANCE',
+                'Insufficient balance. Need {need:.2f} RUB, have {have:.2f} RUB',
+            )
+            .format(need=total_cost / 100, have=user.balance_kopeks / 100),
         )
 
     # Deduct balance and update subscription
@@ -207,7 +222,7 @@ async def update_countries(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='Failed to charge balance',
+                detail=get_texts().t('CABINET_COUNTRIES_CHARGE_FAILED', 'Failed to charge balance'),
             )
 
         await create_transaction(
@@ -285,7 +300,7 @@ async def update_countries(
             )
 
     return {
-        'message': 'Countries updated successfully',
+        'message': get_texts().t('CABINET_COUNTRIES_UPDATED', 'Countries updated successfully'),
         'added': added_names,
         'removed': removed_names,
         'amount_paid_kopeks': total_cost,

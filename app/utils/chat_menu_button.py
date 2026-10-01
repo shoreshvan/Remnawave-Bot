@@ -10,6 +10,7 @@ from aiogram import Bot
 from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from app.config import settings
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -40,7 +41,8 @@ async def configure_chat_menu_button(bot: Bot) -> bool:
     if not url:
         return False
 
-    text = (settings.MENU_BUTTON_WEBAPP_TEXT or 'Кабинет').strip() or 'Кабинет'
+    default_text = get_texts().t('MENU_BUTTON_WEBAPP_DEFAULT_TEXT', 'Кабинет')
+    text = (settings.MENU_BUTTON_WEBAPP_TEXT or default_text).strip() or default_text
     try:
         await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(text=text, web_app=WebAppInfo(url=url)))
     except Exception as error:
