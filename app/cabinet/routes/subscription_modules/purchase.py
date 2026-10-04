@@ -1516,7 +1516,7 @@ async def activate_trial(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=get_texts()
-                .t('CABINET_TRIAL_INSUFFICIENT_BALANCE', 'Insufficient balance. Need {amount:.2f} RUB')
+                .t('CABINET_TRIAL_INSUFFICIENT_BALANCE', 'Insufficient balance. Need {amount:.2f} تومان')
                 .format(amount=price_kopeks / 100),
             )
         trial_description = 'Активация триальной подписки'

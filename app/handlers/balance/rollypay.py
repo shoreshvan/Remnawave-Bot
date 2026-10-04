@@ -226,7 +226,7 @@ async def start_rollypay_topup(
         texts.t(
             'ROLLYPAY_ENTER_AMOUNT',
             '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в рублях.\n\n'
+            'Введите сумму пополнения в تومان.\n\n'
             'Минимум: {min_amount}\u20bd\n'
             'Максимум: {max_amount}\u20bd',
         ).format(

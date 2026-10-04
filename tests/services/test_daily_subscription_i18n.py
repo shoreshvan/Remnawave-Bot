@@ -38,13 +38,13 @@ async def test_daily_notifications_localized(monkeypatch, language, multi_tariff
     if language == 'fa':
         label = '\n📦 تعرفه: «Test»' if multi_tariff else ''
         expected_charge = (
-            '💳 <b>برداشت روزانه</b>\n\nکسر شده: 12.50 ₽\n'
-            f'مانده موجودی: 123.45 ₽{label}\n\nبرداشت بعدی ۲۴ ساعت دیگر انجام می‌شود.'
+            '💳 <b>برداشت روزانه</b>\n\nکسر شده: 12.50 تومان\n'
+            f'مانده موجودی: 123.45 تومان{label}\n\nبرداشت بعدی ۲۴ ساعت دیگر انجام می‌شود.'
         )
         expected_insufficient = (
             f'⚠️ <b>اشتراک{name} به حالت تعلیق درآمده است</b>\n\n'
             'موجودی برای پرداخت روزانه کافی نیست.\n\n'
-            'مبلغ موردنیاز: 150.00 ₽\nموجودی: 123.45 ₽\n\n'
+            'مبلغ موردنیاز: 150.00 تومان\nموجودی: 123.45 تومان\n\n'
             'برای ازسرگیری اشتراک، موجودی خود را شارژ کنید.'
         )
         expected_reset = (
@@ -57,13 +57,13 @@ async def test_daily_notifications_localized(monkeypatch, language, multi_tariff
     else:
         label = '\n📦 Тариф: «Test»' if multi_tariff else ''
         expected_charge = (
-            '💳 <b>Суточное списание</b>\n\nСписано: 12.50 ₽\n'
-            f'Остаток баланса: 123.45 ₽{label}\n\nСледующее списание через 24 часа.'
+            '💳 <b>Суточное списание</b>\n\nСписано: 12.50 تومان\n'
+            f'Остаток баланса: 123.45 تومان{label}\n\nСледующее списание через 24 часа.'
         )
         expected_insufficient = (
             f'⚠️ <b>Подписка{name} приостановлена</b>\n\n'
             'Недостаточно средств для суточной оплаты.\n\n'
-            'Требуется: 150.00 ₽\nБаланс: 123.45 ₽\n\n'
+            'Требуется: 150.00 تومان\nБаланс: 123.45 تومان\n\n'
             'Пополните баланс, чтобы возобновить подписку.'
         )
         expected_reset = (
@@ -83,7 +83,7 @@ async def test_daily_notifications_localized(monkeypatch, language, multi_tariff
     assert [row[0].callback_data for row in keyboard] == ['menu_balance', 'menu_subscription']
     assert charge['amount_kopeks'] == 1250
     assert charge['new_balance_kopeks'] == 12345
-    assert insufficient['context'] == {'required_amount': '150.00 ₽', 'current_balance': '123.45 ₽'}
+    assert insufficient['context'] == {'required_amount': '150.00 تومان', 'current_balance': '123.45 تومان'}
     assert reset['context'] == {'reset_gb': 50, 'current_limit_gb': 100}
     assert insufficient['notification_type'] == module.NotificationType.DAILY_INSUFFICIENT_FUNDS
     assert reset['notification_type'] == module.NotificationType.TRAFFIC_RESET

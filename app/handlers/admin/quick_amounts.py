@@ -35,11 +35,11 @@ def _format_rubles(amount_kopeks: int) -> str:
 
 def _format_amounts_line(quick_amounts: list[int] | None) -> str:
     if quick_amounts:
-        return ', '.join(f'{_format_rubles(amount)} ₽' for amount in quick_amounts)
+        return ', '.join(f'{_format_rubles(amount)} تومان' for amount in quick_amounts)
     if quick_amounts is not None:
         # Пустой список — кнопки отключены админом (None = дефолты)
         return '🚫 отключены'
-    defaults = ', '.join(f'{_format_rubles(amount)} ₽' for amount in DEFAULT_QUICK_AMOUNTS)
+    defaults = ', '.join(f'{_format_rubles(amount)} تومان' for amount in DEFAULT_QUICK_AMOUNTS)
     return f'{defaults} (по умолчанию)'
 
 
@@ -165,7 +165,7 @@ async def start_edit_quick_amounts(callback: CallbackQuery, state: FSMContext, *
         texts.t(
             'ADMIN_QUICK_AMOUNTS_EDIT_PROMPT',
             '💸 <b>Новые быстрые суммы</b>\n\n'
-            'Отправьте суммы в рублях через запятую, например: <code>100, 300, 500, 1000</code>\n'
+            'Отправьте суммы в تومان через запятую, например: <code>100, 300, 500, 1000</code>\n'
             'Не более {max} значений. Дробные суммы — через точку.',
         ).format(max=MAX_QUICK_AMOUNTS),
         reply_markup=InlineKeyboardMarkup(
@@ -233,8 +233,8 @@ async def process_quick_amounts(message: Message, state: FSMContext, **kwargs) -
         await message.answer(
             texts.t(
                 'ADMIN_QUICK_AMOUNTS_INVALID_FORMAT',
-                '❌ Неверный формат. Отправьте до {max} положительных сумм в рублях через запятую '
-                '(не более {max_amount} ₽ каждая), '
+                '❌ Неверный формат. Отправьте до {max} положительных сумм в تومان через запятую '
+                '(не более {max_amount} تومان каждая), '
                 'например: <code>100, 300, 500, 1000</code>',
             ).format(max=MAX_QUICK_AMOUNTS, max_amount=MAX_QUICK_AMOUNT_KOPEKS // 100)
         )

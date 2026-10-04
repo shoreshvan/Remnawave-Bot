@@ -262,7 +262,7 @@ class YooKassaPayment(Base):
         return self.status == 'waiting_for_capture'
 
     def __repr__(self):
-        return f'<YooKassaPayment(id={self.id}, yookassa_id={self.yookassa_payment_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<YooKassaPayment(id={self.id}, yookassa_id={self.yookassa_payment_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class SavedPaymentMethod(Base):
@@ -549,7 +549,7 @@ class MulenPayPayment(Base):
         return self.amount_kopeks / 100
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<MulenPayPayment(id={self.id}, mulen_id={self.mulen_payment_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<MulenPayPayment(id={self.id}, mulen_id={self.mulen_payment_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class Pal24Payment(Base):
@@ -605,7 +605,7 @@ class Pal24Payment(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
-            f'<Pal24Payment(id={self.id}, bill_id={self.bill_id}, amount={self.amount_rubles}₽, status={self.status})>'
+            f'<Pal24Payment(id={self.id}, bill_id={self.bill_id}, amount={self.amount_rubles} تومان, status={self.status})>'
         )
 
 
@@ -649,7 +649,7 @@ class WataPayment(Base):
         return self.amount_kopeks / 100
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<WataPayment(id={self.id}, link_id={self.payment_link_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<WataPayment(id={self.id}, link_id={self.payment_link_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class PlategaPayment(Base):
@@ -691,7 +691,7 @@ class PlategaPayment(Base):
         return self.amount_kopeks / 100
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<PlategaPayment(id={self.id}, transaction_id={self.platega_transaction_id}, amount={self.amount_rubles}₽, status={self.status}, method={self.payment_method_code})>'
+        return f'<PlategaPayment(id={self.id}, transaction_id={self.platega_transaction_id}, amount={self.amount_rubles} تومان, status={self.status}, method={self.payment_method_code})>'
 
 
 class PlategaSubscription(Base):
@@ -920,7 +920,7 @@ class CloudPaymentsPayment(Base):
         return self.status == 'failed'
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<CloudPaymentsPayment(id={self.id}, invoice={self.invoice_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<CloudPaymentsPayment(id={self.id}, invoice={self.invoice_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class FreekassaPayment(Base):
@@ -980,7 +980,7 @@ class FreekassaPayment(Base):
         return self.status in ['failed', 'expired']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<FreekassaPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<FreekassaPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class KassaAiPayment(Base):
@@ -1042,7 +1042,7 @@ class KassaAiPayment(Base):
         return self.status in ['failed', 'expired']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<KassaAiPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<KassaAiPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class RioPayPayment(Base):
@@ -1104,7 +1104,7 @@ class RioPayPayment(Base):
         return self.status in ['failed', 'expired', 'canceled']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<RioPayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<RioPayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class SeverPayPayment(Base):
@@ -1167,7 +1167,7 @@ class SeverPayPayment(Base):
         return self.status in ['failed', 'expired', 'declined', 'amount_mismatch']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<SeverPayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<SeverPayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class PayPearPayment(Base):
@@ -1229,7 +1229,7 @@ class PayPearPayment(Base):
         return self.status in ['failed', 'expired', 'canceled', 'amount_mismatch']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<PayPearPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<PayPearPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class RollyPayPayment(Base):
@@ -1291,7 +1291,7 @@ class RollyPayPayment(Base):
         return self.status in ['failed', 'expired', 'canceled', 'chargeback', 'amount_mismatch']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<RollyPayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<RollyPayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class OverpayPayment(Base):
@@ -1353,7 +1353,7 @@ class OverpayPayment(Base):
         return self.status in ['failed', 'expired', 'canceled', 'chargeback', 'amount_mismatch']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<OverpayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<OverpayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class AuraPayPayment(Base):
@@ -1415,7 +1415,7 @@ class AuraPayPayment(Base):
         return self.status in ['failed', 'expired', 'canceled', 'amount_mismatch']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<AuraPayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<AuraPayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class EtoplatezhiPayment(Base):
@@ -1477,7 +1477,7 @@ class EtoplatezhiPayment(Base):
         return self.status in ['failed', 'expired', 'canceled', 'amount_mismatch']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<EtoplatezhiPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<EtoplatezhiPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class AntilopayPayment(Base):
@@ -1539,7 +1539,7 @@ class AntilopayPayment(Base):
         return self.status in ['failed', 'expired', 'canceled', 'amount_mismatch']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<AntilopayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<AntilopayPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class JupiterPayment(Base):
@@ -1601,7 +1601,7 @@ class JupiterPayment(Base):
         return self.status in ['failed', 'expired', 'cancelled', 'amount_mismatch', 'declined', 'error']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<JupiterPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<JupiterPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class DonutPayment(Base):
@@ -1663,7 +1663,7 @@ class DonutPayment(Base):
         return self.status in ['failed', 'expired', 'cancelled', 'amount_mismatch', 'error']
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
-        return f'<DonutPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+        return f'<DonutPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
 
 
 class LavaPayment(Base):
@@ -1726,7 +1726,7 @@ class LavaPayment(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
-            f'<LavaPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles}₽, status={self.status})>'
+            f'<LavaPayment(id={self.id}, order_id={self.order_id}, amount={self.amount_rubles} تومان, status={self.status})>'
         )
 
 
@@ -1793,7 +1793,7 @@ class CisPayPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<CisPayPayment(id={self.id}, order_id={self.order_id}, '
-            f'amount={self.amount_rubles}₽, status={self.status})>'
+            f'amount={self.amount_rubles} تومان, status={self.status})>'
         )
 
 
@@ -1859,7 +1859,7 @@ class CasheraPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<CasheraPayment(id={self.id}, order_id={self.order_id}, '
-            f'amount={self.amount_rubles}₽, status={self.status})>'
+            f'amount={self.amount_rubles} تومان, status={self.status})>'
         )
 
 
@@ -1934,7 +1934,7 @@ class TabPayPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<TabPayPayment(id={self.id}, order_id={self.order_id}, '
-            f'amount={self.amount_rubles}₽, status={self.status})>'
+            f'amount={self.amount_rubles} تومان, status={self.status})>'
         )
 
 
@@ -2005,7 +2005,7 @@ class ParityPayPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<ParityPayPayment(id={self.id}, order_id={self.order_id}, '
-            f'amount={self.amount_rubles}₽, status={self.status})>'
+            f'amount={self.amount_rubles} تومان, status={self.status})>'
         )
 
 
@@ -2226,7 +2226,7 @@ class Tariff(Base):
         return prices.get(str(period_days))
 
     def has_configured_price_for_period(self, period_days: int) -> bool:
-        """Настроена ли цена этого периода — бесплатный (0 ₽) считается настроенным.
+        """Настроена ли цена этого периода — бесплатный (0 تومان) считается настроенным.
 
         Признак верной настройки — наличие цены, а не её величина. Бесплатный
         тариф в проекте штатный (см. ``is_free``), и бот продаёт его, проверяя
@@ -2290,7 +2290,7 @@ class Tariff(Base):
         return periods[0] if periods else None
 
     def get_price_rubles(self, period_days: int) -> float | None:
-        """Возвращает цену в рублях для указанного периода."""
+        """Возвращает цену в تومان для указанного периода."""
         price_kopeks = self.get_price_for_period(period_days)
         if price_kopeks is not None:
             return price_kopeks / 100
@@ -2339,7 +2339,7 @@ class Tariff(Base):
         return self.traffic_topup_enabled and bool(self.traffic_topup_packages) and not self.is_unlimited_traffic
 
     def get_daily_price_rubles(self) -> float:
-        """Возвращает суточную цену в рублях."""
+        """Возвращает суточную цену в تومان."""
         return self.daily_price_kopeks / 100 if self.daily_price_kopeks else 0
 
     def get_price_for_custom_days(self, days: int) -> int | None:
@@ -4605,12 +4605,12 @@ class WheelSpin(Base):
 
     @property
     def prize_value_rubles(self) -> float:
-        """Стоимость приза в рублях."""
+        """Стоимость приза в تومان."""
         return self.prize_value_kopeks / 100
 
     @property
     def payment_value_rubles(self) -> float:
-        """Стоимость оплаты в рублях."""
+        """Стоимость оплаты в تومان."""
         return self.payment_value_kopeks / 100
 
     def __repr__(self) -> str:

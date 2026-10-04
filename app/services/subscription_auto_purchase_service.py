@@ -1496,7 +1496,7 @@ async def _auto_purchase_daily_tariff(
             message = texts.t(
                 'AUTO_PURCHASE_DAILY_ACTIVATED',
                 '✅ <b>Суточный тариф «{name}» активирован!</b>\n\n'
-                '💰 Списано: {price} ₽ за первый день\n'
+                '💰 Списано: {price} تومان за первый день\n'
                 '🔄 Средства будут списываться автоматически раз в сутки.\n\n'
                 'ℹ️ Вы можете приостановить подписку в любой момент.',
             ).format(name=html.escape(tariff.name), price=f'{final_price / 100:.0f}')

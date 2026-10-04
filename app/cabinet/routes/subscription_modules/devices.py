@@ -168,7 +168,7 @@ async def purchase_devices_legacy(
     days_left = max(1, math.ceil((end_date - now).total_seconds() / 86400))
     base_total_price = int(device_price * chargeable_devices * days_left / 30)
     if chargeable_devices > 0:
-        base_total_price = max(100, base_total_price)  # Минимум 1 рубль
+        base_total_price = max(100, base_total_price)  # Минимум 1 تومان
 
     # Lock user row to prevent TOCTOU on promo-offer state
     from app.database.crud.user import lock_user_for_pricing

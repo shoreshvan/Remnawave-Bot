@@ -52,7 +52,7 @@ def resolve_cashera_interval(period_days: int, is_daily: bool) -> tuple[str, int
 
 
 def round_up_to_rubles(amount_kopeks: int) -> int:
-    """Cashera принимает итоговую сумму подписки только в целых рублях (иначе 422).
+    """Cashera принимает итоговую сумму подписки только в целых تومان (иначе 422).
 
     Округляем вверх: недобор копеек при каждом списании хуже лишних копеек.
     """

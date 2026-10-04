@@ -63,7 +63,7 @@ async def start_heleket_payment(
     message_lines = [
         '🪙 <b>Пополнение через Heleket</b>',
         '\n',
-        'Введите сумму пополнения от 100 до 100,000 ₽:',
+        'Введите сумму пополнения от 100 до 100,000 تومان:',
         '',
         '⚡ Мгновенное зачисление',
         '🔒 Безопасная оплата',
@@ -125,14 +125,14 @@ async def process_heleket_payment_amount(
 
     if amount_rubles < 100:
         await message.answer(
-            'Минимальная сумма пополнения: 100 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+            'Минимальная сумма пополнения: 100 تومان\n\nОтправьте новую сумму пополнения числом в сообщении.',
             reply_markup=get_back_keyboard(db_user.language),
         )
         return
 
     if amount_rubles > 100000:
         await message.answer(
-            'Максимальная сумма пополнения: 100,000 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+            'Максимальная сумма пополнения: 100,000 تومان\n\nОтправьте новую сумму пополнения числом в сообщении.',
             reply_markup=get_back_keyboard(db_user.language),
         )
         return
@@ -143,7 +143,7 @@ async def process_heleket_payment_amount(
         db=db,
         user_id=db_user.id,
         amount_kopeks=amount_kopeks,
-        description=f'Пополнение баланса на {amount_rubles:.0f} ₽',
+        description=f'Пополнение баланса на {amount_rubles:.0f} تومان',
         language=db_user.language,
     )
 
@@ -166,7 +166,7 @@ async def process_heleket_payment_amount(
     details = [
         '🪙 <b>Оплата через Heleket</b>',
         '',
-        f'💰 Сумма к зачислению: {amount_rubles:.0f} ₽',
+        f'💰 Сумма к зачислению: {amount_rubles:.0f} تومان',
     ]
 
     if payer_amount and payer_currency:
@@ -194,7 +194,7 @@ async def process_heleket_payment_amount(
             payer_amount_float = float(payer_amount)
             if payer_amount_float > 0:
                 rub_per_currency = amount_rubles / payer_amount_float
-                details.append(f'💱 Курс: 1 {payer_currency} ≈ {rub_per_currency:.2f} ₽')
+                details.append(f'💱 Курс: 1 {payer_currency} ≈ {rub_per_currency:.2f} تومان')
         except (TypeError, ValueError, ZeroDivisionError):
             pass
 

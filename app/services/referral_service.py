@@ -1063,7 +1063,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
         if not user.has_made_first_topup:
             if not qualifies_for_first_bonus:
                 logger.info(
-                    'Пополнение на ₽ меньше минимума для первого бонуса, но комиссия будет начислена',
+                    'Пополнение на تومان меньше минимума для первого бонуса, но комиссия будет начислена',
                     user_id=user_id,
                     topup_amount_kopeks=topup_amount_kopeks / 100,
                 )
@@ -1092,7 +1092,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         )
 
                         logger.info(
-                            '💰 Комиссия с пополнения: получил ₽ (до первого бонуса)',
+                            '💰 Комиссия с пополнения: получил تومان (до первого бонуса)',
                             telegram_id=referrer.telegram_id,
                             commission_amount=commission_amount / 100,
                         )
@@ -1154,7 +1154,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                 )
                 if bonus_ok:
                     logger.info(
-                        '💰 Реферал получил бонус ₽',
+                        '💰 Реферал получил бонус تومان',
                         user_id=user.id,
                         REFERRAL_FIRST_TOPUP_BONUS_KOPEKS=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS / 100,
                     )
@@ -1205,7 +1205,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
 
                     referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
                     logger.info(
-                        '💰 Реферер получил бонус ₽', referrer_id=referrer_id, inviter_bonus=inviter_bonus / 100
+                        '💰 Реферер получил бонус تومان', referrer_id=referrer_id, inviter_bonus=inviter_bonus / 100
                     )
 
                     if bot:
@@ -1279,7 +1279,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
 
                 referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
                 logger.info(
-                    '💰 Комиссия с пополнения: получил ₽',
+                    '💰 Комиссия с пополнения: получил تومان',
                     referrer_id=referrer_id,
                     commission_amount=commission_amount / 100,
                 )
@@ -1366,7 +1366,7 @@ async def process_referral_purchase(
 
             referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
             logger.info(
-                '💰 Комиссия с покупки: получил ₽', referrer_id=referrer_id, commission_amount=commission_amount / 100
+                '💰 Комиссия с покупки: получил تومان', referrer_id=referrer_id, commission_amount=commission_amount / 100
             )
 
             if bot:

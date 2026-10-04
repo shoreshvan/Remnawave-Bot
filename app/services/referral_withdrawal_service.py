@@ -218,7 +218,7 @@ class ReferralWithdrawalService:
         min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
 
         if available < min_amount:
-            return False, f'Минимальная сумма вывода: {min_amount / 100:.0f}₽. Доступно: {available / 100:.0f}₽', stats
+            return False, f'Минимальная сумма вывода: {min_amount / 100:.0f} تومان. Доступно: {available / 100:.0f} تومان', stats
 
         # Проверяем cooldown (пропускаем в тестовом режиме)
         last_request = await self.get_last_withdrawal_request(db, user_id)
@@ -257,10 +257,10 @@ class ReferralWithdrawalService:
 
         if own_deposits > 0 and spending == 0:
             analysis['risk_score'] += 40
-            analysis['flags'].append(f'🔴 Пополнил {own_deposits / 100:.0f}₽, но ничего не покупал!')
+            analysis['flags'].append(f'🔴 Пополнил {own_deposits / 100:.0f} تومان, но ничего не покупал!')
         elif own_deposits > spending * ratio_threshold and spending > 0:
             analysis['risk_score'] += 25
-            analysis['flags'].append(f'🟠 Пополнил {own_deposits / 100:.0f}₽, потратил только {spending / 100:.0f}₽')
+            analysis['flags'].append(f'🟠 Пополнил {own_deposits / 100:.0f} تومان, потратил только {spending / 100:.0f} تومان')
 
         # 2. Получаем информацию о рефералах
         referrals = await db.execute(select(User).where(User.referred_by_id == user_id))
@@ -314,7 +314,7 @@ class ReferralWithdrawalService:
 
                 if deposit_total > min_suspicious:
                     analysis['risk_score'] += 10
-                    suspicious_flags.append(f'сумма {deposit_total / 100:.0f}₽')
+                    suspicious_flags.append(f'сумма {deposit_total / 100:.0f} تومان')
 
                 if suspicious_flags:
                     suspicious_referrals.append(
@@ -381,7 +381,7 @@ class ReferralWithdrawalService:
 
         if recent_count > 20:
             analysis['risk_score'] += 15
-            analysis['flags'].append(f'⚠️ {recent_count} начислений за неделю ({recent_amount / 100:.0f}₽)')
+            analysis['flags'].append(f'⚠️ {recent_count} начислений за неделю ({recent_amount / 100:.0f} تومان)')
 
         analysis['details']['recent_activity'] = {
             'week_earnings_count': recent_count,
@@ -435,12 +435,12 @@ class ReferralWithdrawalService:
         available = stats['available_total']
 
         if amount_kopeks > available:
-            return None, f'Недостаточно средств. Доступно: {available / 100:.0f}₽'
+            return None, f'Недостаточно средств. Доступно: {available / 100:.0f} تومان'
 
         # В режиме "только реф. баланс" проверяем реф. баланс
         if settings.REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE:
             if amount_kopeks > stats['available_referral']:
-                return None, f'Недостаточно реферального баланса. Доступно: {stats["available_referral"] / 100:.0f}₽'
+                return None, f'Недостаточно реферального баланса. Доступно: {stats["available_referral"] / 100:.0f} تومان'
 
         # Анализируем на отмывание
         analysis = await self.analyze_for_money_laundering(db, user_id)
@@ -501,7 +501,7 @@ class ReferralWithdrawalService:
 
         # Списываем с баланса
         if user.balance_kopeks < request.amount_kopeks:
-            return False, f'Недостаточно средств на балансе. Баланс: {user.balance_kopeks / 100:.0f}₽'
+            return False, f'Недостаточно средств на балансе. Баланс: {user.balance_kopeks / 100:.0f} تومان'
 
         user.balance_kopeks -= request.amount_kopeks
 
@@ -640,10 +640,10 @@ class ReferralWithdrawalService:
         if 'balance_stats' in details:
             bs = details['balance_stats']
             text += '\n💰 <b>Баланс:</b>\n'
-            text += f'• Заработано с рефералов: {bs["total_earned"] / 100:.0f}₽\n'
-            text += f'• Собственные пополнения: {bs["own_deposits"] / 100:.0f}₽\n'
-            text += f'• Потрачено: {bs["spending"] / 100:.0f}₽\n'
-            text += f'• Уже выведено: {bs["withdrawn"] / 100:.0f}₽\n'
+            text += f'• Заработано с рефералов: {bs["total_earned"] / 100:.0f} تومان\n'
+            text += f'• Собственные пополнения: {bs["own_deposits"] / 100:.0f} تومان\n'
+            text += f'• Потрачено: {bs["spending"] / 100:.0f} تومان\n'
+            text += f'• Уже выведено: {bs["withdrawn"] / 100:.0f} تومان\n'
 
         # Статистика по рефералам
         if 'referral_deposits' in details:
@@ -651,13 +651,13 @@ class ReferralWithdrawalService:
             text += '\n👥 <b>Рефералы:</b>\n'
             text += f'• Всего: {details.get("referral_count", 0)}\n'
             text += f'• Платящих: {rd["paying_referrals"]}\n'
-            text += f'• Всего пополнений: {rd["total_deposits"]} ({rd["total_amount"] / 100:.0f}₽)\n'
+            text += f'• Всего пополнений: {rd["total_deposits"]} ({rd["total_amount"] / 100:.0f} تومان)\n'
 
         # Подозрительные рефералы
         if details.get('suspicious_referrals'):
             text += '\n🚨 <b>Подозрительные рефералы:</b>\n'
             for sr in details['suspicious_referrals'][:5]:
-                text += f'• {html.escape(sr["name"])}: {sr["deposits_count"]} поп., {sr["deposits_total"] / 100:.0f}₽\n'
+                text += f'• {html.escape(sr["name"])}: {sr["deposits_count"]} поп., {sr["deposits_total"] / 100:.0f} تومان\n'
                 text += f'  Флаги: {", ".join(sr["flags"])}\n'
 
         # Источники дохода
@@ -670,7 +670,7 @@ class ReferralWithdrawalService:
             }
             for reason, data in details['earnings_by_reason'].items():
                 name = reason_names.get(reason, reason)
-                text += f'• {name}: {data["count"]} шт. ({data["total"] / 100:.0f}₽)\n'
+                text += f'• {name}: {data["count"]} шт. ({data["total"] / 100:.0f} تومان)\n'
 
         return text
 

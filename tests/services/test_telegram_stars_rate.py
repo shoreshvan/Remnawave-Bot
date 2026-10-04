@@ -1,18 +1,22 @@
-"""Regression tests for the Telegram Stars ↔ rubles conversion rate.
+"""Regression tests for the Telegram Stars ↔ home-currency conversion rate.
 
-The bug from 2026-05-16: with default rate=1.3 ₽/⭐, asking the bot to
-top up 150 ₽ produced a quote of 115 ⭐ (round(150/1.3)=115), and the
-return-conversion credited 115 × 1.3 = 149.50 ₽. The user paid for
-150 ₽ worth of stars and got 149.50 ₽ credited — a built-in rounding
-loss on every transaction, plus the rate itself was ~30% below
-Telegram's actual cash-out rate (~0.95–1.0 ₽/⭐).
+Home currency is Toman. `TELEGRAM_STARS_RATE_RUB` is Toman-per-⭐ (the
+`_RUB` suffix is kept only for env / system-setting back-compat; the
+value is home-currency units, not rubles). `rubles_to_stars` /
+`stars_to_rubles` are currency-agnostic — they divide/multiply by the
+rate — so the historical rounding bug they guard against still matters.
+
+The bug from 2026-05-16: with a rate of 1.3, asking the bot to top up
+150 units produced a quote of 115 ⭐ (round(150/1.3)=115), and the
+return-conversion credited 115 × 1.3 = 149.50 — a built-in rounding
+loss on every transaction.
 
 These tests pin:
-  1. The default rate stays 1.0 (matches market, eliminates the loss
-     for integer-ruble round-trips).
-  2. Common integer ruble amounts round-trip losslessly at the default
-     rate. If someone changes the default to >1 again, these tests
-     fail with the exact ruble loss highlighted.
+  1. The default rate is 4000.0 (Toman per ⭐ — an operator pricing
+     decision, tunable via env / admin panel).
+  2. An amount that is a whole multiple of the rate round-trips
+     losslessly. The parametrized case runs at rate=1.0 to exercise
+     that integer-multiple invariant directly.
 """
 
 from __future__ import annotations
@@ -22,19 +26,18 @@ import pytest
 from app.config import Settings, settings
 
 
-def test_default_stars_rate_is_one_ruble_per_star() -> None:
-    """REGRESSION: default rate must stay at 1.0 ₽/⭐.
+def test_default_stars_rate_is_toman_per_star() -> None:
+    """REGRESSION: default rate is the operator's Toman-per-⭐ price.
 
-    Lower → users get over-credited (bot loses money — but Telegram
-    actually pays bot owners ~0.95 ₽/⭐ on withdrawal, so the floor is
-    around there).
-    Higher → users get under-credited (the original 1.3-default bug:
-    150 ₽ top-up credited as 149.50 ₽).
+    Home currency is Toman; the default is 4000 Toman per star (tunable
+    via env / admin panel). Pinned so an accidental edit back to a
+    ruble-era value (1.0, 1.3) can't silently ship and mis-price every
+    Stars top-up.
     """
     default_rate = Settings.model_fields['TELEGRAM_STARS_RATE_RUB'].default
-    assert default_rate == 1.0, (
-        f'Default TELEGRAM_STARS_RATE_RUB must be 1.0 to match Telegram cash-out and '
-        f'round-trip losslessly. Got {default_rate!r}.'
+    assert default_rate == 4000.0, (
+        f'Default TELEGRAM_STARS_RATE_RUB must be 4000.0 (Toman per ⭐). '
+        f'Got {default_rate!r}.'
     )
 
 

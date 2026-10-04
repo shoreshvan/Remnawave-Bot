@@ -58,13 +58,13 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
 
     try:
         current_rate = await currency_converter.get_usd_to_rub_rate()
-        rate_text = texts.t('CRYPTOBOT_CURRENT_RATE', '💱 Текущий курс: 1 USD = {rate} ₽').format(
+        rate_text = texts.t('CRYPTOBOT_CURRENT_RATE', '💱 Текущий курс: 1 USD = {rate} تومان').format(
             rate=f'{current_rate:.2f}'
         )
     except Exception as e:
         logger.warning('Не удалось получить курс валют', error=e)
         current_rate = 95.0
-        rate_text = texts.t('CRYPTOBOT_RATE_APPROX', '💱 Курс: 1 USD ≈ {rate} ₽').format(
+        rate_text = texts.t('CRYPTOBOT_RATE_APPROX', '💱 Курс: 1 USD ≈ {rate} تومان').format(
             rate=f'{current_rate:.0f}'
         )
 
@@ -74,7 +74,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
     message_text = texts.t(
         'CRYPTOBOT_TOPUP_PROMPT',
         '🪙 <b>Пополнение криптовалютой</b>\n\n'
-        'Введите сумму для пополнения от 100 до 100,000 ₽:\n\n'
+        'Введите сумму для пополнения от 100 до 100,000 تومان:\n\n'
         '💰 Доступные активы: {assets}\n'
         '⚡ Мгновенное зачисление на баланс\n'
         '🔒 Безопасная оплата через CryptoBot\n\n'
@@ -140,7 +140,7 @@ async def process_cryptobot_payment_amount(
         await message.answer(
             texts.t(
                 'CRYPTOBOT_MIN_AMOUNT',
-                'Минимальная сумма пополнения: 100 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+                'Минимальная сумма пополнения: 100 تومان\n\nОтправьте новую сумму пополнения числом в сообщении.',
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -150,7 +150,7 @@ async def process_cryptobot_payment_amount(
         await message.answer(
             texts.t(
                 'CRYPTOBOT_MAX_AMOUNT',
-                'Максимальная сумма пополнения: 100,000 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+                'Максимальная сумма пополнения: 100,000 تومان\n\nОтправьте новую сумму пополнения числом в сообщении.',
             ),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -174,7 +174,7 @@ async def process_cryptobot_payment_amount(
                 texts.t(
                     'CRYPTOBOT_MIN_USD',
                     '❌ Минимальная сумма для оплаты в USD: 1.00 USD\n\n'
-                    'Отправьте новую сумму пополнения в рублях числом в сообщении.',
+                    'Отправьте новую сумму пополнения в تومان числом в сообщении.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language),
             )
@@ -185,7 +185,7 @@ async def process_cryptobot_payment_amount(
                 texts.t(
                     'CRYPTOBOT_MAX_USD',
                     '❌ Максимальная сумма для оплаты в USD: 1,000 USD\n\n'
-                    'Отправьте новую сумму пополнения в рублях числом в сообщении.',
+                    'Отправьте новую сумму пополнения в تومان числом в сообщении.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language),
             )
@@ -199,7 +199,7 @@ async def process_cryptobot_payment_amount(
             amount_usd=amount_usd,
             asset=settings.CRYPTOBOT_DEFAULT_ASSET,
             description=texts.t(
-                'CRYPTOBOT_PAYMENT_DESCRIPTION', 'Пополнение баланса на {rubles:.0f} ₽ ({usd:.2f} USD)'
+                'CRYPTOBOT_PAYMENT_DESCRIPTION', 'Пополнение баланса на {rubles:.0f} تومان ({usd:.2f} USD)'
             ).format(rubles=amount_rubles, usd=amount_usd),
             payload=f'balance_{db_user.id}_{amount_kopeks}',
         )
@@ -260,10 +260,10 @@ async def process_cryptobot_payment_amount(
             texts.t(
                 'CRYPTOBOT_INVOICE_INSTRUCTIONS',
                 '🪙 <b>Оплата криптовалютой</b>\n\n'
-                '💰 Сумма к зачислению: {amount} ₽\n'
+                '💰 Сумма к зачислению: {amount} تومان\n'
                 '💵 К оплате: {usd} USD\n'
                 '🪙 Актив: {asset}\n'
-                '💱 Курс: 1 USD = {rate} ₽\n'
+                '💱 Курс: 1 USD = {rate} تومان\n'
                 '🆔 ID платежа: {invoice_id}...\n\n'
                 '📱 <b>Инструкция:</b>\n'
                 "1. Нажмите кнопку 'Оплатить'\n"

@@ -516,7 +516,7 @@ class PromoCodeService:
 
             balance_bonus_rubles = promocode.balance_bonus_kopeks / 100
             effects.append(
-                texts.t('PROMOCODE_EFFECT_BALANCE_ADDED', '💰 Баланс пополнен на {amount}₽').format(
+                texts.t('PROMOCODE_EFFECT_BALANCE_ADDED', '💰 Баланс пополнен на {amount} تومان').format(
                     amount=balance_bonus_rubles
                 )
             )

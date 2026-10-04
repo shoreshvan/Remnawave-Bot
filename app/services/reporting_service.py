@@ -604,7 +604,7 @@ class ReportingService:
 
     def _format_amount(self, amount_kopeks: int) -> str:
         rubles = (amount_kopeks or 0) / 100
-        return f'{rubles:,.2f} ₽'.replace(',', ' ')
+        return f'{rubles:,.2f} تومان'.replace(',', ' ')
 
 
 reporting_service = ReportingService()

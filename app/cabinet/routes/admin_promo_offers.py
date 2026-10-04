@@ -580,7 +580,7 @@ def _build_default_promo_message(
         bonus_rub = bonus_amount_kopeks / 100
         lines.append(
             get_texts()
-            .t('CABINET_PROMO_OFFER_MSG_BONUS', '💰 Бонус <b>{bonus_rub:.0f}₽</b> на баланс')
+            .t('CABINET_PROMO_OFFER_MSG_BONUS', '💰 Бонус <b>{bonus_rub:.0f} تومان</b> на баланс')
             .format(bonus_rub=bonus_rub)
         )
 

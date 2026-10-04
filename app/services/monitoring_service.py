@@ -2792,8 +2792,8 @@ class MonitoringService:
                     message = texts.get(
                         'LOW_BALANCE_ALERT',
                         '⚠️ <b>Низкий баланс</b>\n\n'
-                        'Ваш баланс: {balance} ₽\n'
-                        'Порог уведомления: {threshold} ₽\n\n'
+                        'Ваш баланс: {balance} تومان\n'
+                        'Порог уведомления: {threshold} تومان\n\n'
                         'Пополните баланс, чтобы автопродление подписки прошло успешно.',
                     )
                     message = message.format(

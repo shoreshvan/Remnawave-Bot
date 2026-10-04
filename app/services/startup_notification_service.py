@@ -102,8 +102,8 @@ def _number(value: int | None) -> str:
 
 
 def _rubles(kopeks: int | None) -> str:
-    """Рубли целиком: «24.0K RUB» читался хуже, чем «24 012 ₽»."""
-    return NO_VALUE if kopeks is None else f'{_number(kopeks // KOPEKS_IN_RUBLE)} ₽'
+    """Рубли целиком: «24.0K RUB» читался хуже, чем «24 012 تومان»."""
+    return NO_VALUE if kopeks is None else f'{_number(kopeks // KOPEKS_IN_RUBLE)} تومان'
 
 
 def _panel_line(stats: _StartupStats) -> str:
@@ -388,7 +388,7 @@ class StartupNotificationService:
             return False, texts.t('STARTUP_REMNAWAVE_CONNECTION_ERROR', 'ошибка подключения'), None
 
     def _format_balance(self, kopeks: int) -> str:
-        """Форматирует баланс в рублях."""
+        """Форматирует баланс в تومان."""
         rubles = kopeks / KOPEKS_IN_RUBLE
         if rubles >= MILLION:
             return f'{rubles / MILLION:.2f}M RUB'

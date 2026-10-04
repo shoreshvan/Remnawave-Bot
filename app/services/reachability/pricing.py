@@ -7,7 +7,7 @@ DEFAULT_VLESS_LEG_KOPEKS = 110  # наблюдалось 103 на gold (−7 %);
 
 
 def format_rubles(kopeks: int) -> str:
-    return f'{kopeks // 100},{kopeks % 100:02d} ₽'
+    return f'{kopeks // 100},{kopeks % 100:02d} تومان'
 
 
 class CostLimitExceeded(Exception):

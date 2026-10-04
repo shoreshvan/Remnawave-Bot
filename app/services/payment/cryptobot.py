@@ -283,7 +283,7 @@ class CryptoBotPaymentMixin:
                     amount_kopeks=amount_kopeks,
                     description=(
                         'Пополнение через CryptoBot '
-                        f'({updated_payment.amount} {updated_payment.asset} → {amount_rubles_rounded:.2f}₽)'
+                        f'({updated_payment.amount} {updated_payment.asset} → {amount_rubles_rounded:.2f} تومان)'
                     ),
                     payment_method=PaymentMethod.CRYPTOBOT,
                     external_id=invoice_id,
@@ -373,7 +373,7 @@ class CryptoBotPaymentMixin:
                             '✅ <b>Пополнение успешно!</b>\n\n'
                             '💰 Сумма: {amount}\n'
                             '🪙 Платеж: {paid_amount} {asset}\n'
-                            '💱 Курс: 1 USD = {rate}₽\n'
+                            '💱 Курс: 1 USD = {rate} تومان\n'
                             '🆔 Транзакция: {invoice_id}...\n\n'
                             'Баланс пополнен автоматически!',
                         ).format(

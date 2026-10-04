@@ -701,7 +701,7 @@ async def switch_traffic_package(
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=get_texts()
-                .t('CABINET_TRAFFIC_INSUFFICIENT_BALANCE_SWITCH', 'Insufficient balance. Need {amount:.2f} RUB')
+                .t('CABINET_TRAFFIC_INSUFFICIENT_BALANCE_SWITCH', 'Insufficient balance. Need {amount:.2f} تومان')
                 .format(amount=final_price / 100),
             )
 

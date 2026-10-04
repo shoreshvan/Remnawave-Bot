@@ -31,7 +31,7 @@ logger = structlog.get_logger(__name__)
 
 def _build_server_edit_view(server):
     status_emoji = '✅ Доступен' if server.is_available else '❌ Недоступен'
-    price_text = f'{int(server.price_rubles)} ₽' if server.price_kopeks > 0 else 'Бесплатно'
+    price_text = f'{int(server.price_rubles)} تومان' if server.price_kopeks > 0 else 'Бесплатно'
     promo_groups_text = (
         ', '.join(sorted(pg.name for pg in server.allowed_promo_groups))
         if server.allowed_promo_groups
@@ -202,7 +202,7 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
         for i, server in enumerate(servers, 1 + (page - 1) * 10):
             status_emoji = '✅' if server.is_available else '❌'
             price_text = (
-                f'{int(server.price_rubles)} ₽'
+                f'{int(server.price_rubles)} تومان'
                 if server.price_kopeks > 0
                 else texts.t('ADMIN_SERVERS_FREE', 'Бесплатно')
             )
@@ -607,7 +607,7 @@ async def start_server_edit_price(callback: types.CallbackQuery, state: FSMConte
     await state.set_state(AdminStates.editing_server_price)
 
     current_price = (
-        f'{int(server.price_rubles)} ₽' if server.price_kopeks > 0 else texts.t('ADMIN_SERVERS_FREE', 'Бесплатно')
+        f'{int(server.price_rubles)} تومان' if server.price_kopeks > 0 else texts.t('ADMIN_SERVERS_FREE', 'Бесплатно')
     )
 
     await callback.message.edit_text(
@@ -615,7 +615,7 @@ async def start_server_edit_price(callback: types.CallbackQuery, state: FSMConte
             'ADMIN_SERVERS_EDIT_PRICE_PROMPT',
             '💰 <b>Редактирование цены</b>\n\n'
             'Текущая цена: <b>{price}</b>\n\n'
-            'Отправьте новую цену в рублях (например: 15.50) или 0 для бесплатного доступа:',
+            'Отправьте новую цену в تومان (например: 15.50) или 0 для бесплатного доступа:',
         ).format(price=current_price),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
@@ -648,7 +648,7 @@ async def process_server_price_edit(message: types.Message, state: FSMContext, d
 
         if price_rubles > 10000:
             await message.answer(
-                texts.t('ADMIN_SERVERS_PRICE_TOO_HIGH', '❌ Слишком высокая цена (максимум 10,000 ₽)')
+                texts.t('ADMIN_SERVERS_PRICE_TOO_HIGH', '❌ Слишком высокая цена (максимум 10,000 تومان)')
             )
             return
 
@@ -662,7 +662,7 @@ async def process_server_price_edit(message: types.Message, state: FSMContext, d
             await cache.delete_pattern('available_countries*')
 
             price_text = (
-                f'{int(price_rubles)} ₽' if price_kopeks > 0 else texts.t('ADMIN_SERVERS_FREE', 'Бесплатно')
+                f'{int(price_rubles)} تومان' if price_kopeks > 0 else texts.t('ADMIN_SERVERS_FREE', 'Бесплатно')
             )
             await message.answer(
                 texts.t('ADMIN_SERVERS_PRICE_UPDATED', '✅ Цена сервера изменена на: <b>{price}</b>').format(
@@ -909,7 +909,7 @@ async def show_server_detailed_stats(callback: types.CallbackQuery, db_user: Use
 
     for i, server in enumerate(sorted_servers[:5], 1):
         price_text = (
-            f'{int(server.price_rubles)} ₽' if server.price_kopeks > 0 else texts.t('ADMIN_SERVERS_FREE', 'Бесплатно')
+            f'{int(server.price_rubles)} تومان' if server.price_kopeks > 0 else texts.t('ADMIN_SERVERS_FREE', 'Бесплатно')
         )
         text += f'{i}. {html.escape(server.display_name)} - {price_text}\n'
 

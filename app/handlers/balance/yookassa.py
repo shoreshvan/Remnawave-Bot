@@ -51,7 +51,7 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
 
     message_text = (
         f'💳 <b>Оплата банковской картой</b>\n\n'
-        f'Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:'
+        f'Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} تومان:'
     )
 
     keyboard = await get_topup_amount_keyboard('yookassa', db_user.language, back_callback='back_to_menu')
@@ -97,7 +97,7 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
 
     message_text = (
         f'🏦 <b>Оплата через СБП</b>\n\n'
-        f'Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} рублей:'
+        f'Введите сумму для пополнения от {min_amount_rub:.0f} до {max_amount_rub:,.0f} تومان:'
     )
 
     keyboard = await get_topup_amount_keyboard('yookassa_sbp', db_user.language, back_callback='back_to_menu')
@@ -146,11 +146,11 @@ async def process_yookassa_payment_amount(
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
         min_rubles = f'{settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
         example_rubles = max(1, (settings.YOOKASSA_MIN_AMOUNT_KOPEKS + 99) // 100)
-        retry_hint = f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_rubles} ₽.'
+        retry_hint = f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_rubles} تومان.'
         if example_rubles <= 50000 and example_rubles * 100 <= settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
             retry_hint += f'\n\nНапример, отправьте: {example_rubles}'
         await message.answer(
-            f'❌ Минимальная сумма пополнения картой — {min_rubles} ₽.\n\n{retry_hint}',
+            f'❌ Минимальная сумма пополнения картой — {min_rubles} تومان.\n\n{retry_hint}',
             reply_markup=get_back_keyboard(db_user.language),
         )
         return
@@ -158,8 +158,8 @@ async def process_yookassa_payment_amount(
     if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
         max_rubles = f'{settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
         await message.answer(
-            f'❌ Максимальная сумма пополнения картой — {max_rubles} ₽.\n\n'
-            f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_rubles} ₽.',
+            f'❌ Максимальная сумма пополнения картой — {max_rubles} تومان.\n\n'
+            f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_rubles} تومان.',
             reply_markup=get_back_keyboard(db_user.language),
         )
         return
@@ -306,11 +306,11 @@ async def process_yookassa_sbp_payment_amount(
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
         min_rubles = f'{settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
         example_rubles = max(1, (settings.YOOKASSA_MIN_AMOUNT_KOPEKS + 99) // 100)
-        retry_hint = f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_rubles} ₽.'
+        retry_hint = f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_rubles} تومان.'
         if example_rubles <= 50000 and example_rubles * 100 <= settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
             retry_hint += f'\n\nНапример, отправьте: {example_rubles}'
         await message.answer(
-            f'❌ Минимальная сумма пополнения через СБП — {min_rubles} ₽.\n\n{retry_hint}',
+            f'❌ Минимальная сумма пополнения через СБП — {min_rubles} تومان.\n\n{retry_hint}',
             reply_markup=get_back_keyboard(db_user.language),
         )
         return
@@ -318,8 +318,8 @@ async def process_yookassa_sbp_payment_amount(
     if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
         max_rubles = f'{settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
         await message.answer(
-            f'❌ Максимальная сумма пополнения через СБП — {max_rubles} ₽.\n\n'
-            f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_rubles} ₽.',
+            f'❌ Максимальная сумма пополнения через СБП — {max_rubles} تومان.\n\n'
+            f'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_rubles} تومان.',
             reply_markup=get_back_keyboard(db_user.language),
         )
         return

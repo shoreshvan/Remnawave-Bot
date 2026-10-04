@@ -672,7 +672,7 @@ async def start_edit_campaign_balance_bonus(
             'CAMPAIGN_EDIT_BALANCE_PROMPT',
             '💰 <b>Изменение бонуса на баланс</b>\n\n'
             'Текущий бонус: <b>{bonus}</b>\n'
-            'Введите новую сумму в рублях (например, 100 или 99.5):',
+            'Введите новую сумму в تومان (например, 100 или 99.5):',
         ).format(bonus=texts.format_price(campaign.balance_bonus_kopeks)),
         reply_markup=types.InlineKeyboardMarkup(
             inline_keyboard=[
@@ -1485,7 +1485,7 @@ async def select_campaign_bonus_type(
     if bonus_type == 'balance':
         await state.set_state(AdminStates.creating_campaign_balance)
         await callback.message.edit_text(
-            texts.t('CAMPAIGN_CREATE_BALANCE_PROMPT', '💰 Введите сумму бонуса на баланс (в рублях):'),
+            texts.t('CAMPAIGN_CREATE_BALANCE_PROMPT', '💰 Введите сумму бонуса на баланс (в تومان):'),
             reply_markup=types.InlineKeyboardMarkup(
                 inline_keyboard=[[types.InlineKeyboardButton(
                     text=texts.t('CAMPAIGN_BTN_BACK', '⬅️ Назад'), callback_data='admin_campaigns'

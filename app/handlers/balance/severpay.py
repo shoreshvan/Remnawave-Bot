@@ -94,7 +94,7 @@ async def _create_severpay_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        '💳 Оплатить {amount}₽',
+                        '💳 Оплатить {amount} تومان',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                 )
@@ -111,7 +111,7 @@ async def _create_severpay_payment_and_respond(
     response_text = texts.t(
         'SEVERPAY_PAYMENT_CREATED',
         '💳 <b>Оплата через {name}</b>\n\n'
-        'Сумма: <b>{amount}₽</b>\n\n'
+        'Сумма: <b>{amount} تومان</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
     ).format(name=display_name, amount=f'{amount_rub:.2f}')
@@ -167,7 +167,7 @@ async def process_severpay_payment_amount(
         await message.answer(
             texts.t(
                 'PAYMENT_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount}₽',
+                'Минимальная сумма пополнения: {min_amount} تومان',
             ).format(min_amount=min_amount // 100),
             reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
@@ -178,7 +178,7 @@ async def process_severpay_payment_amount(
         await message.answer(
             texts.t(
                 'PAYMENT_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount}₽',
+                'Максимальная сумма пополнения: {max_amount} تومان',
             ).format(max_amount=max_amount // 100),
             reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
@@ -234,9 +234,9 @@ async def start_severpay_topup(
         texts.t(
             'SEVERPAY_ENTER_AMOUNT',
             '💳 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в рублях.\n\n'
-            'Минимум: {min_amount}₽\n'
-            'Максимум: {max_amount}₽',
+            'Введите сумму пополнения в تومان.\n\n'
+            'Минимум: {min_amount} تومان\n'
+            'Максимум: {max_amount} تومان',
         ).format(
             name=display_name,
             min_amount=min_amount,

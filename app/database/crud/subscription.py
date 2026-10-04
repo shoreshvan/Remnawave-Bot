@@ -1116,7 +1116,7 @@ def _should_carry_remaining_days(*, is_trial: bool, source_is_free: bool) -> boo
 
 
 async def _is_free_source_tariff(db: AsyncSession, tariff_id: int) -> bool:
-    """True, если исходный тариф полностью бесплатный (0₽).
+    """True, если исходный тариф полностью бесплатный (0 تومان).
 
     Любая ошибка → False (переносим дни как раньше), чтобы смена тарифа никогда
     не падала из-за этой проверки.

@@ -195,7 +195,7 @@ async def process_cashera_payment_amount(
 
     if amount_kopeks < settings.CASHERA_MIN_AMOUNT_KOPEKS:
         await message.answer(
-            texts.t('PAYMENT_AMOUNT_TOO_LOW', 'Минимальная сумма пополнения: {min_amount}₽').format(
+            texts.t('PAYMENT_AMOUNT_TOO_LOW', 'Минимальная сумма пополнения: {min_amount} تومان').format(
                 min_amount=settings.CASHERA_MIN_AMOUNT_KOPEKS // 100
             ),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
@@ -205,7 +205,7 @@ async def process_cashera_payment_amount(
 
     if amount_kopeks > settings.CASHERA_MAX_AMOUNT_KOPEKS:
         await message.answer(
-            texts.t('PAYMENT_AMOUNT_TOO_HIGH', 'Максимальная сумма пополнения: {max_amount}₽').format(
+            texts.t('PAYMENT_AMOUNT_TOO_HIGH', 'Максимальная сумма пополнения: {max_amount} تومان').format(
                 max_amount=settings.CASHERA_MAX_AMOUNT_KOPEKS // 100
             ),
             reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),

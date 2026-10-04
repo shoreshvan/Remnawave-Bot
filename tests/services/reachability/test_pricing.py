@@ -35,5 +35,5 @@ def test_cost_limit_exceeded_carries_numbers() -> None:
 
 
 def test_format_rubles() -> None:
-    assert format_rubles(279) == '2,79 ₽'
-    assert format_rubles(100000) == '1000,00 ₽'
+    assert format_rubles(279) == '2,79 تومان'
+    assert format_rubles(100000) == '1000,00 تومان'

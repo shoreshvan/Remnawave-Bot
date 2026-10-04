@@ -1283,7 +1283,7 @@ async def update_user_balance(
         success=True,
         old_balance_kopeks=old_balance,
         new_balance_kopeks=user.balance_kopeks,
-        message=texts.t('CABINET_USERS_BALANCE_UPDATED', 'Balance updated: {old:.2f}₽ -> {new:.2f}₽').format(
+        message=texts.t('CABINET_USERS_BALANCE_UPDATED', 'Balance updated: {old:.2f} تومان -> {new:.2f} تومان').format(
             old=old_balance / 100, new=user.balance_kopeks / 100
         ),
     )

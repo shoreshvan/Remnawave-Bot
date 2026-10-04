@@ -565,7 +565,7 @@ class UserService:
                     db, user, amount_kopeks, description=description, payment_method=PaymentMethod.MANUAL
                 )
                 logger.info(
-                    'Админ пополнил баланс пользователя на ₽',
+                    'Админ пополнил баланс пользователя на تومان',
                     admin_id=admin_id,
                     user_id=user_id,
                     amount_kopeks=amount_kopeks / 100,
@@ -582,7 +582,7 @@ class UserService:
                 )
                 if success:
                     logger.info(
-                        'Админ списал с баланса пользователя ₽',
+                        'Админ списал с баланса пользователя تومان',
                         admin_id=admin_id,
                         user_id=user_id,
                         value=abs(amount_kopeks) / 100,

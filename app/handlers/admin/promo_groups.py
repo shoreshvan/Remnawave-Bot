@@ -230,7 +230,7 @@ def _format_auto_assign_line(texts, group: PromoGroup) -> str:
     amount = _format_rubles(threshold)
     return texts.t(
         'ADMIN_PROMO_GROUP_AUTO_ASSIGN_LINE',
-        'Автовыдача по суммарным тратам: от {amount} ₽',
+        'Автовыдача по суммарным тратам: от {amount} تومان',
     ).format(amount=amount)
 
 
@@ -765,7 +765,7 @@ async def process_create_group_period_discounts(
         message,
         state,
         'ADMIN_PROMO_GROUP_CREATE_AUTO_ASSIGN_PROMPT',
-        'Введите сумму общих трат (в ₽) для автоматической выдачи этой группы. Отправьте 0, чтобы отключить.',
+        'Введите сумму общих трат (в تومان) для автоматической выдачи этой группы. Отправьте 0, чтобы отключить.',
     )
 
 
@@ -786,7 +786,7 @@ async def process_create_group_auto_assign(
         await message.answer(
             texts.t(
                 'ADMIN_PROMO_GROUP_INVALID_AUTO_ASSIGN',
-                'Введите неотрицательное число в рублях или 0 для отключения.',
+                'Введите неотрицательное число в تومان или 0 для отключения.',
             )
         )
         return
@@ -925,7 +925,7 @@ async def prompt_edit_promo_group_field(
         await state.set_state(AdminStates.editing_promo_group_auto_assign)
         prompt = texts.t(
             'ADMIN_PROMO_GROUP_EDIT_AUTO_ASSIGN_PROMPT',
-            'Введите сумму общих трат (в ₽) для автовыдачи. Текущее значение: {current}.',
+            'Введите сумму общих трат (в تومان) для автовыдачи. Текущее значение: {current}.',
         ).format(current=_format_auto_assign_value(group.auto_assign_total_spent_kopeks))
     else:
         await callback.answer(
@@ -1175,7 +1175,7 @@ async def process_edit_group_auto_assign(
         await message.answer(
             texts.t(
                 'ADMIN_PROMO_GROUP_INVALID_AUTO_ASSIGN',
-                'Введите неотрицательное число в рублях или 0 для отключения.',
+                'Введите неотрицательное число в تومان или 0 для отключения.',
             )
         )
         return

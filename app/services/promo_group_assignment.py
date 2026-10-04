@@ -42,7 +42,7 @@ async def _notify_admins_about_auto_assignment(
             )
             if hasattr(settings, 'format_price')
             else reason_texts.t('PROMO_GROUP_AUTO_ASSIGN_REASON', 'Автоназначение за траты {amount}').format(
-                amount=f'{total_spent_kopeks / 100:.2f}₽'
+                amount=f'{total_spent_kopeks / 100:.2f} تومان'
             )
         )
         await notification_service.send_user_promo_group_change_notification(

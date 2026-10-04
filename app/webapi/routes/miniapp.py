@@ -1374,7 +1374,7 @@ async def create_payment_link(
                 status.HTTP_400_BAD_REQUEST,
                 detail=get_texts().t(
                     'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                    'Amount is below minimum ({amount} RUB)',
+                    'Amount is below minimum ({amount} تومان)',
                 ).format(amount=f'{min_amount_kopeks / 100:.2f}'),
             )
         if amount_kopeks > max_amount_kopeks:
@@ -1382,7 +1382,7 @@ async def create_payment_link(
                 status.HTTP_400_BAD_REQUEST,
                 detail=get_texts().t(
                     'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                    'Amount exceeds maximum ({amount} RUB)',
+                    'Amount exceeds maximum ({amount} تومان)',
                 ).format(amount=f'{max_amount_kopeks / 100:.2f}'),
             )
 
@@ -1457,7 +1457,7 @@ async def create_payment_link(
                 status.HTTP_400_BAD_REQUEST,
                 detail=get_texts().t(
                     'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                    'Amount is below minimum ({amount} RUB)',
+                    'Amount is below minimum ({amount} تومان)',
                 ).format(amount=f'{min_amount_kopeks / 100:.2f}'),
             )
         if amount_kopeks > max_amount_kopeks:
@@ -1465,7 +1465,7 @@ async def create_payment_link(
                 status.HTTP_400_BAD_REQUEST,
                 detail=get_texts().t(
                     'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                    'Amount exceeds maximum ({amount} RUB)',
+                    'Amount exceeds maximum ({amount} تومان)',
                 ).format(amount=f'{max_amount_kopeks / 100:.2f}'),
             )
 
@@ -1519,7 +1519,7 @@ async def create_payment_link(
                 status.HTTP_400_BAD_REQUEST,
                 detail=get_texts().t(
                     'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                    'Amount is below minimum ({amount} RUB)',
+                    'Amount is below minimum ({amount} تومان)',
                 ).format(amount=f'{settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS / 100:.2f}'),
             )
         if amount_kopeks > settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS:
@@ -1527,7 +1527,7 @@ async def create_payment_link(
                 status.HTTP_400_BAD_REQUEST,
                 detail=get_texts().t(
                     'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                    'Amount exceeds maximum ({amount} RUB)',
+                    'Amount exceeds maximum ({amount} تومان)',
                 ).format(amount=f'{settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS / 100:.2f}'),
             )
 
@@ -1577,7 +1577,7 @@ async def create_payment_link(
                 status.HTTP_400_BAD_REQUEST,
                 detail=get_texts().t(
                     'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                    'Amount is below minimum ({amount} RUB)',
+                    'Amount is below minimum ({amount} تومان)',
                 ).format(amount=f'{settings.FREEKASSA_MIN_AMOUNT_KOPEKS / 100:.2f}'),
             )
         if amount_kopeks > settings.FREEKASSA_MAX_AMOUNT_KOPEKS:
@@ -1585,7 +1585,7 @@ async def create_payment_link(
                 status.HTTP_400_BAD_REQUEST,
                 detail=get_texts().t(
                     'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                    'Amount exceeds maximum ({amount} RUB)',
+                    'Amount exceeds maximum ({amount} تومان)',
                 ).format(amount=f'{settings.FREEKASSA_MAX_AMOUNT_KOPEKS / 100:.2f}'),
             )
 
@@ -5968,7 +5968,7 @@ async def submit_subscription_renewal_endpoint(
                     'code': 'amount_below_minimum',
                     'message': get_texts().t(
                         'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                        'Amount is below minimum ({amount} RUB)',
+                        'Amount is below minimum ({amount} تومان)',
                     ).format(amount=f'{min_amount_kopeks / 100:.2f}'),
                 },
             )
@@ -5979,7 +5979,7 @@ async def submit_subscription_renewal_endpoint(
                     'code': 'amount_above_maximum',
                     'message': get_texts().t(
                         'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                        'Amount exceeds maximum ({amount} RUB)',
+                        'Amount exceeds maximum ({amount} تومان)',
                     ).format(amount=f'{max_amount_kopeks / 100:.2f}'),
                 },
             )

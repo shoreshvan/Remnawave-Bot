@@ -108,7 +108,7 @@ class StarsInvoiceRequest(BaseModel):
         ...,
         ge=100,
         le=2_000_000_000,
-        description=get_texts().t('CABINET_STARS_INVOICE_AMOUNT_KOPEKS_DESCRIPTION', 'Amount in kopeks (min 1 ruble)'),
+        description=get_texts().t('CABINET_STARS_INVOICE_AMOUNT_KOPEKS_DESCRIPTION', 'Amount in kopeks (min 1 تومان)'),
     )
 
 

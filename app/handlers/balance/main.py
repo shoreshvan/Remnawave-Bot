@@ -592,7 +592,7 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             await message.answer(
                 texts.t(
                     'BALANCE_MIN_AMOUNT',
-                    'Минимальная сумма пополнения: 1 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+                    'Минимальная сумма пополнения: 1 تومان\n\nОтправьте новую сумму пополнения числом в сообщении.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
@@ -602,7 +602,7 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             await message.answer(
                 texts.t(
                     'BALANCE_MAX_AMOUNT',
-                    'Максимальная сумма пополнения: 50,000 ₽\n\nОтправьте новую сумму пополнения числом в сообщении.',
+                    'Максимальная сумма пополнения: 50,000 تومان\n\nОтправьте новую сумму пополнения числом в сообщении.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )
@@ -618,7 +618,7 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
                 example_rubles = max(1, (settings.YOOKASSA_MIN_AMOUNT_KOPEKS + 99) // 100)
                 retry_hint = texts.t(
                     'BALANCE_YOOKASSA_MIN_RETRY_HINT',
-                    'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_rubles} ₽.',
+                    'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_rubles} تومان.',
                 ).format(min_rubles=min_rubles)
                 if example_rubles <= 50000 and example_rubles * 100 <= settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
                     retry_hint += texts.t(
@@ -627,7 +627,7 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
                 await message.answer(
                     texts.t(
                         'BALANCE_YOOKASSA_MIN',
-                        '❌ Минимальная сумма пополнения через YooKassa — {min_rubles} ₽.\n\n{retry_hint}',
+                        '❌ Минимальная сумма пополнения через YooKassa — {min_rubles} تومان.\n\n{retry_hint}',
                     ).format(min_rubles=min_rubles, retry_hint=retry_hint),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )
@@ -638,8 +638,8 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
                 await message.answer(
                     texts.t(
                         'BALANCE_YOOKASSA_MAX',
-                        '❌ Максимальная сумма пополнения через YooKassa — {max_rubles} ₽.\n\n'
-                        'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_rubles} ₽.',
+                        '❌ Максимальная сумма пополнения через YooKassa — {max_rubles} تومان.\n\n'
+                        'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_rubles} تومان.',
                     ).format(max_rubles=max_rubles),
                     reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 )

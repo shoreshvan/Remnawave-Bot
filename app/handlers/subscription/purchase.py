@@ -387,7 +387,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                         daily_kopeks = raw_daily_kopeks
                     daily_price = daily_kopeks / 100
                     tariff_info_lines.append(
-                        texts.t('TARIFF_INFO_DAILY_PRICE_LINE', 'Цена: {price:.2f} ₽/день').format(
+                        texts.t('TARIFF_INFO_DAILY_PRICE_LINE', 'Цена: {price:.2f} تومان/день').format(
                             price=daily_price
                         )
                     )
@@ -2159,7 +2159,7 @@ async def confirm_extend_subscription(
     await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
     logger.info(
-        '✅ Пользователь продлил подписку на дней за ₽',
+        '✅ Пользователь продлил подписку на дней за تومان',
         telegram_id=db_user.telegram_id,
         days=days,
         price=price / 100,
@@ -2414,10 +2414,10 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
     # --- Price validation: block if price increased significantly vs cached FSM price ---
     price_difference = final_price - cached_total_price
     if price_difference > 0:
-        max_allowed_increase = max(500, int(final_price * 0.05))  # 5% или минимум 5₽
+        max_allowed_increase = max(500, int(final_price * 0.05))  # 5% или минимум 5 تومان
         if price_difference > max_allowed_increase:
             logger.error(
-                'Цена выросла для пользователя кэш=₽, пересчет=₽, разница=+₽ (>₽). Покупка заблокирована.',
+                'Цена выросла для пользователя кэш= تومان, пересчет= تومان, разница=+ تومان (> تومان). Покупка заблокирована.',
                 telegram_id=db_user.telegram_id,
                 cached_total_price=cached_total_price / 100,
                 final_price=final_price / 100,
@@ -2429,16 +2429,16 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 show_alert=True,
             )
             return
-        if price_difference > 100:  # допуск 1₽
+        if price_difference > 100:  # допуск 1 تومان
             logger.warning(
-                'Небольшой рост цены для пользователя кэш=₽, пересчет=₽. Используем пересчитанную цену.',
+                'Небольшой рост цены для пользователя кэш= تومان, пересчет= تومان. Используем пересчитанную цену.',
                 telegram_id=db_user.telegram_id,
                 cached_total_price=cached_total_price / 100,
                 final_price=final_price / 100,
             )
-    elif price_difference < -100:  # цена снизилась более чем на 1₽
+    elif price_difference < -100:  # цена снизилась более чем на 1 تومان
         logger.info(
-            'Цена снизилась для пользователя кэш=₽, пересчет=₽. Применяем новую цену.',
+            'Цена снизилась для пользователя кэш= تومان, пересчет= تومان. Применяем новую цену.',
             telegram_id=db_user.telegram_id,
             cached_total_price=cached_total_price / 100,
             final_price=final_price / 100,
@@ -2451,43 +2451,43 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
     base_discount_percent = details['base_discount_percent']
 
     logger.info('Расчет покупки подписки на дней ( мес)', data=data['period_days'], months_in_period=months_in_period)
-    base_log = f'   Период: {base_price_original / 100}₽'
+    base_log = f'   Период: {base_price_original / 100} تومان'
     if base_discount_total and base_discount_total > 0:
-        base_log += f' → {base_price / 100}₽ (скидка {base_discount_percent}%: -{base_discount_total / 100}₽)'
+        base_log += f' → {base_price / 100} تومان (скидка {base_discount_percent}%: -{base_discount_total / 100} تومان)'
     logger.info(base_log)
     if details['total_traffic_price'] > 0:
         traffic_msg = (
-            f'   Трафик: {details["traffic_price_per_month"] / 100}₽/мес'
-            f' × {months_in_period} = {details["total_traffic_price"] / 100}₽'
+            f'   Трафик: {details["traffic_price_per_month"] / 100} تومان/мес'
+            f' × {months_in_period} = {details["total_traffic_price"] / 100} تومان'
         )
         if details['traffic_discount_total'] > 0:
             traffic_msg += (
-                f' (скидка {details["traffic_discount_percent"]}%: -{details["traffic_discount_total"] / 100}₽)'
+                f' (скидка {details["traffic_discount_percent"]}%: -{details["traffic_discount_total"] / 100} تومان)'
             )
         logger.info(traffic_msg)
     if details['total_servers_price'] > 0:
         servers_msg = (
-            f'   Серверы: {details["servers_price_per_month"] / 100}₽/мес'
-            f' × {months_in_period} = {details["total_servers_price"] / 100}₽'
+            f'   Серверы: {details["servers_price_per_month"] / 100} تومان/мес'
+            f' × {months_in_period} = {details["total_servers_price"] / 100} تومان'
         )
         if details['servers_discount_total'] > 0:
             servers_msg += (
-                f' (скидка {details["servers_discount_percent"]}%: -{details["servers_discount_total"] / 100}₽)'
+                f' (скидка {details["servers_discount_percent"]}%: -{details["servers_discount_total"] / 100} تومان)'
             )
         logger.info(servers_msg)
     if details['total_devices_price'] > 0:
         devices_msg = (
-            f'   Устройства: {details["devices_price_per_month"] / 100}₽/мес'
-            f' × {months_in_period} = {details["total_devices_price"] / 100}₽'
+            f'   Устройства: {details["devices_price_per_month"] / 100} تومان/мес'
+            f' × {months_in_period} = {details["total_devices_price"] / 100} تومان'
         )
         if details['devices_discount_total'] > 0:
             devices_msg += (
-                f' (скидка {details["devices_discount_percent"]}%: -{details["devices_discount_total"] / 100}₽)'
+                f' (скидка {details["devices_discount_percent"]}%: -{details["devices_discount_total"] / 100} تومان)'
             )
         logger.info(devices_msg)
     if promo_offer_discount_value > 0:
         logger.info(
-            'Промо-предложение: -₽ (%)',
+            'Промо-предложение: - تومان (%)',
             promo_offer_discount_value=promo_offer_discount_value / 100,
             promo_offer_discount_percent=promo_offer_discount_percent,
         )
@@ -2622,7 +2622,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                         first_paid_period_days=period_days,
                     )
                     logger.info(
-                        'Записана конверсия: дн. триал → дн. платная за ₽',
+                        'Записана конверсия: дн. триал → дн. платная за تومان',
                         trial_duration=trial_duration,
                         period_days=period_days,
                         final_price=final_price / 100,
@@ -2975,7 +2975,7 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
 
         purchase_completed = True
         logger.info(
-            'Пользователь купил подписку на дней за ₽',
+            'Пользователь купил подписку на дней за تومان',
             telegram_id=db_user.telegram_id,
             data=data['period_days'],
             final_price=final_price / 100,
@@ -5013,7 +5013,7 @@ async def _extend_existing_subscription(
     await callback.message.edit_text(success_message, reply_markup=get_back_keyboard(db_user.language))
 
     logger.info(
-        '✅ Пользователь продлил подписку на дней за ₽',
+        '✅ Пользователь продлил подписку на дней за تومان',
         telegram_id=db_user.telegram_id,
         period_days=period_days,
         price_kopeks=price_kopeks / 100,

@@ -530,13 +530,13 @@ async def get_traffic_packages_info() -> str:
             info_lines.append('\n✅ Активные:')
             for pkg in enabled_packages:
                 gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                info_lines.append(f'   • {gb_text}: {pkg["price"] // 100}₽')
+                info_lines.append(f'   • {gb_text}: {pkg["price"] // 100} تومان')
 
         if disabled_packages:
             info_lines.append('\n❌ Отключенные:')
             for pkg in disabled_packages:
                 gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                info_lines.append(f'   • {gb_text}: {pkg["price"] // 100}₽')
+                info_lines.append(f'   • {gb_text}: {pkg["price"] // 100} تومان')
 
         info_lines.append(f'\n📊 Всего пакетов: {len(packages)}')
         info_lines.append(f'🟢 Активных: {len(enabled_packages)}')
@@ -1178,7 +1178,7 @@ async def execute_switch_traffic(
         await callback.message.edit_text(success_text, reply_markup=get_back_keyboard(db_user.language))
 
         logger.info(
-            '✅ Пользователь переключил трафик с на доплата: ₽',
+            '✅ Пользователь переключил трафик с на доплата: تومان',
             telegram_id=db_user.telegram_id,
             current_traffic=current_traffic,
             new_traffic_gb=new_traffic_gb,

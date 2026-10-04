@@ -2596,7 +2596,7 @@ async def test_payment_provider(
             asset=settings.CRYPTOBOT_DEFAULT_ASSET,
             description=texts.t(
                 'BOT_CONFIG_PAY_CRYPTOBOT_TEST_DESC',
-                'Тестовый платеж CryptoBot {rubles:.0f} ₽ ({usd:.2f} USD)',
+                'Тестовый платеж CryptoBot {rubles:.0f} تومان ({usd:.2f} USD)',
             ).format(rubles=amount_rubles, usd=amount_usd),
             payload=f'admin_cryptobot_test_{db_user.id}_{int(time.time())}',
         )

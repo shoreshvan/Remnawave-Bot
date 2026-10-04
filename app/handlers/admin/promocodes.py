@@ -487,7 +487,7 @@ async def start_edit_promocode_amount(callback: types.CallbackQuery, db_user: Us
     text = texts.t(
         'ADMIN_PROMO_EDIT_AMOUNT_PROMPT',
         '\n💰 <b>Изменение суммы бонуса промокода</b>\n\n'
-        'Введите новую сумму в рублях:\n<i>Например: 500</i>\n\n'
+        'Введите новую сумму в تومان:\n<i>Например: 500</i>\n\n'
         'ID промокода: {promo_id}\n',
     ).format(promo_id=promo_id)
 
@@ -656,7 +656,7 @@ async def process_promocode_code(message: types.Message, db_user: User, state: F
         await message.answer(
             texts.t(
                 'ADMIN_PROMO_ENTER_BALANCE',
-                '💰 <b>Промокод:</b> <code>{code}</code>\n\nВведите сумму пополнения баланса (в рублях):',
+                '💰 <b>Промокод:</b> <code>{code}</code>\n\nВведите сумму пополнения баланса (в تومان):',
             ).format(code=code)
         )
         await state.set_state(AdminStates.setting_promocode_value)
@@ -665,7 +665,7 @@ async def process_promocode_code(message: types.Message, db_user: User, state: F
             texts.t(
                 'ADMIN_PROMO_ENTER_COMBO_STEP1',
                 '💰📅 <b>Промокод:</b> <code>{code}</code>\n\n'
-                'Шаг 1 из 2: введите сумму пополнения баланса (в рублях), '
+                'Шаг 1 из 2: введите сумму пополнения баланса (в تومان), '
                 'дни подписки спрошу следующим шагом:',
             ).format(code=code)
         )
@@ -795,7 +795,7 @@ async def process_promocode_value(message: types.Message, db_user: User, state: 
         promo_type = data.get('promocode_type')
 
         if promo_type in ['balance', 'combo'] and (value < 1 or value > 10000):
-            await message.answer(texts.t('ADMIN_PROMO_ERROR_AMOUNT_RANGE', '❌ Сумма должна быть от 1 до 10,000 рублей'))
+            await message.answer(texts.t('ADMIN_PROMO_ERROR_AMOUNT_RANGE', '❌ Сумма должна быть от 1 до 10,000 تومان'))
             return
         if promo_type in ['days', 'trial'] and (value < 1 or value > 3650):
             await message.answer(texts.t('ADMIN_PROMO_ERROR_DAYS_RANGE', '❌ Количество дней должно быть от 1 до 3650'))
@@ -866,13 +866,13 @@ async def handle_edit_value(message: types.Message, db_user: User, state: FSMCon
         if edit_action == 'amount':
             if value < 1 or value > 10000:
                 await message.answer(
-                    texts.t('ADMIN_PROMO_ERROR_AMOUNT_RANGE', '❌ Сумма должна быть от 1 до 10,000 рублей')
+                    texts.t('ADMIN_PROMO_ERROR_AMOUNT_RANGE', '❌ Сумма должна быть от 1 до 10,000 تومان')
                 )
                 return
 
             await update_promocode(db, promo, balance_bonus_kopeks=value * 100)
             await message.answer(
-                texts.t('ADMIN_PROMO_AMOUNT_CHANGED', '✅ Сумма бонуса изменена на {value}₽').format(value=value),
+                texts.t('ADMIN_PROMO_AMOUNT_CHANGED', '✅ Сумма бонуса изменена на {value} تومان').format(value=value),
                 reply_markup=types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [

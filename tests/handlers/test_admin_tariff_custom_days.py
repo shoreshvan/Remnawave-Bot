@@ -116,7 +116,7 @@ def test_tariff_card_shows_custom_days_block_and_entry() -> None:
 
     assert '<b>Произвольные дни:</b>' in rendered
     assert '✅ Включено' in rendered
-    assert 'Цена за 1 день: 15 ₽' in rendered
+    assert 'Цена за 1 день: 15 تومان' in rendered
     assert 'Минимум: 3 дн.' in rendered and 'Максимум: 90 дн.' in rendered
     assert 'admin_tariff_edit_custom_days:7' in callbacks
 

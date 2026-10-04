@@ -340,7 +340,7 @@ async def process_coupon_batch_name(message: types.Message, db_user: User, state
     await message.answer(
         texts.t(
             'ADMIN_COUPONS_ENTER_PRICE',
-            '💰 Введите оптовую цену за купон в рублях — только для учёта (0 — не указывать):',
+            '💰 Введите оптовую цену за купон в تومان — только для учёта (0 — не указывать):',
         ),
         reply_markup=_CANCEL_KEYBOARD,
     )
@@ -362,7 +362,7 @@ async def process_coupon_batch_price(message: types.Message, db_user: User, stat
     # Inverted range check: also rejects NaN (all comparisons with NaN are False)
     if not 0 <= rubles <= MAX_WHOLESALE_PRICE_RUBLES:
         await message.answer(
-            texts.t('ADMIN_COUPONS_PRICE_RANGE', '❌ Цена должна быть от 0 до {max_price} рублей').format(
+            texts.t('ADMIN_COUPONS_PRICE_RANGE', '❌ Цена должна быть от 0 до {max_price} تومان').format(
                 max_price=MAX_WHOLESALE_PRICE_RUBLES
             ),
             reply_markup=_CANCEL_KEYBOARD,

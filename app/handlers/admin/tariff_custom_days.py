@@ -194,7 +194,7 @@ async def start_edit_custom_days_price(
         current_value=_price(getattr(tariff, 'price_per_day_kopeks', None)),
         prompt=texts.t(
             'ADMIN_TARIFF_CD_PRICE_PROMPT',
-            'Введите цену за 1 день в рублях.\nПример: <code>15</code> или <code>12.50</code>',
+            'Введите цену за 1 день в تومان.\nПример: <code>15</code> или <code>12.50</code>',
         ),
     )
 
@@ -276,7 +276,7 @@ async def process_custom_days_price_input(message: types.Message, db_user: User,
         await message.answer(
             texts.t(
                 'ADMIN_TARIFF_CD_PRICE_INVALID',
-                '❌ Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\n'
+                '❌ Некорректная цена. Введите положительную сумму в تومان с точностью не более двух знаков.\n'
                 'Пример: <code>15</code> или <code>12.50</code>',
             ),
             parse_mode='HTML',

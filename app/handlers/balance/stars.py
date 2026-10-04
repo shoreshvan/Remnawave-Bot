@@ -147,7 +147,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
                 '⭐ <b>Оплата через Telegram Stars</b>\n\n'
                 '💰 Сумма: {amount}\n'
                 '⭐ К оплате: {stars} звезд\n'
-                '📊 Курс: {rate}₽ за звезду\n\n'
+                '📊 Курс: {rate} تومان за звезду\n\n'
                 'Нажмите кнопку ниже для оплаты:',
             ).format(
                 amount=texts.format_price(amount_kopeks),

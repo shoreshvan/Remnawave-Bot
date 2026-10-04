@@ -2670,7 +2670,7 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
 
         if abs(amount_kopeks) > 10000000:
             await message.answer(
-                texts.t('ADMIN_BALANCE_EDIT_TOO_LARGE', '❌ Слишком большая сумма (максимум 100,000 ₽)')
+                texts.t('ADMIN_BALANCE_EDIT_TOO_LARGE', '❌ Слишком большая сумма (максимум 100,000 تومان)')
             )
             return
 
@@ -2681,11 +2681,11 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
         ).format(name=db_user.full_name)
         if amount_kopeks > 0:
             description = texts.t(
-                'ADMIN_BALANCE_TX_DESC_TOPUP', 'Пополнение администратором: +{amount} ₽'
+                'ADMIN_BALANCE_TX_DESC_TOPUP', 'Пополнение администратором: +{amount} تومان'
             ).format(amount=int(amount_rubles))
         else:
             description = texts.t(
-                'ADMIN_BALANCE_TX_DESC_WITHDRAW', 'Списание администратором: {amount} ₽'
+                'ADMIN_BALANCE_TX_DESC_WITHDRAW', 'Списание администратором: {amount} تومان'
             ).format(amount=int(amount_rubles))
 
         success = await user_service.update_user_balance(

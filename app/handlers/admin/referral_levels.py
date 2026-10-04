@@ -64,9 +64,9 @@ _TRIGGER_CYCLE = [
 # Поля, которые правятся вводом числа: подпись, единица, максимум.
 _NUMERIC_FIELDS = {
     'referrer_percent': ('Процент пригласившему', '%', 100),
-    'referrer_fixed_kopeks': ('Фикс. сумма пригласившему', '₽', None),
+    'referrer_fixed_kopeks': ('Фикс. сумма пригласившему', ' تومان', None),
     'referrer_days': ('Дни пригласившему', 'дн.', 3650),
-    'referee_fixed_kopeks': ('Фикс. сумма приглашённому', '₽', None),
+    'referee_fixed_kopeks': ('Фикс. сумма приглашённому', ' تومان', None),
     'referee_days': ('Дни приглашённому', 'дн.', 3650),
     'max_payments': ('Лимит оплаченных комиссий (0 = без лимита)', 'шт.', None),
     'required_referrals': ('Рефералов для открытия уровня (0 = сразу)', 'чел.', None),
@@ -1087,7 +1087,7 @@ async def start_level_value_edit(callback: types.CallbackQuery, db_user: User, d
     if maximum is not None:
         hint += texts.t('ADMIN_REF_LVL_VALUE_HINT_MAX', ' Максимум: {maximum}.').format(maximum=maximum)
     if field in _MONEY_FIELDS:
-        hint += texts.t('ADMIN_REF_LVL_VALUE_HINT_RUB', ' Сумма в рублях, можно дробную.')
+        hint += texts.t('ADMIN_REF_LVL_VALUE_HINT_RUB', ' Сумма в تومان, можно дробную.')
 
     await callback.message.edit_text(
         texts.t(

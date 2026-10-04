@@ -715,10 +715,10 @@ async def show_detailed_stats(
         ),
         '',
         texts.t('ADMIN_CONTEST_STAT_AMOUNTS', '<b>💰 СУММЫ:</b>'),
-        texts.t('ADMIN_CONTEST_STAT_SUBSCRIPTIONS', '   🛒 Покупки подписок: <b>{amount} руб.</b>').format(
+        texts.t('ADMIN_CONTEST_STAT_SUBSCRIPTIONS', '   🛒 Покупки подписок: <b>{amount} تومان.</b>').format(
             amount=stats.get("subscription_total", 0) // 100
         ),
-        texts.t('ADMIN_CONTEST_STAT_DEPOSITS', '   📥 Пополнения баланса: <b>{amount} руб.</b>').format(
+        texts.t('ADMIN_CONTEST_STAT_DEPOSITS', '   📥 Пополнения баланса: <b>{amount} تومان.</b>').format(
             amount=stats.get("deposit_total", 0) // 100
         ),
     ]
@@ -790,7 +790,7 @@ async def show_detailed_stats_page(
                 texts.t('ADMIN_CONTEST_STATS_PARTICIPANT_UNPAID', '  ❌ Не оплатили: {count}').format(
                     count=p["unpaid_referrals"]
                 ),
-                texts.t('ADMIN_CONTEST_STATS_PARTICIPANT_AMOUNT', '  💵 Сумма: {amount} руб.').format(
+                texts.t('ADMIN_CONTEST_STATS_PARTICIPANT_AMOUNT', '  💵 Сумма: {amount} تومان.').format(
                     amount=p["total_paid_amount"] // 100
                 ),
                 '',  # Пустая строка для разделения
@@ -913,10 +913,10 @@ async def sync_contest(
         ),
         '',
         texts.t('ADMIN_CONTEST_STAT_AMOUNTS', '<b>💰 СУММЫ:</b>'),
-        texts.t('ADMIN_CONTEST_STAT_SUBSCRIPTIONS', '   🛒 Покупки подписок: <b>{amount} руб.</b>').format(
+        texts.t('ADMIN_CONTEST_STAT_SUBSCRIPTIONS', '   🛒 Покупки подписок: <b>{amount} تومان.</b>').format(
             amount=stats.get("subscription_total", 0) // 100
         ),
-        texts.t('ADMIN_CONTEST_STAT_DEPOSITS', '   📥 Пополнения баланса: <b>{amount} руб.</b>').format(
+        texts.t('ADMIN_CONTEST_STAT_DEPOSITS', '   📥 Пополнения баланса: <b>{amount} تومان.</b>').format(
             amount=stats.get("deposit_total", 0) // 100
         ),
     ]
@@ -961,7 +961,7 @@ async def sync_contest(
         texts.t('ADMIN_CONTEST_STAT_UNPAID', '❌ Рефералов не оплатили: <b>{count}</b>').format(
             count=detailed_stats.get("unpaid_count", 0)
         ),
-        texts.t('ADMIN_CONTEST_STAT_SUBSCRIPTIONS_PLAIN', '🛒 Покупки подписок: <b>{amount} руб.</b>').format(
+        texts.t('ADMIN_CONTEST_STAT_SUBSCRIPTIONS_PLAIN', '🛒 Покупки подписок: <b>{amount} تومان.</b>').format(
             amount=detailed_stats["total_paid_amount"] // 100
         ),
     ]
@@ -1036,10 +1036,10 @@ async def debug_contest_transactions(
         ),
         '',
         texts.t('ADMIN_CONTEST_STAT_AMOUNTS', '<b>💰 СУММЫ:</b>'),
-        texts.t('ADMIN_CONTEST_DEBUG_DEPOSITS', '   📥 Пополнения баланса: <b>{amount}</b> руб.').format(
+        texts.t('ADMIN_CONTEST_DEBUG_DEPOSITS', '   📥 Пополнения баланса: <b>{amount}</b> تومان.').format(
             amount=deposit_total
         ),
-        texts.t('ADMIN_CONTEST_DEBUG_SUBSCRIPTIONS', '   🛒 Покупки подписок: <b>{amount}</b> руб.').format(
+        texts.t('ADMIN_CONTEST_DEBUG_SUBSCRIPTIONS', '   🛒 Покупки подписок: <b>{amount}</b> تومان.').format(
             amount=subscription_total
         ),
         '',
@@ -1055,7 +1055,7 @@ async def debug_contest_transactions(
         )
         for tx in txs_in[:5]:  # Показываем максимум 5
             lines.append(
-                f'  • {tx["created_at"][:10]} | {tx["type"]} | {tx["amount_kopeks"] // 100}₽ | user={tx["user_id"]}'
+                f'  • {tx["created_at"][:10]} | {tx["type"]} | {tx["amount_kopeks"] // 100} تومان | user={tx["user_id"]}'
             )
         if len(txs_in) > 5:
             lines.append(texts.t('ADMIN_CONTEST_DEBUG_MORE', '  ... и ещё {count}').format(count=len(txs_in) - 5))
@@ -1074,7 +1074,7 @@ async def debug_contest_transactions(
         )
         for tx in txs_out[:5]:
             lines.append(
-                f'  • {tx["created_at"][:10]} | {tx["type"]} | {tx["amount_kopeks"] // 100}₽ | user={tx["user_id"]}'
+                f'  • {tx["created_at"][:10]} | {tx["type"]} | {tx["amount_kopeks"] // 100} تومان | user={tx["user_id"]}'
             )
         if len(txs_out) > 5:
             lines.append(texts.t('ADMIN_CONTEST_DEBUG_MORE', '  ... и ещё {count}').format(count=len(txs_out) - 5))

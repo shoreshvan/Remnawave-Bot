@@ -787,14 +787,14 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
     await state.set_state(ReferralWithdrawalStates.waiting_for_amount)
 
     text = texts.t(
-        'REFERRAL_WITHDRAWAL_ENTER_AMOUNT', '💸 Введите сумму для вывода в рублях\n\nДоступно: <b>{amount}</b>'
+        'REFERRAL_WITHDRAWAL_ENTER_AMOUNT', '💸 Введите сумму для вывода в تومان\n\nДоступно: <b>{amount}</b>'
     ).format(amount=texts.format_price(available))
 
     keyboard = types.InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('REFERRAL_WITHDRAWAL_ALL', f'Вывести всё ({available / 100:.0f}₽)'),
+                    text=texts.t('REFERRAL_WITHDRAWAL_ALL', f'Вывести всё ({available / 100:.0f} تومان)'),
                     callback_data=f'referral_withdrawal_amount_{available}',
                 )
             ],
@@ -818,7 +818,7 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
 
     try:
         # Парсим сумму (в рублях)
-        amount_text = message.text.strip().replace(',', '.').replace('₽', '').replace(' ', '')
+        amount_text = message.text.strip().replace(',', '.').replace('₽', '').replace('تومان', '').replace(' ', '')
         amount_rubles = float(amount_text)
         amount_kopeks = int(amount_rubles * 100)
 
@@ -980,7 +980,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
 
 👤 Пользователь: {name}
 🆔 ID: <code>{user_id}</code>
-💰 Сумма: <b>{amount:.0f}₽</b>
+💰 Сумма: <b>{amount:.0f} تومان</b>
 
 💳 Реквизиты:
 <code>{details}</code>

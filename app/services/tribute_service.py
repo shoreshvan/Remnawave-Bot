@@ -171,7 +171,7 @@ class TributeService:
                     user_id=user.id,
                     payment_id=payment_id,
                     amount_kopeks=amount_kopeks,
-                    description=f'Пополнение через Tribute: {amount_kopeks / 100}₽ (ID: {payment_id})',
+                    description=f'Пополнение через Tribute: {amount_kopeks / 100} تومان (ID: {payment_id})',
                 )
 
                 if not created:
@@ -260,7 +260,7 @@ class TributeService:
                 await self._send_success_notification(user_telegram_id, amount_kopeks)
 
                 logger.info(
-                    '🎉 Успешно обработан Tribute платеж: ₽ для пользователя',
+                    '🎉 Успешно обработан Tribute платеж: تومان для пользователя',
                     amount_kopeks=amount_kopeks / 100,
                     user_telegram_id=user_telegram_id,
                 )
@@ -340,7 +340,7 @@ class TributeService:
                 await self._send_refund_notification(user_id, amount_kopeks)
 
                 logger.info(
-                    'Обработан возврат Tribute: ₽ для пользователя',
+                    'Обработан возврат Tribute: تومان для пользователя',
                     amount_kopeks=amount_kopeks / 100,
                     user_id=user_id,
                     trb_user_id=trb_user_id,
@@ -374,7 +374,7 @@ class TributeService:
 
                 text = (
                     f'✅ **Платеж успешно получен!**\n\n'
-                    f'💰 Сумма: {int(amount_rubles)} ₽\n'
+                    f'💰 Сумма: {int(amount_rubles)} تومان\n'
                     f'💳 Способ оплаты: Tribute\n'
                     f'🎉 Средства зачислены на баланс!\n\n'
                     f'Спасибо за оплату! 🙏'
@@ -437,7 +437,7 @@ class TributeService:
 
             text = (
                 f'🔄 **Возврат средств**\n\n'
-                f'💰 Сумма возврата: {int(amount_rubles)} ₽\n'
+                f'💰 Сумма возврата: {int(amount_rubles)} تومان\n'
                 f'💳 Способ: Tribute\n\n'
                 f'Средства будут возвращены на вашу карту в течение 3-5 рабочих дней.\n\n'
                 f'Если у вас есть вопросы, обратитесь в поддержку.'

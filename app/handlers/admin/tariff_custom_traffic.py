@@ -253,7 +253,7 @@ async def start_edit_custom_traffic_price(
         current_value=current,
         prompt=texts.t(
             'ADMIN_TARIFF_CT_PRICE_PROMPT',
-            'Введите цену за 1 ГБ в рублях.\nПример: <code>2</code> или <code>2.50</code>',
+            'Введите цену за 1 ГБ в تومان.\nПример: <code>2</code> или <code>2.50</code>',
         ),
     )
 
@@ -373,7 +373,7 @@ async def process_custom_traffic_price_input(
         await message.answer(
             texts.t(
                 'ADMIN_TARIFF_CT_PRICE_INVALID',
-                '❌ Некорректная цена. Введите положительную сумму в рублях '
+                '❌ Некорректная цена. Введите положительную сумму в تومان '
                 'с точностью не более двух знаков.\nПример: <code>2</code> или <code>2.50</code>',
             ),
             parse_mode='HTML',

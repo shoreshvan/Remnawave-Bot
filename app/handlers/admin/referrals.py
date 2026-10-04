@@ -541,7 +541,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
         text += f'<b>#{req.id}</b> — {user_name} (ID{user_tg_id})\n'
         text += texts.t(
             'ADMIN_REFERRALS_WITHDRAWALS_ROW_RISK',
-            '💰 {amount:.0f}₽ | {risk_emoji} Риск: {risk_score}/100\n',
+            '💰 {amount:.0f} تومان | {risk_emoji} Риск: {risk_score}/100\n',
         ).format(amount=req.amount_kopeks / 100, risk_emoji=risk_emoji, risk_score=req.risk_score)
         text += f'📅 {format_local_datetime(req.created_at, "%d.%m.%Y %H:%M")}\n\n'
 
@@ -550,7 +550,7 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'#{req.id} — {req.amount_kopeks / 100:.0f}₽', callback_data=f'admin_withdrawal_view_{req.id}'
+                    text=f'#{req.id} — {req.amount_kopeks / 100:.0f} تومان', callback_data=f'admin_withdrawal_view_{req.id}'
                 )
             ]
         )
@@ -868,9 +868,9 @@ async def process_test_referral_earning(message: types.Message, db_user: User, d
             await message.answer(texts.t('ADMIN_REFERRALS_TEST_AMOUNT_POSITIVE', '❌ Сумма должна быть положительной'))
             return
 
-        if amount_kopeks > 10000000:  # Лимит 100 000₽
+        if amount_kopeks > 10000000:  # Лимит 100 000 تومان
             await message.answer(
-                texts.t('ADMIN_REFERRALS_TEST_AMOUNT_MAX', '❌ Максимальная сумма тестового начисления: 100 000₽')
+                texts.t('ADMIN_REFERRALS_TEST_AMOUNT_MAX', '❌ Максимальная сумма тестового начисления: 100 000 تومان')
             )
             return
 
@@ -919,8 +919,8 @@ async def process_test_referral_earning(message: types.Message, db_user: User, d
             '✅ <b>Тестовое начисление создано!</b>\n\n'
             '👤 Пользователь: {user_name}\n'
             '🆔 ID: <code>{telegram_id}</code>\n'
-            '💰 Сумма: <b>{amount:.0f}₽</b>\n'
-            '💳 Новый баланс: <b>{balance:.0f}₽</b>\n\n'
+            '💰 Сумма: <b>{amount:.0f} تومان</b>\n'
+            '💳 Новый баланс: <b>{balance:.0f} تومان</b>\n\n'
             'Начисление добавлено как реферальный доход.',
         ).format(
             user_name=html.escape(target_user.full_name)
@@ -949,7 +949,7 @@ async def process_test_referral_earning(message: types.Message, db_user: User, d
     )
 
     logger.info(
-        'Тестовое начисление: админ начислил ₽ пользователю',
+        'Тестовое начисление: админ начислил تومان пользователю',
         telegram_id=db_user.telegram_id,
         amount_rubles=amount_rubles,
         target_telegram_id=target_telegram_id,
@@ -1466,9 +1466,9 @@ async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
             text += texts.t(
                 'ADMIN_REFERRALS_BONUS_CHECK_REQUIRED',
                 '\n💰 <b>Требуется начислить:</b>\n'
-                '• Рефералам: {to_referrals:.0f}₽\n'
-                '• Рефереерам: {to_referrers:.0f}₽\n'
-                '• <b>Итого: {total:.0f}₽</b>\n\n'
+                '• Рефералам: {to_referrals:.0f} تومان\n'
+                '• Рефереерам: {to_referrers:.0f} تومان\n'
+                '• <b>Итого: {total:.0f} تومان</b>\n\n'
                 '👤 <b>Список ({count} чел.):</b>\n',
             ).format(
                 to_referrals=report.total_missing_to_referrals / 100,
@@ -1487,11 +1487,11 @@ async def check_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
                 text += texts.t('ADMIN_REFERRALS_BONUS_INVITED_BY', '\n   └ Пригласил: {referrer}').format(
                     referrer=referrer_name
                 )
-                text += texts.t('ADMIN_REFERRALS_BONUS_TOPUP', '\n   └ Пополнение: {amount:.0f}₽').format(
+                text += texts.t('ADMIN_REFERRALS_BONUS_TOPUP', '\n   └ Пополнение: {amount:.0f} تومان').format(
                     amount=mb.first_topup_amount_kopeks / 100
                 )
                 text += texts.t(
-                    'ADMIN_REFERRALS_BONUS_BONUSES', '\n   └ Бонусы: {referral:.0f}₽ + {referrer:.0f}₽'
+                    'ADMIN_REFERRALS_BONUS_BONUSES', '\n   └ Бонусы: {referral:.0f} تومان + {referrer:.0f} تومان'
                 ).format(referral=mb.referral_bonus_amount / 100, referrer=mb.referrer_bonus_amount / 100)
 
             if len(report.missing_bonuses) > 15:
@@ -1591,9 +1591,9 @@ async def apply_missing_bonuses(callback: types.CallbackQuery, db_user: User, db
             '\n✅ <b>Бонусы начислены!</b>\n\n'
             '📊 <b>Результат:</b>\n'
             '• Обработано: {users_fixed} пользователей\n'
-            '• Начислено рефералам: {to_referrals:.0f}₽\n'
-            '• Начислено рефереерам: {to_referrers:.0f}₽\n'
-            '• <b>Итого: {total:.0f}₽</b>\n',
+            '• Начислено рефералам: {to_referrals:.0f} تومان\n'
+            '• Начислено рефереерам: {to_referrers:.0f} تومان\n'
+            '• <b>Итого: {total:.0f} تومان</b>\n',
         ).format(
             users_fixed=fix_report.users_fixed,
             to_referrals=fix_report.bonuses_to_referrals / 100,

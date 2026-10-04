@@ -830,7 +830,7 @@ def _build_price_prompt(texts: Any, label: str, current_price: str) -> str:
         '',
         texts.t(
             'ADMIN_PRICING_EDIT_PROMPT',
-            'Введите новую стоимость в рублях (например 990 или 990.50). Для бесплатного тарифа укажите 0.',
+            'Введите новую стоимость в تومان (например 990 или 990.50). Для бесплатного тарифа укажите 0.',
         ),
         texts.t(
             'ADMIN_PRICING_EDIT_CANCEL_HINT',
@@ -873,7 +873,7 @@ async def _render_message_by_id(
 
 
 def _parse_price_input(text: str) -> int:
-    normalized = text.replace('₽', '').replace('р', '').replace('RUB', '')
+    normalized = text.replace('تومان', '').replace('₽', '').replace('р', '').replace('RUB', '')
     normalized = normalized.replace(' ', '').replace(',', '.').strip()
     if not normalized:
         raise ValueError('empty')
@@ -1127,7 +1127,7 @@ async def process_pricing_input(
             await message.answer(
                 texts.t(
                     'ADMIN_PRICING_EDIT_INVALID',
-                    'Не удалось распознать цену. Укажите число в рублях (например 990 или 990.50).',
+                    'Не удалось распознать цену. Укажите число в تومان (например 990 или 990.50).',
                 )
             )
             return

@@ -495,7 +495,7 @@ async def apply_countries_changes(callback: types.CallbackQuery, db_user: User, 
 
         await state.clear()
         logger.info(
-            '✅ Пользователь обновил страны. Добавлено: удалено: заплатил: ₽',
+            '✅ Пользователь обновил страны. Добавлено: удалено: заплатил: تومان',
             telegram_id=db_user.telegram_id,
             added_count=len(added),
             removed_count=len(removed),

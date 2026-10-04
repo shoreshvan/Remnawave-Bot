@@ -655,13 +655,13 @@ def get_traffic_switch_keyboard(
         elif total_price_diff > 0:
             emoji = '⬆️'
             action_text = ''
-            price_text = f' (+{total_price_diff // 100}₽{period_text})'
+            price_text = f' (+{total_price_diff // 100} تومان{period_text})'
             if discount_percent > 0:
                 discount_total = int((price_per_month - current_price_per_month) * price_multiplier) - total_price_diff
                 if discount_total > 0:
                     price_text += texts.t(
                         'TRAFFIC_SWITCH_DISCOUNT_NOTE',
-                        ' (скидка {discount_percent}%: -{discount_rub}₽)',
+                        ' (скидка {discount_percent}%: -{discount_rub} تومان)',
                     ).format(discount_percent=discount_percent, discount_rub=discount_total // 100)
         elif total_price_diff < 0:
             emoji = '⬇️'

@@ -89,7 +89,7 @@ async def _handle_wheel_spin_payment(
                 texts.t(
                     'STARS_WHEEL_NO_SUB_REFUNDED',
                     '❌ Для использования колеса удачи необходима активная подписка.\n'
-                    '💰 {stars} Stars возвращены на баланс в виде {amount:.0f} ₽.',
+                    '💰 {stars} Stars возвращены на баланс в виде {amount:.0f} تومان.',
                 ).format(stars=stars_amount, amount=kopeks_fallback / 100),
             )
             logger.warning(
@@ -135,7 +135,7 @@ async def _handle_wheel_spin_payment(
                     texts.t(
                         'STARS_WHEEL_LIMIT_REFUNDED',
                         '❌ Достигнут дневной лимит спинов.\n'
-                        '💰 {stars} Stars возвращены на баланс в виде {amount:.0f} ₽.',
+                        '💰 {stars} Stars возвращены на баланс в виде {amount:.0f} تومان.',
                     ).format(stars=stars_amount, amount=kopeks_fallback / 100),
                 )
                 logger.warning(
@@ -659,7 +659,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
         if success:
             rubles_amount = TelegramStarsService.calculate_rubles_from_stars(payment.total_amount)
             amount_kopeks = int((rubles_amount * Decimal(100)).to_integral_value(rounding=ROUND_HALF_UP))
-            amount_text = settings.format_price(amount_kopeks).replace(' ₽', '')
+            amount_text = settings.format_price(amount_kopeks).replace(f' {settings.CURRENCY_SYMBOL}', '')
 
             keyboard = await payment_service.build_topup_success_keyboard(user)
 
@@ -670,7 +670,7 @@ async def handle_successful_payment(message: types.Message, db: AsyncSession, st
                     'STARS_PAYMENT_SUCCESS',
                     '🎉 <b>Платеж успешно обработан!</b>\n\n'
                     '⭐ Потрачено звезд: {stars_spent}\n'
-                    '💰 Зачислено на баланс: {amount} ₽\n'
+                    '💰 Зачислено на баланс: {amount} تومان\n'
                     '🆔 ID транзакции: {transaction_id}...\n\n'
                     'Спасибо за пополнение! 🚀',
                 ).format(

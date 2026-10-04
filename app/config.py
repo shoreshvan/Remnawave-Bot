@@ -443,9 +443,9 @@ class Settings(BaseSettings):
     # Базовая цена сброса в копейках (используется если режим "period" или как минимальная цена)
     TRAFFIC_RESET_BASE_PRICE: int = 0  # 0 = использовать PERIOD_PRICES[30]
 
-    REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000
-    REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000
-    REFERRAL_INVITER_BONUS_KOPEKS: int = 10000
+    REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 5_000_000  # 50 000 туманов
+    REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
+    REFERRAL_INVITER_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
     REFERRAL_COMMISSION_PERCENT: int = 25
     REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT: int | None = None
     REFERRAL_RECURRING_COMMISSION_TIERS: str = ''  # Формат: "0:10,10:15,50:20,100:25"
@@ -482,7 +482,7 @@ class Settings(BaseSettings):
 
     # Настройки вывода реферального баланса
     REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
-    REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)
+    REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 50_000_000  # Мин. сумма вывода (500 000 туманов)
     REFERRAL_WITHDRAWAL_COOLDOWN_DAYS: int = 30  # Частота запросов на вывод
     REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE: bool = True  # Только реф. баланс (False = реф + свой)
     REFERRAL_WITHDRAWAL_REQUISITES_TEXT: str = ''  # Текст-подсказка для реквизитов при выводе
@@ -504,7 +504,7 @@ class Settings(BaseSettings):
     REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # Показывать раздел партнёрки в кабинете
 
     # Настройки анализа на подозрительность
-    REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS: int = 50000  # Мин. сумма от 1 реферала (500₽)
+    REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS: int = 20_000_000  # Мин. сумма от 1 реферала (200 000 туманов)
     REFERRAL_WITHDRAWAL_SUSPICIOUS_MAX_DEPOSITS_PER_MONTH: int = 10  # Макс. пополнений от 1 реферала/мес
     REFERRAL_WITHDRAWAL_SUSPICIOUS_NO_PURCHASES_RATIO: float = 2.0  # Пополнил в X раз больше чем потратил
 
@@ -582,7 +582,7 @@ class Settings(BaseSettings):
     # >0 → autopay charges this many days each cycle by default (must be present in tariff/renewal periods).
     # Per-subscription override lives in Subscription.autopay_period_days.
     DEFAULT_AUTOPAY_PERIOD_DAYS: int = 0
-    MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 10000
+    MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 5_000_000  # 50 000 туманов
 
     # ── Антиспам уведомлений об ошибке автоплатежа ──
     # Максимум уведомлений об ошибке списания за ОДИН цикл подписки (до следующего end_date).
@@ -594,7 +594,7 @@ class Settings(BaseSettings):
     # (legacy-режим). 0 — без повторов (только первое + финальное).
     AUTOPAY_FAIL_REPEAT_INTERVAL_HOURS: int = 0
 
-    SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000
+    SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 10_000_000  # 100 000 туманов
 
     MONITORING_INTERVAL: int = 60
     # Жёсткий per-send таймаут (сек) на отправку уведомлений из MonitoringService.
@@ -620,13 +620,14 @@ class Settings(BaseSettings):
     MAINTENANCE_MESSAGE: str = '🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.'
 
     TELEGRAM_STARS_ENABLED: bool = True
-    # ₽ per 1 ⭐. Matches Telegram's own cash-out rate (~0.95–1.0 ₽/⭐ as of
-    # 2026-05) so an integer-ruble top-up round-trips losslessly:
-    # rubles_to_stars(150) → 150 ⭐ → stars_to_rubles(150) → 150 ₽.
-    # The previous 1.3 default undervalued stars by ~30% (bot quoted 115 ⭐
-    # for a 150 ₽ top-up, credited only 149.50 ₽ back — a built-in
-    # rounding loss visible on every payment).
-    TELEGRAM_STARS_RATE_RUB: float = 1.0
+    # Toman credited per 1 ⭐. Home currency is Toman; the identifier keeps
+    # its historical _RUB suffix only for back-compat (existing env vars and
+    # the persisted system-setting key must keep resolving) — the value is
+    # home-currency units, not rubles. Tunable here, via env, or in the admin
+    # panel. At 4000, top-ups that are multiples of 4000 round-trip losslessly
+    # (40 000 → 10 ⭐ → 40 000); other amounts snap to the nearest 4000 step,
+    # inherent to Stars' whole-unit granularity.
+    TELEGRAM_STARS_RATE_RUB: float = 4000.0
     TELEGRAM_STARS_DISPLAY_NAME: str = 'Telegram Stars'
 
     # Telegram Login Widget (cabinet auth page)
@@ -737,6 +738,13 @@ class Settings(BaseSettings):
     CRYPTOBOT_DEFAULT_ASSET: str = 'USDT'
     CRYPTOBOT_ASSETS: str = 'USDT,TON,BTC,ETH'
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
+    # Toman per 1 USD, used to convert CryptoBot's USD/USDT invoices to the
+    # home currency (Toman) and back. Iran's USD rate is operator-set, not
+    # published like USD/RUB was, so this replaces the old live FX fetch.
+    # Change it in .env or the admin panel (category CRYPTOBOT) with no code
+    # change — the converter reads it live, so a panel edit applies without a
+    # restart. Must be > 0.
+    CRYPTOBOT_USD_TO_TOMAN_RATE: float = 255000.0
 
     HELEKET_ENABLED: bool = False
     HELEKET_DISPLAY_NAME: str = 'Heleket Crypto'
@@ -858,8 +866,8 @@ class Settings(BaseSettings):
     FREEKASSA_SECRET_WORD_2: str | None = None  # Для webhook
     FREEKASSA_DISPLAY_NAME: str = 'Freekassa'
     FREEKASSA_CURRENCY: str = 'RUB'
-    FREEKASSA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
-    FREEKASSA_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
+    FREEKASSA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    FREEKASSA_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 تومان
     FREEKASSA_PAYMENT_TIMEOUT_SECONDS: int = 3600
     FREEKASSA_WEBHOOK_PATH: str = '/freekassa-webhook'
     FREEKASSA_WEBHOOK_HOST: str = '0.0.0.0'
@@ -883,8 +891,8 @@ class Settings(BaseSettings):
     KASSA_AI_SECRET_WORD_2: str | None = None  # Для webhook
     KASSA_AI_DISPLAY_NAME: str = 'KassaAI'
     KASSA_AI_CURRENCY: str = 'RUB'
-    KASSA_AI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
-    KASSA_AI_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
+    KASSA_AI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    KASSA_AI_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 تومان
     KASSA_AI_WEBHOOK_PATH: str = '/kassa-ai-webhook'
     KASSA_AI_WEBHOOK_HOST: str = '0.0.0.0'
     KASSA_AI_WEBHOOK_PORT: int = 8089
@@ -922,8 +930,8 @@ class Settings(BaseSettings):
     RIOPAY_WEBHOOK_SECRET: str | None = None  # HMAC-SHA512 ключ для вебхуков (по умолчанию = API_TOKEN)
     RIOPAY_DISPLAY_NAME: str = 'RioPay'
     RIOPAY_CURRENCY: str = 'RUB'
-    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000₽
+    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 تومان
     RIOPAY_WEBHOOK_PATH: str = '/riopay-webhook'
     RIOPAY_SUCCESS_URL: str | None = None
     RIOPAY_FAIL_URL: str | None = None
@@ -934,8 +942,8 @@ class Settings(BaseSettings):
     SEVERPAY_TOKEN: str | None = None  # Secret token for HMAC-SHA256
     SEVERPAY_DISPLAY_NAME: str = 'SeverPay'
     SEVERPAY_CURRENCY: str = 'RUB'
-    SEVERPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    SEVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    SEVERPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    SEVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     SEVERPAY_WEBHOOK_PATH: str = '/severpay-webhook'
     SEVERPAY_RETURN_URL: str | None = None
     SEVERPAY_LIFETIME: int = 1440  # minutes, 30-4320
@@ -966,8 +974,8 @@ class Settings(BaseSettings):
     PAYPEAR_SECRET_KEY: str | None = None
     PAYPEAR_DISPLAY_NAME: str = 'PayPear'
     PAYPEAR_CURRENCY: str = 'RUB'
-    PAYPEAR_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    PAYPEAR_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    PAYPEAR_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    PAYPEAR_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     PAYPEAR_WEBHOOK_PATH: str = '/paypear-webhook'
     PAYPEAR_RETURN_URL: str | None = None
     PAYPEAR_PAYMENT_METHOD: str = 'sbp'  # bank_card, sbp, sberpay, tpay
@@ -978,8 +986,8 @@ class Settings(BaseSettings):
     ROLLYPAY_SIGNING_SECRET: str | None = None  # HMAC webhook verification
     ROLLYPAY_DISPLAY_NAME: str = 'RollyPay'
     ROLLYPAY_CURRENCY: str = 'RUB'
-    ROLLYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ROLLYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     ROLLYPAY_WEBHOOK_PATH: str = '/rollypay-webhook'
     ROLLYPAY_RETURN_URL: str | None = None
 
@@ -1015,8 +1023,8 @@ class Settings(BaseSettings):
     AURAPAY_SECRET_KEY: str | None = None  # Secret key #2 for webhook HMAC
     AURAPAY_DISPLAY_NAME: str = 'AuraPay'
     AURAPAY_CURRENCY: str = 'RUB'
-    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     AURAPAY_WEBHOOK_PATH: str = '/aurapay-webhook'
     AURAPAY_RETURN_URL: str | None = None
     AURAPAY_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1035,8 +1043,8 @@ class Settings(BaseSettings):
     ANTILOPAY_PRODUCT_NAME: str = 'VPN подписка'
     ANTILOPAY_PRODUCT_TYPE: str = 'services'
     ANTILOPAY_CURRENCY: str = 'RUB'
-    ANTILOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    ANTILOPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ANTILOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    ANTILOPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     ANTILOPAY_WEBHOOK_PATH: str = '/antilopay-webhook'
     ANTILOPAY_RETURN_URL: str | None = None
     ANTILOPAY_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1064,8 +1072,8 @@ class Settings(BaseSettings):
     JUPITER_METHOD_DESCRIPTION: str = 'SBP'
     JUPITER_DISPLAY_NAME: str = 'Jupiter'
     JUPITER_CURRENCY: str = 'RUB'
-    JUPITER_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    JUPITER_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    JUPITER_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    JUPITER_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     JUPITER_WEBHOOK_PATH: str = '/jupiter-webhook'
     JUPITER_RETURN_URL: str | None = None
     JUPITER_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1083,8 +1091,8 @@ class Settings(BaseSettings):
     DONUT_METHOD_ID: str | None = None
     DONUT_DISPLAY_NAME: str = 'Donut'
     DONUT_CURRENCY: str = 'RUB'
-    DONUT_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    DONUT_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    DONUT_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    DONUT_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     DONUT_WEBHOOK_PATH: str = '/donut-webhook'
     DONUT_RETURN_URL: str | None = None
     DONUT_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1103,8 +1111,8 @@ class Settings(BaseSettings):
     CISPAY_BASE_URL: str = 'https://api.cispay.app'
     CISPAY_DISPLAY_NAME: str = 'CisPay'
     CISPAY_CURRENCY: str = 'RUB'
-    CISPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    CISPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    CISPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    CISPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     CISPAY_WEBHOOK_PATH: str = '/cispay-webhook'
     # Счёт cisPay живёт 30 минут, после чего переходит в EXPIRED на стороне провайдера
     CISPAY_PAYMENT_LIFETIME_MINUTES: int = 30
@@ -1132,8 +1140,8 @@ class Settings(BaseSettings):
     # подтверждает, дальше Cashera списывает сама). Метод sbp_recurring должен быть
     # подключён к мерчанту в кабинете Cashera.
     CASHERA_RECURRENT_ENABLED: bool = False
-    CASHERA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽ — минимум Cashera для карт
-    CASHERA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    CASHERA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان — минимум Cashera для карт
+    CASHERA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     CASHERA_WEBHOOK_PATH: str = '/cashera-webhook'
     CASHERA_RETURN_URL: str | None = None
     CASHERA_FAILED_URL: str | None = None
@@ -1146,8 +1154,8 @@ class Settings(BaseSettings):
     TABPAY_WEBHOOK_SECRET: str | None = None
     TABPAY_BASE_URL: str = 'https://tabpay.org/api'
     TABPAY_DISPLAY_NAME: str = 'TabPay'
-    TABPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    TABPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    TABPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    TABPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     TABPAY_WEBHOOK_PATH: str = '/tabpay-webhook'
     # Окно свежести X-Timestamp: защищает от переигрывания перехваченного вебхука.
     # Требует синхронных часов на сервере (NTP), иначе свежие вебхуки не пройдут.
@@ -1167,8 +1175,8 @@ class Settings(BaseSettings):
     PARITYPAY_CALLBACK_SECRET: str | None = None
     PARITYPAY_BASE_URL: str = 'https://api.paritypay.net'
     PARITYPAY_DISPLAY_NAME: str = 'ParityPay'
-    PARITYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    PARITYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    PARITYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    PARITYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     PARITYPAY_WEBHOOK_PATH: str = '/paritypay-webhook'
     # Время жизни счёта в минутах, поле expire; у провайдера по умолчанию 60
     PARITYPAY_INVOICE_LIFETIME_MINUTES: int = 60
@@ -1186,8 +1194,8 @@ class Settings(BaseSettings):
     LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 — для проверки подписи webhook
     LAVA_DISPLAY_NAME: str = 'Lava'
     LAVA_CURRENCY: str = 'RUB'
-    LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    LAVA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    LAVA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     LAVA_WEBHOOK_PATH: str = '/lava-webhook'
     LAVA_RETURN_URL: str | None = None
     LAVA_PAYMENT_LIFETIME_MINUTES: int = 60  # макс 7200 минут (5 дней)
@@ -1207,8 +1215,8 @@ class Settings(BaseSettings):
     ETOPLATEZHI_SECRET_KEY: str | None = None
     ETOPLATEZHI_DISPLAY_NAME: str = 'Etoplatezhi'
     ETOPLATEZHI_CURRENCY: str = 'RUB'
-    ETOPLATEZHI_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
-    ETOPLATEZHI_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
+    ETOPLATEZHI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
+    ETOPLATEZHI_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
     ETOPLATEZHI_WEBHOOK_PATH: str = '/etoplatezhi-webhook'
     ETOPLATEZHI_RETURN_URL: str | None = None
     ETOPLATEZHI_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1520,7 +1528,7 @@ class Settings(BaseSettings):
     # Эндпоинт рассчитан на автоматизацию (AI-агент поддержки), поэтому у него есть
     # предохранитель: агент, ошибшийся на два нуля, упрётся в лимит, а не подарит
     # человеку годовую подписку. 0 — без ограничения.
-    WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 1_000_000
+    WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 5_000_000_000  # 50 000 000 туманов
 
     ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600

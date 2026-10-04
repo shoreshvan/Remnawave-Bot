@@ -363,8 +363,8 @@ class DailySubscriptionService:
         message = texts.t(
             'DAILY_NOTIFY_CHARGE',
             '💳 <b>Суточное списание</b>\n\n'
-            'Списано: {amount_rubles:.2f} ₽\n'
-            'Остаток баланса: {balance_rubles:.2f} ₽{tariff_label}\n\n'
+            'Списано: {amount_rubles:.2f} تومان\n'
+            'Остаток баланса: {balance_rubles:.2f} تومان{tariff_label}\n\n'
             'Следующее списание через 24 часа.',
         ).format(amount_rubles=amount_rubles, balance_rubles=balance_rubles, tariff_label=tariff_label)
 
@@ -395,8 +395,8 @@ class DailySubscriptionService:
             'DAILY_NOTIFY_INSUFFICIENT_BALANCE',
             '⚠️ <b>Подписка{tariff_label} приостановлена</b>\n\n'
             'Недостаточно средств для суточной оплаты.\n\n'
-            'Требуется: {required_rubles:.2f} ₽\n'
-            'Баланс: {balance_rubles:.2f} ₽\n\n'
+            'Требуется: {required_rubles:.2f} تومان\n'
+            'Баланс: {balance_rubles:.2f} تومان\n\n'
             'Пополните баланс, чтобы возобновить подписку.',
         ).format(tariff_label=tariff_label, required_rubles=required_rubles, balance_rubles=balance_rubles)
 
@@ -417,8 +417,8 @@ class DailySubscriptionService:
 
         # Use unified notification delivery service
         context = {
-            'required_amount': f'{required_rubles:.2f} ₽',
-            'current_balance': f'{balance_rubles:.2f} ₽',
+            'required_amount': f'{required_rubles:.2f} {settings.CURRENCY_SYMBOL}',
+            'current_balance': f'{balance_rubles:.2f} {settings.CURRENCY_SYMBOL}',
         }
 
         try:

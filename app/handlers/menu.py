@@ -65,7 +65,7 @@ def _format_rubles(amount_kopeks: int) -> str:
     else:
         formatted = f'{rubles:,.2f}'
 
-    return f'{formatted.replace(",", " ")} ₽'
+    return f'{formatted.replace(",", " ")} تومان'
 
 
 def _resolve_info_page_text(values: dict | None, language: str) -> str:
@@ -1640,7 +1640,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             await callback.answer(
                 texts.t(
                     'ACTIVATION_SUCCESS',
-                    '✅ Подписка продлена на {days} дней за {price} ₽!',
+                    '✅ Подписка продлена на {days} дней за {price} تومان!',
                 ).format(days=best_period, price=pricing.final_total // 100),
                 show_alert=True,
             )
@@ -1691,7 +1691,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
 
             await callback.answer(
                 texts.t(
-                    'ACTIVATION_SUCCESS', f'✅ Подписка активирована на {best_period} дней за {best_price // 100} ₽!'
+                    'ACTIVATION_SUCCESS', f'✅ Подписка активирована на {best_period} дней за {best_price // 100} تومان!'
                 ),
                 show_alert=True,
             )

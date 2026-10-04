@@ -815,11 +815,11 @@ async def toggle_daily_tariff(
         await callback.answer(texts.t('ADMIN_TARIFF_DAILY_MODE_OFF', 'Суточный режим отключен'), show_alert=True)
     else:
         # Включаем суточный режим (с ценой по умолчанию)
-        tariff = await update_tariff(db, tariff, is_daily=True, daily_price_kopeks=5000)  # 50 руб по умолчанию
+        tariff = await update_tariff(db, tariff, is_daily=True, daily_price_kopeks=5000)  # 50 تومان по умолчанию
         await callback.answer(
             texts.t(
                 'ADMIN_TARIFF_DAILY_MODE_ON',
-                'Суточный режим включен. Цена: 50 ₽/день\nНастройте цену через кнопку «💰 Суточная цена»',
+                'Суточный режим включен. Цена: 50 تومان/день\nНастройте цену через кнопку «💰 Суточная цена»',
             ),
             show_alert=True,
         )
@@ -863,7 +863,7 @@ async def start_edit_daily_price(
             '💰 <b>Редактирование суточной цены</b>\n\n'
             'Тариф: {name}\n'
             'Текущая цена: {price}/день\n\n'
-            'Введите новую цену за день в рублях.\n'
+            'Введите новую цену за день в تومان.\n'
             'Пример: <code>50</code> или <code>99.90</code>',
         ).format(name=html.escape(tariff.name), price=format_price_kopeks(current_price)),
         reply_markup=InlineKeyboardMarkup(
@@ -1239,8 +1239,8 @@ async def select_tariff_type_daily(
             'Устройств: <b>{devices}</b>\n'
             'Уровень: <b>{tier}</b>\n'
             'Тип: <b>🔄 Суточный</b>\n\n'
-            'Шаг 6/6: Введите суточную цену в рублях\n\n'
-            'Пример: <i>50</i> (50 ₽/день), <i>99.90</i> (99.90 ₽/день)',
+            'Шаг 6/6: Введите суточную цену в تومان\n\n'
+            'Пример: <i>50</i> (50 تومان/день), <i>99.90</i> (99.90 تومان/день)',
         ).format(
             name=data['tariff_name'],
             traffic=traffic_display,
@@ -1919,7 +1919,7 @@ async def start_edit_tariff_device_price(
             'Текущая цена: <b>{current_price}</b>\n\n'
             'Введите цену в копейках за одно устройство в месяц.\n\n'
             '• <code>0</code> или <code>-</code> — докупка устройств недоступна\n'
-            '• Например: <code>5000</code> = 50₽/мес за устройство',
+            '• Например: <code>5000</code> = 50 تومان/мес за устройство',
         ).format(current_price=current_price),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
@@ -2487,7 +2487,7 @@ async def start_edit_traffic_topup_packages(
             'Введите пакеты в формате:\n'
             '<code>{current_packages}</code>\n\n'
             '(ГБ:цена_в_копейках, через запятую)\n'
-            'Например: <code>5:5000, 10:9000</code> = 5ГБ за 50₽, 10ГБ за 90₽',
+            'Например: <code>5:5000, 10:9000</code> = 5ГБ за 50 تومان, 10ГБ за 90 تومان',
         ).format(
             name=html.escape(tariff.name),
             packages_display=packages_display,

@@ -250,13 +250,13 @@ async def create_stars_invoice(
     if request.amount_kopeks < 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_BALANCE_STARS_MIN_AMOUNT', 'Minimum amount is 1.00 RUB'),
+            detail=texts.t('CABINET_BALANCE_STARS_MIN_AMOUNT', 'Minimum amount is 1.00 تومان'),
         )
 
     if request.amount_kopeks > 1000000:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_BALANCE_STARS_MAX_AMOUNT', 'Maximum amount is 10,000.00 RUB'),
+            detail=texts.t('CABINET_BALANCE_STARS_MAX_AMOUNT', 'Maximum amount is 10,000.00 تومان'),
         )
 
     # Calculate Stars amount and normalize kopeks to match exact star value
@@ -289,7 +289,7 @@ async def create_stars_invoice(
                 title=texts.t('CABINET_BALANCE_STARS_INVOICE_TITLE', 'Пополнение баланса VPN'),
                 description=texts.t(
                     'CABINET_BALANCE_STARS_INVOICE_DESCRIPTION',
-                    'Пополнение баланса на {amount} ₽ ({stars} ⭐)',
+                    'Пополнение баланса на {amount} تومان ({stars} ⭐)',
                 ).format(amount=f'{normalized_kopeks / 100:.2f}', stars=stars_amount),
                 payload=payload,
                 provider_token='',
@@ -351,7 +351,7 @@ async def create_topup(
     if request.amount_kopeks < method.min_amount_kopeks:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_BALANCE_TOPUP_MIN_AMOUNT', 'Minimum amount is {amount} RUB').format(
+            detail=texts.t('CABINET_BALANCE_TOPUP_MIN_AMOUNT', 'Minimum amount is {amount} تومان').format(
                 amount=f'{method.min_amount_kopeks / 100:.2f}'
             ),
         )
@@ -359,7 +359,7 @@ async def create_topup(
     if request.amount_kopeks > method.max_amount_kopeks:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_BALANCE_TOPUP_MAX_AMOUNT', 'Maximum amount is {amount} RUB').format(
+            detail=texts.t('CABINET_BALANCE_TOPUP_MAX_AMOUNT', 'Maximum amount is {amount} تومان').format(
                 amount=f'{method.max_amount_kopeks / 100:.2f}'
             ),
         )

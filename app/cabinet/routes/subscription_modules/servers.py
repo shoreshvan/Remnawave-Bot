@@ -211,7 +211,7 @@ async def update_countries(
             detail=get_texts()
             .t(
                 'CABINET_COUNTRIES_INSUFFICIENT_BALANCE',
-                'Insufficient balance. Need {need:.2f} RUB, have {have:.2f} RUB',
+                'Insufficient balance. Need {need:.2f} تومان, have {have:.2f} تومان',
             )
             .format(need=total_cost / 100, have=user.balance_kopeks / 100),
         )

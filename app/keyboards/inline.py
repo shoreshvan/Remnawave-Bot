@@ -2794,25 +2794,25 @@ def get_add_traffic_keyboard(
 
         if gb == 0:
             if use_russian_fallback:
-                text = texts.t('ADD_TRAFFIC_UNLIMITED', '♾️ Безлимитный трафик - {price} ₽{period}').format(
+                text = texts.t('ADD_TRAFFIC_UNLIMITED', '♾️ Безлимитный трафик - {price} تومان{period}').format(
                     price=total_price // 100, period=period_text
                 )
             else:
-                text = f'♾️ Unlimited traffic - {total_price // 100} ₽{period_text}'
+                text = f'♾️ Unlimited traffic - {total_price // 100} تومان{period_text}'
         elif use_russian_fallback:
-            text = texts.t('ADD_TRAFFIC_GB', '📊 +{gb} ГБ трафика - {price} ₽{period}').format(
+            text = texts.t('ADD_TRAFFIC_GB', '📊 +{gb} ГБ трафика - {price} تومان{period}').format(
                 gb=gb, price=total_price // 100, period=period_text
             )
         else:
-            text = f'📊 +{gb} GB traffic - {total_price // 100} ₽{period_text}'
+            text = f'📊 +{gb} GB traffic - {total_price // 100} تومان{period_text}'
 
         if discount_percent > 0 and total_discount > 0:
             if use_russian_fallback:
-                text += texts.t('TRAFFIC_DISCOUNT_INFO', ' (скидка {percent}%: -{amount}₽)').format(
+                text += texts.t('TRAFFIC_DISCOUNT_INFO', ' (скидка {percent}%: -{amount} تومان)').format(
                     percent=discount_percent, amount=total_discount // 100
                 )
             else:
-                text += f' (discount {discount_percent}%: -{total_discount // 100}₽)'
+                text += f' (discount {discount_percent}%: -{total_discount // 100} تومان)'
 
         buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
 
@@ -2872,19 +2872,19 @@ def get_add_traffic_keyboard_from_tariff(
         period_text = texts.t('TRAFFIC_PERIOD_PER_MONTH', ' /мес') if use_russian_fallback else ' /mo'
 
         if use_russian_fallback:
-            text = texts.t('ADD_TRAFFIC_GB', '📊 +{gb} ГБ трафика - {price} ₽{period}').format(
+            text = texts.t('ADD_TRAFFIC_GB', '📊 +{gb} ГБ трафика - {price} تومان{period}').format(
                 gb=gb, price=discounted_price // 100, period=period_text
             )
         else:
-            text = f'📊 +{gb} GB traffic - {discounted_price // 100} ₽{period_text}'
+            text = f'📊 +{gb} GB traffic - {discounted_price // 100} تومان{period_text}'
 
         if discount_percent > 0 and discount_value > 0:
             if use_russian_fallback:
-                text += texts.t('TRAFFIC_DISCOUNT_INFO', ' (скидка {percent}%: -{amount}₽)').format(
+                text += texts.t('TRAFFIC_DISCOUNT_INFO', ' (скидка {percent}%: -{amount} تومان)').format(
                     percent=discount_percent, amount=discount_value // 100
                 )
             else:
-                text += f' (discount {discount_percent}%: -{discount_value // 100}₽)'
+                text += f' (discount {discount_percent}%: -{discount_value // 100} تومان)'
 
         buttons.append([InlineKeyboardButton(text=text, callback_data=f'add_traffic_{gb}')])
 
@@ -2967,12 +2967,12 @@ def get_change_devices_keyboard(
                     discount_percent,
                 )
                 total_price = int(discounted_per_month * price_multiplier)
-                total_price = max(100, total_price)  # Минимум 1 рубль
-                price_text = f' (+{total_price // 100}₽{period_text})'
+                total_price = max(100, total_price)  # Минимум 1 تومان
+                price_text = f' (+{total_price // 100} تومان{period_text})'
                 total_discount = int(discount_per_month * price_multiplier)
                 if discount_percent > 0 and total_discount > 0:
                     price_text += texts.t('DEVICE_CHANGE_DISCOUNT_INFO', ' (скидка {percent}%: -{amount})').format(
-                        percent=discount_percent, amount=f'{total_discount // 100}₽'
+                        percent=discount_percent, amount=f'{total_discount // 100} تومان'
                     )
                 action_text = ''
             else:
@@ -3130,7 +3130,7 @@ def get_manage_countries_keyboard(
             total_price = max(100, total_price) if total_price > 0 else 0
             if days_left > 30:
                 price_text = texts.t(
-                    'COUNTRY_PRICE_PER_MONTH_TOTAL', ' ({per_month}₽/мес × {days} дн. = {total}₽)'
+                    'COUNTRY_PRICE_PER_MONTH_TOTAL', ' ({per_month} تومان/мес × {days} дн. = {total} تومان)'
                 ).format(per_month=discounted_per_month // 100, days=days_left, total=total_price // 100)
                 logger.info(
                     '🔍 Стоимость сервера',
@@ -3141,11 +3141,11 @@ def get_manage_countries_keyboard(
                     discount_per_month=int(discount_per_month * price_multiplier) / 100,
                 )
             else:
-                price_text = texts.t('COUNTRY_PRICE_TOTAL', ' ({total}₽)').format(total=total_price // 100)
+                price_text = texts.t('COUNTRY_PRICE_TOTAL', ' ({total} تومان)').format(total=total_price // 100)
             total_discount_for_server = int(discount_per_month * price_multiplier)
             if discount_percent > 0 and total_discount_for_server > 0:
                 price_text += texts.t('COUNTRY_CHANGES_DISCOUNT_INFO', ' (скидка {percent}%: -{amount})').format(
-                    percent=discount_percent, amount=f'{total_discount_for_server // 100}₽'
+                    percent=discount_percent, amount=f'{total_discount_for_server // 100} تومان'
                 )
             display_name = f'{icon} {name}{price_text}'
         else:
@@ -3154,7 +3154,7 @@ def get_manage_countries_keyboard(
         buttons.append([InlineKeyboardButton(text=display_name, callback_data=f'country_manage_{uuid}')])
 
     if total_cost > 0:
-        apply_text = texts.t('APPLY_CHANGES_WITH_PRICE_BUTTON', '✅ Применить изменения ({price} ₽)').format(
+        apply_text = texts.t('APPLY_CHANGES_WITH_PRICE_BUTTON', '✅ Применить изменения ({price} تومان)').format(
             price=total_cost // 100
         )
         logger.info('🔍 Общая стоимость новых серверов: ₽', total_cost=total_cost / 100)

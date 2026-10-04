@@ -254,7 +254,7 @@ async def _start_antilopay_topup_impl(
         texts.t(
             'ANTILOPAY_ENTER_AMOUNT',
             '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в рублях.\n\n'
+            'Введите сумму пополнения в تومان.\n\n'
             'Минимум: {min_amount}\u20bd\n'
             'Максимум: {max_amount}\u20bd',
         ).format(

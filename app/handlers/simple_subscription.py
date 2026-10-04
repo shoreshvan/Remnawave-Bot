@@ -1313,7 +1313,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SIMPLE_SUB_CRYPTOBOT_AMOUNT_RANGE',
-                        '❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через CryptoBot',
+                        '❌ Сумма должна быть от 100 до 100 000 تومان для оплаты через CryptoBot',
                     ),
                     show_alert=True,
                 )
@@ -1407,10 +1407,10 @@ async def handle_simple_subscription_payment_method(
             message_text = texts.t(
                 'SIMPLE_SUB_CRYPTOBOT_INSTRUCTIONS',
                 '🪙 <b>Оплата через CryptoBot</b>\n\n'
-                '💰 Сумма к оплате: {amount:.0f} ₽\n'
+                '💰 Сумма к оплате: {amount:.0f} تومان\n'
                 '💵 В долларах: {usd:.2f} USD\n'
                 '🪙 Актив: {asset}\n'
-                '💱 Курс: 1 USD ≈ {rate:.2f} ₽\n'
+                '💱 Курс: 1 USD ≈ {rate:.2f} تومان\n'
                 '🆔 ID платежа: {payment_id}...\n\n'
                 '📱 <b>Инструкция:</b>\n'
                 "1. Нажмите кнопку 'Оплатить через CryptoBot'\n"
@@ -1450,7 +1450,7 @@ async def handle_simple_subscription_payment_method(
                 await callback.answer(
                     texts.t(
                         'SIMPLE_SUB_HELEKET_AMOUNT_RANGE',
-                        '❌ Сумма должна быть от 100 до 100 000 ₽ для оплаты через Heleket',
+                        '❌ Сумма должна быть от 100 до 100 000 تومان для оплаты через Heleket',
                     ),
                     show_alert=True,
                 )
@@ -1537,7 +1537,7 @@ async def handle_simple_subscription_payment_method(
                     if payer_amount_float > 0:
                         rub_per_currency = amount_rubles / payer_amount_float
                         message_lines.append(
-                            texts.t('SIMPLE_SUB_HELEKET_RATE', '💱 Курс: 1 {currency} ≈ {rate:.2f} ₽').format(
+                            texts.t('SIMPLE_SUB_HELEKET_RATE', '💱 Курс: 1 {currency} ≈ {rate:.2f} تومان').format(
                                 currency=payer_currency, rate=rub_per_currency
                             )
                         )

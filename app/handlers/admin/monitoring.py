@@ -1184,12 +1184,12 @@ async def monitoring_statistics_callback(callback: CallbackQuery):
                 )
                 if queue_len > 0:
                     nalogo_section += texts.t(
-                        'ADMIN_MON_STATS_NALOGO_AMOUNT', '\n• На сумму: {amount:,.2f} ₽'
+                        'ADMIN_MON_STATS_NALOGO_AMOUNT', '\n• На сумму: {amount:,.2f} تومان'
                     ).format(amount=total_amount)
                 if pending_count > 0:
                     nalogo_section += texts.t(
                         'ADMIN_MON_STATS_NALOGO_PENDING',
-                        '\n⚠️ <b>Требуют проверки: {count} ({amount:,.2f} ₽)</b>',
+                        '\n⚠️ <b>Требуют проверки: {count} ({amount:,.2f} تومان)</b>',
                     ).format(count=pending_count, amount=pending_amount)
                 text += nalogo_section
 
@@ -1357,7 +1357,7 @@ async def nalogo_force_process_callback(callback: CallbackQuery):
                 )
                 if queue_len > 0:
                     nalogo_section += texts.t(
-                        'ADMIN_MON_STATS_NALOGO_AMOUNT', '\n• На сумму: {amount:,.2f} ₽'
+                        'ADMIN_MON_STATS_NALOGO_AMOUNT', '\n• На сумму: {amount:,.2f} تومان'
                     ).format(amount=total_amount)
                 stats_text += nalogo_section
 
@@ -1428,7 +1428,7 @@ async def nalogo_pending_callback(callback: CallbackQuery):
             created_at = receipt.get('created_at', '')[:16].replace('T', ' ')
             error = receipt.get('error', '')[:50]
 
-            text += f'<b>{i}. {amount:,.2f} ₽</b>\n'
+            text += f'<b>{i}. {amount:,.2f} تومان</b>\n'
             text += f'   📅 {created_at}\n'
             text += f'   🆔 <code>{payment_id[:20]}...</code>\n'
             if error:
@@ -1774,7 +1774,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
         # Паттерны для парсинга логов
         # Успешный платёж: "Успешно обработан платеж YooKassa 30e3c6fc-000f-5001-9000-1a9c8b242396: пользователь 1046 пополнил баланс на 200.0₽"
         payment_pattern = re.compile(
-            r'(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2}.*Успешно обработан платеж YooKassa ([a-f0-9-]+).*на ([\d.]+)₽'
+            r'(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}:\d{2}.*Успешно обработан платеж YooKassa ([a-f0-9-]+).*на ([\d.]+) تومان'
         )
         # Чек создан: "Чек NaloGO создан для платежа 30e3c6fc-000f-5001-9000-1a9c8b242396: 243udsqtik"
         receipt_pattern = re.compile(
@@ -1852,7 +1852,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
         else:
             text += texts.t(
                 'ADMIN_MON_RECONCILE_MISSING',
-                '⚠️ <b>Без чеков:</b> {count} платежей на {amount:,.2f} ₽\n\n',
+                '⚠️ <b>Без чеков:</b> {count} платежей на {amount:,.2f} تومان\n\n',
             ).format(count=missing_count, amount=missing_amount)
 
             # Показываем по датам (последние)
@@ -1861,7 +1861,7 @@ async def _do_reconcile_logs(callback: CallbackQuery):
                 date_payments = by_date[date_str]
                 date_amount = sum(p['amount'] for p in date_payments)
                 text += texts.t(
-                    'ADMIN_MON_RECONCILE_DATE_LINE', '• <b>{date}:</b> {count} шт. на {amount:,.2f} ₽\n'
+                    'ADMIN_MON_RECONCILE_DATE_LINE', '• <b>{date}:</b> {count} шт. на {amount:,.2f} تومان\n'
                 ).format(date=date_str, count=len(date_payments), amount=date_amount)
 
             if len(sorted_dates) > 7:
@@ -1939,7 +1939,7 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery):
             return
 
         payment_pattern = re.compile(
-            r'(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}).*Успешно обработан платеж YooKassa ([a-f0-9-]+).*пользователь (\d+).*на ([\d.]+)₽'
+            r'(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}).*Успешно обработан платеж YooKassa ([a-f0-9-]+).*пользователь (\d+).*на ([\d.]+) تومان'
         )
         receipt_pattern = re.compile(r'Чек NaloGO создан для платежа ([a-f0-9-]+)')
 
@@ -1983,7 +1983,7 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery):
                 text += texts.t(
                     'ADMIN_MON_DETAILS_PAYMENT_LINE',
                     '• <b>{date} {time}</b>\n'
-                    '  User: {user_id} | {amount:.0f}₽\n'
+                    '  User: {user_id} | {amount:.0f} تومان\n'
                     '  <code>{payment_id}...</code>\n\n',
                 ).format(
                     date=p['date'],

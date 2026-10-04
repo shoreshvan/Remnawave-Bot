@@ -40,7 +40,7 @@ LAVA_STATUS_MAP: dict[str, tuple[str, bool]] = {
 
 
 def _lava_amount_to_kopeks(raw: Any) -> int:
-    """Сумма Lava (рубли, число/строка) в копейки; 0 при отсутствии/мусоре."""
+    """Сумма Lava (تومان, число/строка) в копейки; 0 при отсутствии/мусоре."""
     if raw is None:
         return 0
     try:
@@ -763,8 +763,8 @@ class LavaPaymentMixin:
         true_amount = await resolve_true_renewal_amount(db, subscription, charge_days)
         if true_amount and true_amount - amount_kopeks > 1:
             raise ValueError(
-                f'Продукт Lava стоит {amount_kopeks / 100:.2f} ₽, а продление подписки — '
-                f'{true_amount / 100:.2f} ₽ за {charge_days} дн. Заведите продукт с актуальной ценой.'
+                f'Продукт Lava стоит {amount_kopeks / 100:.2f} تومان, а продление подписки — '
+                f'{true_amount / 100:.2f} تومان за {charge_days} дн. Заведите продукт с актуальной ценой.'
             )
 
         consumer_id = self._lava_consumer_id(user)

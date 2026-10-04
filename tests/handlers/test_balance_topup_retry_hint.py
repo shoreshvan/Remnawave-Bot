@@ -84,7 +84,7 @@ async def test_rejected_purchase_topup_keeps_input_open_until_user_retries(payme
 
     hint = message.answer.await_args.args[0]
     assert 'отправьте боту сообщение' in hint
-    assert 'не меньше 50 ₽' in hint
+    assert 'не меньше 50 تومان' in hint
     assert 'Например, отправьте: 50' in hint
     callback.answer.assert_awaited_once()
     payment_environment.factory.assert_not_called()
@@ -96,7 +96,7 @@ async def test_rejected_purchase_topup_keeps_input_open_until_user_retries(payme
     await balance_main.process_topup_amount(too_large, user, state)
     maximum_hint = too_large.answer.await_args.args[0]
     assert 'отправьте боту сообщение' in maximum_hint
-    assert 'не больше 100 ₽' in maximum_hint
+    assert 'не больше 100 تومان' in maximum_hint
     payment_environment.factory.assert_not_called()
     assert await state.get_state() == BalanceStates.waiting_for_amount.state
     assert (await state.get_data())['saved_cart'] == cart
@@ -151,7 +151,7 @@ async def test_minimum_hint_only_suggests_an_accepted_whole_ruble_amount(
 
     hint = message.answer.await_args.args[0]
     assert 'отправьте боту сообщение' in hint
-    assert f'не меньше {displayed_minimum} ₽' in hint
+    assert f'не меньше {displayed_minimum} تومان' in hint
     if example is None:
         assert 'Например' not in hint
     else:

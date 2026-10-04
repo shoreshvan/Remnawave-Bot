@@ -915,7 +915,7 @@ class BotConfigurationService:
         'SIMPLE_SUBSCRIPTION_PERIOD_DAYS': {
             'description': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_PERIOD_DAYS_DESCRIPTION', 'Период подписки, который предлагается при быстрой покупке.'),
             'format': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_PERIOD_DAYS_FORMAT', 'Выберите один из доступных периодов.'),
-            'example': '30 дн. — 990 ₽',
+            'example': '30 дн. — 990 تومان',
             'warning': get_texts().t('SETTINGS_HINT_SIMPLE_SUBSCRIPTION_PERIOD_DAYS_WARNING', 'Не забудьте настроить цену периода в блоке «Стоимость тарифов».'),
         },
         'SIMPLE_SUBSCRIPTION_DEVICE_LIMIT': {

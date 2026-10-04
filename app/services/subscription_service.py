@@ -1268,7 +1268,7 @@ class SubscriptionService:
                     total_price += default_price
                     prices_list.append(default_price)
                     logger.warning(
-                        '⚠️ Сервер недоступен, используем базовую цену: ₽',
+                        '⚠️ Сервер недоступен, используем базовую цену: تومان',
                         country_uuid=country_uuid,
                         default_price=default_price / 100,
                     )

@@ -85,7 +85,7 @@ async def _create_cloudpayments_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        '💳 Оплатить {amount}₽',
+                        '💳 Оплатить {amount} تومان',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                 )
@@ -102,7 +102,7 @@ async def _create_cloudpayments_payment_and_respond(
     response_text = texts.t(
         'CLOUDPAYMENTS_PAYMENT_CREATED',
         '💳 <b>Оплата банковской картой</b>\n\n'
-        'Сумма: <b>{amount}₽</b>\n\n'
+        'Сумма: <b>{amount} تومان</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
     ).format(amount=f'{amount_rub:.2f}')
@@ -168,7 +168,7 @@ async def process_cloudpayments_payment_amount(
         await message.answer(
             texts.t(
                 'AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount:.0f}₽',
+                'Минимальная сумма пополнения: {min_amount:.0f} تومان',
             ).format(min_amount=min_rub),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -179,7 +179,7 @@ async def process_cloudpayments_payment_amount(
         await message.answer(
             texts.t(
                 'AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount:,.0f}₽',
+                'Максимальная сумма пополнения: {max_amount:,.0f} تومان',
             ).format(max_amount=max_rub),
             reply_markup=get_back_keyboard(db_user.language),
         )
@@ -234,7 +234,7 @@ async def start_cloudpayments_payment(
     message_text = texts.t(
         'CLOUDPAYMENTS_ENTER_AMOUNT',
         '💳 <b>Оплата банковской картой (CloudPayments)</b>\n\n'
-        'Введите сумму для пополнения от {min_amount:.0f} до {max_amount:,.0f} рублей:',
+        'Введите сумму для пополнения от {min_amount:.0f} до {max_amount:,.0f} تومان:',
     ).format(min_amount=min_amount_rub, max_amount=max_amount_rub)
 
     keyboard = await get_topup_amount_keyboard('cloudpayments', db_user.language, back_callback='back_to_menu')
@@ -293,7 +293,7 @@ async def process_cloudpayments_amount(
         await message.answer(
             texts.t(
                 'AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount:.0f}₽',
+                'Минимальная сумма пополнения: {min_amount:.0f} تومان',
             ).format(min_amount=min_rub),
             reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
@@ -305,7 +305,7 @@ async def process_cloudpayments_amount(
         await message.answer(
             texts.t(
                 'AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount:,.0f}₽',
+                'Максимальная сумма пополнения: {max_amount:,.0f} تومان',
             ).format(max_amount=max_rub),
             reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
@@ -351,7 +351,7 @@ async def process_cloudpayments_amount(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        '💳 Оплатить {amount}₽',
+                        '💳 Оплатить {amount} تومان',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                 )
@@ -369,7 +369,7 @@ async def process_cloudpayments_amount(
         texts.t(
             'CLOUDPAYMENTS_PAYMENT_CREATED',
             '💳 <b>Оплата банковской картой</b>\n\n'
-            'Сумма: <b>{amount}₽</b>\n\n'
+            'Сумма: <b>{amount} تومان</b>\n\n'
             'Нажмите кнопку ниже для оплаты.\n'
             'После успешной оплаты баланс будет пополнен автоматически.',
         ).format(amount=f'{amount_rub:.2f}'),
