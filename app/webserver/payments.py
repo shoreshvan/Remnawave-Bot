@@ -2110,6 +2110,61 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # HooshPay webhook (hooshpay.xyz/api/v1)
+    if settings.is_hooshpay_configured():
+
+        @router.get(settings.HOOSHPAY_WEBHOOK_PATH)
+        async def hooshpay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'hooshpay_webhook',
+                    'enabled': settings.is_hooshpay_enabled(),
+                }
+            )
+
+        @router.post(settings.HOOSHPAY_WEBHOOK_PATH)
+        async def hooshpay_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.hooshpay_service import hooshpay_service
+
+            # Подпись считается по РАЗОБРАННОМУ телу, пересобранному с сортировкой
+            # ключей (ksort + json_encode на стороне провайдера).
+            payload = hooshpay_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not hooshpay_service.verify_callback_signature(payload, request.headers.get('X-HooshPay-Signature')):
+                logger.warning('HooshPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # HooshPay ждёт HTTP 200 как подтверждение и иначе повторяет доставку.
+            # Подтверждаем сразу после проверки подписи, зачисление доделываем
+            # фоном: обработчик берёт свою сессию БД и блокирует строку платежа,
+            # поэтому параллельные доставки безопасны.
+            async def _process_hooshpay_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_hooshpay_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'HooshPay webhook processing failed',
+                            order_id=payload.get('order_id'),
+                            invoice=payload.get('invoice'),
+                            payment_status=payload.get('status'),
+                        )
+                except Exception as e:
+                    logger.exception('HooshPay webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_hooshpay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # TabPay webhook (tabpay.org)
     if settings.is_tabpay_configured():
 

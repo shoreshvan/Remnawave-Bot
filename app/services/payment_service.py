@@ -44,6 +44,7 @@ from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.payment.lava import LavaPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
 from app.services.payment.paritypay import ParityPayPaymentMixin
+from app.services.payment.hooshpay import HooshpayPaymentMixin
 from app.services.payment.payer_identity import resolve_guest_payer
 from app.services.payment.paypear import PayPearPaymentMixin
 from app.services.payment.riopay import RioPayPaymentMixin
@@ -866,6 +867,7 @@ class PaymentService(
     TabPayPaymentMixin,
     ParityPayPaymentMixin,
     CasheraPaymentMixin,
+    HooshpayPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 

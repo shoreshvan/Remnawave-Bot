@@ -59,7 +59,7 @@ async def start_cryptobot_payment(callback: types.CallbackQuery, db_user: User, 
     try:
         current_rate = await currency_converter.get_usd_to_rub_rate()
         rate_text = texts.t('CRYPTOBOT_CURRENT_RATE', '💱 Текущий курс: 1 USD = {rate} تومان').format(
-            rate=f'{current_rate:.2f}'
+            rate=f'{current_rate:,.0f}'
         )
     except Exception as e:
         logger.warning('Не удалось получить курс валют', error=e)
@@ -277,7 +277,7 @@ async def process_cryptobot_payment_amount(
                 amount=f'{amount_rubles:.0f}',
                 usd=f'{amount_usd:.2f}',
                 asset=payment_result['asset'],
-                rate=f'{current_rate:.2f}',
+                rate=f'{current_rate:,.0f}',
                 invoice_id=payment_result['invoice_id'][:8],
                 support=settings.get_support_contact_display_html(),
             ),

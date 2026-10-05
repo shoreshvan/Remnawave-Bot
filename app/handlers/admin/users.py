@@ -2668,9 +2668,12 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
         amount_rubles = float(message.text.replace(',', '.'))
         amount_kopeks = int(amount_rubles * 100)
 
-        if abs(amount_kopeks) > 10000000:
+        max_edit_kopeks = settings.ADMIN_BALANCE_EDIT_MAX_KOPEKS
+        if max_edit_kopeks and abs(amount_kopeks) > max_edit_kopeks:
             await message.answer(
-                texts.t('ADMIN_BALANCE_EDIT_TOO_LARGE', '❌ Слишком большая сумма (максимум 100,000 تومان)')
+                texts.t('ADMIN_BALANCE_EDIT_TOO_LARGE', '❌ Слишком большая сумма (максимум {max})').format(
+                    max=settings.format_price(max_edit_kopeks)
+                )
             )
             return
 

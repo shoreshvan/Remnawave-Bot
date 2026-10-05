@@ -220,6 +220,13 @@ async def route_payment_by_method(
             await process_paritypay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == 'hooshpay':
+        from .hooshpay import process_hooshpay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_hooshpay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method in ('tabpay', 'tabpay_card', 'tabpay_sbp'):
         from .tabpay import process_tabpay_payment_amount
 
@@ -1002,6 +1009,10 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_paritypay_topup, F.data == 'topup_paritypay')
     dp.callback_query.register(start_paritypay_card_topup, F.data == 'topup_paritypay_card')
     dp.callback_query.register(start_paritypay_sbp_topup, F.data == 'topup_paritypay_sbp')
+
+    from .hooshpay import start_hooshpay_topup
+
+    dp.callback_query.register(start_hooshpay_topup, F.data == 'topup_hooshpay')
 
     from .mulenpay import check_mulenpay_payment_status
 

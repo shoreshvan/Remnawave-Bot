@@ -444,6 +444,9 @@ class Settings(BaseSettings):
     TRAFFIC_RESET_BASE_PRICE: int = 0  # 0 = использовать PERIOD_PRICES[30]
 
     REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 5_000_000  # 50 000 туманов
+    # Максимальная сумма ручного изменения баланса админом (копейки = 1/100 تومان).
+    # Защита от опечаток; оператор меняет под себя через .env, без правок кода.
+    ADMIN_BALANCE_EDIT_MAX_KOPEKS: int = 1_000_000_000  # 10 000 000 تومان
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
     REFERRAL_INVITER_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
     REFERRAL_COMMISSION_PERCENT: int = 25
@@ -1185,6 +1188,23 @@ class Settings(BaseSettings):
     PARITYPAY_CARD_DISPLAY_NAME: str = 'Карта (ParityPay)'
     PARITYPAY_SBP_ENABLED: bool = False
     PARITYPAY_SBP_DISPLAY_NAME: str = 'СБП (ParityPay)'
+
+    # HooshPay (hooshpay.xyz/api/v1) — иранский card-to-card шлюз, суммы в توманах
+    HOOSHPAY_ENABLED: bool = False
+    HOOSHPAY_API_KEY: str | None = None  # X-API-KEY — ключ запросов (hp_live_...)
+    # Секрет для проверки подписи вебхука (X-HooshPay-Signature, HMAC-SHA256).
+    # Отдельный от API-ключа: утечка одного не даёт подделать другое.
+    HOOSHPAY_API_SECRET: str | None = None
+    HOOSHPAY_BASE_URL: str = 'https://hooshpay.xyz/api/v1'
+    HOOSHPAY_DISPLAY_NAME: str = 'HooshPay'
+    # fee_mode: '' | 'seller' | 'buyer' | 'split'. Пусто = берётся из настроек
+    # аккаунта HooshPay (комиссия по умолчанию 20%).
+    HOOSHPAY_FEE_MODE: str | None = None
+    HOOSHPAY_MIN_AMOUNT_KOPEKS: int = 100000  # 1000 تومان — минимум HooshPay
+    HOOSHPAY_MAX_AMOUNT_KOPEKS: int = 1000000000  # 10 000 000 تومان
+    HOOSHPAY_WEBHOOK_PATH: str = '/hooshpay-webhook'
+    HOOSHPAY_INVOICE_LIFETIME_MINUTES: int = 30
+    HOOSHPAY_RETURN_URL: str | None = None
 
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
@@ -3474,6 +3494,32 @@ class Settings(BaseSettings):
 
     def get_paritypay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_paritypay_sbp_display_name())
+
+    def is_hooshpay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.HOOSHPAY_API_KEY and self.HOOSHPAY_API_SECRET)
+
+    def is_hooshpay_enabled(self) -> bool:
+        # Секрет вебхука обязателен наравне с API-ключом: без него подпись
+        # X-HooshPay-Signature не проверить, и вебхук пришлось бы принимать вслепую.
+        return bool(self.HOOSHPAY_ENABLED and self.HOOSHPAY_API_KEY and self.HOOSHPAY_API_SECRET)
+
+    def get_hooshpay_display_name(self) -> str:
+        name = (self.HOOSHPAY_DISPLAY_NAME or '').strip()
+        return name or 'HooshPay'
+
+    def get_hooshpay_display_name_html(self) -> str:
+        return html.escape(self.get_hooshpay_display_name())
+
+    def get_hooshpay_callback_url(self) -> str | None:
+        """Публичный адрес вебхука. Без WEBHOOK_URL не передаём ничего —
+        тогда HooshPay берёт адрес callback_url из настроек кассы."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.HOOSHPAY_WEBHOOK_PATH}'
+
+    def get_hooshpay_return_url(self) -> str | None:
+        return self.HOOSHPAY_RETURN_URL or None
 
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""

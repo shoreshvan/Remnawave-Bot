@@ -28,6 +28,7 @@ from app.database.models import (
     EtoplatezhiPayment,
     FreekassaPayment,
     HeleketPayment,
+    HooshPayPayment,
     JupiterPayment,
     KassaAiPayment,
     LavaPayment,
@@ -96,6 +97,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.TABPAY,
         PaymentMethod.PARITYPAY,
         PaymentMethod.CASHERA,
+        PaymentMethod.HOOSHPAY,
         # ETOPLATEZHI / ANTILOPAY / JUPITER / DONUT / LAVA — webhook-driven,
         # без API-метода синхронизации БД, manual check не реализован.
     }
@@ -126,6 +128,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.TABPAY,
         PaymentMethod.PARITYPAY,
         PaymentMethod.CASHERA,
+        PaymentMethod.HOOSHPAY,
     }
 )
 
@@ -183,6 +186,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return settings.get_tabpay_display_name()
     if method == PaymentMethod.PARITYPAY:
         return settings.get_paritypay_display_name()
+    if method == PaymentMethod.HOOSHPAY:
+        return settings.get_hooshpay_display_name()
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
     return method.value
@@ -239,6 +244,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_tabpay_enabled()
     if method == PaymentMethod.PARITYPAY:
         return settings.is_paritypay_enabled()
+    if method == PaymentMethod.HOOSHPAY:
+        return settings.is_hooshpay_enabled()
     return False
 
 
@@ -563,6 +570,14 @@ def _is_paritypay_pending(payment: ParityPayPayment) -> bool:
     from app.services.payment.paritypay import PARITYPAY_PENDING_STATUSES
 
     return (payment.status or '').lower() in PARITYPAY_PENDING_STATUSES
+
+
+def _is_hooshpay_pending(payment: HooshPayPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.hooshpay import HOOSHPAY_PENDING_STATUSES
+
+    return (payment.status or '').lower() in HOOSHPAY_PENDING_STATUSES
 
 
 def _is_tabpay_pending(payment: TabPayPayment) -> bool:
@@ -1176,6 +1191,32 @@ async def _fetch_paritypay_payments(db: AsyncSession, cutoff: datetime) -> list[
     return records
 
 
+async def _fetch_hooshpay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(HooshPayPayment)
+        .options(selectinload(HooshPayPayment.user))
+        .where(HooshPayPayment.created_at >= cutoff)
+        .order_by(desc(HooshPayPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_hooshpay_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.HOOSHPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _fetch_tabpay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(TabPayPayment)
@@ -1354,6 +1395,7 @@ async def list_recent_pending_payments(
         await _fetch_cashera_payments(db, cutoff),
         await _fetch_tabpay_payments(db, cutoff),
         await _fetch_paritypay_payments(db, cutoff),
+        await _fetch_hooshpay_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
         await _fetch_platega_recurring_charges(db, cutoff),
     )
@@ -1688,6 +1730,21 @@ async def get_payment_record(
             expires_at=getattr(payment, 'expires_at', None),
         )
 
+    if method == PaymentMethod.HOOSHPAY:
+        payment = await db.get(HooshPayPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
     if method == PaymentMethod.TABPAY:
         payment = await db.get(TabPayPayment, local_payment_id)
         if not payment:
@@ -1872,6 +1929,13 @@ async def run_manual_check(
             paritypay_payment = await db.get(ParityPayPayment, local_payment_id)
             if paritypay_payment:
                 result = await payment_service.check_paritypay_payment_status(db, paritypay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.HOOSHPAY:
+            hooshpay_payment = await db.get(HooshPayPayment, local_payment_id)
+            if hooshpay_payment:
+                result = await payment_service.check_hooshpay_payment_status(db, hooshpay_payment.order_id)
                 payment = result.get('payment') if result else None
             else:
                 payment = None

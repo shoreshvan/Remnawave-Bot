@@ -1675,7 +1675,12 @@ class BotConfigurationService:
 
         if isinstance(value, (int, float)):
             formatted = cls._format_numeric_with_unit(key, value)
-            return formatted or str(value)
+            if formatted is not None:
+                return formatted
+            # Целое float показываем без хвоста ".0" (курс 255000.0 → 255000).
+            if isinstance(value, float) and value.is_integer():
+                return str(int(value))
+            return str(value)
 
         if isinstance(value, str):
             cleaned = value.strip()

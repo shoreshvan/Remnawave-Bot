@@ -152,7 +152,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
             ).format(
                 amount=texts.format_price(amount_kopeks),
                 stars=stars_amount,
-                rate=stars_rate,
+                rate=f'{stars_rate:,.0f}',
             ),
             reply_markup=keyboard,
             parse_mode='HTML',

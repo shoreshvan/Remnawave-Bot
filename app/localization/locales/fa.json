@@ -6403,7 +6403,7 @@
   "ADMIN_TX_DATE_LINE": "📅 {date}\n\n",
   "ADMIN_BTN_BACK": "⬅️ بازگشت",
   "ADMIN_USER_BACK_TO_TICKET": "🎫 بازگشت به تیکت",
-  "ADMIN_BALANCE_EDIT_TOO_LARGE": "❌ مبلغ بیش از حد بزرگ است (حداکثر ۱۰۰٬۰۰۰ تومان)",
+  "ADMIN_BALANCE_EDIT_TOO_LARGE": "❌ مبلغ بیش از حد بزرگ است (حداکثر {max})",
   "ADMIN_BALANCE_TX_DESC_TOPUP": "افزایش توسط مدیر: +{amount} تومان",
   "ADMIN_BALANCE_TX_DESC_WITHDRAW": "کسر توسط مدیر: {amount} تومان",
   "ADMIN_BALANCE_CHANGE_ERROR": "❌ خطا در تغییر موجودی (احتمالاً موجودی برای کسر کافی نیست)",
