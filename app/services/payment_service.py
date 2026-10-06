@@ -45,6 +45,7 @@ from app.services.payment.lava import LavaPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
 from app.services.payment.paritypay import ParityPayPaymentMixin
 from app.services.payment.hooshpay import HooshpayPaymentMixin
+from app.services.payment.tonpays import TonpaysPaymentMixin
 from app.services.payment.payer_identity import resolve_guest_payer
 from app.services.payment.paypear import PayPearPaymentMixin
 from app.services.payment.riopay import RioPayPaymentMixin
@@ -868,6 +869,7 @@ class PaymentService(
     ParityPayPaymentMixin,
     CasheraPaymentMixin,
     HooshpayPaymentMixin,
+    TonpaysPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1616,6 +1618,13 @@ class PaymentService(
                     'payment_id': result.get('order_id'),
                     'provider': 'hooshpay',
                 }
+            return None
+
+        # --- TonPays ----------------------------------------------------------
+        # The Telegram platform mandates buyer_chat_id, so guest (non-Telegram)
+        # purchases cannot use this gateway.
+        if _base == 'tonpays':
+            logger.warning('TonPays requires buyer_chat_id, cannot create guest payment')
             return None
 
         # --- Telegram Stars ---------------------------------------------------

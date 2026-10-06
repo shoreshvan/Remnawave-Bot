@@ -43,6 +43,7 @@ from app.database.models import (
     RollyPayPayment,
     SeverPayPayment,
     TabPayPayment,
+    TonPaysPayment,
     WataPayment,
     YooKassaPayment,
 )
@@ -77,6 +78,7 @@ _GATEWAY_REGISTRY: list[tuple[str, type, object]] = [
     (PaymentMethod.TABPAY.value, TabPayPayment, TabPayPayment.is_paid.is_(True)),
     (PaymentMethod.PARITYPAY.value, ParityPayPayment, ParityPayPayment.is_paid.is_(True)),
     (PaymentMethod.HOOSHPAY.value, HooshPayPayment, HooshPayPayment.is_paid.is_(True)),
+    (PaymentMethod.TONPAYS.value, TonPaysPayment, TonPaysPayment.is_paid.is_(True)),
 ]
 
 

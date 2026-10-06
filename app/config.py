@@ -447,7 +447,7 @@ class Settings(BaseSettings):
     # Максимальная сумма ручного изменения баланса админом (копейки = 1/100 تومان).
     # Защита от опечаток; оператор меняет под себя через .env, без правок кода.
     ADMIN_BALANCE_EDIT_MAX_KOPEKS: int = 2_000_000_000  # 20 000 000 تومان
-    ADMIN_BALANCE_EDIT_MIN_KOPEKS: int = 1_000_000  # 10 000 تومان — کف یکدست شارژ دستی
+    ADMIN_BALANCE_EDIT_MIN_KOPEKS: int = 1_000_000  # 10 000 تومان — единый минимум ручной зарядки
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
     REFERRAL_INVITER_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
     REFERRAL_COMMISSION_PERCENT: int = 25
@@ -1197,15 +1197,31 @@ class Settings(BaseSettings):
     # Отдельный от API-ключа: утечка одного не даёт подделать другое.
     HOOSHPAY_API_SECRET: str | None = None
     HOOSHPAY_BASE_URL: str = 'https://hooshpay.xyz/api/v1'
-    HOOSHPAY_DISPLAY_NAME: str = 'HooshPay'
+    HOOSHPAY_DISPLAY_NAME: str = 'کارت به کارت(1)'
     # fee_mode: '' | 'seller' | 'buyer' | 'split'. Пусто = берётся из настроек
     # аккаунта HooshPay (комиссия по умолчанию 20%).
     HOOSHPAY_FEE_MODE: str | None = None
-    HOOSHPAY_MIN_AMOUNT_KOPEKS: int = 1000000  # 10000 تومان — کف یکدست همه درگاه‌های فعال
-    HOOSHPAY_MAX_AMOUNT_KOPEKS: int = 2000000000  # 20 000 000 تومان — سقف یکدست
+    HOOSHPAY_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان — реальный минимум API HooshPay
+    HOOSHPAY_MAX_AMOUNT_KOPEKS: int = 150000000  # 1500000 تومان — реальный максимум API HooshPay
     HOOSHPAY_WEBHOOK_PATH: str = '/hooshpay-webhook'
     HOOSHPAY_INVOICE_LIFETIME_MINUTES: int = 30
     HOOSHPAY_RETURN_URL: str | None = None
+
+    # TonPays custom gateway, Telegram platform (tonpays.online, card-to-card).
+    # В отличие от HooshPay здесь нет hosted payment_url: показываем покупателю
+    # card_number/card_name + final_amount, чек принимает ручная проверка.
+    TONPAYS_ENABLED: bool = False
+    TONPAYS_API_KEY: str | None = None  # X-API-Key — кастомный TG-ключ из панели магазина
+    TONPAYS_BASE_URL: str = 'https://tonpays.online'
+    TONPAYS_DISPLAY_NAME: str = 'کارت به کارت(2)'
+    # Лимиты провайдера в документации не указаны — взяты как у соседнего
+    # карточного шлюза (HooshPay real: 50000..1500000), подтвердить живым тестом.
+    TONPAYS_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان
+    TONPAYS_MAX_AMOUNT_KOPEKS: int = 150000000  # 1500000 تومان
+    TONPAYS_WEBHOOK_PATH: str = '/tonpays-webhook'
+    TONPAYS_INVOICE_LIFETIME_MINUTES: int = 30
+    TONPAYS_RECEIPT_MAX_BYTES: int = 10 * 1024 * 1024  # 10 МБ по документации
+    TONPAYS_CHANGE_CARD_COOLDOWN_SECONDS: int = 60
 
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
@@ -3524,6 +3540,26 @@ class Settings(BaseSettings):
 
     def get_hooshpay_return_url(self) -> str | None:
         return self.HOOSHPAY_RETURN_URL or None
+
+    def is_tonpays_configured(self) -> bool:
+        """Есть ли ключ провайдера — без учёта флага включения."""
+        return bool(self.TONPAYS_API_KEY)
+
+    def is_tonpays_enabled(self) -> bool:
+        return bool(self.TONPAYS_ENABLED and self.TONPAYS_API_KEY)
+
+    def get_tonpays_display_name(self) -> str:
+        name = (self.TONPAYS_DISPLAY_NAME or '').strip()
+        return name or 'کارت به کارت(2)'
+
+    def get_tonpays_display_name_html(self) -> str:
+        return html.escape(self.get_tonpays_display_name())
+
+    def get_tonpays_callback_url(self) -> str | None:
+        """Публичный адрес вебхука. Без WEBHOOK_URL не передаём ничего."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.TONPAYS_WEBHOOK_PATH}'
 
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""

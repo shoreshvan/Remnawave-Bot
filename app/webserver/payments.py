@@ -2165,6 +2165,59 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # TonPays webhook (tonpays.online custom gateway, Telegram platform)
+    if settings.is_tonpays_configured():
+
+        @router.get(settings.TONPAYS_WEBHOOK_PATH)
+        async def tonpays_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'tonpays_webhook',
+                    'enabled': settings.is_tonpays_enabled(),
+                }
+            )
+
+        @router.post(settings.TONPAYS_WEBHOOK_PATH)
+        async def tonpays_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.tonpays_service import tonpays_service
+
+            # Auth = X-API-Key match (the X-TonPays-Signature construction
+            # scheme is undocumented); dedup happens on delivery_id in the mixin.
+            payload = tonpays_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not tonpays_service.verify_callback_auth(request.headers, payload):
+                logger.warning('TonPays webhook: auth failed')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # TonPays retries delivery on non-200. Ack right after auth, credit
+            # in background under a row lock so parallel deliveries are safe.
+            async def _process_tonpays_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_tonpays_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'TonPays webhook processing failed',
+                            order_id=payload.get('order_id'),
+                            invoice=payload.get('invoice_id'),
+                            payment_status=payload.get('status'),
+                        )
+                except Exception as e:
+                    logger.exception('TonPays webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_tonpays_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # TabPay webhook (tabpay.org)
     if settings.is_tabpay_configured():
 

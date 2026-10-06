@@ -227,6 +227,13 @@ async def route_payment_by_method(
             await process_hooshpay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == 'tonpays':
+        from .tonpays import process_tonpays_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_tonpays_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method in ('tabpay', 'tabpay_card', 'tabpay_sbp'):
         from .tabpay import process_tabpay_payment_amount
 
@@ -1013,6 +1020,18 @@ def register_balance_handlers(dp: Dispatcher):
     from .hooshpay import start_hooshpay_topup
 
     dp.callback_query.register(start_hooshpay_topup, F.data == 'topup_hooshpay')
+
+    from .tonpays import (
+        handle_tonpays_check,
+        handle_tonpays_new_card,
+        process_tonpays_receipt,
+        start_tonpays_topup,
+    )
+
+    dp.callback_query.register(start_tonpays_topup, F.data == 'topup_tonpays')
+    dp.callback_query.register(handle_tonpays_check, F.data.startswith('tonpays_check|'))
+    dp.callback_query.register(handle_tonpays_new_card, F.data.startswith('tonpays_card|'))
+    dp.message.register(process_tonpays_receipt, BalanceStates.waiting_for_tonpays_receipt)
 
     from .mulenpay import check_mulenpay_payment_status
 

@@ -1219,6 +1219,18 @@ async def create_topup(
                     detail=texts.t('CABINET_BALANCE_HOOSHPAY_FAILED', 'Failed to create HooshPay payment'),
                 )
 
+        elif request.payment_method == 'tonpays':
+            # TonPays Telegram platform mandates buyer_chat_id and the receipt
+            # UX lives in Telegram — creation is bot-only for now. History and
+            # manual check below still work for bot-created invoices.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t(
+                    'CABINET_BALANCE_METHOD_BOT_ONLY',
+                    'This payment method is only available through the Telegram bot.',
+                ),
+            )
+
         else:
             # For other payment methods, redirect to bot
             raise HTTPException(
@@ -1463,6 +1475,20 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.TONPAYS:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Ожидает подтверждения'),
+            'need_action': ('⚠️', 'Требуется действие'),
+            'success': ('✅', 'Оплачено'),
+            'rejected': ('❌', 'Отклонено'),
+            'expired': ('⌛', 'Истёк'),
+            'cancelled': ('❌', 'Отменён'),
+            'failed': ('❌', 'Ошибка оплаты'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
     if record.method == PaymentMethod.TABPAY:
         mapping = {
             'pending': ('⏳', 'Ожидает оплаты'),
@@ -1520,6 +1546,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status == 'pending'
     if record.method == PaymentMethod.HOOSHPAY:
         return status == 'pending'
+    if record.method == PaymentMethod.TONPAYS:
+        return status in {'pending', 'processing', 'need_action'}
     return False
 
 

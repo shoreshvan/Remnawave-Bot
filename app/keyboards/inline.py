@@ -2398,6 +2398,18 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_tonpays_enabled():
+        tonpays_name = settings.get_tonpays_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_TONPAYS', f'💳 {tonpays_name}'),
+                    callback_data=_build_callback('tonpays'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [

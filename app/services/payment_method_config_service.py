@@ -292,6 +292,13 @@ def _get_method_defaults() -> dict:
             'default_max': settings.HOOSHPAY_MAX_AMOUNT_KOPEKS,
             'available_sub_options': None,
         },
+        'tonpays': {
+            'default_display_name': settings.get_tonpays_display_name(),
+            'is_configured': settings.is_tonpays_enabled(),
+            'default_min': settings.TONPAYS_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.TONPAYS_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
         'tabpay': {
             'default_display_name': settings.get_tabpay_display_name(),
             'is_configured': settings.is_tabpay_enabled(),
@@ -386,6 +393,7 @@ DEFAULT_METHOD_ORDER = [
     'tabpay',
     'paritypay',
     'hooshpay',
+    'tonpays',
     'cashera',
 ]
 

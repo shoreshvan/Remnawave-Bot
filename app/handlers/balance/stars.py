@@ -134,13 +134,19 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_rubles)
         stars_rate = settings.get_stars_rate()
 
+        # Stars are integers: snap the requested amount to exactly
+        # stars × rate (same as the cabinet does). Otherwise a non-multiple
+        # of the rate (e.g. 10000 Toman at 4000/star → 2 stars = 8000) would
+        # credit something different from what the user typed.
+        normalized_kopeks = int(round(stars_amount * stars_rate * 100))
+
         payment_service = PaymentService(message.bot)
         invoice_link = await payment_service.create_stars_invoice(
-            amount_kopeks=amount_kopeks,
+            amount_kopeks=normalized_kopeks,
             description=texts.t('STARS_PAYMENT_DESCRIPTION', 'Пополнение баланса на {amount}').format(
-                amount=texts.format_price(amount_kopeks)
+                amount=texts.format_price(normalized_kopeks)
             ),
-            payload=f'balance_{db_user.id}_{amount_kopeks}',
+            payload=f'balance_{db_user.id}_{normalized_kopeks}',
         )
 
         keyboard = types.InlineKeyboardMarkup(
@@ -175,7 +181,7 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
                 '📊 Курс: {rate} تومان за звезду\n\n'
                 'Нажмите кнопку ниже для оплаты:',
             ).format(
-                amount=texts.format_price(amount_kopeks),
+                amount=texts.format_price(normalized_kopeks),
                 stars=stars_amount,
                 rate=f'{stars_rate:,.0f}',
             ),

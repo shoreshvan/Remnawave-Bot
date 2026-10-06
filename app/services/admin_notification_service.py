@@ -2289,6 +2289,7 @@ class AdminNotificationService:
             'tabpay': provider_template.format(name=settings.get_tabpay_display_name()),
             'paritypay': provider_template.format(name=settings.get_paritypay_display_name()),
             'hooshpay': provider_template.format(name=settings.get_hooshpay_display_name()),
+            'tonpays': provider_template.format(name=settings.get_tonpays_display_name()),
             'manual': texts.t('ADMIN_NOTIFY_PAYMENT_MANUAL', '🛠️ Вручную (админ)'),
             'balance': texts.t('ADMIN_NOTIFY_PAYMENT_FROM_BALANCE', '💰 С баланса'),
         }

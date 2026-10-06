@@ -185,6 +185,7 @@ class PaymentMethod(Enum):
     LAVA = 'lava'
     CASHERA = 'cashera'
     HOOSHPAY = 'hooshpay'
+    TONPAYS = 'tonpays'
     MANUAL = 'manual'
     BALANCE = 'balance'
 
@@ -2077,6 +2078,88 @@ class HooshPayPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<HooshPayPayment(id={self.id}, order_id={self.order_id}, '
+            f'amount={self.amount_toman} تومان, status={self.status})>'
+        )
+
+
+class TonPaysPayment(Base):
+    """Платежи через TonPays custom gateway, Telegram platform (card-to-card).
+
+    Суммы — копейки (1/100 تومان), у провайдера целые томаны. amount —
+    запрошенное пополнение (его и зачисляем); final — сумма с уникальной
+    добавкой (её платит покупатель); credit — подтверждение провайдера.
+    Отдельно храним карту (показываем покупателю) и факт отправки чека.
+    """
+
+    __tablename__ = 'tonpays_payments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Идентификаторы (order_id провайдер ограничивает 20 символами)
+    order_id = Column(String(20), unique=True, nullable=False, index=True)  # Наш order_id
+    tonpays_payment_id = Column(String(64), unique=True, nullable=True, index=True)  # invoice_id (TP-...)
+
+    # Суммы — копейки. amount — запрошенное пополнение (его и зачисляем);
+    # final — сколько реально платит покупатель (с «уникальной» добавкой);
+    # credit — сумма из вебхука (сверка).
+    amount_kopeks = Column(BigInteger, nullable=False)
+    final_amount_kopeks = Column(BigInteger, nullable=True)
+    credit_amount_kopeks = Column(BigInteger, nullable=True)
+    currency = Column(String(10), nullable=False, default='IRT')
+    description = Column(Text, nullable=True)
+
+    # Карта для перевода (показываем покупателю)
+    card_number = Column(String(64), nullable=True)
+    card_name = Column(String(255), nullable=True)
+
+    # Статусы провайдера: pending/processing/need_action/completed + failed-ветка
+    # (rejected/expired/canceled). Внутренние: pending/processing/success/.../amount_mismatch.
+    status = Column(String(32), nullable=False, default='pending')
+    is_paid = Column(Boolean, default=False)
+
+    # Чек: отправлял ли покупатель фото, когда меняли карту в последний раз.
+    receipt_received = Column(Boolean, default=False)
+    last_card_change_at = Column(AwareDateTime(), nullable=True)
+
+    # Метаданные
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+    # Обработанные delivery_id вебхуков (провайдер ретраит доставку).
+    processed_events = Column(JSON, nullable=True)
+
+    # Временные метки
+    paid_at = Column(AwareDateTime(), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    # Связь с транзакцией
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+
+    # Relationships
+    user = relationship('User', backref='tonpays_payments')
+    transaction = relationship('Transaction', backref='tonpays_payment')
+
+    @property
+    def amount_toman(self) -> int:
+        return self.amount_kopeks // 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == 'pending'
+
+    @property
+    def is_success(self) -> bool:
+        return self.status == 'success' and self.is_paid
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status in ['failed', 'rejected', 'expired', 'cancelled', 'amount_mismatch', 'error']
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            f'<TonPaysPayment(id={self.id}, order_id={self.order_id}, '
             f'amount={self.amount_toman} تومان, status={self.status})>'
         )
 

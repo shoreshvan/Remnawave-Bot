@@ -462,6 +462,18 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
+    if settings.is_tonpays_enabled():
+        tonpays_name = settings.get_tonpays_display_name()
+        methods.append(
+            {
+                'id': 'tonpays',
+                'name': tonpays_name,
+                'icon': '💳',
+                'description': f'через {tonpays_name}',
+                'callback': 'topup_tonpays',
+            }
+        )
+
     if settings.is_etoplatezhi_sbp_enabled():
         sbp_name = settings.get_etoplatezhi_sbp_display_name()
         methods.append(
@@ -728,6 +740,8 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_paritypay_card_enabled()
     if method_id == 'hooshpay':
         return settings.is_hooshpay_enabled()
+    if method_id == 'tonpays':
+        return settings.is_tonpays_enabled()
     if method_id == 'etoplatezhi':
         return settings.is_etoplatezhi_enabled()
     if method_id == 'etoplatezhi_sbp':

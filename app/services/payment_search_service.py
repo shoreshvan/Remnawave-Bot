@@ -40,6 +40,7 @@ from app.database.models import (
     RollyPayPayment,
     SeverPayPayment,
     TabPayPayment,
+    TonPaysPayment,
     Transaction,
     TransactionType,
     User,
@@ -1044,6 +1045,43 @@ async def _search_hooshpay(db: AsyncSession, params: SearchParams) -> list[Pendi
     return records
 
 
+async def _search_tonpays(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
+    stmt = (
+        select(TonPaysPayment)
+        .options(selectinload(TonPaysPayment.user))
+        .order_by(desc(TonPaysPayment.created_at))
+    )
+    stmt = _apply_date_filter(stmt, TonPaysPayment.created_at, params.cutoff, params.upper_bound)
+
+    if params.search:
+        kind = _detect_user_search_kind(params.search)
+        if kind == _UserSearchKind.INVOICE:
+            conditions = [
+                TonPaysPayment.order_id.ilike(f'%{_escape_like(params.search)}%'),
+                TonPaysPayment.tonpays_payment_id.ilike(f'%{_escape_like(params.search)}%'),
+            ]
+            stmt = stmt.where(or_(*conditions))
+        else:
+            stmt = _apply_user_join_filter(stmt, TonPaysPayment, kind, params.search)
+
+    stmt = stmt.limit(MAX_RECORDS_PER_PROVIDER)
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        record = _build_record(
+            PaymentMethod.TONPAYS,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _search_tabpay(db: AsyncSession, params: SearchParams) -> list[PendingPayment]:
     stmt = select(TabPayPayment).options(selectinload(TabPayPayment.user)).order_by(desc(TabPayPayment.created_at))
     stmt = _apply_date_filter(stmt, TabPayPayment.created_at, params.cutoff, params.upper_bound)
@@ -1252,6 +1290,7 @@ _PROVIDER_SEARCH_MAP: dict[PaymentMethod, Any] = {
     PaymentMethod.TABPAY: _search_tabpay,
     PaymentMethod.PARITYPAY: _search_paritypay,
     PaymentMethod.HOOSHPAY: _search_hooshpay,
+    PaymentMethod.TONPAYS: _search_tonpays,
     PaymentMethod.TELEGRAM_STARS: _search_stars,
     PaymentMethod.PLATEGA_RECURRENT: _search_platega_recurring,
 }
