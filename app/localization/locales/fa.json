@@ -4022,7 +4022,7 @@
   "BALANCE_INVALID_AMOUNT": "❌ مبلغ نامعتبر",
   "BALANCE_TOPUP_CART_SUCCESS": "✅ موجودی به مبلغ {amount} شارژ شد!\n\n💰 موجودی فعلی: {balance}\n\n🛒 شما یک سبد ذخیره‌شده به مبلغ {cart_total} دارید\n{hint}\n\nمی‌خواهید ثبت سفارش را ادامه دهید؟",
   "BALANCE_MIN_AMOUNT": "حداقل مبلغ شارژ: ۱ تومان\n\nمبلغ جدید شارژ را به صورت عددی در پیام ارسال کنید.",
-  "BALANCE_MAX_AMOUNT": "حداکثر مبلغ شارژ: ۵۰٬۰۰۰ تومان\n\nمبلغ جدید شارژ را به صورت عددی در پیام ارسال کنید.",
+  "BALANCE_MAX_AMOUNT": "حداکثر مبلغ شارژ: ۲۰٬۰۰۰٬۰۰۰ تومان\n\nمبلغ جدید شارژ را به صورت عددی در پیام ارسال کنید.",
   "BALANCE_UNKNOWN_PAYMENT_METHOD": "روش پرداخت ناشناخته",
   "BALANCE_INVALID_REQUEST": "❌ درخواست نامعتبر",
   "BALANCE_REQUEST_PROCESSING_ERROR": "❌ خطا در پردازش درخواست",

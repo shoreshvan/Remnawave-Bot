@@ -29,7 +29,8 @@ from app.utils.payment_utils import get_available_payment_methods, is_payment_me
 
 
 def _enable(monkeypatch: pytest.MonkeyPatch) -> None:
-    # is_hooshpay_enabled() требует флаг И обе кредешки одновременно.
+    # is_hooshpay_enabled() requires flag + API key; the webhook secret is only
+    # needed for is_hooshpay_configured() (webhook mounting).
     monkeypatch.setattr(settings, 'HOOSHPAY_ENABLED', True, raising=False)
     monkeypatch.setattr(settings, 'HOOSHPAY_API_KEY', 'hp_key', raising=False)
     monkeypatch.setattr(settings, 'HOOSHPAY_API_SECRET', 'hp_secret', raising=False)

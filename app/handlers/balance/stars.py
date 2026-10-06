@@ -104,6 +104,31 @@ async def process_stars_payment_amount(message: types.Message, db_user: User, am
         await message.answer(texts.t('STARS_PAYMENT_UNAVAILABLE', '⚠️ Оплата Stars временно недоступна'))
         return
 
+    # Unified top-up bounds (Toman): min 10000 / max 20000000.
+    from app.services.payment_method_config_service import _get_method_defaults
+
+    stars_defaults = _get_method_defaults().get('telegram_stars', {})
+    stars_min_kopeks = int(stars_defaults.get('default_min') or 1000000)
+    stars_max_kopeks = int(stars_defaults.get('default_max') or 2000000000)
+    if amount_kopeks < stars_min_kopeks:
+        await message.answer(
+            texts.t(
+                'STARS_MIN_AMOUNT',
+                '❌ Минимальная сумма пополнения через Stars — {min} تومان.',
+            ).format(min=f'{stars_min_kopeks // 100:,}'.replace(',', '٬')),
+            parse_mode='HTML',
+        )
+        return
+    if amount_kopeks > stars_max_kopeks:
+        await message.answer(
+            texts.t(
+                'STARS_MAX_AMOUNT',
+                '❌ Максимальная сумма пополнения через Stars — {max} تومان.',
+            ).format(max=f'{stars_max_kopeks // 100:,}'.replace(',', '٬')),
+            parse_mode='HTML',
+        )
+        return
+
     try:
         amount_rubles = amount_kopeks / 100
         stars_amount = TelegramStarsService.calculate_stars_from_rubles(amount_rubles)

@@ -112,7 +112,15 @@ class HooshPayService:
         try:
             session = await self._get_session()
             async with session.request(method, url, json=json_payload, headers=self._headers()) as response:
-                data = await response.json(content_type=None)
+                try:
+                    data = await response.json(content_type=None)
+                except (ValueError, TypeError, aiohttp.ContentTypeError) as error:
+                    # Non-JSON or empty body (e.g. upstream 502 page).
+                    if response.status == 404 and allow_404:
+                        return None
+                    message = f'Non-JSON response (HTTP {response.status}): {error}'
+                    logger.error('HooshPay API error', url=url, status=response.status, message=message)
+                    raise HooshPayAPIError(response.status, message) from error
 
                 if response.status == 404 and allow_404:
                     return None
@@ -123,6 +131,8 @@ class HooshPayService:
                     raise HooshPayAPIError(response.status, message)
 
                 return data if isinstance(data, dict) else {'_raw': data}
+        except (HooshPayAPIError, HooshPayNetworkError):
+            raise
         except (aiohttp.ClientError, TimeoutError) as error:
             logger.error('HooshPay API connection error', url=url, error=str(error))
             raise HooshPayNetworkError(str(error)) from error
@@ -150,14 +160,20 @@ class HooshPayService:
         """POST /invoices — creates an invoice and returns its ``data`` block.
 
         ``fee_mode`` is only sent when explicitly configured; otherwise HooshPay
-        applies the account default (per the provider's own setting).
+        applies the account default (per the provider's own setting). Only the
+        provider enum (seller|buyer|split) is sent — anything else falls back to
+        the account default instead of causing a 400.
         """
         payload: dict[str, Any] = {
             'amount': kopeks_to_toman(amount_kopeks),
             'order_id': order_id[:64],
         }
         if fee_mode:
-            payload['fee_mode'] = fee_mode
+            normalized_fee_mode = fee_mode.strip().lower()
+            if normalized_fee_mode in ('seller', 'buyer', 'split'):
+                payload['fee_mode'] = normalized_fee_mode
+            else:
+                logger.warning('HooshPay create_invoice: ignoring invalid fee_mode', fee_mode=fee_mode)
         if description:
             payload['description'] = description[:255]
         if callback_url:
@@ -167,10 +183,12 @@ class HooshPayService:
 
         logger.info('HooshPay create_invoice', order_id=order_id, amount_kopeks=amount_kopeks)
 
-        data = self._unwrap(await self._request('POST', '/invoices', json_payload=payload))
+        raw = await self._request('POST', '/invoices', json_payload=payload)
+        data = self._unwrap(raw)
         if not data or not data.get('uid') or not data.get('payment_url'):
-            logger.error('HooshPay create_invoice: incomplete response', order_id=order_id, response_data=data)
-            raise HooshPayAPIError(200, f'Incomplete create invoice response: {data}')
+            provider_message = self._error_message(raw)
+            logger.error('HooshPay create_invoice: incomplete response', order_id=order_id, response_data=raw)
+            raise HooshPayAPIError(200, f'Incomplete create invoice response: {provider_message}')
 
         logger.info('HooshPay invoice created', order_id=order_id, uid=data.get('uid'), status=data.get('status'))
         return data

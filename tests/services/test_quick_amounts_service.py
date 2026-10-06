@@ -60,11 +60,11 @@ def test_normalize_caps_after_dedupe():
 
 
 def test_effective_returns_defaults_when_not_configured():
-    assert get_effective_quick_amounts(None, 0, 10000000) == DEFAULT_QUICK_AMOUNTS
+    assert get_effective_quick_amounts(None, 0, 2000000000) == DEFAULT_QUICK_AMOUNTS
 
 
 def test_effective_filters_by_min_max():
-    assert get_effective_quick_amounts(None, 20000, 60000) == [30000, 50000]
+    assert get_effective_quick_amounts(None, 2000000, 60000000) == [5000000, 20000000]
     assert get_effective_quick_amounts([5000, 70000, 200000], 10000, 100000) == [70000]
 
 

@@ -605,11 +605,11 @@ async def process_topup_amount(message: types.Message, db_user: User, state: FSM
             )
             return
 
-        if amount_rubles > 50000:
+        if amount_rubles > 20000000:
             await message.answer(
                 texts.t(
                     'BALANCE_MAX_AMOUNT',
-                    'Максимальная сумма пополнения: 50,000 تومان\n\nОтправьте новую сумму пополнения числом в сообщении.',
+                    'Максимальная сумма пополнения: 20,000,000 تومان\n\nОтправьте новую сумму пополнения числом в сообщении.',
                 ),
                 reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
             )

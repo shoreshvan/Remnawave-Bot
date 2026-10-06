@@ -247,16 +247,16 @@ async def create_stars_invoice(
         )
 
     # Validate amount
-    if request.amount_kopeks < 100:
+    if request.amount_kopeks < 1000000:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_BALANCE_STARS_MIN_AMOUNT', 'Minimum amount is 1.00 تومان'),
+            detail=texts.t('CABINET_BALANCE_STARS_MIN_AMOUNT', 'Minimum amount is 10000 تومان'),
         )
 
-    if request.amount_kopeks > 1000000:
+    if request.amount_kopeks > 2000000000:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_BALANCE_STARS_MAX_AMOUNT', 'Maximum amount is 10,000.00 تومان'),
+            detail=texts.t('CABINET_BALANCE_STARS_MAX_AMOUNT', 'Maximum amount is 20000000 تومان'),
         )
 
     # Calculate Stars amount and normalize kopeks to match exact star value
@@ -1457,6 +1457,8 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
             'expired': ('⌛', 'Истёк'),
             'cancelled': ('❌', 'Отменён'),
             'failed': ('❌', 'Ошибка оплаты'),
+            'declined': ('❌', 'Отклонено'),
+            'error': ('❌', 'Ошибка'),
             'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
         }
         return mapping.get(status, ('❓', 'Неизвестно'))

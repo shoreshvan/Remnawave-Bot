@@ -446,7 +446,8 @@ class Settings(BaseSettings):
     REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 5_000_000  # 50 000 туманов
     # Максимальная сумма ручного изменения баланса админом (копейки = 1/100 تومان).
     # Защита от опечаток; оператор меняет под себя через .env, без правок кода.
-    ADMIN_BALANCE_EDIT_MAX_KOPEKS: int = 1_000_000_000  # 10 000 000 تومان
+    ADMIN_BALANCE_EDIT_MAX_KOPEKS: int = 2_000_000_000  # 20 000 000 تومان
+    ADMIN_BALANCE_EDIT_MIN_KOPEKS: int = 1_000_000  # 10 000 تومان — کف یکدست شارژ دستی
     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
     REFERRAL_INVITER_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
     REFERRAL_COMMISSION_PERCENT: int = 25
@@ -1200,8 +1201,8 @@ class Settings(BaseSettings):
     # fee_mode: '' | 'seller' | 'buyer' | 'split'. Пусто = берётся из настроек
     # аккаунта HooshPay (комиссия по умолчанию 20%).
     HOOSHPAY_FEE_MODE: str | None = None
-    HOOSHPAY_MIN_AMOUNT_KOPEKS: int = 100000  # 1000 تومان — минимум HooshPay
-    HOOSHPAY_MAX_AMOUNT_KOPEKS: int = 1000000000  # 10 000 000 تومان
+    HOOSHPAY_MIN_AMOUNT_KOPEKS: int = 1000000  # 10000 تومان — کف یکدست همه درگاه‌های فعال
+    HOOSHPAY_MAX_AMOUNT_KOPEKS: int = 2000000000  # 20 000 000 تومان — سقف یکدست
     HOOSHPAY_WEBHOOK_PATH: str = '/hooshpay-webhook'
     HOOSHPAY_INVOICE_LIFETIME_MINUTES: int = 30
     HOOSHPAY_RETURN_URL: str | None = None

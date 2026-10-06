@@ -32,6 +32,28 @@ HOOSHPAY_FINAL_STATUSES = frozenset({'amount_mismatch'})
 HOOSHPAY_PENDING_STATUSES = frozenset({'pending'})
 
 
+def _parse_provider_paid_at(value: Any) -> datetime | None:
+    """Parses HooshPay ``paid_at`` ("2026-06-16T12:05:00", naive Tehran wall time).
+
+    Returns an aware UTC datetime, or None when unparsable. Naive values are
+    assumed to be Asia/Tehran; aware values are converted to UTC.
+    """
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    try:
+        if parsed.tzinfo is None:
+            from zoneinfo import ZoneInfo
+
+            parsed = parsed.replace(tzinfo=ZoneInfo('Asia/Tehran'))
+        return parsed.astimezone(UTC)
+    except Exception:
+        return None
+
+
 class HooshpayPaymentMixin:
     """Mixin for working with HooshPay payments."""
 
@@ -58,6 +80,11 @@ class HooshpayPaymentMixin:
             return None
         if amount_kopeks > max_amount:
             logger.warning('HooshPay: amount above maximum', amount_kopeks=amount_kopeks, max_kopeks=max_amount)
+            return None
+        if amount_kopeks % 100 != 0:
+            # Provider speaks whole Toman; truncating here would later trip the
+            # strict amount check in the webhook (amount_mismatch). Fail fast.
+            logger.warning('HooshPay: amount is not a whole Toman', amount_kopeks=amount_kopeks)
             return None
 
         payment_module = import_module('app.services.payment_service')
@@ -91,9 +118,11 @@ class HooshpayPaymentMixin:
             uid = api_result.get('uid')
             payment_url = api_result.get('payment_url')
             payable_amount_kopeks = toman_to_kopeks(api_result.get('payable_amount'))
-            # The provider returns "Y-m-d H:i:s" without a timezone; computing the
-            # deadline ourselves from the lifetime is safer than guessing the zone.
-            expires_at = datetime.now(UTC) + timedelta(minutes=lifetime)
+            # Prefer the provider deadline ("2026-06-16T12:30:00", naive Tehran
+            # wall time); fall back to our own lifetime when missing/unparsable.
+            expires_at = _parse_provider_paid_at(api_result.get('expires_at')) or (
+                datetime.now(UTC) + timedelta(minutes=lifetime)
+            )
 
             hooshpay_crud = import_module('app.database.crud.hooshpay')
             local_payment = await hooshpay_crud.create_hooshpay_payment(
@@ -189,6 +218,7 @@ class HooshpayPaymentMixin:
 
             callback_payload = {
                 'invoice': hooshpay_uid,
+                'event': payload.get('event'),
                 'status': raw_status,
                 'amount': payload.get('amount'),
                 'payable_amount': payload.get('payable_amount'),
@@ -196,6 +226,7 @@ class HooshpayPaymentMixin:
                 'fee_amount': payload.get('fee_amount'),
                 'fee_mode': payload.get('fee_mode'),
                 'tracking_code': payload.get('tracking_code'),
+                'paid_at': payload.get('paid_at'),
             }
 
             if is_paid:
@@ -207,6 +238,19 @@ class HooshpayPaymentMixin:
                     hooshpay_uid=str(hooshpay_uid),
                     callback_payload=callback_payload,
                 )
+
+            if payment.is_paid:
+                # Late/delayed non-paid delivery must never regress a credited
+                # payment (e.g. success -> expired). Acknowledge and keep state.
+                logger.warning(
+                    'HooshPay callback: non-paid event for already-paid payment, ignored',
+                    order_id=payment.order_id,
+                    current_status=payment.status,
+                    incoming_status=raw_status,
+                )
+                hooshpay_crud.remember_hooshpay_event(payment, event_key)
+                await db.commit()
+                return True
 
             hooshpay_crud.remember_hooshpay_event(payment, event_key)
             await hooshpay_crud.update_hooshpay_payment_status(
@@ -270,7 +314,7 @@ class HooshpayPaymentMixin:
 
         payment.status = 'success'
         payment.is_paid = True
-        payment.paid_at = datetime.now(UTC)
+        payment.paid_at = _parse_provider_paid_at(payload.get('paid_at')) or datetime.now(UTC)
         payment.hooshpay_payment_id = hooshpay_uid or payment.hooshpay_payment_id
         # payable_amount is what the buyer paid; merchant_credit is the net we
         # receive. We credit the full requested invoice amount to the user and
@@ -508,6 +552,90 @@ class HooshpayPaymentMixin:
                 return {'payment': payment, 'status': payment.status, 'is_paid': False}
 
             if not payment.hooshpay_payment_id:
+                return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': False}
+
+            # Per docs, POST /invoices/{uid}/verify with its ``paid`` flag is the
+            # final word (e.g. on customer return). GET only describes the invoice.
+            try:
+                verify_resp = await hooshpay_service.verify_invoice(uid=payment.hooshpay_payment_id)
+            except Exception as e:
+                logger.error('Error verifying HooshPay payment via API', error=e)
+                verify_resp = None
+
+            if verify_resp is not None:
+                verify_paid = verify_resp.get('paid') is True
+                verify_status_raw = (verify_resp.get('status') or '').strip().lower()
+                verify_data = verify_resp.get('data')
+                if not isinstance(verify_data, dict):
+                    verify_data = {}
+
+                if verify_paid or verify_status_raw == 'paid':
+                    received_kopeks = toman_to_kopeks(verify_data.get('amount'))
+                    status_data_for_record: dict[str, Any] = verify_data or verify_resp
+                    if received_kopeks is None:
+                        # Verify confirms payment but carries no amount (docs truncate
+                        # ``data``) — fetch the invoice for the amount check.
+                        try:
+                            status_data = await hooshpay_service.get_invoice(uid=payment.hooshpay_payment_id)
+                        except Exception as e:
+                            logger.error('Error checking HooshPay payment status via API', error=e)
+                            status_data = None
+                        if status_data:
+                            status_data_for_record = status_data
+                            received_kopeks = toman_to_kopeks(status_data.get('amount'))
+
+                    if received_kopeks is None or received_kopeks != payment.amount_kopeks:
+                        logger.error(
+                            'HooshPay amount mismatch (API check)',
+                            expected_kopeks=payment.amount_kopeks,
+                            received_kopeks=received_kopeks,
+                            order_id=payment.order_id,
+                        )
+                        await hooshpay_crud.update_hooshpay_payment_status(
+                            db=db,
+                            payment=payment,
+                            status='amount_mismatch',
+                            is_paid=False,
+                            callback_payload={'check_source': 'api_verify', 'hooshpay_verify_data': verify_resp,
+                                              'hooshpay_status_data': status_data_for_record},
+                        )
+                        return {'payment': payment, 'status': 'amount_mismatch', 'is_paid': False}
+
+                    locked = await hooshpay_crud.get_hooshpay_payment_by_id_for_update(db, payment.id)
+                    if not locked:
+                        logger.error('HooshPay: failed to lock payment', payment_id=payment.id)
+                        return None
+                    payment = locked
+
+                    if payment.is_paid:
+                        logger.info('HooshPay payment already processed (api_check)', order_id=payment.order_id)
+                        return {'payment': payment, 'status': 'success', 'is_paid': True}
+
+                    logger.info('HooshPay payment confirmed via API verify', order_id=payment.order_id)
+
+                    payment.status = 'success'
+                    payment.is_paid = True
+                    payment.paid_at = _parse_provider_paid_at(verify_data.get('paid_at')) or datetime.now(UTC)
+                    payment.callback_payload = {'check_source': 'api_verify', 'hooshpay_verify_data': verify_resp,
+                                                'hooshpay_status_data': status_data_for_record}
+                    payment.updated_at = datetime.now(UTC)
+                    hooshpay_crud.remember_hooshpay_event(payment, f'{payment.hooshpay_payment_id}:paid')
+                    await db.flush()
+
+                    await self._finalize_hooshpay_payment(db, payment, trigger='api_check')
+
+                    return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': payment.is_paid}
+
+                # Verify authoritatively says not paid — sync the status without a
+                # second GET call.
+                internal_status, _ = HOOSHPAY_STATUS_MAP.get(verify_status_raw, ('pending', False))
+                if internal_status != payment.status:
+                    payment = await hooshpay_crud.update_hooshpay_payment_status(
+                        db=db,
+                        payment=payment,
+                        status=internal_status,
+                        callback_payload={'check_source': 'api_verify', 'hooshpay_verify_data': verify_resp},
+                    )
                 return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': False}
 
             try:

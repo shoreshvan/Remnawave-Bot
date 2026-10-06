@@ -2677,6 +2677,15 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
             )
             return
 
+        min_edit_kopeks = settings.ADMIN_BALANCE_EDIT_MIN_KOPEKS
+        if min_edit_kopeks and 0 < amount_kopeks < min_edit_kopeks:
+            await message.answer(
+                texts.t('ADMIN_BALANCE_EDIT_TOO_SMALL', '❌ Слишком маленькая сумма (минимум {min})').format(
+                    min=settings.format_price(min_edit_kopeks)
+                )
+            )
+            return
+
         user_service = UserService()
 
         description = texts.t(

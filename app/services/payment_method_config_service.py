@@ -50,8 +50,8 @@ def _get_method_defaults() -> dict:
         'telegram_stars': {
             'default_display_name': settings.get_telegram_stars_display_name(),
             'is_configured': settings.TELEGRAM_STARS_ENABLED,
-            'default_min': 100,
-            'default_max': 1000000,
+            'default_min': 1000000,
+            'default_max': 2000000000,
             'available_sub_options': None,
         },
         'tribute': {
@@ -390,7 +390,7 @@ DEFAULT_METHOD_ORDER = [
 ]
 
 
-DEFAULT_QUICK_AMOUNTS = [10000, 30000, 50000, 100000]
+DEFAULT_QUICK_AMOUNTS = [1000000, 5000000, 20000000, 100000000]
 MAX_QUICK_AMOUNTS = 10
 MAX_QUICK_AMOUNT_KOPEKS = 100_000_000
 
