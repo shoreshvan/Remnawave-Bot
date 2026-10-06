@@ -62,6 +62,8 @@ def _method_display(method: PaymentMethod) -> str:
         return settings.get_tabpay_display_name()
     if method == PaymentMethod.PARITYPAY:
         return settings.get_paritypay_display_name()
+    if method == PaymentMethod.HOOSHPAY:
+        return settings.get_hooshpay_display_name()
     return method.value
 
 

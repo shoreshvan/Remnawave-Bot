@@ -1596,6 +1596,28 @@ class PaymentService(
                 }
             return None
 
+        # --- HooshPay ---------------------------------------------------------
+        if _base == 'hooshpay':
+            if not settings.is_hooshpay_enabled():
+                logger.warning('HooshPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_hooshpay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'hooshpay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'hooshpay',
+                }
+            return None
+
         # --- Telegram Stars ---------------------------------------------------
         if payment_method == 'telegram_stars':
             if not settings.TELEGRAM_STARS_ENABLED:

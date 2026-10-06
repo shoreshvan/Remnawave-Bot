@@ -285,6 +285,13 @@ def _get_method_defaults() -> dict:
                 {'id': 'sbp', 'name': 'СБП'},
             ],
         },
+        'hooshpay': {
+            'default_display_name': settings.get_hooshpay_display_name(),
+            'is_configured': settings.is_hooshpay_enabled(),
+            'default_min': settings.HOOSHPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.HOOSHPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
         'tabpay': {
             'default_display_name': settings.get_tabpay_display_name(),
             'is_configured': settings.is_tabpay_enabled(),
@@ -378,6 +385,7 @@ DEFAULT_METHOD_ORDER = [
     'cispay',
     'tabpay',
     'paritypay',
+    'hooshpay',
     'cashera',
 ]
 

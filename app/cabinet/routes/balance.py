@@ -1191,6 +1191,34 @@ async def create_topup(
                     detail=texts.t('CABINET_BALANCE_PARITYPAY_FAILED', 'Failed to create ParityPay payment'),
                 )
 
+        elif request.payment_method == 'hooshpay':
+            if not settings.is_hooshpay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=texts.t('CABINET_BALANCE_HOOSHPAY_UNAVAILABLE', 'HooshPay payment method is unavailable'),
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_hooshpay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_success_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=texts.t('CABINET_BALANCE_HOOSHPAY_FAILED', 'Failed to create HooshPay payment'),
+                )
+
         else:
             # For other payment methods, redirect to bot
             raise HTTPException(
@@ -1422,6 +1450,17 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.HOOSHPAY:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'expired': ('⌛', 'Истёк'),
+            'cancelled': ('❌', 'Отменён'),
+            'failed': ('❌', 'Ошибка оплаты'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
     if record.method == PaymentMethod.TABPAY:
         mapping = {
             'pending': ('⏳', 'Ожидает оплаты'),
@@ -1476,6 +1515,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         # PENDING держится 20 минут после начала оплаты, поэтому проверяем и его.
         return status in {'pending', 'processing'}
     if record.method == PaymentMethod.PARITYPAY:
+        return status == 'pending'
+    if record.method == PaymentMethod.HOOSHPAY:
         return status == 'pending'
     return False
 
