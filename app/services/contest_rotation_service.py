@@ -278,8 +278,13 @@ class ContestRotationService:
         else:
             prize_display = prize_value
 
+        template_slug_key = (tpl.slug or '').upper()
+        template_name = (
+            texts.t(f'CONTEST_TEMPLATE_{template_slug_key}_NAME', tpl.name) if template_slug_key else tpl.name
+        )
+
         text = (
-            f'🎲 {texts.t("CONTEST_START_ANNOUNCEMENT", "Стартует игра")}: <b>{tpl.name}</b>\n'
+            f'🎲 {texts.t("CONTEST_START_ANNOUNCEMENT", "Стартует игра")}: <b>{template_name}</b>\n'
             f'{texts.t("CONTEST_PRIZE", "Приз")}: {prize_display} • {texts.t("CONTEST_WINNERS", "Победителей")}: {tpl.max_winners}\n'
             f'{texts.t("CONTEST_ATTEMPTS", "Попыток/польз")}: {tpl.attempts_per_user}\n\n'
             f'{texts.t("CONTEST_ELIGIBILITY", "Участвовать могут только с активной или триальной подпиской")}.\n'

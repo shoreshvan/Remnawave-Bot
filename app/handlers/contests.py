@@ -113,7 +113,12 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
 
     buttons = []
     for tpl_slug, rnd in unique_templates.items():
-        title = rnd.template.name if rnd.template else tpl_slug
+        slug_key = ((rnd.template.slug if rnd.template else tpl_slug) or '').upper()
+        title = (
+            texts.t(f'CONTEST_TEMPLATE_{slug_key}_NAME', rnd.template.name)
+            if rnd.template and slug_key
+            else (rnd.template.name if rnd.template else tpl_slug)
+        )
         buttons.append(
             [
                 types.InlineKeyboardButton(

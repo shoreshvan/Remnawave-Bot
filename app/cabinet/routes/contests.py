@@ -235,16 +235,28 @@ async def get_contests(
             unique_templates[tpl_slug] = rnd
 
     contests = []
+    cabinet_texts = get_texts(user.language or settings.DEFAULT_LANGUAGE)
     for tpl_slug, rnd in unique_templates.items():
         # Check if user already played this round
         attempt = await get_attempt(db, rnd.id, user.id)
+        tpl_slug_key = ((rnd.template.slug if rnd.template else tpl_slug) or '').upper()
+        if rnd.template and tpl_slug_key:
+            tpl_name = cabinet_texts.t(f'CONTEST_TEMPLATE_{tpl_slug_key}_NAME', rnd.template.name)
+            tpl_description = (
+                cabinet_texts.t(f'CONTEST_TEMPLATE_{tpl_slug_key}_DESC', rnd.template.description)
+                if rnd.template.description
+                else None
+            )
+        else:
+            tpl_name = rnd.template.name if rnd.template else tpl_slug
+            tpl_description = rnd.template.description if rnd.template else None
 
         contests.append(
             ContestInfo(
                 id=rnd.id,
                 slug=tpl_slug,
-                name=rnd.template.name if rnd.template else tpl_slug,
-                description=rnd.template.description if rnd.template else None,
+                name=tpl_name,
+                description=tpl_description,
                 prize_type=rnd.template.prize_type if rnd.template else 'days',
                 prize_value=rnd.template.prize_value if rnd.template else '1',
                 is_available=True,

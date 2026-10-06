@@ -2845,6 +2845,16 @@ async def show_bot_config_setting(
     await callback.answer()
 
 
+def _is_money_key(key: str) -> bool:
+    """Whether a setting key stores money in kopeks (displayed as Toman).
+
+    Same rule as ``format_value_human``: contains PRICE or ends with _KOPEKS.
+    Bare AMOUNT is not money (e.g. device counts).
+    """
+    upper_key = (key or '').upper()
+    return 'PRICE' in upper_key or '_KOPEKS' in upper_key
+
+
 @admin_required
 @error_handler
 async def start_edit_setting(
@@ -2887,8 +2897,23 @@ async def start_edit_setting(
         texts.t('BOT_CONFIG_EDIT_KEY', 'Ключ: <code>{key}</code>').format(key=summary['key']),
         texts.t('BOT_CONFIG_EDIT_TYPE', 'Тип: {type}').format(type=summary['type']),
         texts.t('BOT_CONFIG_EDIT_CURRENT', 'Текущее значение: {current}').format(current=summary['current']),
-        texts.t('BOT_CONFIG_EDIT_SEND_HINT', '\nОтправьте новое значение сообщением.'),
     ]
+
+    # Денежные ключи хранятся в копейках, а показываются в تومان — без подсказки
+    # админ вводит «50000», имея в виду تومان, а сохраняется 50000 копеек (500 تومان).
+    if _is_money_key(key):
+        raw_current = bot_configuration_service.get_current_value(key)
+        if isinstance(raw_current, (int, float)) and not isinstance(raw_current, bool):
+            instructions.append(
+                texts.t(
+                    'BOT_CONFIG_EDIT_KOPEKS_HINT',
+                    '💰 Единица — копейки (1/100 تومان): сейчас raw = <code>{raw}</code> ({pretty}). Вводите число в копейках.',
+                ).format(raw=raw_current, pretty=summary['current'])
+            )
+
+    instructions.append(
+        texts.t('BOT_CONFIG_EDIT_SEND_HINT', '\nОтправьте новое значение сообщением.'),
+    )
 
     if definition.is_optional:
         instructions.append(
