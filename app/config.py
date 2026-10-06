@@ -3500,9 +3500,12 @@ class Settings(BaseSettings):
         return bool(self.HOOSHPAY_API_KEY and self.HOOSHPAY_API_SECRET)
 
     def is_hooshpay_enabled(self) -> bool:
-        # Секрет вебхука обязателен наравне с API-ключом: без него подпись
-        # X-HooshPay-Signature не проверить, и вебхук пришлось бы принимать вслепую.
-        return bool(self.HOOSHPAY_ENABLED and self.HOOSHPAY_API_KEY and self.HOOSHPAY_API_SECRET)
+        # Для работы шлюза достаточно API-ключа: REST авторизуется заголовком
+        # X-API-KEY, секрет нужен ТОЛЬКО для проверки подписи вебхука. Поэтому
+        # секрет требует is_hooshpay_configured() (по нему монтируется вебхук),
+        # а не это условие — без вебхука оплата всё равно подтверждается
+        # периодическим опросом (payment_verification_service).
+        return bool(self.HOOSHPAY_ENABLED and self.HOOSHPAY_API_KEY)
 
     def get_hooshpay_display_name(self) -> str:
         name = (self.HOOSHPAY_DISPLAY_NAME or '').strip()

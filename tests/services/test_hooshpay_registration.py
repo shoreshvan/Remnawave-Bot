@@ -134,3 +134,27 @@ def test_settings_category_registered() -> None:
     assert 'HOOSHPAY' in BotConfigurationService.CATEGORY_TITLES
     assert BotConfigurationService._resolve_category_key('HOOSHPAY_ENABLED') == 'HOOSHPAY'
     assert BotConfigurationService._resolve_category_key('HOOSHPAY_API_KEY') == 'HOOSHPAY'
+
+
+# ---------------------------------------------------------------------------
+# Включение без секрета вебхука (webhook-less / polling-only)
+# ---------------------------------------------------------------------------
+
+
+def test_enabled_without_webhook_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Секрет нужен ТОЛЬКО вебхуку. Без него шлюз обязан работать (REST — по
+    X-API-KEY, подтверждение — периодическим опросом), иначе кнопка не покажется
+    тем, кто не настраивает вебхук — ровно этот баг и был."""
+    monkeypatch.setattr(settings, 'HOOSHPAY_ENABLED', True, raising=False)
+    monkeypatch.setattr(settings, 'HOOSHPAY_API_KEY', 'hp_key', raising=False)
+    monkeypatch.setattr(settings, 'HOOSHPAY_API_SECRET', None, raising=False)
+
+    assert settings.is_hooshpay_enabled() is True
+    assert is_payment_method_available('hooshpay') is True
+    assert 'hooshpay' in {m['id'] for m in get_available_payment_methods()}
+    # Но вебхук без секрета принимать нельзя — он не монтируется.
+    assert settings.is_hooshpay_configured() is False
+
+    # Без API-ключа шлюз всё равно выключен (одного флага мало).
+    monkeypatch.setattr(settings, 'HOOSHPAY_API_KEY', None, raising=False)
+    assert settings.is_hooshpay_enabled() is False
