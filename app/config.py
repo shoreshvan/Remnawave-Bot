@@ -1223,6 +1223,20 @@ class Settings(BaseSettings):
     TONPAYS_RECEIPT_MAX_BYTES: int = 10 * 1024 * 1024  # 10 МБ по документации
     TONPAYS_CHANGE_CARD_COOLDOWN_SECONDS: int = 60
 
+    # AtlasPay (api.atlaspay.space/api/v1) — card-to-card с SMS-подтверждением,
+    # оплата через Telegram mini-app по customerStartLink. Суммы в целых томанах;
+    # totalAmountToman (с уникальной добавкой) показываем покупателю, зачисляем base.
+    ATLASPAY_ENABLED: bool = False
+    ATLASPAY_API_KEY: str | None = None  # X-API-Key из панели магазина
+    ATLASPAY_WEBHOOK_SECRET: str | None = None  # Секрет подписи вебхука (X-Webhook-Signature, HMAC-SHA256)
+    ATLASPAY_BASE_URL: str = 'https://api.atlaspay.space/api/v1'
+    ATLASPAY_DISPLAY_NAME: str = 'کارت به کارت(3)'
+    ATLASPAY_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان
+    ATLASPAY_MAX_AMOUNT_KOPEKS: int = 250000000  # 2500000 تومان
+    ATLASPAY_WEBHOOK_PATH: str = '/atlaspay-webhook'
+    # Дедлайн провайдера всегда 20 минут (paymentDeadlineAt) — только для текста.
+    ATLASPAY_DEADLINE_MINUTES: int = 20
+
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
     LAVA_BASE_URL: str = 'https://api.lava.ru'
@@ -3560,6 +3574,26 @@ class Settings(BaseSettings):
         if not self.WEBHOOK_URL:
             return None
         return f'{self.WEBHOOK_URL.rstrip("/")}{self.TONPAYS_WEBHOOK_PATH}'
+
+    def is_atlaspay_configured(self) -> bool:
+        """Есть ли ключ провайдера — без учёта флага включения."""
+        return bool(self.ATLASPAY_API_KEY)
+
+    def is_atlaspay_enabled(self) -> bool:
+        return bool(self.ATLASPAY_ENABLED and self.ATLASPAY_API_KEY)
+
+    def get_atlaspay_display_name(self) -> str:
+        name = (self.ATLASPAY_DISPLAY_NAME or '').strip()
+        return name or 'کارت به کارت(3)'
+
+    def get_atlaspay_display_name_html(self) -> str:
+        return html.escape(self.get_atlaspay_display_name())
+
+    def get_atlaspay_callback_url(self) -> str | None:
+        """Публичный адрес вебхука (можно переопределять на каждый заказ)."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.ATLASPAY_WEBHOOK_PATH}'
 
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""

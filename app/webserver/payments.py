@@ -2218,6 +2218,61 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # AtlasPay webhook (api.atlaspay.space)
+    if settings.is_atlaspay_configured():
+
+        @router.get(settings.ATLASPAY_WEBHOOK_PATH)
+        async def atlaspay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'atlaspay_webhook',
+                    'enabled': settings.is_atlaspay_enabled(),
+                }
+            )
+
+        @router.post(settings.ATLASPAY_WEBHOOK_PATH)
+        async def atlaspay_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.atlaspay_service import atlaspay_service
+
+            payload = atlaspay_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # HMAC-SHA256 over the body with the account webhookSecret. Raw
+            # bytes first, compact canonical JSON as fallback (docs sample signs
+            # JSON.stringify(req.body)). Answer fast: provider waits only 5s
+            # and never retries — the mixin re-verifies via API anyway.
+            if not atlaspay_service.verify_callback_signature(
+                raw_body, payload, request.headers.get('X-Webhook-Signature')
+            ):
+                logger.warning('AtlasPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            async def _process_atlaspay_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_atlaspay_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'AtlasPay webhook processing failed',
+                            order_ref=payload.get('merchantOrderRef'),
+                            provider_order=payload.get('orderId'),
+                            event=payload.get('event'),
+                        )
+                except Exception as e:
+                    logger.exception('AtlasPay webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_atlaspay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # TabPay webhook (tabpay.org)
     if settings.is_tabpay_configured():
 

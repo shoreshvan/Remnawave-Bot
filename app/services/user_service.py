@@ -1258,6 +1258,7 @@ class UserService:
                 EtoplatezhiPayment,
                 HooshPayPayment,
                 TonPaysPayment,
+                AtlasPayPayment,
                 JupiterPayment,
                 LavaPayment,
                 OverpayPayment,
@@ -1286,6 +1287,7 @@ class UserService:
                 ParityPayPayment,
                 HooshPayPayment,
                 TonPaysPayment,
+                AtlasPayPayment,
                 CasheraPayment,
             )
             for model in extra_payment_models:

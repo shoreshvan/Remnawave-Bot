@@ -66,6 +66,8 @@ def _method_display(method: PaymentMethod) -> str:
         return settings.get_hooshpay_display_name()
     if method == PaymentMethod.TONPAYS:
         return settings.get_tonpays_display_name()
+    if method == PaymentMethod.ATLASPAY:
+        return settings.get_atlaspay_display_name()
     return method.value
 
 

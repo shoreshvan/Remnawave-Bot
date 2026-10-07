@@ -19,6 +19,7 @@ from app.config import settings
 from app.database.database import AsyncSessionLocal
 from app.database.models import (
     AntilopayPayment,
+    AtlasPayPayment,
     AuraPayPayment,
     CasheraPayment,
     CisPayPayment,
@@ -100,6 +101,7 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.CASHERA,
         PaymentMethod.HOOSHPAY,
         PaymentMethod.TONPAYS,
+        PaymentMethod.ATLASPAY,
         # ETOPLATEZHI / ANTILOPAY / JUPITER / DONUT / LAVA — webhook-driven,
         # без API-метода синхронизации БД, manual check не реализован.
     }
@@ -132,6 +134,7 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.CASHERA,
         PaymentMethod.HOOSHPAY,
         PaymentMethod.TONPAYS,
+        PaymentMethod.ATLASPAY,
     }
 )
 
@@ -193,6 +196,8 @@ def method_display_name(method: PaymentMethod) -> str:
         return settings.get_hooshpay_display_name()
     if method == PaymentMethod.TONPAYS:
         return settings.get_tonpays_display_name()
+    if method == PaymentMethod.ATLASPAY:
+        return settings.get_atlaspay_display_name()
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
     return method.value
@@ -253,6 +258,8 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_hooshpay_enabled()
     if method == PaymentMethod.TONPAYS:
         return settings.is_tonpays_enabled()
+    if method == PaymentMethod.ATLASPAY:
+        return settings.is_atlaspay_enabled()
     return False
 
 
@@ -593,6 +600,14 @@ def _is_tonpays_pending(payment: TonPaysPayment) -> bool:
     from app.services.payment.tonpays import TONPAYS_PENDING_STATUSES
 
     return (payment.status or '').lower() in TONPAYS_PENDING_STATUSES
+
+
+def _is_atlaspay_pending(payment: AtlasPayPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.atlaspay import ATLASPAY_PENDING_STATUSES
+
+    return (payment.status or '').lower() in ATLASPAY_PENDING_STATUSES
 
 
 def _is_tabpay_pending(payment: TabPayPayment) -> bool:
@@ -1258,6 +1273,32 @@ async def _fetch_tonpays_payments(db: AsyncSession, cutoff: datetime) -> list[Pe
     return records
 
 
+async def _fetch_atlaspay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(AtlasPayPayment)
+        .options(selectinload(AtlasPayPayment.user))
+        .where(AtlasPayPayment.created_at >= cutoff)
+        .order_by(desc(AtlasPayPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_atlaspay_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.ATLASPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _fetch_tabpay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(TabPayPayment)
@@ -1438,6 +1479,7 @@ async def list_recent_pending_payments(
         await _fetch_paritypay_payments(db, cutoff),
         await _fetch_hooshpay_payments(db, cutoff),
         await _fetch_tonpays_payments(db, cutoff),
+        await _fetch_atlaspay_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
         await _fetch_platega_recurring_charges(db, cutoff),
     )
@@ -1802,6 +1844,21 @@ async def get_payment_record(
             expires_at=getattr(payment, 'expires_at', None),
         )
 
+    if method == PaymentMethod.ATLASPAY:
+        payment = await db.get(AtlasPayPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
     if method == PaymentMethod.TABPAY:
         payment = await db.get(TabPayPayment, local_payment_id)
         if not payment:
@@ -2000,6 +2057,13 @@ async def run_manual_check(
             tonpays_payment = await db.get(TonPaysPayment, local_payment_id)
             if tonpays_payment:
                 result = await payment_service.check_tonpays_payment_status(db, tonpays_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.ATLASPAY:
+            atlaspay_payment = await db.get(AtlasPayPayment, local_payment_id)
+            if atlaspay_payment:
+                result = await payment_service.check_atlaspay_payment_status(db, atlaspay_payment.order_id)
                 payment = result.get('payment') if result else None
             else:
                 payment = None

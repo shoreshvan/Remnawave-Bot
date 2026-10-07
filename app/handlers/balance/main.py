@@ -234,6 +234,13 @@ async def route_payment_by_method(
             await process_tonpays_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == 'atlaspay':
+        from .atlaspay import process_atlaspay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_atlaspay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method in ('tabpay', 'tabpay_card', 'tabpay_sbp'):
         from .tabpay import process_tabpay_payment_amount
 
@@ -1032,6 +1039,11 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(handle_tonpays_check, F.data.startswith('tonpays_check|'))
     dp.callback_query.register(handle_tonpays_new_card, F.data.startswith('tonpays_card|'))
     dp.message.register(process_tonpays_receipt, BalanceStates.waiting_for_tonpays_receipt)
+
+    from .atlaspay import handle_atlaspay_check, start_atlaspay_topup
+
+    dp.callback_query.register(start_atlaspay_topup, F.data == 'topup_atlaspay')
+    dp.callback_query.register(handle_atlaspay_check, F.data.startswith('atlaspay_check|'))
 
     from .mulenpay import check_mulenpay_payment_status
 

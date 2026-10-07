@@ -186,6 +186,7 @@ class PaymentMethod(Enum):
     CASHERA = 'cashera'
     HOOSHPAY = 'hooshpay'
     TONPAYS = 'tonpays'
+    ATLASPAY = 'atlaspay'
     MANUAL = 'manual'
     BALANCE = 'balance'
 
@@ -2160,6 +2161,87 @@ class TonPaysPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<TonPaysPayment(id={self.id}, order_id={self.order_id}, '
+            f'amount={self.amount_toman} تومان, status={self.status})>'
+        )
+
+
+class AtlasPayPayment(Base):
+    """Платежи через AtlasPay (api.atlaspay.space, card-to-card + SMS-verify).
+
+    Суммы — копейки (1/100 تومان), у провайдера целые томаны. amount —
+    запрошенное пополнение (его и зачисляем); total — сумма с уникальной
+    добавкой (её платит покупатель); received — фактически полученное
+    провайдером (сверка при недоплате). requires_manual_delivery=True означает
+    принятую недоплату — такой платёж НЕ зачисляем автоматически.
+    """
+
+    __tablename__ = 'atlaspay_payments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Идентификаторы: наш merchantOrderRef + числовой orderId провайдера.
+    order_id = Column(String(64), unique=True, nullable=False, index=True)  # merchantOrderRef
+    atlaspay_payment_id = Column(String(64), unique=True, nullable=True, index=True)  # orderId провайдера
+    tracking_code = Column(String(64), nullable=True, index=True)  # Показываем покупателю вместо orderId
+
+    # Суммы — копейки. amount — запрошенное пополнение (его и зачисляем);
+    # total — что платит покупатель (с уникальной добавкой и комиссиями);
+    # received — что реально дошло (actualReceivedAmountToman).
+    amount_kopeks = Column(BigInteger, nullable=False)
+    total_amount_kopeks = Column(BigInteger, nullable=True)
+    received_amount_kopeks = Column(BigInteger, nullable=True)
+    currency = Column(String(10), nullable=False, default='IRT')
+    description = Column(Text, nullable=True)
+
+    # Ссылка на mini-app для оплаты.
+    payment_url = Column(Text, nullable=True)
+
+    # Статусы провайдера: awaiting_payment/admin_review/underpaid_*/confirmed/
+    # settled/rejected/expired/cancelled. Внутренние: pending/processing/
+    # underpaid_review/success/manual_review/.../amount_mismatch.
+    status = Column(String(32), nullable=False, default='pending')
+    is_paid = Column(Boolean, default=False)
+    requires_manual_delivery = Column(Boolean, default=False)
+
+    # Метаданные
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+    # Ключи обработанных уведомлений вида "{ref}:{event}" (идемпотентность).
+    processed_events = Column(JSON, nullable=True)
+
+    # Временные метки
+    paid_at = Column(AwareDateTime(), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    # Связь с транзакцией
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+
+    # Relationships
+    user = relationship('User', backref='atlaspay_payments')
+    transaction = relationship('Transaction', backref='atlaspay_payment')
+
+    @property
+    def amount_toman(self) -> int:
+        return self.amount_kopeks // 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == 'pending'
+
+    @property
+    def is_success(self) -> bool:
+        return self.status == 'success' and self.is_paid
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status in ['failed', 'rejected', 'expired', 'cancelled', 'amount_mismatch', 'error']
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            f'<AtlasPayPayment(id={self.id}, order_id={self.order_id}, '
             f'amount={self.amount_toman} تومان, status={self.status})>'
         )
 

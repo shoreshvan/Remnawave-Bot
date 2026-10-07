@@ -45,6 +45,7 @@ from app.services.payment.lava import LavaPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
 from app.services.payment.paritypay import ParityPayPaymentMixin
 from app.services.payment.hooshpay import HooshpayPaymentMixin
+from app.services.payment.atlaspay import AtlaspayPaymentMixin
 from app.services.payment.tonpays import TonpaysPaymentMixin
 from app.services.payment.payer_identity import resolve_guest_payer
 from app.services.payment.paypear import PayPearPaymentMixin
@@ -870,6 +871,7 @@ class PaymentService(
     CasheraPaymentMixin,
     HooshpayPaymentMixin,
     TonpaysPaymentMixin,
+    AtlaspayPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1625,6 +1627,28 @@ class PaymentService(
         # purchases cannot use this gateway.
         if _base == 'tonpays':
             logger.warning('TonPays requires buyer_chat_id, cannot create guest payment')
+            return None
+
+        # --- AtlasPay ---------------------------------------------------------
+        # customerTelegramId is optional — unbound guest orders are allowed.
+        if _base == 'atlaspay':
+            if not settings.is_atlaspay_enabled():
+                logger.warning('AtlasPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_atlaspay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'atlaspay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'atlaspay',
+                }
             return None
 
         # --- Telegram Stars ---------------------------------------------------
