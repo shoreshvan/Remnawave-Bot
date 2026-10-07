@@ -151,7 +151,22 @@ class NowPaymentsService:
 
         logger.info('NOWPayments create_invoice', order_id=order_id, price_usd=price_usd)
 
-        data = await self._request('POST', '/invoice', json_payload=payload)
+        try:
+            data = await self._request('POST', '/invoice', json_payload=payload)
+        except (NowPaymentsAPIError, NowPaymentsNetworkError) as e:
+            # Provider 500s carry no detail — log the payload shape so the
+            # offending field can be bisected (urls? description? amount?).
+            logger.error(
+                'NOWPayments create_invoice failed',
+                order_id=order_id,
+                price_usd=price_usd,
+                payload_keys=sorted(payload.keys()),
+                has_ipn_callback=bool(payload.get('ipn_callback_url')),
+                success_url_len=len(payload.get('success_url') or ''),
+                cancel_url_len=len(payload.get('cancel_url') or ''),
+                error=str(e),
+            )
+            raise
         if not data or data.get('id') is None or not data.get('invoice_url'):
             logger.error('NOWPayments create_invoice: incomplete response', order_id=order_id, response_data=data)
             raise NowPaymentsAPIError(201, f'Incomplete create invoice response: {self._error_message(data)}')

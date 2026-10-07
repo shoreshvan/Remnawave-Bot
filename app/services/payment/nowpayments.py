@@ -40,11 +40,6 @@ NOWPAYMENTS_FINAL_STATUSES = frozenset({'amount_mismatch'})
 NOWPAYMENTS_PENDING_STATUSES = frozenset({'pending', 'processing'})
 
 
-def _fa_digits(value: str) -> str:
-    """Latin digits -> Persian digits for display strings."""
-    return value.translate(str.maketrans('0123456789', '۰۱۲۳۴۵۶۷۸۹'))
-
-
 class NowpaymentsPaymentMixin:
     """Mixin for working with NOWPayments payments."""
 
@@ -56,23 +51,32 @@ class NowpaymentsPaymentMixin:
         amount_kopeks: int,
         reason: str | None = None,
         note: str | None = None,
+        with_plan: bool = False,
+        with_support: bool = False,
     ) -> str | None:
         """Builds the static result-page URL for success/cancel/partially URLs.
 
         The page is display-only (no backend fetch): every value it shows is
         embedded here. Values are display data the payer already knows.
+
+        Length discipline: NOWPayments 500s on long redirect URLs (classic
+        VARCHAR(255)-style column — proven by live bisect: 219 chars OK,
+        280+ always fails). So: plain ASCII digits (page groups + fa-maps
+        them), short ISO date, code values for plan/reason/note (the page
+        maps them to Persian), no track (page falls back to invoice), support
+        only on fail pages (success uses print, not support).
         """
         base = settings.get_nowpayments_result_page_url()
         if not base:
             return None
         params: dict[str, str] = {
             'status': status,
-            'amount': _fa_digits(f'{amount_kopeks // 100:,}'),
+            'amount': f'{amount_kopeks // 100}',
             'invoice': order_id,
-            'track': order_id,
-            'date': datetime.now(UTC).strftime('%Y/%m/%d %H:%M UTC'),
-            'plan': settings.get_nowpayments_display_name(),
+            'date': datetime.now(UTC).strftime('%Y-%m-%d'),
         }
+        if with_plan:
+            params['plan'] = 'nowpayments'
         if reason:
             params['reason'] = reason
         if note:
@@ -80,10 +84,14 @@ class NowpaymentsPaymentMixin:
         back = self._get_bot_link()
         if back:
             params['back'] = back
-        support = settings.get_support_contact_url()
-        if support:
-            params['support'] = support
-        return f'{base}?{urlencode(params)}'
+        if with_support:
+            support = settings.get_support_contact_url()
+            if support:
+                params['support'] = support
+        url = f'{base}?{urlencode(params)}'
+        if len(url) > 240:
+            logger.warning('NOWPayments result URL is long, may hit provider limits', length=len(url))
+        return url
 
     @staticmethod
     def _get_bot_link() -> str | None:
@@ -156,19 +164,23 @@ class NowpaymentsPaymentMixin:
                 price_usd=price_usd,
                 order_description=(description[:255] if description else None),
                 ipn_callback_url=settings.get_nowpayments_callback_url(),
-                success_url=self._build_result_url(status='ok', order_id=order_id, amount_kopeks=amount_kopeks),
+                success_url=self._build_result_url(
+                    status='ok', order_id=order_id, amount_kopeks=amount_kopeks, with_plan=True
+                ),
                 cancel_url=self._build_result_url(
                     status='failed',
                     order_id=order_id,
                     amount_kopeks=amount_kopeks,
-                    reason='انصراف کاربر یا خطای درگاه',
+                    reason='cancelled',
+                    with_support=True,
                 ),
                 partially_paid_url=self._build_result_url(
                     status='failed',
                     order_id=order_id,
                     amount_kopeks=amount_kopeks,
-                    reason='مبلغ واریزی کمتر از مبلغ فاکتور بود',
-                    note='سفارش شما با کسری واریز ثبت شد و در انتظار بررسی پشتیبانی است.',
+                    reason='underpaid',
+                    note='underpaid',
+                    with_support=True,
                 ),
             )
 
