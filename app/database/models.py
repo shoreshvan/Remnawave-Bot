@@ -187,6 +187,7 @@ class PaymentMethod(Enum):
     HOOSHPAY = 'hooshpay'
     TONPAYS = 'tonpays'
     ATLASPAY = 'atlaspay'
+    NOWPAYMENTS = 'nowpayments'
     MANUAL = 'manual'
     BALANCE = 'balance'
 
@@ -2242,6 +2243,89 @@ class AtlasPayPayment(Base):
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return (
             f'<AtlasPayPayment(id={self.id}, order_id={self.order_id}, '
+            f'amount={self.amount_toman} تومان, status={self.status})>'
+        )
+
+
+class NowPaymentsPayment(Base):
+    """Платежи через NOWPayments (api.nowpayments.io, приём крипты, invoice flow).
+
+    Суммы — копейки (1/100 تومان). amount — запрошенное пополнение в تومان
+    (его и зачисляем); price_usd — та же сумма в USD для провайдера (IRR он
+    не знает); pay_* — что выбрал/прислал покупатель в крипте. outcome_* —
+    итог расчёта провайдера (сверка).
+    """
+
+    __tablename__ = 'nowpayments_payments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # Идентификаторы: наш order_id + payment_id/invoice_id провайдера.
+    order_id = Column(String(64), unique=True, nullable=False, index=True)
+    nowpayments_payment_id = Column(String(64), unique=True, nullable=True, index=True)
+    invoice_id = Column(String(64), nullable=True, index=True)
+
+    # Суммы — копейки. amount — запрошенное пополнение (его и зачисляем).
+    amount_kopeks = Column(BigInteger, nullable=False)
+    price_usd = Column(String(32), nullable=True)
+    currency = Column(String(10), nullable=False, default='IRT')
+    description = Column(Text, nullable=True)
+
+    # Крипта: что выбрал покупатель и что реально пришло.
+    pay_currency = Column(String(16), nullable=True)
+    pay_amount = Column(String(32), nullable=True)
+    actually_paid = Column(String(32), nullable=True)
+    outcome_currency = Column(String(16), nullable=True)
+    outcome_amount = Column(String(32), nullable=True)
+
+    # Ссылка на hosted-страницу оплаты.
+    payment_url = Column(Text, nullable=True)
+
+    # Статусы провайдера: waiting/confirming/confirmed/sending/finished/
+    # partially_paid/failed/refunded/expired. Внутренние: pending/processing/
+    # success/manual_review/.../amount_mismatch.
+    status = Column(String(32), nullable=False, default='pending')
+    is_paid = Column(Boolean, default=False)
+
+    # Метаданные
+    metadata_json = Column(JSON, nullable=True)
+    callback_payload = Column(JSON, nullable=True)
+    # Ключи обработанных уведомлений вида "{order_id}:{payment_status}".
+    processed_events = Column(JSON, nullable=True)
+
+    # Временные метки
+    paid_at = Column(AwareDateTime(), nullable=True)
+    expires_at = Column(AwareDateTime(), nullable=True)
+    created_at = Column(AwareDateTime(), default=func.now())
+    updated_at = Column(AwareDateTime(), default=func.now(), onupdate=func.now())
+
+    # Связь с транзакцией
+    transaction_id = Column(Integer, ForeignKey('transactions.id'), nullable=True)
+
+    # Relationships
+    user = relationship('User', backref='nowpayments_payments')
+    transaction = relationship('Transaction', backref='nowpayments_payment')
+
+    @property
+    def amount_toman(self) -> int:
+        return self.amount_kopeks // 100
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == 'pending'
+
+    @property
+    def is_success(self) -> bool:
+        return self.status == 'success' and self.is_paid
+
+    @property
+    def is_failed(self) -> bool:
+        return self.status in ['failed', 'expired', 'cancelled', 'refunded', 'amount_mismatch', 'error']
+
+    def __repr__(self) -> str:  # pragma: no cover - debug helper
+        return (
+            f'<NowPaymentsPayment(id={self.id}, order_id={self.order_id}, '
             f'amount={self.amount_toman} تومان, status={self.status})>'
         )
 

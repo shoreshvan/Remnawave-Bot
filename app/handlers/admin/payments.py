@@ -68,6 +68,8 @@ def _method_display(method: PaymentMethod) -> str:
         return settings.get_tonpays_display_name()
     if method == PaymentMethod.ATLASPAY:
         return settings.get_atlaspay_display_name()
+    if method == PaymentMethod.NOWPAYMENTS:
+        return settings.get_nowpayments_display_name()
     return method.value
 
 

@@ -1259,6 +1259,33 @@ async def create_topup(
                     detail=texts.t('CABINET_BALANCE_ATLASPAY_FAILED', 'Failed to create AtlasPay payment'),
                 )
 
+        elif request.payment_method == 'nowpayments':
+            if not settings.is_nowpayments_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=texts.t('CABINET_BALANCE_NOWPAYMENTS_UNAVAILABLE', 'NOWPayments payment method is unavailable'),
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_nowpayments_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=texts.t('CABINET_BALANCE_NOWPAYMENTS_FAILED', 'Failed to create NOWPayments payment'),
+                )
+
         else:
             # For other payment methods, redirect to bot
             raise HTTPException(
@@ -1532,6 +1559,20 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.NOWPAYMENTS:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Подтверждается сетью'),
+            'success': ('✅', 'Оплачено'),
+            'manual_review': ('⚠️', 'Требуется проверка'),
+            'failed': ('❌', 'Ошибка оплаты'),
+            'refunded': ('↩️', 'Возвращён'),
+            'expired': ('⌛', 'Истёк'),
+            'cancelled': ('❌', 'Отменён'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
     if record.method == PaymentMethod.TABPAY:
         mapping = {
             'pending': ('⏳', 'Ожидает оплаты'),
@@ -1593,6 +1634,8 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {'pending', 'processing', 'need_action'}
     if record.method == PaymentMethod.ATLASPAY:
         return status in {'pending', 'processing', 'underpaid_review'}
+    if record.method == PaymentMethod.NOWPAYMENTS:
+        return status in {'pending', 'processing'}
     return False
 
 

@@ -1,4 +1,4 @@
-"""Handler for AtlasPay balance top-up (api.atlaspay.space, Telegram mini-app)."""
+"""Handler for NOWPayments balance top-up (api.nowpayments.io, crypto intake)."""
 
 import html
 
@@ -20,10 +20,10 @@ from app.utils.decorators import error_handler
 
 logger = structlog.get_logger(__name__)
 
-ATLASPAY_PAYMENT_METHODS = {'atlaspay'}
+NOWPAYMENTS_PAYMENT_METHODS = {'nowpayments'}
 
 # Telegram caps callback_data at 64 bytes.
-_ATLASPAY_CHECK_PREFIX = 'atlaspay_check|'
+_NOWPAYMENTS_CHECK_PREFIX = 'nowpay_check|'
 
 
 def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | None:
@@ -39,14 +39,14 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-async def _create_atlaspay_payment_and_respond(
+async def _create_nowpayments_payment_and_respond(
     message_or_callback,
     db_user: User,
     db: AsyncSession,
     amount_kopeks: int,
     edit_message: bool = False,
 ):
-    """Creates an AtlasPay order and sends the buyer the mini-app pay link."""
+    """Creates a NOWPayments invoice and sends the buyer the hosted pay page link."""
     texts = get_texts(db_user.language)
 
     payment_service = PaymentService()
@@ -55,11 +55,10 @@ async def _create_atlaspay_payment_and_respond(
         description='Пополнение баланса',
     )
 
-    result = await payment_service.create_atlaspay_payment(
+    result = await payment_service.create_nowpayments_payment(
         db=db,
         user_id=db_user.id,
         amount_kopeks=amount_kopeks,
-        customer_telegram_id=int(db_user.telegram_id) if db_user.telegram_id else None,
         description=description,
         language=db_user.language,
     )
@@ -75,22 +74,16 @@ async def _create_atlaspay_payment_and_respond(
         return
 
     payment_url = result['payment_url']
-    # Show the PROVIDER total (base + unique delta), never the base amount.
-    total_kopeks = result.get('total_amount_kopeks') or amount_kopeks
-    total_toman = f'{total_kopeks // 100:,}'.replace(',', '٬')
-    # Never show the sequential provider order id — trackingCode only.
-    tracking = result.get('tracking_code') or result['order_id']
-
-    pay_button_text = texts.t('ATLASPAY_PAY_BUTTON', '💳 پرداخت')
-    check_button_text = texts.t('ATLASPAY_CHECK_BUTTON', '✅ پرداخت کردم')
+    display_name = settings.get_nowpayments_display_name()
+    amount_toman = f'{amount_kopeks // 100:,}'.replace(',', '٬')
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=pay_button_text, url=payment_url)],
+            [InlineKeyboardButton(text=texts.t('NOWPAYMENTS_PAY_BUTTON', '💳 پرداخت'), url=payment_url)],
             [
                 InlineKeyboardButton(
-                    text=check_button_text,
-                    callback_data=f'{_ATLASPAY_CHECK_PREFIX}{result["order_id"]}',
+                    text=texts.t('NOWPAYMENTS_CHECK_BUTTON', '✅ پرداخت کردم'),
+                    callback_data=f'{_NOWPAYMENTS_CHECK_PREFIX}{result["order_id"]}',
                 )
             ],
             [InlineKeyboardButton(text=texts.t('BACK_BUTTON', '◀️ Назад'), callback_data='menu_balance')],
@@ -98,37 +91,30 @@ async def _create_atlaspay_payment_and_respond(
     )
 
     response_text = texts.t(
-        'ATLASPAY_PAYMENT_CREATED',
-        '⚠️ <b>پرداخت از طریق {name}</b>\n\n'
-        '💰 مبلغ قابل پرداخت: <b>{total} تومان</b>\n'
-        'مبلغ را دقیقاً همین عدد واریز کنید؛ واریز مبلغ رُند باعث تأخیر می‌شود.\n\n'
-        '⏱ مهلت پرداخت: {minutes} دقیقه\n\n'
-        '🌐 از دکمه زیر وارد صفحه پرداخت شوید، پس از واریز رسید را همان‌جا بارگذاری کنید.\n\n'
-        '🔖 شماره پیگیری: <code>{tracking}</code>',
-    ).format(
-        name=settings.get_atlaspay_display_name(),
-        total=total_toman,
-        minutes=settings.ATLASPAY_DEADLINE_MINUTES,
-        tracking=html.escape(str(tracking)),
-    )
+        'NOWPAYMENTS_PAYMENT_CREATED',
+        '💳 <b>پرداخت از طریق {name}</b>\n\n'
+        'مبلغ: <b>{amount} تومان</b>\n\n'
+        'از دکمه زیر وارد صفحه پرداخت شوید و ارز موردنظرتان را انتخاب کنید.\n'
+        'موجودی پس از تأیید شبکه به‌صورت خودکار شارژ می‌شود.',
+    ).format(name=display_name, amount=amount_toman)
 
     if edit_message:
         await message_or_callback.edit_text(response_text, reply_markup=keyboard, parse_mode='HTML')
     else:
         await message_or_callback.answer(response_text, reply_markup=keyboard, parse_mode='HTML')
 
-    logger.info('AtlasPay payment created', telegram_id=db_user.telegram_id, amount_kopeks=amount_kopeks)
+    logger.info('NOWPayments payment created', telegram_id=db_user.telegram_id, amount_kopeks=amount_kopeks)
 
 
 @error_handler
-async def process_atlaspay_payment_amount(
+async def process_nowpayments_payment_amount(
     message: types.Message,
     db_user: User,
     db: AsyncSession,
     amount_kopeks: int,
     state: FSMContext,
 ):
-    """Handles the amount entered by the user for AtlasPay."""
+    """Handles the amount entered by the user for NOWPayments."""
     texts = get_texts(db_user.language)
 
     restriction_kb = _check_topup_restriction(db_user, texts)
@@ -142,8 +128,8 @@ async def process_atlaspay_payment_amount(
         await state.clear()
         return
 
-    min_amount = settings.ATLASPAY_MIN_AMOUNT_KOPEKS
-    max_amount = settings.ATLASPAY_MAX_AMOUNT_KOPEKS
+    min_amount = settings.NOWPAYMENTS_MIN_AMOUNT_KOPEKS
+    max_amount = settings.NOWPAYMENTS_MAX_AMOUNT_KOPEKS
 
     if amount_kopeks < min_amount:
         await message.answer(
@@ -167,7 +153,7 @@ async def process_atlaspay_payment_amount(
 
     if amount_kopeks % 100 != 0:
         await message.answer(
-            texts.t('ATLASPAY_AMOUNT_MUST_BE_WHOLE', 'مبلغ باید به تومان کامل باشد (بدون خرده).'),
+            texts.t('NOWPAYMENTS_AMOUNT_MUST_BE_WHOLE', 'مبلغ باید به تومان کامل باشد (بدون خرده).'),
             reply_markup=get_back_keyboard(db_user.language),
             parse_mode='HTML',
         )
@@ -175,7 +161,7 @@ async def process_atlaspay_payment_amount(
 
     await state.clear()
 
-    await _create_atlaspay_payment_and_respond(
+    await _create_nowpayments_payment_and_respond(
         message_or_callback=message,
         db_user=db_user,
         db=db,
@@ -185,13 +171,13 @@ async def process_atlaspay_payment_amount(
 
 
 @error_handler
-async def start_atlaspay_topup(
+async def start_nowpayments_topup(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
     state: FSMContext,
 ):
-    """Starts the amount-entry FSM for AtlasPay."""
+    """Starts the amount-entry FSM for NOWPayments."""
     texts = get_texts(db_user.language)
 
     restriction_kb = _check_topup_restriction(db_user, texts)
@@ -205,19 +191,19 @@ async def start_atlaspay_topup(
         return
 
     await state.set_state(BalanceStates.waiting_for_amount)
-    await state.update_data(payment_method='atlaspay')
+    await state.update_data(payment_method='nowpayments')
 
-    min_amount = settings.ATLASPAY_MIN_AMOUNT_KOPEKS // 100
-    max_amount = settings.ATLASPAY_MAX_AMOUNT_KOPEKS // 100
+    min_amount = settings.NOWPAYMENTS_MIN_AMOUNT_KOPEKS // 100
+    max_amount = settings.NOWPAYMENTS_MAX_AMOUNT_KOPEKS // 100
 
-    display_name = settings.get_atlaspay_display_name()
-    keyboard = await get_topup_amount_keyboard('atlaspay', db_user.language)
+    display_name = settings.get_nowpayments_display_name()
+    keyboard = await get_topup_amount_keyboard('nowpayments', db_user.language)
 
     await callback.message.edit_text(
         texts.t(
-            'ATLASPAY_ENTER_AMOUNT',
+            'NOWPAYMENTS_ENTER_AMOUNT',
             '💳 <b>پرداخت از طریق {name}</b>\n\n'
-            'مبلغ شارژ را به تومان وارد کنید.\n\n'
+            'مبلغ شارژ را به تومان وارد کنید. معادل دلاری آن محاسبه و در صفحه پرداخت نمایش داده می‌شود.\n\n'
             'حداقل: {min_amount} تومان\n'
             'حداکثر: {max_amount} تومان',
         ).format(
@@ -231,29 +217,29 @@ async def start_atlaspay_topup(
 
 
 @error_handler
-async def handle_atlaspay_check(
+async def handle_nowpayments_check(
     callback: types.CallbackQuery,
     db_user: User,
     db: AsyncSession,
     state: FSMContext,
 ):
-    """«پرداخت کردم» — immediate verify via the AtlasPay API."""
+    """«پرداخت کردم» — immediate status check via the NOWPayments API."""
     texts = get_texts(db_user.language)
-    order_id = (callback.data or '').removeprefix(_ATLASPAY_CHECK_PREFIX)
+    order_id = (callback.data or '').removeprefix(_NOWPAYMENTS_CHECK_PREFIX)
 
     service = PaymentService(callback.bot)
-    result = await service.check_atlaspay_payment_status(db, order_id)
+    result = await service.check_nowpayments_payment_status(db, order_id)
 
     if not result:
         await callback.answer(
-            texts.t('ATLASPAY_CHECK_ERROR', 'خطا در استعلام وضعیت. دوباره تلاش کنید.'), show_alert=True
+            texts.t('NOWPAYMENTS_CHECK_ERROR', 'خطا در استعلام وضعیت. دوباره تلاش کنید.'), show_alert=True
         )
         return
 
     if result.get('is_paid'):
         await state.clear()
         await callback.answer(
-            texts.t('ATLASPAY_CHECK_PAID', '✅ پرداخت تأیید و موجودی شارژ شد.'), show_alert=True
+            texts.t('NOWPAYMENTS_CHECK_PAID', '✅ پرداخت تأیید و موجودی شارژ شد.'), show_alert=True
         )
         return
 
@@ -262,19 +248,19 @@ async def handle_atlaspay_check(
         await state.clear()
         await callback.answer(
             texts.t(
-                'ATLASPAY_CHECK_EXPIRED',
+                'NOWPAYMENTS_CHECK_EXPIRED',
                 '⌛ مهلت پرداخت تمام شد. لطفاً یک پرداخت جدید ایجاد کنید.',
             ),
             show_alert=True,
         )
         return
 
-    if status in ('rejected', 'cancelled', 'failed'):
+    if status in ('failed', 'refunded', 'cancelled'):
         await state.clear()
         await callback.answer(
             texts.t(
-                'ATLASPAY_CHECK_FAILED',
-                '❌ پرداخت رد یا لغو شد. در صورت نیاز یک پرداخت جدید ایجاد کنید.',
+                'NOWPAYMENTS_CHECK_FAILED',
+                '❌ پرداخت ناموفق بود. در صورت نیاز یک پرداخت جدید ایجاد کنید.',
             ),
             show_alert=True,
         )
@@ -284,8 +270,8 @@ async def handle_atlaspay_check(
         await state.clear()
         await callback.answer(
             texts.t(
-                'ATLASPAY_CHECK_MANUAL',
-                '⚠️ پرداخت با مغایرت ثبت شد و در انتظار بررسی پشتیبانی است.',
+                'NOWPAYMENTS_CHECK_MANUAL',
+                '⚠️ مبلغ واریزی کمتر از مبلغ فاکتور است و در انتظار بررسی پشتیبانی است.',
             ),
             show_alert=True,
         )
@@ -293,8 +279,8 @@ async def handle_atlaspay_check(
 
     await callback.answer(
         texts.t(
-            'ATLASPAY_CHECK_PENDING',
-            '⏳ پرداخت هنوز تأیید نشده. کمی بعد دوباره بزنید.',
+            'NOWPAYMENTS_CHECK_PENDING',
+            '⏳ پرداخت هنوز در شبکه تأیید نشده. کمی بعد دوباره بزنید.',
         ),
         show_alert=True,
     )

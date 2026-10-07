@@ -234,6 +234,13 @@ async def route_payment_by_method(
             await process_tonpays_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == 'nowpayments':
+        from .nowpayments import process_nowpayments_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_nowpayments_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     if payment_method == 'atlaspay':
         from .atlaspay import process_atlaspay_payment_amount
 
@@ -1044,6 +1051,11 @@ def register_balance_handlers(dp: Dispatcher):
 
     dp.callback_query.register(start_atlaspay_topup, F.data == 'topup_atlaspay')
     dp.callback_query.register(handle_atlaspay_check, F.data.startswith('atlaspay_check|'))
+
+    from .nowpayments import handle_nowpayments_check, start_nowpayments_topup
+
+    dp.callback_query.register(start_nowpayments_topup, F.data == 'topup_nowpayments')
+    dp.callback_query.register(handle_nowpayments_check, F.data.startswith('nowpay_check|'))
 
     from .mulenpay import check_mulenpay_payment_status
 

@@ -2273,6 +2273,87 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
 
         routes_registered = True
 
+    # Static payment-result page (NOWPayments success/cancel/partially URLs).
+    # Display-only: every value it renders comes from the URL query string,
+    # no backend fetch, no secrets. Mounted regardless of gateway flags so the
+    # page itself never 404s (a missing gateway only means no new links).
+    try:
+        from pathlib import Path
+
+        from fastapi.responses import FileResponse
+
+        _result_page = Path(__file__).resolve().parents[1] / 'cabinet' / 'static' / 'payment_result.html'
+        if _result_page.exists():
+
+            @router.get(settings.NOWPAYMENTS_RESULT_PATH)
+            async def payment_result_page() -> FileResponse:
+                return FileResponse(
+                    _result_page,
+                    media_type='text/html; charset=utf-8',
+                    headers={'Cache-Control': 'no-store'},
+                )
+
+            routes_registered = True
+        else:
+            logger.warning('Payment result page not found, route skipped', path=str(_result_page))
+    except Exception as e:
+        logger.error('Failed to mount payment result page', error=e)
+
+    # NOWPayments IPN (api.nowpayments.io)
+    if settings.is_nowpayments_configured():
+
+        @router.get(settings.NOWPAYMENTS_WEBHOOK_PATH)
+        async def nowpayments_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'nowpayments_webhook',
+                    'enabled': settings.is_nowpayments_enabled(),
+                }
+            )
+
+        @router.post(settings.NOWPAYMENTS_WEBHOOK_PATH)
+        async def nowpayments_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.nowpayments_service import nowpayments_service
+
+            payload = nowpayments_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # HMAC-SHA512 over the key-sorted compact JSON with the IPN Secret
+            # (raw-bytes fallback for proxies that reformat spacing).
+            if not nowpayments_service.verify_callback_signature(
+                raw_body, payload, request.headers.get('x-nowpayments-sig')
+            ):
+                logger.warning('NOWPayments webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # A single IPN per status change; ack fast and credit in background
+            # under a row lock so parallel deliveries are safe.
+            async def _process_nowpayments_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_nowpayments_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'NOWPayments webhook processing failed',
+                            order_id=payload.get('order_id'),
+                            provider_payment=payload.get('payment_id'),
+                            payment_status=payload.get('payment_status'),
+                        )
+                except Exception as e:
+                    logger.exception('NOWPayments webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_nowpayments_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
     # TabPay webhook (tabpay.org)
     if settings.is_tabpay_configured():
 

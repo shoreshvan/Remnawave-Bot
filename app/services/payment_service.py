@@ -46,6 +46,7 @@ from app.services.payment.overpay import OverpayPaymentMixin
 from app.services.payment.paritypay import ParityPayPaymentMixin
 from app.services.payment.hooshpay import HooshpayPaymentMixin
 from app.services.payment.atlaspay import AtlaspayPaymentMixin
+from app.services.payment.nowpayments import NowpaymentsPaymentMixin
 from app.services.payment.tonpays import TonpaysPaymentMixin
 from app.services.payment.payer_identity import resolve_guest_payer
 from app.services.payment.paypear import PayPearPaymentMixin
@@ -872,6 +873,7 @@ class PaymentService(
     HooshpayPaymentMixin,
     TonpaysPaymentMixin,
     AtlaspayPaymentMixin,
+    NowpaymentsPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1627,6 +1629,27 @@ class PaymentService(
         # purchases cannot use this gateway.
         if _base == 'tonpays':
             logger.warning('TonPays requires buyer_chat_id, cannot create guest payment')
+            return None
+
+        # --- NOWPayments ------------------------------------------------------
+        if _base == 'nowpayments':
+            if not settings.is_nowpayments_enabled():
+                logger.warning('NOWPayments is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_nowpayments_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'nowpayments')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'nowpayments',
+                }
             return None
 
         # --- AtlasPay ---------------------------------------------------------

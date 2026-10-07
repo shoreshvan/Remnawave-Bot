@@ -303,6 +303,29 @@ async def handle_tonpays_check(
         )
         return
 
+    status = (result.get('status') or '').lower()
+    if status == 'expired':
+        await state.clear()
+        await callback.answer(
+            texts.t(
+                'TONPAYS_CHECK_EXPIRED',
+                '⌛ مهلت پرداخت تمام شد. لطفاً یک پرداخت جدید ایجاد کنید.',
+            ),
+            show_alert=True,
+        )
+        return
+
+    if status in ('rejected', 'cancelled', 'failed'):
+        await state.clear()
+        await callback.answer(
+            texts.t(
+                'TONPAYS_CHECK_FAILED',
+                '❌ پرداخت رد یا لغو شد. در صورت نیاز یک پرداخت جدید ایجاد کنید.',
+            ),
+            show_alert=True,
+        )
+        return
+
     await callback.answer(
         texts.t(
             'TONPAYS_CHECK_PENDING', '⏳ پرداخت هنوز تأیید نشده. پس از واریز، فیش را بفرستید یا کمی بعد دوباره بزنید.'

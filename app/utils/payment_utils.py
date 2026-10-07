@@ -486,6 +486,18 @@ def get_available_payment_methods() -> list[dict[str, str]]:
             }
         )
 
+    if settings.is_nowpayments_enabled():
+        nowpayments_name = settings.get_nowpayments_display_name()
+        methods.append(
+            {
+                'id': 'nowpayments',
+                'name': nowpayments_name,
+                'icon': '💎',
+                'description': f'через {nowpayments_name}',
+                'callback': 'topup_nowpayments',
+            }
+        )
+
     if settings.is_etoplatezhi_sbp_enabled():
         sbp_name = settings.get_etoplatezhi_sbp_display_name()
         methods.append(
@@ -756,6 +768,8 @@ def is_payment_method_available(method_id: str) -> bool:
         return settings.is_tonpays_enabled()
     if method_id == 'atlaspay':
         return settings.is_atlaspay_enabled()
+    if method_id == 'nowpayments':
+        return settings.is_nowpayments_enabled()
     if method_id == 'etoplatezhi':
         return settings.is_etoplatezhi_enabled()
     if method_id == 'etoplatezhi_sbp':

@@ -306,6 +306,13 @@ def _get_method_defaults() -> dict:
             'default_max': settings.ATLASPAY_MAX_AMOUNT_KOPEKS,
             'available_sub_options': None,
         },
+        'nowpayments': {
+            'default_display_name': settings.get_nowpayments_display_name(),
+            'is_configured': settings.is_nowpayments_enabled(),
+            'default_min': settings.NOWPAYMENTS_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.NOWPAYMENTS_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
         'tabpay': {
             'default_display_name': settings.get_tabpay_display_name(),
             'is_configured': settings.is_tabpay_enabled(),
@@ -402,6 +409,7 @@ DEFAULT_METHOD_ORDER = [
     'hooshpay',
     'tonpays',
     'atlaspay',
+    'nowpayments',
     'cashera',
 ]
 

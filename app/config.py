@@ -1237,6 +1237,20 @@ class Settings(BaseSettings):
     # Дедлайн провайдера всегда 20 минут (paymentDeadlineAt) — только для текста.
     ATLASPAY_DEADLINE_MINUTES: int = 20
 
+    # NOWPayments (api.nowpayments.io/v1) — приём крипты с авто-конвертацией.
+    # price_currency не знает IRR: суммы в تومان переводим в USD по ручному курсу.
+    NOWPAYMENTS_ENABLED: bool = False
+    NOWPAYMENTS_API_KEY: str | None = None  # x-api-key из кабинета NOWPayments
+    NOWPAYMENTS_IPN_SECRET: str | None = None  # IPN Secret (HMAC-SHA512, x-nowpayments-sig)
+    NOWPAYMENTS_BASE_URL: str = 'https://api.nowpayments.io/v1'
+    NOWPAYMENTS_DISPLAY_NAME: str = 'ارز دیجیتال'
+    NOWPAYMENTS_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان (подтвердить живым тестом)
+    NOWPAYMENTS_MAX_AMOUNT_KOPEKS: int = 250000000  # 2500000 تومان (подтвердить живым тестом)
+    NOWPAYMENTS_WEBHOOK_PATH: str = '/nowpayments-webhook'
+    NOWPAYMENTS_RESULT_PATH: str = '/payment/result'
+    # Курс доллара для перевода تومان -> USD (ЦБ его не отдаёт, задаётся вручную).
+    NOWPAYMENTS_USD_TO_TOMAN_RATE: float = 255000.0
+
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
     LAVA_BASE_URL: str = 'https://api.lava.ru'
@@ -3594,6 +3608,43 @@ class Settings(BaseSettings):
         if not self.WEBHOOK_URL:
             return None
         return f'{self.WEBHOOK_URL.rstrip("/")}{self.ATLASPAY_WEBHOOK_PATH}'
+
+    def is_nowpayments_configured(self) -> bool:
+        """Есть ли ключ API — без учёта флага включения."""
+        return bool(self.NOWPAYMENTS_API_KEY)
+
+    def is_nowpayments_enabled(self) -> bool:
+        return bool(self.NOWPAYMENTS_ENABLED and self.NOWPAYMENTS_API_KEY)
+
+    def get_nowpayments_display_name(self) -> str:
+        name = (self.NOWPAYMENTS_DISPLAY_NAME or '').strip()
+        return name or 'ارز دیجیتال'
+
+    def get_nowpayments_display_name_html(self) -> str:
+        return html.escape(self.get_nowpayments_display_name())
+
+    def get_nowpayments_callback_url(self) -> str | None:
+        """Публичный адрес IPN. Без WEBHOOK_URL не передаём ничего."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.NOWPAYMENTS_WEBHOOK_PATH}'
+
+    def get_nowpayments_result_page_url(self) -> str | None:
+        """Публичный адрес страницы результата (success_url для инвойсов)."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.NOWPAYMENTS_RESULT_PATH}'
+
+    def get_nowpayments_usd_rate(self) -> float:
+        rate = self.NOWPAYMENTS_USD_TO_TOMAN_RATE or 0
+        return float(rate) if rate > 0 else 0.0
+
+    def nowpayments_toman_to_usd(self, amount_kopeks: int) -> float:
+        """Копейки -> USD для price_amount (округление до центов)."""
+        rate = self.get_nowpayments_usd_rate()
+        if rate <= 0:
+            raise ValueError('NOWPayments USD rate must be positive')
+        return round((amount_kopeks / 100) / rate, 2)
 
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""
