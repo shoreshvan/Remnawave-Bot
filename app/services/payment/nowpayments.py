@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.localization.texts import get_texts
 from app.services.nowpayments_service import nowpayments_service
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
@@ -502,7 +503,10 @@ class NowpaymentsPaymentMixin:
             )
 
         display_name = settings.get_nowpayments_display_name()
-        description = f'Пополнение через {display_name}'
+        texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+        description = texts.t(
+            'NOWPAYMENTS_TRANSACTION_DESCRIPTION', 'Пополнение через {display_name}'
+        ).format(display_name=display_name)
 
         transaction = existing_transaction
         created_transaction = False
@@ -556,7 +560,11 @@ class NowpaymentsPaymentMixin:
             external_id=transaction_external_id,
         )
 
-        topup_status = '\U0001f195 Первое пополнение' if was_first_topup else '\U0001f504 Пополнение'
+        topup_status = (
+            texts.t('SEVERPAY_TOPUP_STATUS_FIRST', '\U0001f195 Первое пополнение')
+            if was_first_topup
+            else texts.t('SEVERPAY_TOPUP_STATUS_REPEAT', '\U0001f504 Пополнение')
+        )
 
         try:
             from app.services.referral_service import process_referral_topup
@@ -598,12 +606,17 @@ class NowpaymentsPaymentMixin:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
                     user.telegram_id,
-                    (
+                    texts.t(
+                        'NOWPAYMENTS_TOPUP_SUCCESS',
                         '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
+                        '\U0001f4b0 Сумма: {amount}\n'
+                        '\U0001f4b3 Способ: {method}\n'
+                        '\U0001f194 Транзакция: {transaction_id}\n\n'
+                        'Баланс пополнен автоматически!',
+                    ).format(
+                        amount=settings.format_price(payment.amount_kopeks),
+                        method=display_name,
+                        transaction_id=transaction.id,
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,
