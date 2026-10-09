@@ -1225,7 +1225,7 @@
   "PAY_NOW_BUTTON": "💳支付",
   "PAY_WITH_COINS_BUTTON": "🪙支付",
   "PENDING_CANCEL_BUTTON": "⌛取消",
-  "PERIOD_14_DAYS": "📅14天-{settings.format_price(settings.PRICE_14_DAYS)}",
+  "PERIOD_15_DAYS": "📅15天-{settings.format_price(settings.PRICE_15_DAYS)}",
   "PERIOD_180_DAYS": "📅180天-{settings.format_price(settings.PRICE_180_DAYS)}",
   "PERIOD_30_DAYS": "📅30天-{settings.format_price(settings.PRICE_30_DAYS)}",
   "PERIOD_360_DAYS": "📅360天-{settings.format_price(settings.PRICE_360_DAYS)}",

@@ -1227,7 +1227,7 @@
   "PAY_NOW_BUTTON": "💳 Оплатити",
   "PAY_WITH_COINS_BUTTON": "🪙 Оплатити",
   "PENDING_CANCEL_BUTTON": "⌛ Скасувати",
-  "PERIOD_14_DAYS": "📅 14 днів - {settings.format_price(settings.PRICE_14_DAYS)}",
+  "PERIOD_15_DAYS": "📅 15 днів - {settings.format_price(settings.PRICE_15_DAYS)}",
   "PERIOD_180_DAYS": "📅 180 днів - {settings.format_price(settings.PRICE_180_DAYS)}",
   "PERIOD_30_DAYS": "📅 30 днів - {settings.format_price(settings.PRICE_30_DAYS)}",
   "PERIOD_360_DAYS": "📅 360 днів - {settings.format_price(settings.PRICE_360_DAYS)}",

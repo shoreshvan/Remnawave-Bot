@@ -376,9 +376,9 @@ class Settings(BaseSettings):
     BASE_SUBSCRIPTION_PRICE: int = 50000
     AVAILABLE_SUBSCRIPTION_PERIODS: str = '14,30,60,90,180,360'
     AVAILABLE_RENEWAL_PERIODS: str = '30,90,180'
-    PRICE_14_DAYS: int = 50000
-    PRICE_30_DAYS: int = 99000
-    PRICE_60_DAYS: int = 189000
+    PRICE_15_DAYS: int = 2500000
+    PRICE_30_DAYS: int = 10000000
+    PRICE_60_DAYS: int = 25000000
     PRICE_90_DAYS: int = 269000
     PRICE_180_DAYS: int = 499000
     PRICE_360_DAYS: int = 899000
@@ -3975,7 +3975,7 @@ class Settings(BaseSettings):
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
             if not periods_str or not periods_str.strip():
-                allowed_periods = {14, 30, 60, 90, 180, 360}
+                allowed_periods = {15, 30, 60, 90, 180, 360}
             else:
                 allowed_periods = set()
                 for period_str in periods_str.split(','):
@@ -3983,7 +3983,7 @@ class Settings(BaseSettings):
                     if period_str:
                         allowed_periods.add(int(period_str))
         except (ValueError, AttributeError):
-            allowed_periods = {14, 30, 60, 90, 180, 360}
+            allowed_periods = {15, 30, 60, 90, 180, 360}
 
         # Возвращаем только разрешённые периоды (без фильтрации по цене,
         # т.к. в режиме classic цена складывается из серверов/трафика/устройств)
@@ -4024,16 +4024,16 @@ class Settings(BaseSettings):
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
             if not periods_str or not periods_str.strip():
-                return [14, 30, 60, 90, 180, 360]
+                return [15, 30, 60, 90, 180, 360]
 
             periods = []
             for period_str in periods_str.split(','):
                 period_str = period_str.strip()
                 if period_str:
                     periods.append(int(period_str))
-            return sorted(periods) if periods else [14, 30, 60, 90, 180, 360]
+            return sorted(periods) if periods else [15, 30, 60, 90, 180, 360]
         except (ValueError, AttributeError):
-            return [14, 30, 60, 90, 180, 360]
+            return [15, 30, 60, 90, 180, 360]
 
     def get_configured_renewal_periods(self) -> list[int]:
         """
@@ -4753,7 +4753,7 @@ settings = Settings()
 ENV_OVERRIDE_KEYS = set(settings.model_fields_set)
 
 _PERIOD_PRICE_FIELDS: dict[int, str] = {
-    14: 'PRICE_14_DAYS',
+    15: 'PRICE_15_DAYS',
     30: 'PRICE_30_DAYS',
     60: 'PRICE_60_DAYS',
     90: 'PRICE_90_DAYS',

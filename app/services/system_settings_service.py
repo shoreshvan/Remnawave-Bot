@@ -351,7 +351,7 @@ class BotConfigurationService:
         'FIXED_TRAFFIC_LIMIT_GB': 'TRAFFIC',
         'AVAILABLE_SUBSCRIPTION_PERIODS': 'PERIODS',
         'AVAILABLE_RENEWAL_PERIODS': 'PERIODS',
-        'PRICE_14_DAYS': 'SUBSCRIPTION_PRICES',
+        'PRICE_15_DAYS': 'SUBSCRIPTION_PRICES',
         'PRICE_30_DAYS': 'SUBSCRIPTION_PRICES',
         'PRICE_60_DAYS': 'SUBSCRIPTION_PRICES',
         'PRICE_90_DAYS': 'SUBSCRIPTION_PRICES',
@@ -899,7 +899,7 @@ class BotConfigurationService:
         'SALES_MODE': {
             'description': (
                 get_texts().t('SETTINGS_HINT_SALES_MODE_DESCRIPTION', 'Режим продажи подписок. '
-                '«Классический» — выбор периода из .env (PRICE_14_DAYS и т.д.). '
+                '«Классический» — выбор периода из .env (PRICE_15_DAYS и т.д.). '
                 '«Тарифы» — готовые тарифные планы из кабинета с серверами и лимитами.')
             ),
             'format': get_texts().t('SETTINGS_HINT_SALES_MODE_FORMAT', 'Выберите один из доступных режимов.'),
@@ -2449,7 +2449,7 @@ class BotConfigurationService:
                 refresh_period_prices()
                 refresh_classic_period_prices()
             elif key in {
-                'PRICE_14_DAYS',
+                'PRICE_15_DAYS',
                 'PRICE_30_DAYS',
                 'PRICE_60_DAYS',
                 'PRICE_90_DAYS',
