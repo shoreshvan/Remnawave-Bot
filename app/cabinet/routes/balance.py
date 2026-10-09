@@ -1267,12 +1267,14 @@ async def create_topup(
                 )
 
             payment_service = PaymentService()
+            # NOWPayments shows order_description on its hosted page: keep it English.
             result = await payment_service.create_nowpayments_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
-                description=settings.get_balance_payment_description(
-                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                description=settings.PAYMENT_BALANCE_TEMPLATE.format(
+                    service_name=settings.PAYMENT_SERVICE_NAME,
+                    description='Balance top-up',
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
             )

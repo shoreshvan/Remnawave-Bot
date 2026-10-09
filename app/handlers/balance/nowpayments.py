@@ -57,9 +57,10 @@ async def _create_nowpayments_payment_and_respond(
     texts = get_texts(db_user.language)
 
     payment_service = PaymentService()
+    # NOWPayments shows order_description on its hosted page: keep it English.
     description = settings.PAYMENT_BALANCE_TEMPLATE.format(
         service_name=settings.PAYMENT_SERVICE_NAME,
-        description=texts.t('SEVERPAY_PAYMENT_DESCRIPTION', 'Пополнение баланса'),
+        description='Balance top-up',
     )
 
     result = await payment_service.create_nowpayments_payment(
@@ -101,7 +102,7 @@ async def _create_nowpayments_payment_and_respond(
         'NOWPAYMENTS_PAYMENT_CREATED',
         '💳 <b>پرداخت از طریق {name}</b>\n\n'
         'مبلغ: <b>{amount} تومان</b>\n\n'
-        'از دکمه زیر وارد صفحه پرداخت شوید و ارز موردنظرتان را انتخاب کنید.\n'
+        'از دکمه زیر وارد صفحه پرداخت شوید و ارز مورد نظرتان را انتخاب کنید.\n'
         'موجودی پس از تأیید شبکه به‌صورت خودکار شارژ می‌شود.',
     ).format(name=display_name, amount=amount_toman)
 
