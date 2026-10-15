@@ -327,8 +327,12 @@ def _renew_link(subscription_id: int | None, texts) -> str:
 
 
 def _traffic_usage_text(subscription, texts) -> str:
-    used = texts.format_traffic(float(getattr(subscription, 'traffic_used_gb', 0) or 0), is_limit=False)
-    limit = texts.format_traffic(float(getattr(subscription, 'traffic_limit_gb', 0) or 0), is_limit=True)
+    used = texts.format_traffic(
+        float(getattr(subscription, 'traffic_used_gb', 0) or 0), is_limit=False, language=texts.language
+    )
+    limit = texts.format_traffic(
+        float(getattr(subscription, 'traffic_limit_gb', 0) or 0), is_limit=True, language=texts.language
+    )
     return f'{used} / {limit}'
 
 

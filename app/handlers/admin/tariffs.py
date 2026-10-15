@@ -409,7 +409,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     )
     if getattr(tariff, 'is_highlighted', False):
         status += texts.t('ADMIN_TARIFF_STATUS_HIGHLIGHTED', ' · ⭐ выделен')
-    traffic = format_traffic(tariff.traffic_limit_gb)
+    traffic = format_traffic(tariff.traffic_limit_gb, language)
     prices_display = _format_period_prices_display(tariff.period_prices or {}, tariff.highlight_period_days, texts)
 
     # Форматируем список серверов
@@ -1063,7 +1063,7 @@ async def process_tariff_traffic(
     await state.update_data(tariff_traffic=traffic)
     await state.set_state(AdminStates.creating_tariff_devices)
 
-    traffic_display = format_traffic(traffic)
+    traffic_display = format_traffic(traffic, db_user.language)
 
     await message.answer(
         texts.t(
@@ -1104,7 +1104,7 @@ async def process_tariff_devices(
     await state.update_data(tariff_devices=devices)
     await state.set_state(AdminStates.creating_tariff_tier)
 
-    traffic_display = format_traffic(data['tariff_traffic'])
+    traffic_display = format_traffic(data['tariff_traffic'], db_user.language)
 
     await message.answer(
         texts.t(
@@ -1147,7 +1147,7 @@ async def process_tariff_tier(
     data = await state.get_data()
     await state.update_data(tariff_tier=tier)
 
-    traffic_display = format_traffic(data['tariff_traffic'])
+    traffic_display = format_traffic(data['tariff_traffic'], db_user.language)
 
     # Шаг 5/6: Выбор типа тарифа
     await message.answer(
@@ -1196,7 +1196,7 @@ async def select_tariff_type_periodic(
     await state.update_data(tariff_is_daily=False)
     await state.set_state(AdminStates.creating_tariff_prices)
 
-    traffic_display = format_traffic(data['tariff_traffic'])
+    traffic_display = format_traffic(data['tariff_traffic'], db_user.language)
 
     await callback.message.edit_text(
         texts.t(
@@ -1242,7 +1242,7 @@ async def select_tariff_type_daily(
     await state.update_data(tariff_is_daily=True)
     await state.set_state(AdminStates.editing_tariff_daily_price)
 
-    traffic_display = format_traffic(data['tariff_traffic'])
+    traffic_display = format_traffic(data['tariff_traffic'], db_user.language)
 
     await callback.message.edit_text(
         texts.t(
@@ -1297,7 +1297,7 @@ async def process_tariff_prices(
     data = await state.get_data()
     await state.update_data(tariff_prices=prices)
 
-    format_traffic(data['tariff_traffic'])
+    format_traffic(data['tariff_traffic'], db_user.language)
     _format_period_prices_display(prices, texts=texts)
 
     # Создаем тариф
@@ -1491,7 +1491,7 @@ async def start_edit_tariff_traffic(
     await state.set_state(AdminStates.editing_tariff_traffic)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
-    current_traffic = format_traffic(tariff.traffic_limit_gb)
+    current_traffic = format_traffic(tariff.traffic_limit_gb, db_user.language)
 
     await callback.message.edit_text(
         texts.t(

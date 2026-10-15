@@ -165,7 +165,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
                 'Текущий лимит: {current_traffic}\n'
                 'Выберите дополнительный трафик:'
             ),
-        ).format(current_traffic=texts.format_traffic(current_traffic))
+        ).format(current_traffic=texts.format_traffic(current_traffic, language=texts.language))
 
         await callback.message.edit_text(
             prompt_text,
@@ -214,7 +214,7 @@ async def handle_add_traffic(callback: types.CallbackQuery, db_user: User, db: A
     prompt_text = texts.t(
         'ADD_TRAFFIC_PROMPT',
         ('📈 <b>Добавить трафик к подписке</b>\n\nТекущий лимит: {current_traffic}\nВыберите дополнительный трафик:'),
-    ).format(current_traffic=texts.format_traffic(current_traffic))
+    ).format(current_traffic=texts.format_traffic(current_traffic, language=texts.language))
 
     await callback.message.edit_text(
         prompt_text,
@@ -309,8 +309,8 @@ async def handle_reset_traffic(
             'TRAFFIC_RESET_PRICE_INFO',
             '\n\n💡 <i>Расчет цены:</i>\n• Базовый трафик: {base}\n• Докупленный: {purchased}',
         ).format(
-            base=texts.format_traffic(base_traffic_gb),
-            purchased=texts.format_traffic(purchased_gb),
+            base=texts.format_traffic(base_traffic_gb, language=texts.language),
+            purchased=texts.format_traffic(purchased_gb, language=texts.language),
         )
 
     # Проверяем достаточно ли средств
@@ -337,8 +337,8 @@ async def handle_reset_traffic(
                 'После сброса счетчик использованного трафика станет равным 0.'
             ),
         ).format(
-            used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
-            limit=texts.format_traffic(subscription.traffic_limit_gb),
+            used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False, language=texts.language),
+            limit=texts.format_traffic(subscription.traffic_limit_gb, language=texts.language),
             price=texts.format_price(reset_price),
             price_info=price_info,
             balance_info=balance_info,
@@ -482,7 +482,7 @@ async def confirm_reset_traffic(
                     '🔄 Использованный трафик обнулен\n'
                     '📊 Лимит: {limit}'
                 ),
-            ).format(limit=texts.format_traffic(subscription.traffic_limit_gb)),
+            ).format(limit=texts.format_traffic(subscription.traffic_limit_gb, language=texts.language)),
             reply_markup=get_back_keyboard(db_user.language),
         )
 
@@ -802,7 +802,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
                 traffic_gb=traffic_gb
             )
             success_text += texts.t('TRAFFIC_ADD_SUCCESS_LIMIT', 'Новый лимит: {limit}').format(
-                limit=texts.format_traffic(subscription.traffic_limit_gb)
+                limit=texts.format_traffic(subscription.traffic_limit_gb, language=texts.language)
             )
 
         if price > 0:
@@ -894,8 +894,8 @@ async def handle_switch_traffic(
             'TRAFFIC_SWITCH_PURCHASED_INFO',
             '\n📦 Базовый пакет: {base}\n➕ Докуплено: {purchased}',
         ).format(
-            base=texts.format_traffic(base_traffic),
-            purchased=texts.format_traffic(purchased_traffic),
+            base=texts.format_traffic(base_traffic, language=texts.language),
+            purchased=texts.format_traffic(purchased_traffic, language=texts.language),
         )
 
     await callback.message.edit_text(
@@ -911,7 +911,7 @@ async def handle_switch_traffic(
                 '• Докупленный трафик будет сброшен'
             ),
         ).format(
-            current=texts.format_traffic(current_traffic),
+            current=texts.format_traffic(current_traffic, language=texts.language),
             purchased_info=purchased_info,
         ),
         reply_markup=get_traffic_switch_keyboard(
@@ -1009,7 +1009,7 @@ async def confirm_switch_traffic(
             return
 
         action_text = texts.t('TRAFFIC_ACTION_INCREASE', 'увеличить до {limit}').format(
-            limit=texts.format_traffic(new_traffic_gb),
+            limit=texts.format_traffic(new_traffic_gb, language=texts.language),
         )
         cost_text = texts.t('TRAFFIC_COST_SURCHARGE', 'Доплата: {price} (за {days} дн.)').format(
             price=texts.format_price(total_price_difference),
@@ -1024,16 +1024,16 @@ async def confirm_switch_traffic(
     else:
         total_price_difference = 0
         action_text = texts.t('TRAFFIC_ACTION_DECREASE', 'уменьшить до {limit}').format(
-            limit=texts.format_traffic(new_traffic_gb),
+            limit=texts.format_traffic(new_traffic_gb, language=texts.language),
         )
         cost_text = texts.t('TRAFFIC_COST_NO_REFUND', 'Возврат средств не производится')
 
     confirm_text = texts.t('TRAFFIC_SWITCH_CONFIRM_HEADER', '🔄 <b>Подтверждение переключения трафика</b>\n\n')
     confirm_text += texts.t('TRAFFIC_SWITCH_CONFIRM_CURRENT', 'Текущий лимит: {limit}\n').format(
-        limit=texts.format_traffic(current_traffic),
+        limit=texts.format_traffic(current_traffic, language=texts.language),
     )
     confirm_text += texts.t('TRAFFIC_SWITCH_CONFIRM_NEW', 'Новый лимит: {limit}\n\n').format(
-        limit=texts.format_traffic(new_traffic_gb),
+        limit=texts.format_traffic(new_traffic_gb, language=texts.language),
     )
     confirm_text += texts.t('TRAFFIC_SWITCH_CONFIRM_ACTION', 'Действие: {action}\n').format(action=action_text)
     confirm_text += texts.t('TRAFFIC_SWITCH_CONFIRM_COST', '💰 {cost}\n\n').format(cost=cost_text)
@@ -1156,10 +1156,10 @@ async def execute_switch_traffic(
         if new_traffic_gb > current_traffic:
             success_text = texts.t('TRAFFIC_SWITCH_INCREASED', '✅ Лимит трафика увеличен!\n\n')
             success_text += texts.t('TRAFFIC_SWITCH_WAS', '📊 Было: {old} → ').format(
-                old=texts.format_traffic(current_traffic),
+                old=texts.format_traffic(current_traffic, language=texts.language),
             )
             success_text += texts.t('TRAFFIC_SWITCH_NOW', 'Стало: {new}\n').format(
-                new=texts.format_traffic(new_traffic_gb),
+                new=texts.format_traffic(new_traffic_gb, language=texts.language),
             )
             if price_difference > 0:
                 success_text += texts.t('TRAFFIC_SWITCH_CHARGED', '💰 Списано: {price}').format(
@@ -1168,10 +1168,10 @@ async def execute_switch_traffic(
         elif new_traffic_gb < current_traffic:
             success_text = texts.t('TRAFFIC_SWITCH_DECREASED', '✅ Лимит трафика уменьшен!\n\n')
             success_text += texts.t('TRAFFIC_SWITCH_WAS', '📊 Было: {old} → ').format(
-                old=texts.format_traffic(current_traffic),
+                old=texts.format_traffic(current_traffic, language=texts.language),
             )
             success_text += texts.t('TRAFFIC_SWITCH_NOW', 'Стало: {new}\n').format(
-                new=texts.format_traffic(new_traffic_gb),
+                new=texts.format_traffic(new_traffic_gb, language=texts.language),
             )
             success_text += texts.t('TRAFFIC_SWITCH_NO_REFUND_INFO', 'ℹ️ Возврат средств не производится')
 

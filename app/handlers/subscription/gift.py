@@ -195,7 +195,7 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
     escaped_name = html.escape(offer.tariff_name)
     escaped_desc = html.escape(offer.tariff_description) + '\n\n' if offer.tariff_description else ''
     traffic_str = (
-        texts.format_traffic(offer.traffic_limit_gb)
+        texts.format_traffic(offer.traffic_limit_gb, language=texts.language)
         if offer.traffic_limit_gb is not None
         else texts.t('GIFT_TRAFFIC_UNLIMITED', '∞ (безлимит)')
     )
@@ -247,7 +247,7 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
     texts = get_texts(db_user.language)
     escaped_name = html.escape(quote.tariff_name)
     traffic_str = (
-        texts.format_traffic(quote.traffic_limit_gb)
+        texts.format_traffic(quote.traffic_limit_gb, language=texts.language)
         if quote.traffic_limit_gb is not None
         else texts.t('GIFT_TRAFFIC_UNLIMITED', '∞ (безлимит)')
     )

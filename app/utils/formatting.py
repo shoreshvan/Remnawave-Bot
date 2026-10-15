@@ -18,9 +18,9 @@ def user_html_link(user) -> str:
     return f'<b>{safe}</b>'
 
 
-def format_traffic(gb: int) -> str:
+def format_traffic(gb: int, language: str | None = None) -> str:
     """Форматирует трафик."""
-    texts = get_texts()
+    texts = get_texts(language)
     if gb == 0:
         return texts.t('TRAFFIC_UNLIMITED_SHORT', 'Безлимит')
     return texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=gb)

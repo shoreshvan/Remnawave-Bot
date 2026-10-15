@@ -179,17 +179,18 @@ def update_traffic_prices():
     logger.info('🔄 TRAFFIC_PRICES обновлены из конфигурации')
 
 
-def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None) -> str:
+def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None, language: str = 'ru') -> str:
     if is_fixed_mode is None:
         is_fixed_mode = settings.is_traffic_fixed()
 
+    is_fa = (language or 'ru').split('-')[0].lower() == 'fa'
     if traffic_gb == 0:
         if is_fixed_mode:
-            return 'Безлимитный'
-        return 'Безлимитный'
+            return 'نامحدود' if is_fa else 'Безлимитный'
+        return 'نامحدود' if is_fa else 'Безлимитный'
     if is_fixed_mode:
-        return f'{traffic_gb} ГБ'
-    return f'{traffic_gb} ГБ'
+        return f'{traffic_gb} گیگ' if is_fa else f'{traffic_gb} ГБ'
+    return f'{traffic_gb} گیگ' if is_fa else f'{traffic_gb} ГБ'
 
 
 def validate_traffic_price(gb: int) -> bool:

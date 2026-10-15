@@ -969,7 +969,7 @@ async def _apply_campaign_bonus_if_needed(
         )
 
     if result.bonus_type == 'subscription':
-        traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0)
+        traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0, language=texts.language)
         return texts.CAMPAIGN_BONUS_SUBSCRIPTION.format(
             name=html.escape(campaign.name),
             days=result.subscription_days,
@@ -982,7 +982,7 @@ async def _apply_campaign_bonus_if_needed(
         return None
 
     if result.bonus_type == 'tariff':
-        traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0)
+        traffic_text = texts.format_traffic(result.subscription_traffic_gb or 0, language=texts.language)
         return texts.t(
             'CAMPAIGN_BONUS_TARIFF',
             "🎁 Вам выдан тариф '{tariff_name}' на {days} дней!\n📊 Трафик: {traffic}\n📱 Устройств: {devices}",
