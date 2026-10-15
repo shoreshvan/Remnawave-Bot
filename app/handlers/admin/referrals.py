@@ -31,61 +31,94 @@ logger = structlog.get_logger(__name__)
 from app.services.referral_reward_service import format_reward_total as _paid_line
 
 
-def _levels_breakdown_block(by_level: list[dict]) -> str:
+def _levels_breakdown_block(by_level: list[dict], texts=None) -> str:
     """Разбивка по уровням — главная новая величина многоуровневой схемы.
 
     Без неё админ видит общий итог и не понимает, какую его часть создаёт глубина
     цепочки, то есть не может судить, окупается ли она.
     """
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     meaningful = [row for row in by_level if row.get('money_kopeks') or row.get('days')]
     if len(meaningful) < 2:
         # Единственный уровень — это обычная одноуровневая программа, и блок
         # только зашумил бы экран.
         return ''
 
-    lines = ['\n<b>По уровням:</b>']
+    lines = [texts.t('ADMIN_REF_LEVELS_BREAKDOWN_HEADER', '\n<b>По уровням:</b>')]
     for row in meaningful:
-        lines.append(f'- Уровень {row["level"]}: {_paid_line(row.get("money_kopeks", 0), row.get("days", 0))}')
+        lines.append(
+            texts.t('ADMIN_REF_LEVELS_BREAKDOWN_ROW', '- Уровень {level}: {paid}').format(
+                level=row['level'], paid=_paid_line(row.get('money_kopeks', 0), row.get('days', 0))
+            )
+        )
     return '\n'.join(lines) + '\n'
 
 
-async def _program_rules_block(db: AsyncSession) -> str:
+async def _program_rules_block(db: AsyncSession, texts=None) -> str:
     """Действующие правила программы.
 
     В многоуровневой схеме печатать легаси-ключи нельзя: они не управляют ни одним
     начислением, и админ читал бы суммы, которых бот не платит. Описание берётся из
     того же источника, что и расчёт.
     """
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     if not settings.is_referral_levels_scheme():
-        return (
+        return texts.t(
+            'ADMIN_REF_RULES_CLASSIC',
             '<b>Настройки реферальной системы:</b>\n'
-            f'- Минимальное пополнение: {settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS)}\n'
-            f'- Бонус за первое пополнение: {settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS)}\n'
-            f'- Бонус пригласившему: {settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS)}\n'
-            f'- Комиссия с покупок: {settings.REFERRAL_COMMISSION_PERCENT}%'
+            '- Минимальное пополнение: {min_topup}\n'
+            '- Бонус за первое пополнение: {first_topup}\n'
+            '- Бонус пригласившему: {inviter}\n'
+            '- Комиссия с покупок: {commission}%',
+        ).format(
+            min_topup=settings.format_price(settings.REFERRAL_MINIMUM_TOPUP_KOPEKS),
+            first_topup=settings.format_price(settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS),
+            inviter=settings.format_price(settings.REFERRAL_INVITER_BONUS_KOPEKS),
+            commission=settings.REFERRAL_COMMISSION_PERCENT,
         )
 
     from app.services.referral_reward_service import describe_active_levels, describe_referee_bonus
 
     tariff_names = await _reward_tariff_names(db)
     tier_mode = settings.is_referral_tier_levels()
-    header = 'уровни за приглашённых' if tier_mode else 'уровни по цепочке'
-    lines = [f'<b>Правила программы (многоуровневая схема, {header}):</b>']
+    header = (
+        texts.t('ADMIN_REF_RULES_HEADER_TIERS', 'уровни за приглашённых')
+        if tier_mode
+        else texts.t('ADMIN_REF_RULES_HEADER_CHAIN', 'уровни по цепочке')
+    )
+    lines = [
+        texts.t(
+            'ADMIN_REF_RULES_LEVELS_HEADER', '<b>Правила программы (многоуровневая схема, {header}):</b>'
+        ).format(header=header)
+    ]
     level_lines = await describe_active_levels(db, tariff_names=tariff_names)
     if level_lines:
         lines.extend(f'- {line}' for line in level_lines)
     else:
-        lines.append('- ⚠️ Ни один уровень не настроен — награды не начисляются')
+        lines.append(
+            texts.t('ADMIN_REF_RULES_NO_LEVELS', '- ⚠️ Ни один уровень не настроен — награды не начисляются')
+        )
 
     referee_bonus = await describe_referee_bonus(db, tariff_names=tariff_names)
     if referee_bonus:
-        lines.append(f'- Приглашённому: {referee_bonus}')
+        lines.append(texts.t('ADMIN_REF_RULES_REFEREE', '- Приглашённому: {bonus}').format(bonus=referee_bonus))
     if tier_mode:
         # Про глубину здесь писать нечего: цепочка не обходится. Зато admin
         # обязан видеть главное отличие режима — платят одному и по одному правилу.
-        lines.append('- Платят только прямому пригласившему, применяется один уровень — старший из достигнутых')
+        lines.append(
+            texts.t(
+                'ADMIN_REF_RULES_TIER_NOTE',
+                '- Платят только прямому пригласившему, применяется один уровень — старший из достигнутых',
+            )
+        )
     else:
-        lines.append(f'- Глубина цепочки: до {settings.get_referral_max_level_depth()} уровней')
+        lines.append(
+            texts.t('ADMIN_REF_RULES_CHAIN_DEPTH', '- Глубина цепочки: до {depth} уровней').format(
+                depth=settings.get_referral_max_level_depth()
+            )
+        )
     return '\n'.join(lines)
 
 
@@ -152,7 +185,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
             avg=settings.format_price(int(avg_per_referrer)),
         )
 
-        text += _levels_breakdown_block(stats.get('by_level') or [])
+        text += _levels_breakdown_block(stats.get('by_level') or [], texts)
         text += texts.t('ADMIN_REFERRALS_STATS_TOP_HEADER', '\n<b>Топ-5 рефереров:</b>\n')
 
         top_referrers = stats.get('top_referrers', [])
@@ -173,7 +206,7 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         else:
             text += texts.t('ADMIN_REFERRALS_STATS_NO_DATA', 'Нет данных\n')
 
-        text += f'\n{await _program_rules_block(db)}'
+        text += f'\n{await _program_rules_block(db, texts)}'
         text += texts.t(
             'ADMIN_REFERRALS_STATS_NOTIFICATIONS_LINE',
             '\n- Уведомления: {status}\n\n<i>🕐 Обновлено: {time}</i>\n',
@@ -268,12 +301,14 @@ async def show_referral_statistics(callback: types.CallbackQuery, db_user: User,
         )
 
 
-def _get_top_keyboard(period: str, sort_by: str) -> types.InlineKeyboardMarkup:
+def _get_top_keyboard(period: str, sort_by: str, texts=None) -> types.InlineKeyboardMarkup:
     """Создаёт клавиатуру для выбора периода и сортировки."""
-    period_week = '✅ Неделя' if period == 'week' else 'Неделя'
-    period_month = '✅ Месяц' if period == 'month' else 'Месяц'
-    sort_earnings = '✅ По заработку' if sort_by == 'earnings' else 'По заработку'
-    sort_invited = '✅ По приглашённым' if sort_by == 'invited' else 'По приглашённым'
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+    period_week = ('✅ ' if period == 'week' else '') + texts.t('ADMIN_REF_TOP_PERIOD_WEEK', 'Неделя')
+    period_month = ('✅ ' if period == 'month' else '') + texts.t('ADMIN_REF_TOP_PERIOD_MONTH', 'Месяц')
+    sort_earnings = ('✅ ' if sort_by == 'earnings' else '') + texts.t('ADMIN_REF_TOP_SORT_EARNINGS', 'По заработку')
+    sort_invited = ('✅ ' if sort_by == 'invited' else '') + texts.t('ADMIN_REF_TOP_SORT_INVITED', 'По приглашённым')
 
     return types.InlineKeyboardMarkup(
         inline_keyboard=[
@@ -285,8 +320,17 @@ def _get_top_keyboard(period: str, sort_by: str) -> types.InlineKeyboardMarkup:
                 types.InlineKeyboardButton(text=sort_earnings, callback_data=f'admin_top_ref:{period}:earnings'),
                 types.InlineKeyboardButton(text=sort_invited, callback_data=f'admin_top_ref:{period}:invited'),
             ],
-            [types.InlineKeyboardButton(text='🔄 Обновить', callback_data=f'admin_top_ref:{period}:{sort_by}')],
-            [types.InlineKeyboardButton(text='⬅️ К статистике', callback_data='admin_referrals')],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_REF_TOP_REFRESH', '🔄 Обновить'),
+                    callback_data=f'admin_top_ref:{period}:{sort_by}',
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_REF_TOP_BACK_TO_STATS', '⬅️ К статистике'), callback_data='admin_referrals'
+                )
+            ],
         ]
     )
 
@@ -295,18 +339,20 @@ def _get_top_keyboard(period: str, sort_by: str) -> types.InlineKeyboardMarkup:
 @error_handler
 async def show_top_referrers(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Показывает топ рефереров (по умолчанию: неделя, по заработку)."""
-    await _show_top_referrers_filtered(callback, db, period='week', sort_by='earnings')
+    texts = get_texts(db_user.language)
+    await _show_top_referrers_filtered(callback, db, period='week', sort_by='earnings', texts=texts)
 
 
 @admin_required
 @error_handler
 async def show_top_referrers_filtered(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     """Обрабатывает выбор периода и сортировки."""
+    texts = get_texts(db_user.language)
     # Парсим callback_data: admin_top_ref:period:sort_by
     parts = callback.data.split(':')
     if len(parts) != 3:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_REFERRALS_INVALID_PARAMS_TOAST', 'Ошибка параметров')
+            texts.t('ADMIN_REFERRALS_INVALID_PARAMS_TOAST', 'Ошибка параметров')
         )
         return
 
@@ -318,19 +364,31 @@ async def show_top_referrers_filtered(callback: types.CallbackQuery, db_user: Us
     if sort_by not in ('earnings', 'invited'):
         sort_by = 'earnings'
 
-    await _show_top_referrers_filtered(callback, db, period, sort_by)
+    await _show_top_referrers_filtered(callback, db, period, sort_by, texts)
 
 
-async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncSession, period: str, sort_by: str):
+async def _show_top_referrers_filtered(
+    callback: types.CallbackQuery, db: AsyncSession, period: str, sort_by: str, texts=None
+):
     """Внутренняя функция отображения топа с фильтрами."""
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     try:
         top_referrers = await get_top_referrers_by_period(db, period=period, sort_by=sort_by)
 
-        period_text = 'за неделю' if period == 'week' else 'за месяц'
-        sort_text = 'по заработку' if sort_by == 'earnings' else 'по приглашённым'
+        period_text = (
+            texts.t('ADMIN_REF_TOP_PERIOD_WEEK_GEN', 'за неделю')
+            if period == 'week'
+            else texts.t('ADMIN_REF_TOP_PERIOD_MONTH_GEN', 'за месяц')
+        )
+        sort_text = (
+            texts.t('ADMIN_REF_TOP_SORT_EARNINGS_GEN', 'по заработку')
+            if sort_by == 'earnings'
+            else texts.t('ADMIN_REF_TOP_SORT_INVITED_GEN', 'по приглашённым')
+        )
 
-        text = f'🏆 <b>Топ рефереров {period_text}</b>\n'
-        text += f'<i>Сортировка: {sort_text}</i>\n\n'
+        text = texts.t('ADMIN_REF_TOP_TITLE', '🏆 <b>Топ рефереров {period}</b>\n').format(period=period_text)
+        text += texts.t('ADMIN_REF_TOP_SORT_LINE', '<i>Сортировка: {sort}</i>\n\n').format(sort=sort_text)
 
         if top_referrers:
             for i, referrer in enumerate(top_referrers[:20], 1):
@@ -361,30 +419,34 @@ async def _show_top_referrers_filtered(callback: types.CallbackQuery, db: AsyncS
                 # Выделяем основную метрику в зависимости от сортировки
                 if sort_by == 'invited':
                     text += f'{emoji}{i}. {display_text}\n'
-                    text += f'   👥 <b>{count} приглашённых</b> | 💰 {earned}\n\n'
+                    text += texts.t(
+                        'ADMIN_REF_TOP_ROW_INVITED', '   👥 <b>{count} приглашённых</b> | 💰 {earned}\n\n'
+                    ).format(count=count, earned=earned)
                 else:
                     text += f'{emoji}{i}. {display_text}\n'
-                    text += f'   💰 <b>{earned}</b> | 👥 {count} приглашённых\n\n'
+                    text += texts.t(
+                        'ADMIN_REF_TOP_ROW_EARNINGS', '   💰 <b>{earned}</b> | 👥 {count} приглашённых\n\n'
+                    ).format(earned=earned, count=count)
         else:
-            text += 'Нет данных за выбранный период\n'
+            text += texts.t('ADMIN_REF_TOP_NO_DATA', 'Нет данных за выбранный период\n')
 
-        keyboard = _get_top_keyboard(period, sort_by)
+        keyboard = _get_top_keyboard(period, sort_by, texts)
 
         try:
             await callback.message.edit_text(text, reply_markup=keyboard)
             await callback.answer()
         except Exception as edit_error:
             if 'message is not modified' in str(edit_error):
-                await callback.answer('Данные актуальны')
+                await callback.answer(texts.t('ADMIN_REFERRALS_UP_TO_DATE_TOAST', 'Данные актуальны'))
             else:
                 raise
 
     except Exception as e:
         logger.error('Ошибка в show_top_referrers_filtered', error=e, exc_info=True)
-        await callback.answer('Ошибка загрузки топа рефереров')
+        await callback.answer(texts.t('ADMIN_REF_TOP_LOAD_ERROR_TOAST', 'Ошибка загрузки топа рефереров'))
 
 
-def _settings_hint() -> str:
+def _settings_hint(texts=None) -> str:
     """Подсказка о том, ГДЕ настройка реально меняется.
 
     Реферальные ключи редактируются из админки и кабинета — но только если они не
@@ -392,15 +454,21 @@ def _settings_hint() -> str:
     в БД, не применяясь к настройкам. Прежний текст звал править .env всегда, из-за
     чего залоченность выглядела нормой, а не следствием конфигурации.
     """
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     locked = sorted(key for key in ENV_OVERRIDE_KEYS if key.startswith('REFERRAL_'))
     if not locked:
-        return '<i>💡 Настройки меняются здесь и в кабинете, раздел «Реферальная программа».</i>'
+        return texts.t(
+            'ADMIN_REF_SETTINGS_HINT_FREE',
+            '<i>💡 Настройки меняются здесь и в кабинете, раздел «Реферальная программа».</i>',
+        )
     listed = ', '.join(locked[:5]) + ('…' if len(locked) > 5 else '')
-    return (
+    return texts.t(
+        'ADMIN_REF_SETTINGS_HINT_LOCKED',
         '<i>⚠️ Часть настроек задана в .env и поэтому не меняется из админки: '
-        f'{listed}. Уберите эти строки из .env и перезапустите бота, '
-        'чтобы управлять программой отсюда.</i>'
-    )
+        '{listed}. Уберите эти строки из .env и перезапустите бота, '
+        'чтобы управлять программой отсюда.</i>',
+    ).format(listed=listed)
 
 
 @admin_required
@@ -421,13 +489,13 @@ async def show_referral_settings(callback: types.CallbackQuery, db_user: User, d
 {hint}
 """,
         ).format(
-            rules=await _program_rules_block(db),
+            rules=await _program_rules_block(db, texts),
             status=(
                 texts.t('ADMIN_REFERRALS_NOTIFICATIONS_ON', '✅ Включены')
                 if settings.REFERRAL_NOTIFICATIONS_ENABLED
                 else texts.t('ADMIN_REFERRALS_NOTIFICATIONS_OFF', '❌ Отключены')
             ),
-            hint=_settings_hint(),
+            hint=_settings_hint(texts),
         )
         await callback.message.edit_text(
             text,
@@ -475,7 +543,7 @@ async def show_referral_settings(callback: types.CallbackQuery, db_user: User, d
             else texts.t('ADMIN_REFERRALS_NOTIFICATIONS_OFF', '❌ Отключены')
         ),
         retry_attempts=getattr(settings, 'REFERRAL_NOTIFICATION_RETRY_ATTEMPTS', 3),
-        hint=_settings_hint(),
+        hint=_settings_hint(texts),
     )
 
     keyboard = types.InlineKeyboardMarkup(
@@ -971,16 +1039,22 @@ def _get_period_dates(period: str) -> tuple[datetime, datetime]:
     return today_start, tomorrow_start
 
 
-def _get_period_display_name(period: str) -> str:
+def _get_period_display_name(period: str, texts=None) -> str:
     """Возвращает человекочитаемое название периода."""
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     names = {'today': 'сегодня', 'yesterday': 'вчера', 'week': '7 дней', 'month': '30 дней'}
-    return names.get(period, 'сегодня')
+    return texts.t(f'ADMIN_REF_PERIOD_{period.upper()}', names.get(period, 'сегодня'))
 
 
-async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncSession, state: FSMContext, period: str):
+async def _show_diagnostics_for_period(
+    callback: types.CallbackQuery, db: AsyncSession, state: FSMContext, period: str, texts=None
+):
     """Внутренняя функция для отображения диагностики за указанный период."""
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     try:
-        await callback.answer('Анализирую логи...')
+        await callback.answer(texts.t('ADMIN_REF_DIAG_ANALYZING', 'Анализирую логи...'))
 
         from app.services.referral_diagnostics_service import referral_diagnostics_service
 
@@ -997,29 +1071,38 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
         report = await referral_diagnostics_service.analyze_period(db, start_date, end_date)
 
         # Формируем отчёт
-        period_display = _get_period_display_name(period)
+        period_display = _get_period_display_name(period, texts)
 
-        text = f"""
-🔍 <b>Диагностика рефералов — {period_display}</b>
-
-<b>📊 Статистика переходов:</b>
-• Всего кликов по реф-ссылкам: {report.total_ref_clicks}
-• Уникальных пользователей: {report.unique_users_clicked}
-• Потерянных рефералов: {len(report.lost_referrals)}
-"""
+        text = texts.t(
+            'ADMIN_REF_DIAG_HEADER',
+            '\n🔍 <b>Диагностика рефералов — {period}</b>\n\n'
+            '<b>📊 Статистика переходов:</b>\n'
+            '• Всего кликов по реф-ссылкам: {clicks}\n'
+            '• Уникальных пользователей: {users}\n'
+            '• Потерянных рефералов: {lost}\n',
+        ).format(
+            period=period_display,
+            clicks=report.total_ref_clicks,
+            users=report.unique_users_clicked,
+            lost=len(report.lost_referrals),
+        )
 
         if report.lost_referrals:
-            text += '\n<b>❌ Потерянные рефералы:</b>\n'
-            text += '<i>(пришли по ссылке, но реферер не засчитался)</i>\n\n'
+            text += texts.t('ADMIN_REF_DIAG_LOST_HEADER', '\n<b>❌ Потерянные рефералы:</b>\n')
+            text += texts.t(
+                'ADMIN_REF_DIAG_LOST_SUBTEXT', '<i>(пришли по ссылке, но реферер не засчитался)</i>\n\n'
+            )
 
             for i, lost in enumerate(report.lost_referrals[:15], 1):
                 # Статус пользователя
                 if not lost.registered:
-                    status = '⚠️ Не в БД'
+                    status = texts.t('ADMIN_REF_DIAG_STATUS_NOT_IN_DB', '⚠️ Не в БД')
                 elif not lost.has_referrer:
-                    status = '❌ Без реферера'
+                    status = texts.t('ADMIN_REF_DIAG_STATUS_NO_REFERRER', '❌ Без реферера')
                 else:
-                    status = f'⚡ Другой реферер (ID{lost.current_referrer_id})'
+                    status = texts.t(
+                        'ADMIN_REF_DIAG_STATUS_OTHER_REFERRER', '⚡ Другой реферер (ID{id})'
+                    ).format(id=lost.current_referrer_id)
 
                 # Имя или ID
                 if lost.username:
@@ -1043,9 +1126,11 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
                 text += f'   <code>{html.escape(lost.referral_code)}</code>{referrer_info} ({time_str})\n'
 
             if len(report.lost_referrals) > 15:
-                text += f'\n<i>... и ещё {len(report.lost_referrals) - 15}</i>\n'
+                text += texts.t('ADMIN_REF_DIAG_MORE', '\n<i>... и ещё {count}</i>\n').format(
+                    count=len(report.lost_referrals) - 15
+                )
         else:
-            text += '\n✅ <b>Все рефералы засчитаны!</b>\n'
+            text += texts.t('ADMIN_REF_DIAG_ALL_OK', '\n✅ <b>Все рефералы засчитаны!</b>\n')
 
         # Информация о логах
         log_path = referral_diagnostics_service.log_path
@@ -1055,21 +1140,35 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
         text += f'\n<i>📂 {log_path.name}'
         if log_exists:
             text += f' ({log_size / 1024:.0f} KB)'
-            text += f' | Строк: {report.lines_in_period}'
+            text += texts.t('ADMIN_REF_DIAG_LOG_LINES', ' | Строк: {lines}').format(lines=report.lines_in_period)
         else:
-            text += ' (не найден!)'
+            text += texts.t('ADMIN_REF_DIAG_LOG_NOT_FOUND', ' (не найден!)')
         text += '</i>'
 
         # Кнопки: только "Сегодня" (текущий лог) и "Загрузить файл" (старые логи)
         keyboard_rows = [
             [
-                types.InlineKeyboardButton(text='📅 Сегодня (текущий лог)', callback_data='admin_ref_diag:today'),
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_REF_DIAG_BTN_TODAY', '📅 Сегодня (текущий лог)'),
+                    callback_data='admin_ref_diag:today',
+                ),
             ],
-            [types.InlineKeyboardButton(text='📤 Загрузить лог-файл', callback_data='admin_ref_diag_upload')],
-            [types.InlineKeyboardButton(text='🔍 Проверить бонусы (по БД)', callback_data='admin_ref_check_bonuses')],
             [
                 types.InlineKeyboardButton(
-                    text='🏆 Синхронизировать с конкурсом', callback_data='admin_ref_sync_contest'
+                    text=texts.t('ADMIN_REF_DIAG_BTN_UPLOAD', '📤 Загрузить лог-файл'),
+                    callback_data='admin_ref_diag_upload',
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_REF_DIAG_BTN_CHECK_BONUSES', '🔍 Проверить бонусы (по БД)'),
+                    callback_data='admin_ref_check_bonuses',
+                )
+            ],
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('ADMIN_REF_DIAG_BTN_SYNC_CONTEST', '🏆 Синхронизировать с конкурсом'),
+                    callback_data='admin_ref_sync_contest',
                 )
             ],
         ]
@@ -1077,13 +1176,28 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
         # Кнопки действий (только если есть потерянные рефералы)
         if report.lost_referrals:
             keyboard_rows.append(
-                [types.InlineKeyboardButton(text='📋 Предпросмотр исправлений', callback_data='admin_ref_fix_preview')]
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_DIAG_BTN_FIX_PREVIEW', '📋 Предпросмотр исправлений'),
+                        callback_data='admin_ref_fix_preview',
+                    )
+                ]
             )
 
         keyboard_rows.extend(
             [
-                [types.InlineKeyboardButton(text='🔄 Обновить', callback_data=f'admin_ref_diag:{period}')],
-                [types.InlineKeyboardButton(text='⬅️ К статистике', callback_data='admin_referrals')],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_TOP_REFRESH', '🔄 Обновить'),
+                        callback_data=f'admin_ref_diag:{period}',
+                    )
+                ],
+                [
+                    types.InlineKeyboardButton(
+                        text=texts.t('ADMIN_REF_TOP_BACK_TO_STATS', '⬅️ К статистике'),
+                        callback_data='admin_referrals',
+                    )
+                ],
             ]
         )
 
@@ -1093,20 +1207,21 @@ async def _show_diagnostics_for_period(callback: types.CallbackQuery, db: AsyncS
 
     except Exception as e:
         logger.error('Ошибка в _show_diagnostics_for_period', error=e, exc_info=True)
-        await callback.answer('Ошибка при анализе логов', show_alert=True)
+        await callback.answer(texts.t('ADMIN_REF_DIAG_ERROR_TOAST', 'Ошибка при анализе логов'), show_alert=True)
 
 
 @admin_required
 @error_handler
 async def show_referral_diagnostics(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Показывает диагностику реферальной системы по логам."""
+    texts = get_texts(db_user.language)
     # Определяем период из callback_data или используем "today" по умолчанию
     if ':' in callback.data:
         period = callback.data.split(':')[1]
     else:
         period = 'today'
 
-    await _show_diagnostics_for_period(callback, db, state, period)
+    await _show_diagnostics_for_period(callback, db, state, period, texts)
 
 
 @admin_required
@@ -1141,7 +1256,7 @@ async def preview_referral_fixes(callback: types.CallbackQuery, db_user: User, d
 
             # Анализируем логи
             report = await referral_diagnostics_service.analyze_period(db, start_date, end_date)
-            period_display = _get_period_display_name(period)
+            period_display = _get_period_display_name(period, texts)
 
         if not report.lost_referrals:
             await callback.answer(
@@ -1272,7 +1387,7 @@ async def apply_referral_fixes(callback: types.CallbackQuery, db_user: User, db:
 
             # Анализируем логи
             report = await referral_diagnostics_service.analyze_period(db, start_date, end_date)
-            period_display = _get_period_display_name(period)
+            period_display = _get_period_display_name(period, texts)
 
         if not report.lost_referrals:
             await callback.answer(

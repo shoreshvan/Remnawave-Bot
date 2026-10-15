@@ -29,8 +29,10 @@ logger = structlog.get_logger(__name__)
 router = Router()
 
 
-def _format_toggle(enabled: bool) -> str:
-    return '🟢 Вкл' if enabled else '🔴 Выкл'
+def _format_toggle(enabled: bool, texts=None) -> str:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+    return texts.t('ADMIN_MON_TOGGLE_ON', '🟢 Вкл') if enabled else texts.t('ADMIN_MON_TOGGLE_OFF', '🔴 Выкл')
 
 
 def _build_notification_settings_view(language: str):
@@ -43,10 +45,10 @@ def _build_notification_settings_view(language: str):
     third_hours = NotificationSettingsService.get_third_wave_valid_hours()
     third_days = NotificationSettingsService.get_third_wave_trigger_days()
 
-    trial_channel_status = _format_toggle(config.get('trial_channel_unsubscribed', {}).get('enabled', True))
-    expired_1d_status = _format_toggle(config['expired_1d'].get('enabled', True))
-    second_wave_status = _format_toggle(config['expired_second_wave'].get('enabled', True))
-    third_wave_status = _format_toggle(config['expired_third_wave'].get('enabled', True))
+    trial_channel_status = _format_toggle(config.get('trial_channel_unsubscribed', {}).get('enabled', True), texts)
+    expired_1d_status = _format_toggle(config['expired_1d'].get('enabled', True), texts)
+    second_wave_status = _format_toggle(config['expired_second_wave'].get('enabled', True), texts)
+    third_wave_status = _format_toggle(config['expired_third_wave'].get('enabled', True), texts)
 
     summary_text = texts.t(
         'ADMIN_MON_NOTIFY_SUMMARY',
@@ -989,7 +991,7 @@ async def monitoring_logs_callback(callback: CallbackQuery):
                     'ADMIN_MON_LOGS_EMPTY',
                     '📋 <b>Логи мониторинга пусты</b>\n\nСистема еще не выполнила проверки.',
                 )
-                keyboard = get_monitoring_logs_back_keyboard()
+                keyboard = get_monitoring_logs_back_keyboard(texts)
                 await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
                 return
 
@@ -1023,7 +1025,7 @@ async def monitoring_logs_callback(callback: CallbackQuery):
             text += texts.t('ADMIN_MON_LOGS_STATS_FAILED', '• Ошибок: {count}\n').format(count=total_failed)
             text += texts.t('ADMIN_MON_LOGS_STATS_RATE', '• Успешность: {rate}%').format(rate=success_rate)
 
-            keyboard = get_monitoring_logs_keyboard(page, paginated_logs.total_pages)
+            keyboard = get_monitoring_logs_keyboard(page, paginated_logs.total_pages, texts)
             await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
@@ -2023,8 +2025,11 @@ async def receipts_reconcile_logs_details_callback(callback: CallbackQuery):
         )
 
 
-def get_monitoring_logs_keyboard(current_page: int, total_pages: int):
+def get_monitoring_logs_keyboard(current_page: int, total_pages: int, texts=None):
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
 
     keyboard = []
 
@@ -2044,27 +2049,40 @@ def get_monitoring_logs_keyboard(current_page: int, total_pages: int):
     keyboard.extend(
         [
             [
-                InlineKeyboardButton(text='🔄 Обновить', callback_data='admin_mon_logs'),
-                InlineKeyboardButton(text='🗑️ Очистить', callback_data='admin_mon_clear_logs'),
+                InlineKeyboardButton(text=texts.t('ADMIN_REFRESH', '🔄 Обновить'), callback_data='admin_mon_logs'),
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_MONITORING_CLEAR', '🗑️ Очистить'),
+                    callback_data='admin_mon_clear_logs',
+                ),
             ],
-            [InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_monitoring')],
+            [InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data='admin_monitoring')],
         ]
     )
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def get_monitoring_logs_back_keyboard():
+def get_monitoring_logs_back_keyboard(texts=None):
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
 
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text='🔄 Обновить', callback_data='admin_mon_logs'),
-                InlineKeyboardButton(text='🔍 Фильтры', callback_data='admin_mon_logs_filters'),
+                InlineKeyboardButton(text=texts.t('ADMIN_REFRESH', '🔄 Обновить'), callback_data='admin_mon_logs'),
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_MON_BTN_FILTERS', '🔍 Фильтры'), callback_data='admin_mon_logs_filters'
+                ),
             ],
-            [InlineKeyboardButton(text='🗑️ Очистить логи', callback_data='admin_mon_clear_logs')],
-            [InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_monitoring')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_MON_BTN_CLEAR_LOGS', '🗑️ Очистить логи'),
+                    callback_data='admin_mon_clear_logs',
+                )
+            ],
+            [InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data='admin_monitoring')],
         ]
     )
 
@@ -2202,12 +2220,16 @@ async def process_notification_value_input(message: Message, state: FSMContext):
 # ============== Настройки мониторинга трафика ==============
 
 
-def _format_traffic_toggle(enabled: bool) -> str:
-    return '🟢 Вкл' if enabled else '🔴 Выкл'
+def _format_traffic_toggle(enabled: bool, texts=None) -> str:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+    return texts.t('ADMIN_MON_TOGGLE_ON', '🟢 Вкл') if enabled else texts.t('ADMIN_MON_TOGGLE_OFF', '🔴 Выкл')
 
 
-def _build_traffic_settings_keyboard() -> InlineKeyboardMarkup:
+def _build_traffic_settings_keyboard(texts=None) -> InlineKeyboardMarkup:
     """Строит клавиатуру настроек мониторинга трафика."""
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     fast_enabled = settings.TRAFFIC_FAST_CHECK_ENABLED
     daily_enabled = settings.TRAFFIC_DAILY_CHECK_ENABLED
 
@@ -2221,60 +2243,92 @@ def _build_traffic_settings_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f'{_format_traffic_toggle(fast_enabled)} Быстрая проверка',
+                    text=texts.t('ADMIN_MON_TRAFFIC_BTN_FAST', '{toggle} Быстрая проверка').format(
+                        toggle=_format_traffic_toggle(fast_enabled, texts)
+                    ),
                     callback_data='admin_traffic_toggle_fast',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f'⏱ Интервал: {fast_interval} мин', callback_data='admin_traffic_edit_fast_interval'
+                    text=texts.t('ADMIN_MON_TRAFFIC_BTN_INTERVAL', '⏱ Интервал: {value} мин').format(
+                        value=fast_interval
+                    ),
+                    callback_data='admin_traffic_edit_fast_interval',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f'📊 Порог дельты: {fast_threshold} ГБ', callback_data='admin_traffic_edit_fast_threshold'
+                    text=texts.t('ADMIN_MON_TRAFFIC_BTN_DELTA', '📊 Порог дельты: {value} ГБ').format(
+                        value=fast_threshold
+                    ),
+                    callback_data='admin_traffic_edit_fast_threshold',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f'{_format_traffic_toggle(daily_enabled)} Суточная проверка',
+                    text=texts.t('ADMIN_MON_TRAFFIC_BTN_DAILY', '{toggle} Суточная проверка').format(
+                        toggle=_format_traffic_toggle(daily_enabled, texts)
+                    ),
                     callback_data='admin_traffic_toggle_daily',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f'🕐 Время проверки: {daily_time}', callback_data='admin_traffic_edit_daily_time'
+                    text=texts.t('ADMIN_MON_TRAFFIC_BTN_TIME', '🕐 Время проверки: {value}').format(
+                        value=daily_time
+                    ),
+                    callback_data='admin_traffic_edit_daily_time',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=f'📈 Суточный порог: {daily_threshold} ГБ', callback_data='admin_traffic_edit_daily_threshold'
+                    text=texts.t('ADMIN_MON_TRAFFIC_BTN_DAILY_THRESHOLD', '📈 Суточный порог: {value} ГБ').format(
+                        value=daily_threshold
+                    ),
+                    callback_data='admin_traffic_edit_daily_threshold',
                 )
             ],
-            [InlineKeyboardButton(text=f'⏳ Кулдаун: {cooldown} мин', callback_data='admin_traffic_edit_cooldown')],
-            [InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_monitoring')],
+            [
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_MON_TRAFFIC_BTN_COOLDOWN', '⏳ Кулдаун: {value} мин').format(value=cooldown),
+                    callback_data='admin_traffic_edit_cooldown',
+                )
+            ],
+            [InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data='admin_monitoring')],
         ]
     )
 
 
-def _build_traffic_settings_text() -> str:
+def _build_traffic_settings_text(texts=None) -> str:
     """Строит текст настроек мониторинга трафика."""
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     fast_enabled = settings.TRAFFIC_FAST_CHECK_ENABLED
     daily_enabled = settings.TRAFFIC_DAILY_CHECK_ENABLED
 
-    fast_status = _format_traffic_toggle(fast_enabled)
-    daily_status = _format_traffic_toggle(daily_enabled)
+    fast_status = _format_traffic_toggle(fast_enabled, texts)
+    daily_status = _format_traffic_toggle(daily_enabled, texts)
 
-    text = (
+    text = texts.t(
+        'ADMIN_MON_TRAFFIC_SETTINGS_TEXT',
         '⚙️ <b>Настройки мониторинга трафика</b>\n\n'
-        f'<b>Быстрая проверка:</b> {fast_status}\n'
-        f'• Интервал: {settings.TRAFFIC_FAST_CHECK_INTERVAL_MINUTES} мин\n'
-        f'• Порог дельты: {settings.TRAFFIC_FAST_CHECK_THRESHOLD_GB} ГБ\n\n'
-        f'<b>Суточная проверка:</b> {daily_status}\n'
-        f'• Время: {settings.TRAFFIC_DAILY_CHECK_TIME} UTC\n'
-        f'• Порог: {settings.TRAFFIC_DAILY_THRESHOLD_GB} ГБ\n\n'
-        f'<b>Общие:</b>\n'
-        f'• Кулдаун уведомлений: {settings.TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES} мин\n'
+        '<b>Быстрая проверка:</b> {fast_status}\n'
+        '• Интервал: {fast_interval} мин\n'
+        '• Порог дельты: {fast_threshold} ГБ\n\n'
+        '<b>Суточная проверка:</b> {daily_status}\n'
+        '• Время: {daily_time} UTC\n'
+        '• Порог: {daily_threshold} ГБ\n\n'
+        '<b>Общие:</b>\n'
+        '• Кулдаун уведомлений: {cooldown} мин\n',
+    ).format(
+        fast_status=fast_status,
+        fast_interval=settings.TRAFFIC_FAST_CHECK_INTERVAL_MINUTES,
+        fast_threshold=settings.TRAFFIC_FAST_CHECK_THRESHOLD_GB,
+        daily_status=daily_status,
+        daily_time=settings.TRAFFIC_DAILY_CHECK_TIME,
+        daily_threshold=settings.TRAFFIC_DAILY_THRESHOLD_GB,
+        cooldown=settings.TRAFFIC_NOTIFICATION_COOLDOWN_MINUTES,
     )
 
     # Информация о фильтрах
@@ -2283,11 +2337,17 @@ def _build_traffic_settings_text() -> str:
     excluded_user_ids = settings.get_traffic_excluded_user_ids()
 
     if monitored_nodes:
-        text += f'• Мониторим только: {len(monitored_nodes)} нод(ы)\n'
+        text += texts.t('ADMIN_MON_TRAFFIC_MONITORED_ONLY', '• Мониторим только: {count} нод(ы)\n').format(
+            count=len(monitored_nodes)
+        )
     if ignored_nodes:
-        text += f'• Игнорируем: {len(ignored_nodes)} нод(ы)\n'
+        text += texts.t('ADMIN_MON_TRAFFIC_IGNORED', '• Игнорируем: {count} нод(ы)\n').format(
+            count=len(ignored_nodes)
+        )
     if excluded_user_ids:
-        text += f'• Исключено юзеров: {len(excluded_user_ids)}\n'
+        text += texts.t('ADMIN_MON_TRAFFIC_EXCLUDED_USERS', '• Исключено юзеров: {count}\n').format(
+            count=len(excluded_user_ids)
+        )
 
     return text
 
@@ -2298,8 +2358,8 @@ async def admin_traffic_settings(callback: CallbackQuery):
     """Показывает настройки мониторинга трафика."""
     try:
         texts = get_texts(callback.from_user.language_code or settings.DEFAULT_LANGUAGE)
-        text = _build_traffic_settings_text()
-        keyboard = _build_traffic_settings_keyboard()
+        text = _build_traffic_settings_text(texts)
+        keyboard = _build_traffic_settings_keyboard(texts)
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
     except Exception as e:
         logger.error('Ошибка отображения настроек трафика', error=e)
@@ -2330,8 +2390,8 @@ async def toggle_fast_check(callback: CallbackQuery):
         )
 
         # Обновляем отображение
-        text = _build_traffic_settings_text()
-        keyboard = _build_traffic_settings_keyboard()
+        text = _build_traffic_settings_text(texts)
+        keyboard = _build_traffic_settings_keyboard(texts)
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
@@ -2360,8 +2420,8 @@ async def toggle_daily_check(callback: CallbackQuery):
             else texts.t('ADMIN_MON_TOAST_DISABLED', '⏸️ Отключено')
         )
 
-        text = _build_traffic_settings_text()
-        keyboard = _build_traffic_settings_keyboard()
+        text = _build_traffic_settings_text(texts)
+        keyboard = _build_traffic_settings_keyboard(texts)
         await callback.message.edit_text(text, parse_mode='HTML', reply_markup=keyboard)
 
     except Exception as e:
@@ -2535,8 +2595,8 @@ async def process_traffic_setting_input(message: Message, state: FSMContext):
         message_id = data.get('settings_message_id')
         if chat_id and message_id:
             try:
-                text = _build_traffic_settings_text()
-                keyboard = _build_traffic_settings_keyboard()
+                text = _build_traffic_settings_text(texts)
+                keyboard = _build_traffic_settings_keyboard(texts)
                 await message.bot.edit_message_text(
                     chat_id=chat_id, message_id=message_id, text=text, parse_mode='HTML', reply_markup=keyboard
                 )

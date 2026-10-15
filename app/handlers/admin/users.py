@@ -226,12 +226,16 @@ async def _show_users_list_filtered(
 
     # Если нет пользователей
     if not users:
-        await callback.message.edit_text(config.empty_message, reply_markup=get_admin_users_keyboard(db_user.language))
+        await callback.message.edit_text(
+            texts.t(f'ADMIN_USERS_LISTVIEW_{filter_type.name}_EMPTY', config.empty_message),
+            reply_markup=get_admin_users_keyboard(db_user.language),
+        )
         await callback.answer()
         return
 
     # Формируем текст заголовка
-    text = config.title + texts.t('ADMIN_USERS_PAGE_SUFFIX', ' (стр. {page}/{total})\n\n').format(
+    title = texts.t(f'ADMIN_USERS_LISTVIEW_{filter_type.name}_TITLE', config.title)
+    text = title + texts.t('ADMIN_USERS_PAGE_SUFFIX', ' (стр. {page}/{total})\n\n').format(
         page=page, total=users_data['total_pages']
     )
     text += texts.t('ADMIN_USERS_LIST_PROMPT', 'Нажмите на пользователя для управления:')
@@ -885,13 +889,15 @@ async def show_users_statistics(callback: types.CallbackQuery, db_user: User, db
 
 
 async def _render_user_subscription_overview(
-    callback: types.CallbackQuery, db: AsyncSession, user_id: int, subscription_id: int | None = None
+    callback: types.CallbackQuery, db: AsyncSession, user_id: int, subscription_id: int | None = None, texts=None
 ) -> bool:
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     user_service = UserService()
     profile = await user_service.get_user_profile(db, user_id)
 
     if not profile:
-        await callback.answer('❌ Пользователь не найден', show_alert=True)
+        await callback.answer(texts.t('USER_NOT_FOUND', '❌ Пользователь не найден'), show_alert=True)
         return False
 
     user = profile['user']
@@ -975,9 +981,9 @@ async def _render_user_subscription_overview(
 
         traffic_display = f'{subscription.traffic_used_gb:.1f}/'
         if subscription.traffic_limit_gb == 0:
-            traffic_display += '♾️ ГБ'
+            traffic_display += texts.t('ADMIN_SUB_TRAFFIC_UNLIMITED_GB', '♾️ ГБ')
         else:
-            traffic_display += f'{subscription.traffic_limit_gb} ГБ'
+            traffic_display += texts.t('ADMIN_SUB_TRAFFIC_LIMIT_GB', '{gb} ГБ').format(gb=subscription.traffic_limit_gb)
 
         text += texts.t('ADMIN_SUB_OVERVIEW_STATUS', '<b>Статус:</b> {emoji} {state}\n').format(
             emoji=status_emoji,
@@ -1191,7 +1197,7 @@ def _extract_admin_sub_context(callback_data: str) -> tuple[int, int | None]:
 async def show_user_subscription(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     user_id = int(callback.data.split('_')[-1])
 
-    if await _render_user_subscription_overview(callback, db, user_id):
+    if await _render_user_subscription_overview(callback, db, user_id, texts=get_texts(db_user.language)):
         await callback.answer()
 
 
@@ -1203,7 +1209,9 @@ async def admin_select_user_subscription(callback: types.CallbackQuery, db_user:
     user_id = int(parts[-2])
     subscription_id = int(parts[-1])
 
-    if await _render_user_subscription_overview(callback, db, user_id, subscription_id=subscription_id):
+    if await _render_user_subscription_overview(
+        callback, db, user_id, subscription_id=subscription_id, texts=get_texts(db_user.language)
+    ):
         await callback.answer()
 
 
@@ -4336,7 +4344,7 @@ async def process_subscription_grant_text(message: types.Message, db_user: User,
 async def show_user_servers_management(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     user_id = int(callback.data.split('_')[-1])
 
-    if await _render_user_subscription_overview(callback, db, user_id):
+    if await _render_user_subscription_overview(callback, db, user_id, texts=get_texts(db_user.language)):
         await callback.answer()
 
 
@@ -4344,13 +4352,17 @@ async def show_user_servers_management(callback: types.CallbackQuery, db_user: U
 @error_handler
 async def show_server_selection(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     user_id, subscription_id = _extract_admin_sub_context(callback.data)
-    await _show_servers_for_user(callback, user_id, db, subscription_id=subscription_id)
+    await _show_servers_for_user(
+        callback, user_id, db, subscription_id=subscription_id, texts=get_texts(db_user.language)
+    )
     await callback.answer()
 
 
 async def _show_servers_for_user(
-    callback: types.CallbackQuery, user_id: int, db: AsyncSession, subscription_id: int | None = None
+    callback: types.CallbackQuery, user_id: int, db: AsyncSession, subscription_id: int | None = None, texts=None
 ):
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     try:
         user = await get_user_by_id(db, user_id)
         current_squads = []
@@ -4380,18 +4392,20 @@ async def _show_servers_for_user(
 
         if not servers_to_show:
             await callback.message.edit_text(
-                '❌ Доступные серверы не найдены',
+                texts.t('ADMIN_USER_SERVERS_NONE', '❌ Доступные серверы не найдены'),
                 reply_markup=types.InlineKeyboardMarkup(
-                    inline_keyboard=[[types.InlineKeyboardButton(text='⬅️ Назад', callback_data=back_cb)]]
+                    inline_keyboard=[
+                        [types.InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data=back_cb)]
+                    ]
                 ),
             )
             return
 
-        text = '🌍 <b>Управление серверами</b>\n\n'
-        text += 'Нажмите на сервер чтобы добавить/убрать:\n'
-        text += '✅ - выбранный сервер\n'
-        text += '⚪ - доступный сервер\n'
-        text += '🔒 - неактивный (только для уже назначенных)\n\n'
+        text = texts.t('ADMIN_USER_SERVERS_TITLE', '🌍 <b>Управление серверами</b>\n\n')
+        text += texts.t('ADMIN_USER_SERVERS_PROMPT', 'Нажмите на сервер чтобы добавить/убрать:\n')
+        text += texts.t('ADMIN_USER_SERVERS_LEGEND_SELECTED', '✅ - выбранный сервер\n')
+        text += texts.t('ADMIN_USER_SERVERS_LEGEND_AVAILABLE', '⚪ - доступный сервер\n')
+        text += texts.t('ADMIN_USER_SERVERS_LEGEND_INACTIVE', '🔒 - неактивный (только для уже назначенных)\n\n')
 
         keyboard = []
         selected_servers = [s for s in servers_to_show if s.squad_uuid in current_squads]
@@ -4412,7 +4426,7 @@ async def _show_servers_for_user(
 
             display_name = server.display_name
             if not server.is_available and not is_selected:
-                display_name += ' (неактивный)'
+                display_name += texts.t('ADMIN_USER_SERVERS_INACTIVE_SUFFIX', ' (неактивный)')
 
             keyboard.append(
                 [
@@ -4424,12 +4438,14 @@ async def _show_servers_for_user(
             )
 
         if len(servers_to_show) > 20:
-            text += f'\n📝 Показано первых 20 из {len(servers_to_show)} серверов'
+            text += texts.t('ADMIN_USER_SERVERS_TRUNCATED', '\n📝 Показано первых 20 из {count} серверов').format(
+                count=len(servers_to_show)
+            )
 
         keyboard.append(
             [
-                types.InlineKeyboardButton(text='✅ Готово', callback_data=back_cb),
-                types.InlineKeyboardButton(text='⬅️ Назад', callback_data=back_cb),
+                types.InlineKeyboardButton(text=texts.t('ADMIN_USER_SERVERS_DONE', '✅ Готово'), callback_data=back_cb),
+                types.InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data=back_cb),
             ]
         )
 

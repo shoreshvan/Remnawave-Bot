@@ -490,7 +490,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
 
     if not show_devices:
         message_template = message_template.replace(
-            '\n📱 Устройства: {devices_used} / {device_limit}',
+            texts.t('SUBSCRIPTION_OVERVIEW_DEVICES_LINE', '\n📱 Устройства: {devices_used} / {device_limit}'),
             '',
         )
 
@@ -578,7 +578,9 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                 else:
                     time_text = texts.t('TRAFFIC_EXPIRES_MANY_DAYS', 'осталось {days} дней').format(days=days_remaining)
 
-                message += f'• {purchase.traffic_gb} ГБ — {time_text}\n'
+                message += texts.t('PURCHASED_TRAFFIC_ITEM_LINE', '• {gb} ГБ — {time_text}\n').format(
+                    gb=purchase.traffic_gb, time_text=time_text
+                )
                 message += texts.t(
                     'PURCHASED_TRAFFIC_PROGRESS_LINE', '  {bar} {percent:.0f}% | до {expire_date}\n'
                 ).format(bar=bar, percent=progress_percent, expire_date=expire_date)
@@ -894,7 +896,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
         traffic_label = (
             texts.t('PURCHASE_TARIFF_UNLIMITED_SHORT', 'Безлимит')
             if paid_trial_traffic == 0
-            else f'{paid_trial_traffic} ГБ'
+            else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=paid_trial_traffic)
         )
 
         message_lines = [
@@ -1650,7 +1652,7 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
         traffic_display = (
             texts.t('TRAFFIC_UNLIMITED_ADJ', 'Безлимитный')
             if traffic_value == 0
-            else f'{traffic_value} ГБ'
+            else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_value)
         )
     else:
         traffic_value = prepared_cart_data.get('traffic_gb')
@@ -1659,7 +1661,7 @@ async def return_to_saved_cart(callback: types.CallbackQuery, state: FSMContext,
         traffic_display = (
             texts.t('TRAFFIC_UNLIMITED_ADJ', 'Безлимитный')
             if traffic_value == 0
-            else f'{traffic_value} ГБ'
+            else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_value)
         )
 
     summary_lines = [
@@ -3124,7 +3126,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
 
     if not show_devices:
         settings_template = settings_template.replace(
-            '\n📱 Устройства: {devices_used} / {devices_limit}',
+            texts.t('SUBSCRIPTION_SETTINGS_DEVICES_LINE', '\n📱 Устройства: {devices_used} / {devices_limit}'),
             '',
         )
 
@@ -3910,7 +3912,7 @@ async def handle_trial_payment_method(callback: types.CallbackQuery, db_user: Us
         traffic_label = (
             texts.t('PURCHASE_TARIFF_UNLIMITED_SHORT', 'Безлимит')
             if trial_traffic == 0
-            else f'{trial_traffic} ГБ'
+            else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=trial_traffic)
         )
 
         if payment_method == 'stars':
@@ -4645,7 +4647,9 @@ async def handle_simple_subscription_purchase(
     traffic_text = (
         texts.t('PURCHASE_TARIFF_UNLIMITED_SHORT', 'Безлимит')
         if subscription_params['traffic_limit_gb'] == 0
-        else f'{subscription_params["traffic_limit_gb"]} ГБ'
+        else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(
+            traffic=subscription_params['traffic_limit_gb']
+        )
     )
 
     if user_balance_kopeks >= price_kopeks:

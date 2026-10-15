@@ -68,10 +68,12 @@ def _parse_period_prices(text: str) -> dict[str, int]:
     return prices
 
 
-def _format_period_prices_display(prices: dict[str, int], highlight: int | None = None) -> str:
+def _format_period_prices_display(prices: dict[str, int], highlight: int | None = None, texts=None) -> str:
     """Форматирует цены периодов для отображения; выделенный период отмечен звездой."""
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     if not prices:
-        return 'Не заданы'
+        return texts.t('ADMIN_TARIFF_PERIOD_PRICES_NOT_SET', 'Не заданы')
 
     lines = []
     for period_str in sorted(prices.keys(), key=int):
@@ -353,8 +355,10 @@ def get_tariff_view_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _format_traffic_reset_mode(mode: str | None) -> str:
+def _format_traffic_reset_mode(mode: str | None, texts=None) -> str:
     """Форматирует режим сброса трафика для отображения."""
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     mode_labels = {
         'DAY': '📅 Ежедневно',
         'WEEK': '📆 Еженедельно',
@@ -363,23 +367,33 @@ def _format_traffic_reset_mode(mode: str | None) -> str:
         'NO_RESET': '🚫 Никогда',
     }
     if mode is None:
-        return f'🌐 Глобальная настройка ({settings.DEFAULT_TRAFFIC_RESET_STRATEGY})'
-    return mode_labels.get(mode, f'⚠️ Неизвестно ({mode})')
+        return texts.t(
+            'ADMIN_TARIFF_RESET_MODE_GLOBAL_BUTTON', '🌐 Глобальная настройка ({strategy})'
+        ).format(strategy=settings.DEFAULT_TRAFFIC_RESET_STRATEGY)
+    if mode in mode_labels:
+        return texts.t(f'ADMIN_TARIFF_RESET_MODE_{mode}', mode_labels[mode])
+    return texts.t('ADMIN_TARIFF_RESET_MODE_UNKNOWN', '⚠️ Неизвестно ({mode})').format(mode=mode)
 
 
-def _format_traffic_topup_packages(tariff: Tariff) -> str:
+def _format_traffic_topup_packages(tariff: Tariff, texts=None) -> str:
     """Форматирует пакеты докупки трафика для отображения."""
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     if not getattr(tariff, 'traffic_topup_enabled', False):
-        return '❌ Отключено'
+        return texts.t('ADMIN_TARIFF_TOPUP_STATUS_DISABLED', '❌ Отключено')
 
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
     if not packages:
-        return '✅ Включено, но пакеты не настроены'
+        return texts.t('ADMIN_TARIFF_TOPUP_ENABLED_NO_PACKAGES', '✅ Включено, но пакеты не настроены')
 
-    lines = ['✅ Включено']
+    lines = [texts.t('ADMIN_TARIFF_TOPUP_STATUS_ENABLED', '✅ Включено')]
     for gb in sorted(packages.keys()):
         price = packages[gb]
-        lines.append(f'  • {gb} ГБ: {format_price_kopeks(price)}')
+        lines.append(
+            texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
+                gb=gb, price=format_price_kopeks(price)
+            )
+        )
 
     return '\n'.join(lines)
 
@@ -396,7 +410,7 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     if getattr(tariff, 'is_highlighted', False):
         status += texts.t('ADMIN_TARIFF_STATUS_HIGHLIGHTED', ' · ⭐ выделен')
     traffic = format_traffic(tariff.traffic_limit_gb)
-    prices_display = _format_period_prices_display(tariff.period_prices or {}, tariff.highlight_period_days)
+    prices_display = _format_period_prices_display(tariff.period_prices or {}, tariff.highlight_period_days, texts)
 
     # Форматируем список серверов
     squads_list = tariff.allowed_squads or []
@@ -445,13 +459,13 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     # Форматируем произвольный трафик и докупку трафика
     custom_traffic_display = format_custom_traffic_settings(tariff)
     custom_days_display = format_custom_days_settings(tariff)
-    traffic_topup_display = _format_traffic_topup_packages(tariff)
+    traffic_topup_display = _format_traffic_topup_packages(tariff, texts)
     server_limits_display = format_server_limits_summary(tariff)
     panel_settings_display = format_panel_settings(tariff)
 
     # Форматируем режим сброса трафика
     traffic_reset_mode = getattr(tariff, 'traffic_reset_mode', None)
-    traffic_reset_display = _format_traffic_reset_mode(traffic_reset_mode)
+    traffic_reset_display = _format_traffic_reset_mode(traffic_reset_mode, texts)
 
     # Форматируем суточный тариф
     is_daily = getattr(tariff, 'is_daily', False)
@@ -1284,7 +1298,7 @@ async def process_tariff_prices(
     await state.update_data(tariff_prices=prices)
 
     format_traffic(data['tariff_traffic'])
-    _format_period_prices_display(prices)
+    _format_period_prices_display(prices, texts=texts)
 
     # Создаем тариф
     tariff = await create_tariff(
@@ -1705,7 +1719,7 @@ async def start_edit_tariff_prices(
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     current_prices = _format_period_prices_for_edit(tariff.period_prices or {})
-    prices_display = _format_period_prices_display(tariff.period_prices or {})
+    prices_display = _format_period_prices_display(tariff.period_prices or {}, texts=texts)
 
     await callback.message.edit_text(
         texts.t(
@@ -2257,7 +2271,10 @@ async def start_edit_tariff_traffic_topup(
         status = texts.t('ADMIN_TARIFF_TOPUP_STATUS_ENABLED', '✅ Включено')
         if packages:
             packages_display = '\n'.join(
-                f'  • {gb} ГБ: {format_price_kopeks(price)}' for gb, price in sorted(packages.items())
+                texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
+                    gb=gb, price=format_price_kopeks(price)
+                )
+                for gb, price in sorted(packages.items())
             )
         else:
             packages_display = texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_NONE', '  Пакеты не настроены')
@@ -2267,7 +2284,7 @@ async def start_edit_tariff_traffic_topup(
 
     # Форматируем лимит
     if max_topup_traffic > 0:
-        max_limit_display = f'{max_topup_traffic} ГБ'
+        max_limit_display = texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=max_topup_traffic)
     else:
         max_limit_display = texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
 
@@ -2373,7 +2390,10 @@ async def toggle_tariff_traffic_topup(
         status = texts.t('ADMIN_TARIFF_TOPUP_STATUS_ENABLED', '✅ Включено')
         if packages:
             packages_display = '\n'.join(
-                f'  • {gb} ГБ: {format_price_kopeks(price)}' for gb, price in sorted(packages.items())
+                texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
+                    gb=gb, price=format_price_kopeks(price)
+                )
+                for gb, price in sorted(packages.items())
             )
         else:
             packages_display = texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_NONE', '  Пакеты не настроены')
@@ -2383,7 +2403,7 @@ async def toggle_tariff_traffic_topup(
 
     # Форматируем лимит
     if max_topup_traffic > 0:
-        max_limit_display = f'{max_topup_traffic} ГБ'
+        max_limit_display = texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=max_topup_traffic)
     else:
         max_limit_display = texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
 
@@ -2473,7 +2493,10 @@ async def start_edit_traffic_topup_packages(
 
     if packages:
         packages_display = '\n'.join(
-            f'  • {gb} ГБ: {format_price_kopeks(price)}' for gb, price in sorted(packages.items())
+            texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
+                gb=gb, price=format_price_kopeks(price)
+            )
+            for gb, price in sorted(packages.items())
         )
     else:
         packages_display = texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_NOT_SET', '  Не настроены')
@@ -2556,10 +2579,15 @@ async def process_edit_traffic_topup_packages(
 
     # Показываем обновленное меню
     texts = get_texts(db_user.language)
-    packages_display = '\n'.join(f'  • {gb} ГБ: {format_price_kopeks(price)}' for gb, price in sorted(packages.items()))
+    packages_display = '\n'.join(
+        texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
+            gb=gb, price=format_price_kopeks(price)
+        )
+        for gb, price in sorted(packages.items())
+    )
     max_topup_traffic = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
     max_limit_display = (
-        f'{max_topup_traffic} ГБ'
+        texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=max_topup_traffic)
         if max_topup_traffic > 0
         else texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
     )
@@ -2630,7 +2658,7 @@ async def start_edit_max_topup_traffic(
 
     current_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
     if current_limit > 0:
-        current_display = f'{current_limit} ГБ'
+        current_display = texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=current_limit)
     else:
         current_display = texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
 
@@ -2698,13 +2726,18 @@ async def process_edit_max_topup_traffic(
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
     if packages:
         packages_display = '\n'.join(
-            f'  • {gb} ГБ: {format_price_kopeks(price)}' for gb, price in sorted(packages.items())
+            texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
+                gb=gb, price=format_price_kopeks(price)
+            )
+            for gb, price in sorted(packages.items())
         )
     else:
         packages_display = texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_NONE', '  Пакеты не настроены')
 
     max_limit_display = (
-        f'{new_limit} ГБ' if new_limit > 0 else texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
+        texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=new_limit)
+        if new_limit > 0
+        else texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
     )
 
     buttons = [
@@ -3487,7 +3520,7 @@ async def start_edit_traffic_reset_mode(
             '• <b>Еженедельно</b> — сброс каждую неделю\n'
             '• <b>Ежемесячно</b> — сброс каждый месяц\n'
             '• <b>Никогда</b> — трафик накапливается за весь период подписки',
-        ).format(name=html.escape(tariff.name), current_mode=_format_traffic_reset_mode(current_mode)),
+        ).format(name=html.escape(tariff.name), current_mode=_format_traffic_reset_mode(current_mode, texts)),
         reply_markup=get_traffic_reset_mode_keyboard(tariff_id, current_mode, db_user.language),
         parse_mode='HTML',
     )
@@ -3521,7 +3554,7 @@ async def set_traffic_reset_mode(
     # Обновляем тариф
     tariff = await update_tariff(db, tariff, traffic_reset_mode=new_mode)
 
-    mode_display = _format_traffic_reset_mode(new_mode)
+    mode_display = _format_traffic_reset_mode(new_mode, texts)
     await callback.answer(
         texts.t('ADMIN_TARIFF_RESET_MODE_CHANGED_ALERT', 'Режим сброса изменён: {mode}').format(mode=mode_display),
         show_alert=True,

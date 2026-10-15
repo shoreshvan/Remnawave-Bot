@@ -29,79 +29,141 @@ from app.utils.decorators import admin_required, error_handler
 logger = structlog.get_logger(__name__)
 
 
-def _build_server_edit_view(server):
-    status_emoji = '✅ Доступен' if server.is_available else '❌ Недоступен'
-    price_text = f'{int(server.price_rubles)} تومان' if server.price_kopeks > 0 else 'Бесплатно'
+def _build_server_edit_view(server, texts=None):
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+    status_emoji = (
+        texts.t('ADMIN_SERVERS_EDIT_STATUS_AVAILABLE', '✅ Доступен')
+        if server.is_available
+        else texts.t('ADMIN_SERVERS_EDIT_STATUS_UNAVAILABLE', '❌ Недоступен')
+    )
+    price_text = (
+        f'{int(server.price_rubles)} تومان'
+        if server.price_kopeks > 0
+        else texts.t('ADMIN_SERVERS_FREE', 'Бесплатно')
+    )
     promo_groups_text = (
         ', '.join(sorted(pg.name for pg in server.allowed_promo_groups))
         if server.allowed_promo_groups
-        else 'Не выбраны'
+        else texts.t('ADMIN_SERVERS_EDIT_PROMO_NONE', 'Не выбраны')
     )
 
-    trial_status = '✅ Да' if server.is_trial_eligible else '⚪️ Нет'
+    trial_status = (
+        texts.t('ADMIN_SERVERS_EDIT_TRIAL_YES', '✅ Да')
+        if server.is_trial_eligible
+        else texts.t('ADMIN_SERVERS_EDIT_TRIAL_NO', '⚪️ Нет')
+    )
 
-    text = f"""
-🌐 <b>Редактирование сервера</b>
-
-<b>Информация:</b>
-• ID: {server.id}
-• UUID: <code>{server.squad_uuid}</code>
-• Название: {html.escape(server.display_name)}
-• Оригинальное: {html.escape(server.original_name) if server.original_name else 'Не указано'}
-• Статус: {status_emoji}
-
-<b>Настройки:</b>
-• Цена: {price_text}
-• Код страны: {server.country_code or 'Не указан'}
-• Лимит пользователей: {server.max_users or 'Без лимита'}
-• Текущих пользователей: {server.current_users}
-• Промогруппы: {promo_groups_text}
-• Выдача триала: {trial_status}
-
-<b>Описание:</b>
-{server.description or 'Не указано'}
-
-Выберите что изменить:
-"""
+    text = texts.t(
+        'ADMIN_SERVERS_EDIT_VIEW_TEXT',
+        '\n🌐 <b>Редактирование сервера</b>\n\n'
+        '<b>Информация:</b>\n'
+        '• ID: {id}\n'
+        '• UUID: <code>{uuid}</code>\n'
+        '• Название: {name}\n'
+        '• Оригинальное: {original}\n'
+        '• Статус: {status}\n\n'
+        '<b>Настройки:</b>\n'
+        '• Цена: {price}\n'
+        '• Код страны: {country}\n'
+        '• Лимит пользователей: {limit}\n'
+        '• Текущих пользователей: {current_users}\n'
+        '• Промогруппы: {promo_groups}\n'
+        '• Выдача триала: {trial}\n\n'
+        '<b>Описание:</b>\n'
+        '{description}\n\n'
+        'Выберите что изменить:\n',
+    ).format(
+        id=server.id,
+        uuid=server.squad_uuid,
+        name=html.escape(server.display_name),
+        original=(
+            html.escape(server.original_name)
+            if server.original_name
+            else texts.t('ADMIN_SERVERS_EDIT_NOT_SET', 'Не указано')
+        ),
+        status=status_emoji,
+        price=price_text,
+        country=server.country_code or texts.t('ADMIN_SERVERS_EDIT_NOT_SPECIFIED', 'Не указан'),
+        limit=server.max_users or texts.t('ADMIN_SERVERS_EDIT_NO_LIMIT', 'Без лимита'),
+        current_users=server.current_users,
+        promo_groups=promo_groups_text,
+        trial=trial_status,
+        description=server.description or texts.t('ADMIN_SERVERS_EDIT_NOT_SET', 'Не указано'),
+    )
 
     keyboard = [
         [
-            types.InlineKeyboardButton(text='✏️ Название', callback_data=f'admin_server_edit_name_{server.id}'),
-            types.InlineKeyboardButton(text='💰 Цена', callback_data=f'admin_server_edit_price_{server.id}'),
-        ],
-        [
-            types.InlineKeyboardButton(text='🌍 Страна', callback_data=f'admin_server_edit_country_{server.id}'),
-            types.InlineKeyboardButton(text='👥 Лимит', callback_data=f'admin_server_edit_limit_{server.id}'),
-        ],
-        [
-            types.InlineKeyboardButton(text='👥 Юзеры', callback_data=f'admin_server_users_{server.id}'),
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_SERVER_EDIT_NAME', '✏️ Название'),
+                callback_data=f'admin_server_edit_name_{server.id}',
+            ),
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_SERVER_EDIT_PRICE', '💰 Цена'),
+                callback_data=f'admin_server_edit_price_{server.id}',
+            ),
         ],
         [
             types.InlineKeyboardButton(
-                text='🎁 Выдавать в триал' if not server.is_trial_eligible else '🚫 Не выдавать в триал',
+                text=texts.t('ADMIN_SERVER_EDIT_COUNTRY', '🌍 Страна'),
+                callback_data=f'admin_server_edit_country_{server.id}',
+            ),
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_SERVER_EDIT_LIMIT', '👥 Лимит'),
+                callback_data=f'admin_server_edit_limit_{server.id}',
+            ),
+        ],
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_SERVERS_EDIT_BTN_USERS', '👥 Юзеры'),
+                callback_data=f'admin_server_users_{server.id}',
+            ),
+        ],
+        [
+            types.InlineKeyboardButton(
+                text=(
+                    texts.t('ADMIN_SERVERS_EDIT_BTN_TRIAL_GIVE', '🎁 Выдавать в триал')
+                    if not server.is_trial_eligible
+                    else texts.t('ADMIN_SERVERS_EDIT_BTN_TRIAL_DONT', '🚫 Не выдавать в триал')
+                ),
                 callback_data=f'admin_server_trial_{server.id}',
             ),
         ],
         [
-            types.InlineKeyboardButton(text='🎯 Промогруппы', callback_data=f'admin_server_edit_promo_{server.id}'),
-            types.InlineKeyboardButton(text='📝 Описание', callback_data=f'admin_server_edit_desc_{server.id}'),
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_SERVERS_EDIT_BTN_PROMO', '🎯 Промогруппы'),
+                callback_data=f'admin_server_edit_promo_{server.id}',
+            ),
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_SERVER_EDIT_DESCRIPTION', '📝 Описание'),
+                callback_data=f'admin_server_edit_desc_{server.id}',
+            ),
         ],
         [
             types.InlineKeyboardButton(
-                text='❌ Отключить' if server.is_available else '✅ Включить',
+                text=(
+                    texts.t('ADMIN_SERVER_DISABLE', '❌ Отключить')
+                    if server.is_available
+                    else texts.t('ADMIN_SERVER_ENABLE', '✅ Включить')
+                ),
                 callback_data=f'admin_server_toggle_{server.id}',
             )
         ],
         [
-            types.InlineKeyboardButton(text='🗑️ Удалить', callback_data=f'admin_server_delete_{server.id}'),
-            types.InlineKeyboardButton(text='⬅️ Назад', callback_data='admin_servers_list'),
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_SERVER_DELETE', '🗑️ Удалить'),
+                callback_data=f'admin_server_delete_{server.id}',
+            ),
+            types.InlineKeyboardButton(text=texts.t('BACK', '⬅️ Назад'), callback_data='admin_servers_list'),
         ],
     ]
 
     return text, types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
-def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_ids):
+def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_ids, texts=None):
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
     keyboard = []
     for group in promo_groups:
         emoji = '✅' if group['id'] in selected_ids else '⚪'
@@ -115,9 +177,20 @@ def _build_server_promo_groups_keyboard(server_id: int, promo_groups, selected_i
         )
 
     keyboard.append(
-        [types.InlineKeyboardButton(text='💾 Сохранить', callback_data=f'admin_server_promo_save_{server_id}')]
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('ADMIN_SERVERS_PROMO_BTN_SAVE', '💾 Сохранить'),
+                callback_data=f'admin_server_promo_save_{server_id}',
+            )
+        ]
     )
-    keyboard.append([types.InlineKeyboardButton(text='⬅️ Назад', callback_data=f'admin_server_edit_{server_id}')])
+    keyboard.append(
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('BACK', '⬅️ Назад'), callback_data=f'admin_server_edit_{server_id}'
+            )
+        ]
+    )
 
     return types.InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -208,7 +281,7 @@ async def show_servers_list(callback: types.CallbackQuery, db_user: User, db: As
             )
 
             text += f'{i}. {status_emoji} {html.escape(server.display_name)}\n'
-            text += f'   💰 Цена: {price_text}'
+            text += texts.t('ADMIN_SERVERS_LIST_PRICE_LINE', '   💰 Цена: {price}').format(price=price_text)
 
             if server.max_users:
                 text += f' | 👥 {server.current_users}/{server.max_users}'
@@ -364,7 +437,7 @@ async def show_server_edit_menu(callback: types.CallbackQuery, db_user: User, db
         await callback.answer(texts.t('ADMIN_SERVER_NOT_FOUND', '❌ Сервер не найден!'), show_alert=True)
         return
 
-    text, keyboard = _build_server_edit_view(server)
+    text, keyboard = _build_server_edit_view(server, texts)
 
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     await callback.answer()
@@ -557,7 +630,7 @@ async def toggle_server_availability(callback: types.CallbackQuery, db_user: Use
 
     server = await get_server_squad_by_id(db, server_id)
 
-    text, keyboard = _build_server_edit_view(server)
+    text, keyboard = _build_server_edit_view(server, texts)
 
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
 
@@ -587,7 +660,7 @@ async def toggle_server_trial_assignment(callback: types.CallbackQuery, db_user:
 
     server = await get_server_squad_by_id(db, server_id)
 
-    text, keyboard = _build_server_edit_view(server)
+    text, keyboard = _build_server_edit_view(server, texts)
 
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
 
@@ -1241,7 +1314,7 @@ async def start_server_edit_promo_groups(
 
     await callback.message.edit_text(
         text,
-        reply_markup=_build_server_promo_groups_keyboard(server_id, promo_groups, selected_ids),
+        reply_markup=_build_server_promo_groups_keyboard(server_id, promo_groups, selected_ids, texts),
         parse_mode='HTML',
     )
     await callback.answer()
@@ -1286,7 +1359,7 @@ async def toggle_server_promo_group(
     await state.update_data(selected_promo_groups=list(selected))
 
     await callback.message.edit_reply_markup(
-        reply_markup=_build_server_promo_groups_keyboard(server_id, promo_groups, selected)
+        reply_markup=_build_server_promo_groups_keyboard(server_id, promo_groups, selected, texts)
     )
     await callback.answer(message)
 
@@ -1327,7 +1400,7 @@ async def save_server_promo_groups(
     await cache.delete_pattern('available_countries*')
     await state.clear()
 
-    text, keyboard = _build_server_edit_view(server)
+    text, keyboard = _build_server_edit_view(server, texts)
 
     await callback.message.edit_text(
         text,

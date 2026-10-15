@@ -49,7 +49,9 @@ class ChoiceOption:
     def label(self, lang_code: str) -> str:
         if lang_code == 'ru':
             return self.label_ru
-        return self.label_en or self.label_ru
+        return get_texts(lang_code).t(
+            f'ADMIN_PRICING_CHOICE_{str(self.value).upper()}', self.label_en or self.label_ru
+        )
 
 
 @dataclass(slots=True)
@@ -66,12 +68,15 @@ class SettingEntry:
     def label(self, lang_code: str) -> str:
         if lang_code == 'ru':
             return self.label_ru
-        return self.label_en or self.label_ru
+        return get_texts(lang_code).t(f'ADMIN_PRICING_LABEL_{self.key}', self.label_en or self.label_ru)
 
     def description(self, lang_code: str) -> str | None:
         if lang_code == 'ru':
             return self.description_ru
-        return self.description_en or self.description_ru
+        default = self.description_en or self.description_ru
+        if default is None:
+            return None
+        return get_texts(lang_code).t(f'ADMIN_PRICING_DESC_{self.key}', default)
 
 
 TRIAL_ENTRIES: tuple[SettingEntry, ...] = (
@@ -319,7 +324,7 @@ def _language_code(language: str | None) -> str:
 
 def _format_period_label(days: int, lang_code: str, short: bool = False) -> str:
     if short:
-        suffix = 'д' if lang_code == 'ru' else 'd'
+        suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
         return f'{days}{suffix}'
     texts = get_texts(lang_code)
     if lang_code == 'ru':
@@ -336,7 +341,7 @@ def _format_traffic_label(gb: int, lang_code: str, short: bool = False) -> str:
             'ADMIN_PRICING_TRAFFIC_UNLIMITED',
             'Безлимит' if lang_code == 'ru' else 'Unlimited',
         )
-    unit = 'ГБ' if lang_code == 'ru' else 'GB'
+    unit = get_texts(lang_code).t('ADMIN_PRICING_GB_UNIT', 'ГБ' if lang_code == 'ru' else 'GB')
     if short:
         return f'{gb}{unit}' if lang_code == 'ru' else f'{gb}{unit}'
     return f'{gb} {unit}'
@@ -352,7 +357,7 @@ def _format_trial_summary(lang_code: str) -> str:
 
     traffic_label = _format_traffic_label(traffic, lang_code, short=True)
     devices_label = f'{devices}📱' if lang_code == 'ru' else f'{devices}📱'
-    days_suffix = 'д' if lang_code == 'ru' else 'd'
+    days_suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
     return f'{duration}{days_suffix}, {traffic_label}, {devices_label}{price_note}'
 
 
@@ -420,7 +425,7 @@ def _build_period_summary(items: Iterable[PriceItem], lang_code: str, fallback: 
             days = None
 
         if days is not None:
-            suffix = 'д' if lang_code == 'ru' else 'd'
+            suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
             short_label = f'{days}{suffix}'
         else:
             short_label = label
@@ -447,7 +452,7 @@ def _build_traffic_summary(lang_code: str, fallback: str) -> str:
 
 def _build_period_options_summary(lang_code: str) -> str:
     texts = get_texts(lang_code)
-    suffix = 'д' if lang_code == 'ru' else 'd'
+    suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
     available = ', '.join(f'{days}{suffix}' for days in settings.get_available_subscription_periods())
     renewal = ', '.join(f'{days}{suffix}' for days in settings.get_available_renewal_periods())
     if lang_code == 'ru':
@@ -622,7 +627,7 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
 def _build_period_options_section(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
     texts = get_texts(language)
     lang_code = _language_code(language)
-    suffix = 'д' if lang_code == 'ru' else 'd'
+    suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
 
     # Используем методы без фильтрации по ценам для админки
     available_subscription = set(settings.get_configured_subscription_periods())
