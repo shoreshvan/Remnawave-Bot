@@ -741,7 +741,7 @@ async def show_messages_history(callback: types.CallbackQuery, db_user: User, db
                 sent=broadcast.sent_count,
                 total=broadcast.total_count,
                 rate=success_rate,
-                audience=get_target_name(broadcast.target_type),
+                audience=get_target_name(broadcast.target_type, texts),
                 admin=html.escape(broadcast.admin_name or ''),
                 preview=message_preview,
             )
@@ -1235,7 +1235,7 @@ async def confirm_button_selection(callback: types.CallbackQuery, db_user: User,
         if not target.startswith('custom_')
         else await get_custom_users_count(db, target.replace('custom_', ''))
     )
-    target_display = get_target_display_name(target)
+    target_display = get_target_display_name(target, texts)
 
     media_info = ''
     if has_media:
@@ -2286,7 +2286,9 @@ async def get_users_statistics(db: AsyncSession) -> dict:
     return stats
 
 
-def get_target_name(target_type: str) -> str:
+def get_target_name(target_type: str, texts=None) -> str:
+    if texts is None:
+        texts = get_texts()
     names = {
         'all': 'Всем пользователям',
         'active': 'С активной подпиской',
@@ -2311,12 +2313,14 @@ def get_target_name(target_type: str) -> str:
     # Обработка фильтра по тарифу
     if target_type.startswith('tariff_'):
         tariff_id = target_type.split('_')[1]
-        return f'По тарифу #{tariff_id}'
-    return names.get(target_type, target_type)
+        return texts.t('ADMIN_MSG_TARGET_TARIFF', 'По тарифу #{tariff_id}').format(tariff_id=tariff_id)
+    if target_type in names:
+        return texts.t(f'ADMIN_MSG_TARGET_{target_type.upper()}', names[target_type])
+    return target_type
 
 
-def get_target_display_name(target: str) -> str:
-    return get_target_name(target)
+def get_target_display_name(target: str, texts=None) -> str:
+    return get_target_name(target, texts)
 
 
 def register_handlers(dp: Dispatcher):

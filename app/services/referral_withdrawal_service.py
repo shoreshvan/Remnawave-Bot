@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.database.models import (
     ReferralEarning,
     Transaction,
@@ -194,10 +195,12 @@ class ReferralWithdrawalService:
         Возвращает (can_request, reason, stats).
         Принимает предвычисленные stats для избежания повторного запроса.
         """
+        texts = get_texts()
+
         if not settings.is_referral_withdrawal_enabled():
             return (
                 False,
-                'Функция вывода реферального баланса отключена',
+                texts.t('REFERRAL_WITHDRAWAL_DISABLED', 'Функция вывода реферального баланса отключена'),
                 {
                     'total_earned': 0,
                     'own_deposits': 0,
@@ -218,7 +221,7 @@ class ReferralWithdrawalService:
         min_amount = settings.REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS
 
         if available < min_amount:
-            return False, f'Минимальная сумма вывода: {min_amount / 100:.0f} تومان. Доступно: {available / 100:.0f} تومان', stats
+            return False, texts.t('REFERRAL_WITHDRAWAL_MIN_AMOUNT_CHECK', 'Минимальная сумма вывода: {min_amount} تومان. Доступно: {available} تومان').format(min_amount=f'{min_amount / 100:.0f}', available=f'{available / 100:.0f}'), stats
 
         # Проверяем cooldown (пропускаем в тестовом режиме)
         last_request = await self.get_last_withdrawal_request(db, user_id)
@@ -230,11 +233,11 @@ class ReferralWithdrawalService:
 
                 if datetime.now(UTC) < cooldown_end:
                     days_left = (cooldown_end - datetime.now(UTC)).days + 1
-                    return False, f'Следующий запрос на вывод будет доступен через {days_left} дн.', stats
+                    return False, texts.t('REFERRAL_WITHDRAWAL_COOLDOWN', 'Следующий запрос на вывод будет доступен через {days} дн.').format(days=days_left), stats
 
             # Проверяем, нет ли активной заявки
             if last_request.status == WithdrawalRequestStatus.PENDING.value:
-                return False, 'У вас уже есть активная заявка на рассмотрении', stats
+                return False, texts.t('REFERRAL_WITHDRAWAL_ALREADY_PENDING', 'У вас уже есть активная заявка на рассмотрении'), stats
 
         return True, 'OK', stats
 
@@ -245,6 +248,8 @@ class ReferralWithdrawalService:
         Детальный анализ активности пользователя на предмет отмывания денег.
         """
         analysis = {'risk_score': 0, 'risk_level': 'low', 'recommendation': 'approve', 'flags': [], 'details': {}}
+
+        texts = get_texts()
 
         # Получаем статистику баланса
         balance_stats = await self.get_referral_balance_stats(db, user_id)
@@ -257,10 +262,18 @@ class ReferralWithdrawalService:
 
         if own_deposits > 0 and spending == 0:
             analysis['risk_score'] += 40
-            analysis['flags'].append(f'🔴 Пополнил {own_deposits / 100:.0f} تومان, но ничего не покупал!')
+            analysis['flags'].append(
+                texts.t('REFERRAL_WITHDRAWAL_FLAG_NO_PURCHASE', '🔴 Пополнил {amount} تومان, но ничего не покупал!').format(
+                    amount=f'{own_deposits / 100:.0f}'
+                )
+            )
         elif own_deposits > spending * ratio_threshold and spending > 0:
             analysis['risk_score'] += 25
-            analysis['flags'].append(f'🟠 Пополнил {own_deposits / 100:.0f} تومان, потратил только {spending / 100:.0f} تومان')
+            analysis['flags'].append(
+                texts.t('REFERRAL_WITHDRAWAL_FLAG_LOW_SPENDING', '🟠 Пополнил {deposits} تومان, потратил только {spent} تومان').format(
+                    deposits=f'{own_deposits / 100:.0f}', spent=f'{spending / 100:.0f}'
+                )
+            )
 
         # 2. Получаем информацию о рефералах
         referrals = await db.execute(select(User).where(User.referred_by_id == user_id))
@@ -270,7 +283,7 @@ class ReferralWithdrawalService:
 
         if referral_count == 0 and balance_stats['total_earned'] > 0:
             analysis['risk_score'] += 50
-            analysis['flags'].append('🔴 Нет рефералов, но есть реферальный доход!')
+            analysis['flags'].append(texts.t('REFERRAL_WITHDRAWAL_FLAG_NO_REFERRALS', '🔴 Нет рефералов, но есть реферальный доход!'))
 
         # 3. Анализ пополнений каждого реферала
         referral_ids = [r.id for r in referrals_list]
@@ -310,11 +323,17 @@ class ReferralWithdrawalService:
 
                 if deposit_count > max_deposits:
                     analysis['risk_score'] += 15
-                    suspicious_flags.append(f'{deposit_count} пополнений/мес')
+                    suspicious_flags.append(
+                        texts.t('REFERRAL_WITHDRAWAL_FLAG_MANY_DEPOSITS', '{count} пополнений/мес').format(count=deposit_count)
+                    )
 
                 if deposit_total > min_suspicious:
                     analysis['risk_score'] += 10
-                    suspicious_flags.append(f'сумма {deposit_total / 100:.0f} تومان')
+                    suspicious_flags.append(
+                        texts.t('REFERRAL_WITHDRAWAL_FLAG_LARGE_AMOUNT', 'сумма {amount} تومان').format(
+                            amount=f'{deposit_total / 100:.0f}'
+                        )
+                    )
 
                 if suspicious_flags:
                     suspicious_referrals.append(
@@ -329,7 +348,11 @@ class ReferralWithdrawalService:
             analysis['details']['suspicious_referrals'] = suspicious_referrals
 
             if suspicious_referrals:
-                analysis['flags'].append(f'⚠️ Подозрительная активность у {len(suspicious_referrals)} реферала(ов)')
+                analysis['flags'].append(
+                    texts.t('REFERRAL_WITHDRAWAL_FLAG_SUSPICIOUS_REFERRALS', '⚠️ Подозрительная активность у {count} реферала(ов)').format(
+                        count=len(suspicious_referrals)
+                    )
+                )
 
             # Общая статистика по рефералам (за всё время, только реальные платежи)
             all_ref_deposits = await db.execute(
@@ -354,7 +377,7 @@ class ReferralWithdrawalService:
             # Проверка: только 1 платящий реферал
             if ref_stats.paying_count == 1 and balance_stats['total_earned'] > 50000:
                 analysis['risk_score'] += 20
-                analysis['flags'].append('⚠️ Весь доход от одного реферала')
+                analysis['flags'].append(texts.t('REFERRAL_WITHDRAWAL_FLAG_SINGLE_REFERRAL', '⚠️ Весь доход от одного реферала'))
 
         # 4. Анализ реферальных начислений по типам
         earnings = await db.execute(
@@ -381,7 +404,11 @@ class ReferralWithdrawalService:
 
         if recent_count > 20:
             analysis['risk_score'] += 15
-            analysis['flags'].append(f'⚠️ {recent_count} начислений за неделю ({recent_amount / 100:.0f} تومان)')
+            analysis['flags'].append(
+                texts.t('REFERRAL_WITHDRAWAL_FLAG_RECENT_EARNINGS', '⚠️ {count} начислений за неделю ({amount} تومان)').format(
+                    count=recent_count, amount=f'{recent_amount / 100:.0f}'
+                )
+            )
 
         analysis['details']['recent_activity'] = {
             'week_earnings_count': recent_count,
@@ -399,19 +426,19 @@ class ReferralWithdrawalService:
         if score >= 70:
             analysis['risk_level'] = 'critical'
             analysis['recommendation'] = 'reject'
-            analysis['recommendation_text'] = '🔴 РЕКОМЕНДУЕТСЯ ОТКЛОНИТЬ'
+            analysis['recommendation_text'] = texts.t('REFERRAL_WITHDRAWAL_RECOMMENDATION_REJECT', '🔴 РЕКОМЕНДУЕТСЯ ОТКЛОНИТЬ')
         elif score >= 50:
             analysis['risk_level'] = 'high'
             analysis['recommendation'] = 'review'
-            analysis['recommendation_text'] = '🟠 ТРЕБУЕТ ПРОВЕРКИ'
+            analysis['recommendation_text'] = texts.t('REFERRAL_WITHDRAWAL_RECOMMENDATION_REVIEW', '🟠 ТРЕБУЕТ ПРОВЕРКИ')
         elif score >= 30:
             analysis['risk_level'] = 'medium'
             analysis['recommendation'] = 'review'
-            analysis['recommendation_text'] = '🟡 Рекомендуется проверить'
+            analysis['recommendation_text'] = texts.t('REFERRAL_WITHDRAWAL_RECOMMENDATION_CHECK', '🟡 Рекомендуется проверить')
         else:
             analysis['risk_level'] = 'low'
             analysis['recommendation'] = 'approve'
-            analysis['recommendation_text'] = '🟢 Можно одобрить'
+            analysis['recommendation_text'] = texts.t('REFERRAL_WITHDRAWAL_RECOMMENDATION_APPROVE', '🟢 Можно одобрить')
 
         return analysis
 
@@ -424,6 +451,7 @@ class ReferralWithdrawalService:
         Создаёт заявку на вывод с анализом на отмывание.
         Возвращает (request, error_message).
         """
+        texts = get_texts()
         # Блокируем строку пользователя для предотвращения параллельного создания заявок
         await db.execute(select(User).where(User.id == user_id).with_for_update())
 
@@ -435,12 +463,12 @@ class ReferralWithdrawalService:
         available = stats['available_total']
 
         if amount_kopeks > available:
-            return None, f'Недостаточно средств. Доступно: {available / 100:.0f} تومان'
+            return None, texts.t('REFERRAL_WITHDRAWAL_NOT_ENOUGH', 'Недостаточно средств. Доступно: {amount} تومان').format(amount=f'{available / 100:.0f}')
 
         # В режиме "только реф. баланс" проверяем реф. баланс
         if settings.REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE:
             if amount_kopeks > stats['available_referral']:
-                return None, f'Недостаточно реферального баланса. Доступно: {stats["available_referral"] / 100:.0f} تومان'
+                return None, texts.t('REFERRAL_WITHDRAWAL_NOT_ENOUGH_REF', 'Недостаточно реферального баланса. Доступно: {amount} تومان').format(amount=f'{stats["available_referral"] / 100:.0f}')
 
         # Анализируем на отмывание
         analysis = await self.analyze_for_money_laundering(db, user_id)
@@ -483,25 +511,27 @@ class ReferralWithdrawalService:
         Одобряет заявку на вывод и списывает средства с баланса.
         Возвращает (success, error_message).
         """
+        texts = get_texts()
+
         result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request:
-            return False, 'Заявка не найдена'
+            return False, texts.t('REFERRAL_WITHDRAWAL_REQUEST_NOT_FOUND', 'Заявка не найдена')
 
         if request.status != WithdrawalRequestStatus.PENDING.value:
-            return False, 'Заявка уже обработана'
+            return False, texts.t('REFERRAL_WITHDRAWAL_ALREADY_PROCESSED', 'Заявка уже обработана')
 
         # Получаем пользователя для списания с баланса (с блокировкой строки)
         user_result = await db.execute(select(User).where(User.id == request.user_id).with_for_update())
         user = user_result.scalar_one_or_none()
 
         if not user:
-            return False, 'Пользователь не найден'
+            return False, texts.t('REFERRAL_WITHDRAWAL_USER_NOT_FOUND', 'Пользователь не найден')
 
         # Списываем с баланса
         if user.balance_kopeks < request.amount_kopeks:
-            return False, f'Недостаточно средств на балансе. Баланс: {user.balance_kopeks / 100:.0f} تومان'
+            return False, texts.t('REFERRAL_WITHDRAWAL_INSUFFICIENT_BALANCE', 'Недостаточно средств на балансе. Баланс: {amount} تومان').format(amount=f'{user.balance_kopeks / 100:.0f}')
 
         user.balance_kopeks -= request.amount_kopeks
 
@@ -510,7 +540,7 @@ class ReferralWithdrawalService:
             user_id=request.user_id,
             type=TransactionType.WITHDRAWAL.value,
             amount_kopeks=-request.amount_kopeks,
-            description=f'Вывод реферального баланса (заявка #{request.id})',
+            description=texts.t('REFERRAL_WITHDRAWAL_TX_DESCRIPTION', 'Вывод реферального баланса (заявка #{id})').format(id=request.id),
             is_completed=True,
             completed_at=datetime.now(UTC),
         )
@@ -529,14 +559,16 @@ class ReferralWithdrawalService:
         self, db: AsyncSession, request_id: int, admin_id: int, comment: str | None = None
     ) -> tuple[bool, str]:
         """Отклоняет заявку на вывод."""
+        texts = get_texts()
+
         result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request:
-            return False, 'Заявка не найдена'
+            return False, texts.t('REFERRAL_WITHDRAWAL_REQUEST_NOT_FOUND', 'Заявка не найдена')
 
         if request.status != WithdrawalRequestStatus.PENDING.value:
-            return False, 'Заявка уже обработана'
+            return False, texts.t('REFERRAL_WITHDRAWAL_ALREADY_PROCESSED', 'Заявка уже обработана')
 
         request.status = WithdrawalRequestStatus.REJECTED.value
         request.processed_by = admin_id
@@ -550,14 +582,16 @@ class ReferralWithdrawalService:
         self, db: AsyncSession, request_id: int, admin_id: int, comment: str | None = None
     ) -> tuple[bool, str]:
         """Отмечает заявку как выполненную (деньги переведены)."""
+        texts = get_texts()
+
         result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request:
-            return False, 'Заявка не найдена'
+            return False, texts.t('REFERRAL_WITHDRAWAL_REQUEST_NOT_FOUND', 'Заявка не найдена')
 
         if request.status != WithdrawalRequestStatus.APPROVED.value:
-            return False, 'Заявка не в статусе "одобрена"'
+            return False, texts.t('REFERRAL_WITHDRAWAL_NOT_APPROVED_STATUS', 'Заявка не в статусе "одобрена"')
 
         request.status = WithdrawalRequestStatus.COMPLETED.value
         request.processed_by = admin_id
@@ -619,18 +653,25 @@ class ReferralWithdrawalService:
 
     def format_analysis_for_admin(self, analysis: dict) -> str:
         """Форматирует анализ для отображения админу."""
+        texts = get_texts()
+
         risk_emoji = {'low': '🟢', 'medium': '🟡', 'high': '🟠', 'critical': '🔴'}
 
-        text = f"""
-🔍 <b>Анализ на подозрительную активность</b>
-
-{risk_emoji.get(analysis['risk_level'], '⚪')} Уровень риска: <b>{analysis['risk_level'].upper()}</b>
-📊 Оценка риска: <b>{analysis['risk_score']}/100</b>
-{analysis.get('recommendation_text', '')}
-"""
+        text = texts.t(
+            'REFERRAL_WITHDRAWAL_ANALYSIS_HEADER',
+            '🔍 <b>Анализ на подозрительную активность</b>\n\n'
+            '{risk_emoji} Уровень риска: <b>{risk_level}</b>\n'
+            '📊 Оценка риска: <b>{risk_score}/100</b>\n'
+            '{recommendation}\n',
+        ).format(
+            risk_emoji=risk_emoji.get(analysis['risk_level'], '⚪'),
+            risk_level=analysis['risk_level'].upper(),
+            risk_score=analysis['risk_score'],
+            recommendation=analysis.get('recommendation_text', ''),
+        )
 
         if analysis.get('flags'):
-            text += '\n⚠️ <b>Предупреждения:</b>\n'
+            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_WARNINGS_HEADER', '\n⚠️ <b>Предупреждения:</b>\n')
             for flag in analysis['flags']:
                 text += f'  {flag}\n'
 
@@ -639,38 +680,65 @@ class ReferralWithdrawalService:
         # Статистика баланса
         if 'balance_stats' in details:
             bs = details['balance_stats']
-            text += '\n💰 <b>Баланс:</b>\n'
-            text += f'• Заработано с рефералов: {bs["total_earned"] / 100:.0f} تومان\n'
-            text += f'• Собственные пополнения: {bs["own_deposits"] / 100:.0f} تومان\n'
-            text += f'• Потрачено: {bs["spending"] / 100:.0f} تومان\n'
-            text += f'• Уже выведено: {bs["withdrawn"] / 100:.0f} تومان\n'
+            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_HEADER', '\n💰 <b>Баланс:</b>\n')
+            text += texts.t(
+                'REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_EARNED', '• Заработано с рефералов: {amount} تومان\n'
+            ).format(amount=f'{bs["total_earned"] / 100:.0f}')
+            text += texts.t(
+                'REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_OWN', '• Собственные пополнения: {amount} تومان\n'
+            ).format(amount=f'{bs["own_deposits"] / 100:.0f}')
+            text += texts.t(
+                'REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_SPENT', '• Потрачено: {amount} تومان\n'
+            ).format(amount=f'{bs["spending"] / 100:.0f}')
+            text += texts.t(
+                'REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_WITHDRAWN', '• Уже выведено: {amount} تومان\n'
+            ).format(amount=f'{bs["withdrawn"] / 100:.0f}')
 
         # Статистика по рефералам
         if 'referral_deposits' in details:
             rd = details['referral_deposits']
-            text += '\n👥 <b>Рефералы:</b>\n'
-            text += f'• Всего: {details.get("referral_count", 0)}\n'
-            text += f'• Платящих: {rd["paying_referrals"]}\n'
-            text += f'• Всего пополнений: {rd["total_deposits"]} ({rd["total_amount"] / 100:.0f} تومان)\n'
+            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_REFERRALS_HEADER', '\n👥 <b>Рефералы:</b>\n')
+            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_REFERRALS_TOTAL', '• Всего: {count}\n').format(
+                count=details.get('referral_count', 0)
+            )
+            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_REFERRALS_PAYING', '• Платящих: {count}\n').format(
+                count=rd['paying_referrals']
+            )
+            text += texts.t(
+                'REFERRAL_WITHDRAWAL_ANALYSIS_REFERRALS_DEPOSITS',
+                '• Всего пополнений: {count} ({amount} تومان)\n',
+            ).format(count=rd['total_deposits'], amount=f'{rd["total_amount"] / 100:.0f}')
 
         # Подозрительные рефералы
         if details.get('suspicious_referrals'):
-            text += '\n🚨 <b>Подозрительные рефералы:</b>\n'
+            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_SUSPICIOUS_HEADER', '\n🚨 <b>Подозрительные рефералы:</b>\n')
             for sr in details['suspicious_referrals'][:5]:
-                text += f'• {html.escape(sr["name"])}: {sr["deposits_count"]} поп., {sr["deposits_total"] / 100:.0f} تومان\n'
-                text += f'  Флаги: {", ".join(sr["flags"])}\n'
+                text += texts.t(
+                    'REFERRAL_WITHDRAWAL_ANALYSIS_SUSPICIOUS_ITEM',
+                    '• {name}: {count} поп., {amount} تومان\n',
+                ).format(
+                    name=html.escape(sr['name']),
+                    count=sr['deposits_count'],
+                    amount=f'{sr["deposits_total"] / 100:.0f}',
+                )
+                text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_SUSPICIOUS_FLAGS', '  Флаги: {flags}\n').format(
+                    flags=', '.join(sr['flags'])
+                )
 
         # Источники дохода
         if 'earnings_by_reason' in details:
-            text += '\n📊 <b>Источники дохода:</b>\n'
+            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_EARNINGS_HEADER', '\n📊 <b>Источники дохода:</b>\n')
             reason_names = {
-                'referral_first_topup': 'Бонус за 1-е пополнение',
-                'referral_commission_topup': 'Комиссия с пополнений',
-                'referral_commission': 'Комиссия с покупок',
+                'referral_first_topup': texts.t('REFERRAL_WITHDRAWAL_REASON_FIRST_TOPUP', 'Бонус за 1-е пополнение'),
+                'referral_commission_topup': texts.t('REFERRAL_WITHDRAWAL_REASON_COMMISSION_TOPUP', 'Комиссия с пополнений'),
+                'referral_commission': texts.t('REFERRAL_WITHDRAWAL_REASON_COMMISSION', 'Комиссия с покупок'),
             }
             for reason, data in details['earnings_by_reason'].items():
                 name = reason_names.get(reason, reason)
-                text += f'• {name}: {data["count"]} шт. ({data["total"] / 100:.0f} تومان)\n'
+                text += texts.t(
+                    'REFERRAL_WITHDRAWAL_ANALYSIS_EARNINGS_ITEM',
+                    '• {name}: {count} шт. ({amount} تومان)\n',
+                ).format(name=name, count=data['count'], amount=f'{data["total"] / 100:.0f}')
 
         return text
 

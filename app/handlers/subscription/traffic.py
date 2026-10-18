@@ -517,35 +517,55 @@ async def refresh_traffic_config():
         return False
 
 
-async def get_traffic_packages_info() -> str:
+async def get_traffic_packages_info(language: str | None = None) -> str:
+    texts = get_texts(language)
     try:
         packages = settings.get_traffic_packages()
 
-        info_lines = ['📦 Настроенные пакеты трафика:']
+        info_lines = [texts.t('TRAFFIC_PACKAGES_INFO_HEADER', '📦 Настроенные пакеты трафика:')]
+
+        gb_suffix = texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ')
+        unlimited_text = texts.t('TRAFFIC_PACKAGES_INFO_UNLIMITED', '♾️ Безлимит')
 
         enabled_packages = [pkg for pkg in packages if pkg['enabled']]
         disabled_packages = [pkg for pkg in packages if not pkg['enabled']]
 
         if enabled_packages:
-            info_lines.append('\n✅ Активные:')
+            info_lines.append(texts.t('TRAFFIC_PACKAGES_INFO_ENABLED', '\n✅ Активные:'))
             for pkg in enabled_packages:
-                gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                info_lines.append(f'   • {gb_text}: {pkg["price"] // 100} تومان')
+                gb_text = unlimited_text if pkg['gb'] == 0 else f'{pkg["gb"]}{gb_suffix}'
+                info_lines.append(
+                    texts.t('TRAFFIC_PACKAGES_INFO_LINE', '   • {gb_text}: {price} تومان').format(
+                        gb_text=gb_text, price=pkg['price'] // 100
+                    )
+                )
 
         if disabled_packages:
-            info_lines.append('\n❌ Отключенные:')
+            info_lines.append(texts.t('TRAFFIC_PACKAGES_INFO_DISABLED', '\n❌ Отключенные:'))
             for pkg in disabled_packages:
-                gb_text = '♾️ Безлимит' if pkg['gb'] == 0 else f'{pkg["gb"]} ГБ'
-                info_lines.append(f'   • {gb_text}: {pkg["price"] // 100} تومان')
+                gb_text = unlimited_text if pkg['gb'] == 0 else f'{pkg["gb"]}{gb_suffix}'
+                info_lines.append(
+                    texts.t('TRAFFIC_PACKAGES_INFO_LINE', '   • {gb_text}: {price} تومان').format(
+                        gb_text=gb_text, price=pkg['price'] // 100
+                    )
+                )
 
-        info_lines.append(f'\n📊 Всего пакетов: {len(packages)}')
-        info_lines.append(f'🟢 Активных: {len(enabled_packages)}')
-        info_lines.append(f'🔴 Отключенных: {len(disabled_packages)}')
+        info_lines.append(
+            texts.t('TRAFFIC_PACKAGES_INFO_TOTAL', '\n📊 Всего пакетов: {count}').format(count=len(packages))
+        )
+        info_lines.append(
+            texts.t('TRAFFIC_PACKAGES_INFO_ENABLED_COUNT', '🟢 Активных: {count}').format(count=len(enabled_packages))
+        )
+        info_lines.append(
+            texts.t('TRAFFIC_PACKAGES_INFO_DISABLED_COUNT', '🔴 Отключенных: {count}').format(
+                count=len(disabled_packages)
+            )
+        )
 
         return '\n'.join(info_lines)
 
     except Exception as e:
-        return f'⚠️ Ошибка получения информации: {e}'
+        return texts.t('TRAFFIC_PACKAGES_INFO_ERROR', '⚠️ Ошибка получения информации: {error}').format(error=e)
 
 
 async def select_traffic(callback: types.CallbackQuery, state: FSMContext, db_user: User):

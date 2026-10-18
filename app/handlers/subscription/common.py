@@ -183,14 +183,14 @@ def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None, language
     if is_fixed_mode is None:
         is_fixed_mode = settings.is_traffic_fixed()
 
-    is_fa = (language or 'ru').split('-')[0].lower() == 'fa'
+    texts = get_texts((language or 'ru').split('-')[0].lower())
     if traffic_gb == 0:
         if is_fixed_mode:
-            return 'نامحدود' if is_fa else 'Безлимитный'
-        return 'نامحدود' if is_fa else 'Безлимитный'
+            return texts.t('SUBSCRIPTION_SUMMARY_TRAFFIC_UNLIMITED', 'Безлимитный')
+        return texts.t('SUBSCRIPTION_SUMMARY_TRAFFIC_UNLIMITED', 'Безлимитный')
     if is_fixed_mode:
-        return f'{traffic_gb} گیگ' if is_fa else f'{traffic_gb} ГБ'
-    return f'{traffic_gb} گیگ' if is_fa else f'{traffic_gb} ГБ'
+        return texts.t('COMMON_TRAFFIC_GB_VALUE', '{traffic} ГБ').format(traffic=traffic_gb)
+    return texts.t('COMMON_TRAFFIC_GB_VALUE', '{traffic} ГБ').format(traffic=traffic_gb)
 
 
 def validate_traffic_price(gb: int) -> bool:
@@ -676,7 +676,7 @@ def get_traffic_switch_keyboard(
         if gb == 0:
             traffic_text = texts.t('TRAFFIC_SWITCH_UNLIMITED', 'Безлимит')
         else:
-            traffic_text = f'{gb} ГБ'
+            traffic_text = texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=gb)
 
         button_text = f'{emoji} {traffic_text}{action_text}{price_text}'
 

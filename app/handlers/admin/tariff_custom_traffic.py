@@ -21,54 +21,86 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_price_kopeks
 
 
-def _format_custom_traffic_value(value: int | None, suffix: str = '') -> str:
+def _format_custom_traffic_value(value: int | None, suffix: str = '', texts=None) -> str:
     """Format an optional positive custom-traffic value for the admin UI."""
+    if texts is None:
+        texts = get_texts()
     if value is None or value <= 0:
-        return 'Не задано'
+        return texts.t('ADMIN_TARIFF_CT_NOT_SET', 'Не задано')
     return f'{value}{suffix}'
 
 
-def format_custom_traffic_settings(tariff: Tariff) -> str:
+def format_custom_traffic_settings(tariff: Tariff, texts=None) -> str:
     """Format custom-traffic state for the main tariff card."""
+    if texts is None:
+        texts = get_texts()
     enabled = getattr(tariff, 'custom_traffic_enabled', False)
     price = getattr(tariff, 'traffic_price_per_gb_kopeks', None)
     minimum = getattr(tariff, 'min_traffic_gb', None)
     maximum = getattr(tariff, 'max_traffic_gb', None)
 
-    status = '✅ Включено' if enabled else '❌ Выключено'
-    price_display = format_price_kopeks(price) if price is not None and price > 0 else 'Не задано'
-    minimum_display = _format_custom_traffic_value(minimum, ' ГБ')
-    maximum_display = _format_custom_traffic_value(maximum, ' ГБ')
-
-    return (
-        f'{status}\n'
-        f'• Цена за 1 ГБ: {price_display}\n'
-        f'• Минимальный объём: {minimum_display}\n'
-        f'• Максимальный объём: {maximum_display}'
+    status = (
+        texts.t('ADMIN_TARIFF_CT_CARD_STATUS_ON', '✅ Включено')
+        if enabled
+        else texts.t('ADMIN_TARIFF_CT_CARD_STATUS_OFF', '❌ Выключено')
     )
+    price_display = (
+        format_price_kopeks(price)
+        if price is not None and price > 0
+        else texts.t('ADMIN_TARIFF_CT_NOT_SET', 'Не задано')
+    )
+    gb_suffix = texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ')
+    minimum_display = _format_custom_traffic_value(minimum, gb_suffix, texts)
+    maximum_display = _format_custom_traffic_value(maximum, gb_suffix, texts)
+
+    return texts.t(
+        'ADMIN_TARIFF_CT_CARD_BODY',
+        '{status}\n'
+        '• Цена за 1 ГБ: {price}\n'
+        '• Минимальный объём: {minimum}\n'
+        '• Максимальный объём: {maximum}',
+    ).format(status=status, price=price_display, minimum=minimum_display, maximum=maximum_display)
 
 
-def render_custom_traffic_settings(tariff: Tariff) -> str:
+def render_custom_traffic_settings(tariff: Tariff, texts=None) -> str:
     """Render the dedicated custom-traffic settings screen."""
+    if texts is None:
+        texts = get_texts()
     enabled = getattr(tariff, 'custom_traffic_enabled', False)
     price = getattr(tariff, 'traffic_price_per_gb_kopeks', None)
     minimum = getattr(tariff, 'min_traffic_gb', None)
     maximum = getattr(tariff, 'max_traffic_gb', None)
 
-    status = '✅ Включён' if enabled else '❌ Выключен'
-    price_display = format_price_kopeks(price) if price is not None and price > 0 else 'Не задано'
-    minimum_display = _format_custom_traffic_value(minimum, ' ГБ')
-    maximum_display = _format_custom_traffic_value(maximum, ' ГБ')
+    status = (
+        texts.t('ADMIN_TARIFF_CT_SCREEN_STATUS_ON', '✅ Включён')
+        if enabled
+        else texts.t('ADMIN_TARIFF_CT_SCREEN_STATUS_OFF', '❌ Выключен')
+    )
+    price_display = (
+        format_price_kopeks(price)
+        if price is not None and price > 0
+        else texts.t('ADMIN_TARIFF_CT_NOT_SET', 'Не задано')
+    )
+    gb_suffix = texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ')
+    minimum_display = _format_custom_traffic_value(minimum, gb_suffix, texts)
+    maximum_display = _format_custom_traffic_value(maximum, gb_suffix, texts)
 
-    return (
-        f'⚙️ <b>Произвольный трафик</b>\n\n'
-        f'Тариф: <b>{html.escape(tariff.name)}</b>\n\n'
-        f'Статус: {status}\n'
-        f'Цена за 1 ГБ: <b>{price_display}</b>\n'
-        f'Минимальный объём: <b>{minimum_display}</b>\n'
-        f'Максимальный объём: <b>{maximum_display}</b>\n\n'
+    return texts.t(
+        'ADMIN_TARIFF_CT_SCREEN_BODY',
+        '⚙️ <b>Произвольный трафик</b>\n\n'
+        'Тариф: <b>{tariff_name}</b>\n\n'
+        'Статус: {status}\n'
+        'Цена за 1 ГБ: <b>{price}</b>\n'
+        'Минимальный объём: <b>{minimum}</b>\n'
+        'Максимальный объём: <b>{maximum}</b>\n\n'
         'Пользователь сможет выбрать объём трафика в указанных границах. '
-        'Цена выбранного объёма добавляется к цене периода.'
+        'Цена выбранного объёма добавляется к цене периода.',
+    ).format(
+        tariff_name=html.escape(tariff.name),
+        status=status,
+        price=price_display,
+        minimum=minimum_display,
+        maximum=maximum_display,
     )
 
 
@@ -274,7 +306,9 @@ async def start_edit_custom_traffic_min(
         await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
 
-    current = _format_custom_traffic_value(getattr(tariff, 'min_traffic_gb', None), ' ГБ')
+    current = _format_custom_traffic_value(
+        getattr(tariff, 'min_traffic_gb', None), texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ'), texts
+    )
     await _start_custom_traffic_field_edit(
         callback,
         db_user,
@@ -306,7 +340,9 @@ async def start_edit_custom_traffic_max(
         await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
         return
 
-    current = _format_custom_traffic_value(getattr(tariff, 'max_traffic_gb', None), ' ГБ')
+    current = _format_custom_traffic_value(
+        getattr(tariff, 'max_traffic_gb', None), texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ'), texts
+    )
     await _start_custom_traffic_field_edit(
         callback,
         db_user,
@@ -326,13 +362,16 @@ async def _load_custom_traffic_tariff_from_state(
     message: types.Message,
     db: AsyncSession,
     state: FSMContext,
+    texts=None,
 ) -> Tariff | None:
     """Resolve the selected tariff and clear stale FSM state if it disappeared."""
+    if texts is None:
+        texts = get_texts()
     state_data = await state.get_data()
     tariff_id = state_data.get('tariff_id')
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
-        await message.answer('Тариф не найден')
+        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
     return tariff
 
@@ -347,7 +386,7 @@ async def _send_custom_traffic_update_result(
     """Finish a successful field edit and show the refreshed settings screen."""
     await state.clear()
     await message.answer(
-        f'{confirmation}\n\n{render_custom_traffic_settings(tariff)}',
+        f'{confirmation}\n\n{render_custom_traffic_settings(tariff, get_texts(db_user.language))}',
         reply_markup=get_custom_traffic_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -363,7 +402,7 @@ async def process_custom_traffic_price_input(
 ):
     """Persist a validated custom-traffic price per gigabyte."""
     texts = get_texts(db_user.language)
-    tariff = await _load_custom_traffic_tariff_from_state(message, db, state)
+    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, texts)
     if tariff is None:
         return
 
@@ -402,7 +441,7 @@ async def process_custom_traffic_min_input(
 ):
     """Persist a validated minimum selectable traffic amount."""
     texts = get_texts(db_user.language)
-    tariff = await _load_custom_traffic_tariff_from_state(message, db, state)
+    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, texts)
     if tariff is None:
         return
 
@@ -448,7 +487,7 @@ async def process_custom_traffic_max_input(
 ):
     """Persist a validated maximum selectable traffic amount."""
     texts = get_texts(db_user.language)
-    tariff = await _load_custom_traffic_tariff_from_state(message, db, state)
+    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, texts)
     if tariff is None:
         return
 

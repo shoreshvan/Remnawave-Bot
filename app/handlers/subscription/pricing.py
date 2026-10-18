@@ -144,11 +144,15 @@ async def _prepare_subscription_summary(
         if final_traffic_gb == 0:
             traffic_display = texts.t('SUBSCRIPTION_SUMMARY_TRAFFIC_UNLIMITED', 'Безлимитный')
         else:
-            traffic_display = f'{final_traffic_gb} ГБ'
+            traffic_display = texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(
+                traffic=final_traffic_gb
+            )
     elif summary_data.get('traffic_gb', 0) == 0:
         traffic_display = texts.t('SUBSCRIPTION_SUMMARY_TRAFFIC_UNLIMITED', 'Безлимитный')
     else:
-        traffic_display = f'{summary_data.get("traffic_gb", 0)} ГБ'
+        traffic_display = texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(
+            traffic=summary_data.get('traffic_gb', 0)
+        )
 
     # Resolve country display names (still needed for the summary text)
     countries = await _get_available_countries(db_user.promo_group_id)
@@ -348,9 +352,9 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         else:
             traffic_text = texts.t('SUBSCRIPTION_INFO_TRAFFIC_UNLIMITED', '∞ Безлимитный')
     elif settings.is_traffic_fixed():
-        traffic_text = f'{traffic_limit} ГБ'
+        traffic_text = texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_limit)
     else:
-        traffic_text = f'{traffic_limit} ГБ'
+        traffic_text = texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_limit)
 
     subscription_cost = await get_subscription_cost(subscription, db)
 
@@ -358,7 +362,9 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
 
     if not devices_selection_enabled:
         info_template = info_template.replace(
-            '\n📱 <b>Устройства:</b> {devices_used} / {devices_limit}',
+            texts.t(
+                'SUBSCRIPTION_INFO_DEVICES_LINE', '\n📱 <b>Устройства:</b> {devices_used} / {devices_limit}'
+            ),
             '',
         ).replace(
             '\n📱 <b>Devices:</b> {devices_used} / {devices_limit}',
@@ -442,7 +448,9 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
                         'осталось {days} дней',
                     ).format(days=days_remaining)
 
-                info_text += f'\n• {purchase.traffic_gb} ГБ — {time_text}'
+                info_text += texts.t(
+                    'SUBSCRIPTION_INFO_TRAFFIC_ITEM_LINE', '\n• {gb} ГБ — {time_text}'
+                ).format(gb=purchase.traffic_gb, time_text=time_text)
                 info_text += texts.t(
                     'SUBSCRIPTION_INFO_TRAFFIC_PROGRESS',
                     '\n  {bar} {percent:.0f}% | до {date}',

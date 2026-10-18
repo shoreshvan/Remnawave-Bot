@@ -38,42 +38,54 @@ def _status_emoji(sub) -> str:
     return '🔴'
 
 
-def _status_label(sub) -> str:
+def _status_label(sub, texts=None) -> str:
     """Return a short human-readable status label for non-active subscriptions."""
+    if texts is None:
+        texts = get_texts()
     actual = sub.actual_status
     if actual == 'expired':
-        return ' (Истекла)'
+        return texts.t('MY_SUBS_STATUS_SUFFIX_EXPIRED', ' (Истекла)')
     if actual == 'disabled':
-        return ' (Отключена)'
+        return texts.t('MY_SUBS_STATUS_SUFFIX_DISABLED', ' (Отключена)')
     if actual == 'limited':
-        return ' (Лимит)'
+        return texts.t('MY_SUBS_STATUS_SUFFIX_LIMITED', ' (Лимит)')
     return ''
 
 
-def _format_subscription_line(sub, idx: int) -> str:
+def _format_subscription_line(sub, idx: int, texts=None) -> str:
     """Format a single subscription for the list view."""
-    tariff_name = sub.tariff.name if sub.tariff else 'Подписка'
+    if texts is None:
+        texts = get_texts()
+    tariff_name = sub.tariff.name if sub.tariff else texts.t('MY_SUBS_TARIFF_FALLBACK_PLAIN', 'Подписка')
     emoji = _status_emoji(sub)
-    label = _status_label(sub)
+    label = _status_label(sub, texts)
 
     # Traffic info
     if sub.traffic_limit_gb == 0:
         traffic = '∞'
     else:
         used = f'{sub.traffic_used_gb:.1f}' if sub.traffic_used_gb else '0'
-        traffic = f'{used}/{sub.traffic_limit_gb} ГБ'
+        traffic = texts.t('MY_SUBS_TRAFFIC_USAGE', '{used}/{limit} ГБ').format(
+            used=used, limit=sub.traffic_limit_gb
+        )
 
     # Devices
-    devices = f'{Texts.format_device_limit(sub.device_limit)} устр.' if sub.device_limit is not None else ''
+    devices = (
+        texts.t('MY_SUBS_DEVICES_SHORT', '{devices} устр.').format(
+            devices=Texts.format_device_limit(sub.device_limit)
+        )
+        if sub.device_limit is not None
+        else ''
+    )
 
     # End date
     end_date = format_local_datetime(sub.end_date, '%d.%m.%Y') if sub.end_date else '—'
 
     parts = [f'{emoji} <b>{idx}. {tariff_name}</b>{label}']
-    parts.append(f'   📊 Трафик: {traffic}')
+    parts.append(texts.t('MY_SUBS_LINE_TRAFFIC', '   📊 Трафик: {traffic}').format(traffic=traffic))
     if devices:
-        parts.append(f'   📱 Устройства: {devices}')
-    parts.append(f'   📅 До: {end_date}')
+        parts.append(texts.t('MY_SUBS_LINE_DEVICES', '   📱 Устройства: {devices}').format(devices=devices))
+    parts.append(texts.t('MY_SUBS_LINE_UNTIL', '   📅 До: {date}').format(date=end_date))
 
     return '\n'.join(parts)
 
@@ -128,40 +140,86 @@ def _build_subscriptions_keyboard(
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _build_subscription_detail_keyboard(sub_id: int, sub=None) -> types.InlineKeyboardMarkup:
+def _build_subscription_detail_keyboard(sub_id: int, sub=None, texts=None) -> types.InlineKeyboardMarkup:
     """Build keyboard for single subscription management.
 
     For expired/disabled subscriptions, only 'Renew' and 'Back' are shown —
     connection link and traffic/device management are irrelevant.
     """
+    if texts is None:
+        texts = get_texts()
     is_inactive = sub is not None and sub.actual_status in ('expired', 'disabled')
 
     buttons = []
 
     if not is_inactive:
-        buttons.append([types.InlineKeyboardButton(text='🔗 Ссылка подключения', callback_data=f'sl:{sub_id}')])
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('MY_SUBS_DETAIL_BTN_LINK', '🔗 Ссылка подключения'), callback_data=f'sl:{sub_id}'
+                )
+            ]
+        )
 
-    buttons.append([types.InlineKeyboardButton(text='🔄 Продлить', callback_data=f'se:{sub_id}')])
+    buttons.append(
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('MY_SUBS_DETAIL_BTN_RENEW', '🔄 Продлить'), callback_data=f'se:{sub_id}'
+            )
+        ]
+    )
 
     if not is_inactive:
-        buttons.append([types.InlineKeyboardButton(text='💳 Автоплатеж', callback_data='subscription_autopay')])
-        buttons.append([types.InlineKeyboardButton(text='📊 Трафик', callback_data=f'st:{sub_id}')])
-        buttons.append([types.InlineKeyboardButton(text='📱 Устройства', callback_data=f'sd:{sub_id}')])
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('MY_SUBS_DETAIL_BTN_AUTOPAY', '💳 Автоплатеж'),
+                    callback_data='subscription_autopay',
+                )
+            ]
+        )
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('MY_SUBS_DETAIL_BTN_TRAFFIC', '📊 Трафик'), callback_data=f'st:{sub_id}'
+                )
+            ]
+        )
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('MY_SUBS_DETAIL_BTN_DEVICES', '📱 Устройства'), callback_data=f'sd:{sub_id}'
+                )
+            ]
+        )
 
     if is_inactive:
-        buttons.append([types.InlineKeyboardButton(text='🗑 Удалить подписку', callback_data=f'sub_del:{sub_id}')])
+        buttons.append(
+            [
+                types.InlineKeyboardButton(
+                    text=texts.t('MY_SUBS_DETAIL_BTN_DELETE', '🗑 Удалить подписку'),
+                    callback_data=f'sub_del:{sub_id}',
+                )
+            ]
+        )
 
     if not is_inactive and settings.is_subscription_revoke_enabled():
         buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text='🔄 Перевыпустить',
+                    text=texts.t('MY_SUBS_DETAIL_BTN_REISSUE', '🔄 Перевыпустить'),
                     callback_data=f'sr:{sub_id}',
                 )
             ]
         )
 
-    buttons.append([types.InlineKeyboardButton(text='◀️ К списку подписок', callback_data='my_subscriptions')])
+    buttons.append(
+        [
+            types.InlineKeyboardButton(
+                text=texts.t('MY_SUBS_DETAIL_BTN_BACK', '◀️ К списку подписок'), callback_data='my_subscriptions'
+            )
+        ]
+    )
 
     return types.InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -207,7 +265,7 @@ async def show_my_subscriptions(
     else:
         lines = [texts.t('MY_SUBS_LIST_HEADER', '📋 <b>Мои подписки</b>\n')]
         for idx, sub in enumerate(subscriptions, 1):
-            lines.append(_format_subscription_line(sub, idx))
+            lines.append(_format_subscription_line(sub, idx, texts))
             lines.append('')  # empty line between subscriptions
         text = '\n'.join(lines)
         keyboard = _build_subscriptions_keyboard(subscriptions, db_user.language, gift_enabled=gift_enabled)
@@ -247,10 +305,12 @@ async def show_subscription_detail(
 
     # Traffic
     if subscription.traffic_limit_gb == 0:
-        traffic = '∞ ГБ'
+        traffic = texts.t('MY_SUBS_DETAIL_TRAFFIC_UNLIMITED', '∞ ГБ')
     else:
         used = f'{subscription.traffic_used_gb:.1f}' if subscription.traffic_used_gb else '0'
-        traffic = f'{used} / {subscription.traffic_limit_gb} ГБ'
+        traffic = texts.t('MY_SUBS_DETAIL_TRAFFIC_USAGE', '{used} / {limit} ГБ').format(
+            used=used, limit=subscription.traffic_limit_gb
+        )
 
     end_date = format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M') if subscription.end_date else '—'
     status = subscription.status_display
@@ -273,7 +333,7 @@ async def show_subscription_detail(
     if subscription.subscription_url and not settings.should_hide_subscription_link():
         text += f'\n🔗 <code>{subscription.subscription_url}</code>'
 
-    keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription)
+    keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription, texts=texts)
 
     if callback.message:
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
