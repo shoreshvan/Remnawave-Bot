@@ -194,7 +194,10 @@ class NowPaymentsService:
         """
         if invoice_id is None or str(invoice_id) == '':
             raise ValueError('NOWPayments get_invoice_status: invoice_id is required')
-        return await self._request('GET', f'/invoice/{invoice_id}', allow_404=True)
+        result = await self._request('GET', f'/invoice/{invoice_id}', allow_404=True)
+        if result is None:
+            logger.warning('NOWPayments invoice endpoint: no result (404 or empty)', invoice_id=invoice_id)
+        return result
 
     # ------------------------------------------------------------------
     # IPN signature (docs recipe, byte-exact)

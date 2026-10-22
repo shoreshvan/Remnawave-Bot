@@ -190,6 +190,57 @@ def create_unified_app(
         # о зачислении), и пул БД — то есть до всех остановок ниже.
         shutdown_handlers.append(payments.drain_webhook_bg_tasks)
 
+        # NOWPayments background reconciliation: scan pending/processing invoices
+        # every 5 minutes and auto-credit the ones that became finished. Covers
+        # the case where IPN never delivered (e.g. invoice created before
+        # WEBHOOK_URL was set) — the only other recovery is the manual button.
+        if settings.is_nowpayments_enabled():
+
+            async def _nowpayments_reconcile_loop() -> None:
+                import asyncio
+
+                from app.database.database import AsyncSessionLocal
+                from app.services.payment.nowpayments import (
+                    reconcile_pending_nowpayments_payments,
+                )
+
+                while True:
+                    try:
+                        await asyncio.sleep(300)
+                    except asyncio.CancelledError:
+                        raise
+                    try:
+                        async with AsyncSessionLocal() as session:
+                            credited = await reconcile_pending_nowpayments_payments(
+                                session, bot
+                            )
+                            await session.commit()
+                            if credited:
+                                logger.info(
+                                    'NOWPayments reconciliation credited payments',
+                                    credited=credited,
+                                )
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as error:
+                        logger.error('NOWPayments reconciliation pass failed', error=error)
+
+            async def _start_nowpayments_reconcile() -> None:
+                task = asyncio.create_task(_nowpayments_reconcile_loop())
+                app.state.nowpayments_reconcile_task = task
+
+            async def _stop_nowpayments_reconcile() -> None:
+                task = getattr(app.state, 'nowpayments_reconcile_task', None)
+                if task is not None:
+                    task.cancel()
+                    try:
+                        await task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+
+            startup_handlers.append(_start_nowpayments_reconcile)
+            shutdown_handlers.append(_stop_nowpayments_reconcile)
+
     # Mount RemnaWave incoming webhook router
     remnawave_webhook_enabled = settings.is_remnawave_webhook_enabled()
     if remnawave_webhook_enabled:

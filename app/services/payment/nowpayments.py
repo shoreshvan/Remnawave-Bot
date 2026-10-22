@@ -378,6 +378,42 @@ class NowpaymentsPaymentMixin:
                 pay_amount=str(payload.get('pay_amount')) if payload.get('pay_amount') is not None else None,
                 callback_payload=callback_payload,
             )
+            # Notify admin + user about the underpayment so it doesn't sit
+            # unnoticed. Best-effort: never fail the webhook on notify errors.
+            if getattr(self, 'bot', None):
+                try:
+                    from app.services.admin_notification_service import AdminNotificationService
+
+                    notification_service = AdminNotificationService(self.bot)
+                    await notification_service.send_admin_notification(
+                        text=(
+                            '⚠️ NOWPayments underpayment (manual review)'
+                            + chr(10)
+                            + 'Order: ' + str(payment.order_id)
+                            + chr(10)
+                            + 'Expected: ' + str(payment.amount_kopeks) + ' kopeks'
+                            + chr(10)
+                            + 'Actually paid: ' + str(payload.get('actually_paid')) + ' ' + str(payload.get('pay_currency') or '')
+                            + chr(10)
+                            + 'User id: ' + str(payment.user_id)
+                        ),
+                    )
+                except Exception as error:
+                    logger.error('NOWPayments admin notification (underpayment) error', error=error)
+                try:
+                    payment_module = import_module('app.services.payment_service')
+                    user = await payment_module.get_user_by_id(db, payment.user_id)
+                    if user and getattr(user, 'telegram_id', None):
+                        texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                        await self.bot.send_message(
+                            user.telegram_id,
+                            texts.t(
+                                'NOWPAYMENTS_UNDERPAID_REVIEW',
+                                '⚠️ مبلغ واریزی کمتر از مبلغ فاکتور است و در انتظار بررسی پشتیبانی است.',
+                            ),
+                        )
+                except Exception as error:
+                    logger.error('NOWPayments user notification (underpayment) error', error=error)
             return True
 
         except Exception as e:
@@ -771,3 +807,93 @@ class NowpaymentsPaymentMixin:
         except Exception as e:
             logger.exception('NOWPayments: status check error', error=e)
             return None
+
+    async def force_credit_nowpayments_payment(
+        self,
+        db: AsyncSession,
+        order_id: str,
+        *,
+        trigger: str = 'admin_force',
+    ) -> Any:
+        nowpayments_crud = import_module('app.database.crud.nowpayments')
+
+        payment = await nowpayments_crud.get_nowpayments_payment_by_order_id(db, order_id)
+        if not payment:
+            logger.warning('NOWPayments force-credit: payment not found', order_id=order_id)
+            return None
+        if payment.is_paid:
+            logger.info('NOWPayments force-credit: already paid', order_id=order_id)
+            return payment
+        if (payment.status or '').lower() in {'failed', 'refunded', 'expired', 'success'}:
+            logger.warning('NOWPayments force-credit: refused for status', order_id=order_id, status=payment.status)
+            return None
+
+        locked = await nowpayments_crud.get_nowpayments_payment_by_id_for_update(db, payment.id)
+        if not locked:
+            logger.error('NOWPayments force-credit: failed to lock', order_id=order_id)
+            return None
+        payment = locked
+        if payment.is_paid:
+            return payment
+
+        event_key = f'{payment.order_id}:force_credit'
+        nowpayments_crud.remember_nowpayments_event(payment, event_key)
+
+        payment.status = 'success'
+        payment.is_paid = True
+        payment.paid_at = datetime.now(UTC)
+        payment.updated_at = datetime.now(UTC)
+        await db.flush()
+
+        ok = await self._finalize_nowpayments_payment(db, payment, trigger=trigger)
+        if not ok:
+            await db.rollback()
+            return None
+        await db.commit()
+        logger.info('NOWPayments force-credited', order_id=order_id, trigger=trigger)
+        return payment
+
+
+async def reconcile_pending_nowpayments_payments(db: AsyncSession, bot) -> int:
+    """Best-effort reconciliation of pending/processing NOWPayments invoices.
+
+    Scans all pending/processing invoices and runs the authoritative status
+    check for each. Returns the number that became paid during this pass.
+    Safe to call repeatedly; per-payment errors are swallowed.
+    """
+    from sqlalchemy import select
+
+    from app.database.models import NowPaymentsPayment
+    from app.services.payment_service import PaymentService
+
+    payment_service = PaymentService(bot)
+    credited = 0
+
+    try:
+        result = await db.execute(
+            select(NowPaymentsPayment).where(
+                NowPaymentsPayment.status.in_(['pending', 'processing']),
+            )
+        )
+        payments = list(result.scalars().all())
+    except Exception as error:
+        logger.error('NOWPayments reconciliation: failed to load pending payments', error=error)
+        return 0
+
+    for payment in payments:
+        try:
+            outcome = await payment_service.check_nowpayments_payment_status(db, payment.order_id)
+            if outcome and outcome.get('is_paid'):
+                credited += 1
+                await db.commit()
+        except Exception as error:
+            logger.error(
+                'NOWPayments reconciliation: check failed',
+                order_id=getattr(payment, 'order_id', None),
+                error=error,
+            )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+    return credited
