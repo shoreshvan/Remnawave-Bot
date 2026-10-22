@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -197,8 +198,6 @@ def create_unified_app(
         if settings.is_nowpayments_enabled():
 
             async def _nowpayments_reconcile_loop() -> None:
-                import asyncio
-
                 from app.database.database import AsyncSessionLocal
                 from app.services.payment.nowpayments import (
                     reconcile_pending_nowpayments_payments,
@@ -231,12 +230,15 @@ def create_unified_app(
 
             async def _stop_nowpayments_reconcile() -> None:
                 task = getattr(app.state, 'nowpayments_reconcile_task', None)
-                if task is not None:
-                    task.cancel()
-                    try:
-                        await task
-                    except (asyncio.CancelledError, Exception):
-                        pass
+                if task is None:
+                    return
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    pass
 
             startup_handlers.append(_start_nowpayments_reconcile)
             shutdown_handlers.append(_stop_nowpayments_reconcile)

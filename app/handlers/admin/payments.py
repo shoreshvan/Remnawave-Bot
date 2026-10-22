@@ -749,8 +749,11 @@ async def force_credit_payment_prompt(
     await callback.message.edit_text(
         texts.t(
             'ADMIN_PAYMENT_FORCE_CONFIRM_TEXT',
-            '⚠️ Force-credit this NOWPayments invoice without provider verification?\\n\\n{details}',
-        ).format(details=_build_payment_details_text(record, texts=texts, language=db_user.language)),
+            '⚠️ Force-credit this NOWPayments invoice without provider verification?',
+        )
+        + chr(10)
+        + chr(10)
+        + _build_payment_details_text(record, texts=texts, language=db_user.language),
         parse_mode='HTML',
         reply_markup=keyboard,
     )

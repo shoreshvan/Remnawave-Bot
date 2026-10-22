@@ -857,9 +857,10 @@ class NowpaymentsPaymentMixin:
 async def reconcile_pending_nowpayments_payments(db: AsyncSession, bot) -> int:
     """Best-effort reconciliation of pending/processing NOWPayments invoices.
 
-    Scans all pending/processing invoices and runs the authoritative status
-    check for each. Returns the number that became paid during this pass.
-    Safe to call repeatedly; per-payment errors are swallowed.
+    Scans pending/processing invoices created in the last 7 days (at most 100)
+    and runs the authoritative status check for each. Returns the number that
+    became paid during this pass. Safe to call repeatedly; per-payment errors
+    are swallowed.
     """
     from sqlalchemy import select
 
@@ -868,12 +869,17 @@ async def reconcile_pending_nowpayments_payments(db: AsyncSession, bot) -> int:
 
     payment_service = PaymentService(bot)
     credited = 0
+    cutoff = datetime.now(UTC) - timedelta(days=7)
 
     try:
         result = await db.execute(
-            select(NowPaymentsPayment).where(
+            select(NowPaymentsPayment)
+            .where(
                 NowPaymentsPayment.status.in_(['pending', 'processing']),
+                NowPaymentsPayment.created_at >= cutoff,
             )
+            .order_by(NowPaymentsPayment.created_at.desc())
+            .limit(100)
         )
         payments = list(result.scalars().all())
     except Exception as error:
