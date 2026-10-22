@@ -184,6 +184,18 @@ class NowPaymentsService:
             raise ValueError('NOWPayments get_payment_status: payment_id is required')
         return await self._request('GET', f'/payment/{payment_id}', allow_404=True)
 
+    async def get_invoice_status(self, *, invoice_id: str | int) -> dict[str, Any] | None:
+        """GET /invoice/{id} — invoice info (status mirrors the payment lifecycle).
+
+        Invoice-created payments 404 at ``/payment/{id}`` until the real
+        payment id reaches us (via IPN). The invoice endpoint accepts its own
+        id and carries the lifecycle in ``status``, so it works as the
+        button-press fallback when only the invoice id is known.
+        """
+        if invoice_id is None or str(invoice_id) == '':
+            raise ValueError('NOWPayments get_invoice_status: invoice_id is required')
+        return await self._request('GET', f'/invoice/{invoice_id}', allow_404=True)
+
     # ------------------------------------------------------------------
     # IPN signature (docs recipe, byte-exact)
     # ------------------------------------------------------------------

@@ -674,13 +674,40 @@ class NowpaymentsPaymentMixin:
             if not payment.nowpayments_payment_id:
                 return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': False}
 
+            status_data: dict[str, Any] | None = None
             try:
                 status_data = await nowpayments_service.get_payment_status(
                     payment_id=payment.nowpayments_payment_id
                 )
             except Exception as e:
                 logger.error('Error checking NOWPayments payment status via API', error=e)
-                return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': payment.is_paid}
+
+            if not status_data:
+                # Invoice-created payments 404 at /payment/{id}: the endpoint
+                # only knows the real payment id, which reaches us via IPN.
+                # Without it, fall back to the invoice endpoint — its status
+                # mirrors the payment lifecycle.
+                invoice_ref = payment.invoice_id or payment.nowpayments_payment_id
+                if invoice_ref:
+                    try:
+                        invoice_data = await nowpayments_service.get_invoice_status(invoice_id=invoice_ref)
+                    except Exception as e:
+                        logger.error('Error checking NOWPayments invoice status via API', error=e)
+                        invoice_data = None
+                    if invoice_data:
+                        raw_invoice_status = (
+                            str(invoice_data.get('payment_status') or invoice_data.get('status') or '')
+                            .strip()
+                            .lower()
+                        )
+                        if raw_invoice_status:
+                            status_data = dict(invoice_data)
+                            status_data['payment_status'] = raw_invoice_status
+                            logger.info(
+                                'NOWPayments API check: resolved via invoice endpoint',
+                                order_id=payment.order_id,
+                                invoice_status=raw_invoice_status,
+                            )
 
             if not status_data:
                 logger.warning('NOWPayments API check: payment not found at provider', order_id=payment.order_id)
