@@ -780,7 +780,8 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
         await callback.answer(reason, show_alert=True)
         return
 
-    available = wd_stats.get('available_total', 0) if wd_stats else 0
+    # Decimal из SUM() в PostgreSQL не сериализуется в JSON-хранилище aiogram.
+    available = int(wd_stats.get('available_total', 0) or 0) if wd_stats else 0
 
     # Сохраняем доступный баланс в состоянии
     await state.update_data(available_balance=available)
@@ -814,7 +815,7 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
     """Обрабатывает ввод суммы для вывода."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
-    available = data.get('available_balance', 0)
+    available = int(data.get('available_balance', 0) or 0)
 
     try:
         # Парсим сумму (в рублях)

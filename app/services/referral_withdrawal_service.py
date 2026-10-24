@@ -39,7 +39,7 @@ class ReferralWithdrawalService:
         result = await db.execute(
             select(func.coalesce(func.sum(ReferralEarning.amount_kopeks), 0)).where(ReferralEarning.user_id == user_id)
         )
-        return result.scalar() or 0
+        return int(result.scalar() or 0)
 
     async def get_user_own_deposits(self, db: AsyncSession, user_id: int) -> int:
         """
@@ -54,7 +54,7 @@ class ReferralWithdrawalService:
                 Transaction.payment_method.isnot(None),
             )
         )
-        return result.scalar() or 0
+        return int(result.scalar() or 0)
 
     async def get_first_referral_earning_date(self, db: AsyncSession, user_id: int) -> datetime | None:
         """
@@ -76,7 +76,7 @@ class ReferralWithdrawalService:
                 Transaction.is_completed == True,
             )
         )
-        return abs(result.scalar() or 0)
+        return abs(int(result.scalar() or 0))
 
     async def get_user_spending_after_first_earning(self, db: AsyncSession, user_id: int) -> int:
         """
@@ -95,7 +95,7 @@ class ReferralWithdrawalService:
                 Transaction.created_at >= first_earning_date,
             )
         )
-        return abs(result.scalar() or 0)
+        return abs(int(result.scalar() or 0))
 
     async def get_withdrawn_amount(self, db: AsyncSession, user_id: int) -> int:
         """
@@ -109,7 +109,7 @@ class ReferralWithdrawalService:
                 ),
             )
         )
-        return result.scalar() or 0
+        return int(result.scalar() or 0)
 
     async def get_pending_withdrawal_amount(self, db: AsyncSession, user_id: int) -> int:
         """
@@ -120,7 +120,7 @@ class ReferralWithdrawalService:
                 WithdrawalRequest.user_id == user_id, WithdrawalRequest.status == WithdrawalRequestStatus.PENDING.value
             )
         )
-        return result.scalar() or 0
+        return int(result.scalar() or 0)
 
     async def get_referral_balance_stats(self, db: AsyncSession, user_id: int) -> dict:
         """
@@ -159,14 +159,14 @@ class ReferralWithdrawalService:
             available_total = available_referral
 
         return {
-            'total_earned': total_earned,  # Всего заработано с рефералов
-            'own_deposits': own_deposits,  # Собственные пополнения
-            'spending': spending,  # Потрачено на подписки и пр.
-            'referral_spent': referral_spent,  # Сколько реф. баланса потрачено (аналитика)
-            'withdrawn': withdrawn,  # Уже выведено
-            'pending': pending,  # На рассмотрении
-            'available_referral': available_referral,  # Доступно реф. баланса
-            'available_total': available_total,  # Всего доступно к выводу
+            'total_earned': int(total_earned),  # Всего заработано с рефералов
+            'own_deposits': int(own_deposits),  # Собственные пополнения
+            'spending': int(spending),  # Потрачено на подписки и пр.
+            'referral_spent': int(referral_spent),  # Сколько реф. баланса потрачено (аналитика)
+            'withdrawn': int(withdrawn),  # Уже выведено
+            'pending': int(pending),  # На рассмотрении
+            'available_referral': int(available_referral),  # Доступно реф. баланса
+            'available_total': int(available_total),  # Всего доступно к выводу
             'only_referral_mode': settings.REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE,
         }
 
