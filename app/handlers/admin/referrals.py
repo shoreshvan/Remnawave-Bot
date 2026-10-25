@@ -659,7 +659,12 @@ async def view_withdrawal_request(callback: types.CallbackQuery, db_user: User, 
     )
     user_tg_id = (user.telegram_id or user.email or f'#{user.id}') if user else 'N/A'
 
-    analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
+    try:
+        analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
+    except (json.JSONDecodeError, TypeError):
+        analysis = {}
+    if not isinstance(analysis, dict):
+        analysis = {}
 
     status_text = {
         WithdrawalRequestStatus.PENDING.value: texts.t('ADMIN_REFERRALS_STATUS_PENDING', '⏳ Ожидает'),

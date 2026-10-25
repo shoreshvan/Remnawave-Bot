@@ -77,7 +77,7 @@ async def list_withdrawals(
             WithdrawalRequest.status == WithdrawalRequestStatus.PENDING.value
         )
     )
-    pending_total = pending_total_result.scalar() or 0
+    pending_total = int(pending_total_result.scalar() or 0)
 
     query = query.order_by(desc(WithdrawalRequest.created_at)).offset(offset).limit(limit)
     result = await db.execute(query)
@@ -171,7 +171,7 @@ async def get_withdrawal_detail(
         admin_comment=withdrawal.admin_comment,
         balance_kopeks=user.balance_kopeks if user else 0,
         total_referrals=referral_count.scalar() or 0,
-        total_earnings_kopeks=total_earnings.scalar() or 0,
+        total_earnings_kopeks=int(total_earnings.scalar() or 0),
         created_at=withdrawal.created_at,
         processed_at=withdrawal.processed_at,
     )

@@ -865,7 +865,7 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
 
         await message.answer(text, reply_markup=keyboard)
 
-    except ValueError:
+    except (ValueError, OverflowError):
         await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите корректную сумму'))
 
 
@@ -905,7 +905,7 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
     """Обрабатывает ввод реквизитов и показывает подтверждение."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
-    amount_kopeks = data.get('withdrawal_amount', 0)
+    amount_kopeks = int(data.get('withdrawal_amount', 0) or 0)
     payment_details = message.text.strip()
 
     if len(payment_details) < 10:
@@ -954,8 +954,25 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     """Подтверждает и создаёт заявку на вывод."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
-    amount_kopeks = data.get('withdrawal_amount', 0)
-    payment_details = data.get('payment_details', '')
+    amount_kopeks = int(data.get('withdrawal_amount', 0) or 0)
+    payment_details = str(data.get('payment_details') or '')
+
+    # Защита от устаревшей кнопки/потерянного FSM-состояния: иначе можно
+    # создать заявку на 0 تومان с пустыми реквизитами.
+    if amount_kopeks <= 0:
+        await state.clear()
+        await callback.answer(
+            texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите положительную сумму'),
+            show_alert=True,
+        )
+        return
+    if len(payment_details.strip()) < 10:
+        await state.clear()
+        await callback.answer(
+            texts.t('REFERRAL_WITHDRAWAL_DETAILS_TOO_SHORT', '❌ Реквизиты слишком короткие'),
+            show_alert=True,
+        )
+        return
 
     await state.clear()
 
@@ -969,7 +986,12 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
         return
 
     # Отправляем уведомление админам
-    analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
+    try:
+        analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
+    except (json.JSONDecodeError, TypeError):
+        analysis = {}
+    if not isinstance(analysis, dict):
+        analysis = {}
 
     user_id_display = html_escape(str(db_user.telegram_id or db_user.email or f'#{db_user.id}'))
     safe_name = html_escape(db_user.full_name or texts.t('REFERRAL_WITHDRAWAL_NO_NAME', 'Без имени'))
