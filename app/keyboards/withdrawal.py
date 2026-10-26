@@ -19,17 +19,27 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.database.models import WithdrawalRequestStatus
+from app.localization.texts import get_texts
 
 
-def _actions(request_id: int, status: str) -> list[InlineKeyboardButton]:
+def _actions(request_id: int, status: str, texts) -> list[InlineKeyboardButton]:
     if status == WithdrawalRequestStatus.PENDING.value:
         return [
-            InlineKeyboardButton(text='✅ Одобрить', callback_data=f'admin_withdrawal_approve_{request_id}'),
-            InlineKeyboardButton(text='❌ Отклонить', callback_data=f'admin_withdrawal_reject_{request_id}'),
+            InlineKeyboardButton(
+                text=texts.t('ADMIN_REFERRALS_BTN_APPROVE', '✅ Одобрить'),
+                callback_data=f'admin_withdrawal_approve_{request_id}',
+            ),
+            InlineKeyboardButton(
+                text=texts.t('ADMIN_REFERRALS_BTN_REJECT', '❌ Отклонить'),
+                callback_data=f'admin_withdrawal_reject_{request_id}',
+            ),
         ]
     if status == WithdrawalRequestStatus.APPROVED.value:
         return [
-            InlineKeyboardButton(text='✅ Деньги переведены', callback_data=f'admin_withdrawal_complete_{request_id}')
+            InlineKeyboardButton(
+                text=texts.t('ADMIN_REFERRALS_BTN_MONEY_SENT', '✅ Деньги переведены'),
+                callback_data=f'admin_withdrawal_complete_{request_id}',
+            )
         ]
     return []
 
@@ -41,22 +51,38 @@ def get_withdrawal_request_keyboard(
     user_db_id: int | None = None,
     role: str = 'admin',
     navigation: bool = False,
+    texts=None,
 ) -> InlineKeyboardMarkup | None:
     """Клавиатура заявки по её статусу и роли получателя; ``None`` — кнопок нет."""
     if role not in ('admin', 'group'):
         return None
 
+    if texts is None:
+        texts = get_texts()
+
     rows: list[list[InlineKeyboardButton]] = []
-    actions = _actions(request_id, status)
+    actions = _actions(request_id, status, texts)
     if actions:
         rows.append(actions)
 
     if role == 'admin':
         if user_db_id:
             rows.append(
-                [InlineKeyboardButton(text='👤 Профиль пользователя', callback_data=f'admin_user_manage_{user_db_id}')]
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('ADMIN_REFERRALS_BTN_USER_PROFILE', '👤 Профиль пользователя'),
+                        callback_data=f'admin_user_manage_{user_db_id}',
+                    )
+                ]
             )
         if navigation:
-            rows.append([InlineKeyboardButton(text='⬅️ К списку', callback_data='admin_withdrawal_requests')])
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=texts.t('ADMIN_REFERRALS_BTN_BACK', '⬅️ К списку'),
+                        callback_data='admin_withdrawal_requests',
+                    )
+                ]
+            )
 
     return InlineKeyboardMarkup(inline_keyboard=rows) if rows else None

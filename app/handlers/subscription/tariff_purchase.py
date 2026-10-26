@@ -1361,7 +1361,10 @@ async def handle_custom_confirm(
             db,
             db_user,
             total_price,
-            f'Покупка тарифа {tariff.name} на {custom_days} дней',
+            texts.t(
+                'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION',
+                'Покупка тарифа {tariff} на {days} дней',
+            ).format(tariff=tariff.name, days=custom_days),
             consume_promo_offer=consume_promo,
             mark_as_paid_subscription=True,
         )
@@ -1509,7 +1512,10 @@ async def handle_custom_confirm(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=total_price,
-            description=f'Покупка тарифа {tariff.name} на {custom_days} дней',
+            description=texts.t(
+                'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION',
+                'Покупка тарифа {tariff} на {days} дней',
+            ).format(tariff=tariff.name, days=custom_days),
         )
 
         # Отправляем уведомление админу
@@ -1761,7 +1767,10 @@ async def select_tariff_period(
             'saved_cart': True,
             'missing_amount': missing,
             'return_to_cart': True,
-            'description': f'Покупка тарифа {tariff.name} на {period} дней',
+            'description': texts.t(
+                'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION',
+                'Покупка тарифа {tariff} на {days} дней',
+            ).format(tariff=tariff.name, days=period),
             'traffic_limit_gb': tariff.traffic_limit_gb,
             'device_limit': shown_device_limit,
             'allowed_squads': tariff.allowed_squads or [],
@@ -1925,7 +1934,10 @@ async def confirm_tariff_purchase(
             db,
             db_user,
             final_price,
-            f'Покупка тарифа {tariff.name} на {period} дней',
+            texts.t(
+                'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION',
+                'Покупка тарифа {tariff} на {days} дней',
+            ).format(tariff=tariff.name, days=period),
             consume_promo_offer=consume_promo,
             mark_as_paid_subscription=True,
         )
@@ -2189,7 +2201,10 @@ async def confirm_tariff_purchase(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
-            description=f'Покупка тарифа {tariff.name} на {period} дней',
+            description=texts.t(
+                'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION',
+                'Покупка тарифа {tariff} на {days} дней',
+            ).format(tariff=tariff.name, days=period),
         )
     except Exception as e:
         logger.error('Ошибка создания транзакции', error=e)

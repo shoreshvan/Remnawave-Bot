@@ -952,7 +952,16 @@ async def _auto_purchase_tariff(
 
     # Списываем баланс
     try:
-        description = f'Покупка тарифа {tariff.name} на {format_days_declension(period_days)}'
+        description = get_texts(getattr(user, 'language', 'ru')).t(
+            'TARIFF_AUTO_PURCHASE_TRANSACTION_DESCRIPTION',
+            'Покупка тарифа {tariff} на {days}',
+        ).format(
+            tariff=tariff.name,
+            days=format_days_declension(
+                period_days,
+                'fa' if getattr(user, 'language', None) == 'fa' else 'ru',
+            ),
+        )
         success = await subtract_user_balance(
             db,
             user,
@@ -2791,7 +2800,10 @@ async def try_resume_disabled_daily_after_topup(
 
     # Deduct daily price FIRST (before changing status to avoid free-access window)
     previous_status = subscription.status
-    description = f'Суточная оплата тарифа «{tariff.name}» (авто-возобновление)'
+    description = get_texts(getattr(user, 'language', 'ru')).t(
+        'DAILY_AUTO_RESUME_TRANSACTION_DESCRIPTION',
+        'Суточная оплата тарифа «{tariff_name}» (авто-возобновление)',
+    ).format(tariff_name=tariff.name)
     try:
         deducted = await subtract_user_balance(
             db,

@@ -657,7 +657,10 @@ async def execute_change_devices(
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=price,
-                description=f'Изменение устройств с {current_devices} до {new_devices_count} за {charged_days} дн.',
+                description=texts.t(
+                    'DEVICE_CHANGE_TRANSACTION_DESCRIPTION',
+                    'Изменение устройств с {old} до {new} за {days} дн.',
+                ).format(old=current_devices, new=new_devices_count, days=charged_days),
             )
 
         # Re-lock subscription after subtract_user_balance committed (released all locks)

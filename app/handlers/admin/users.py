@@ -6432,7 +6432,12 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
             db,
             target_user,
             price_kopeks,
-            f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
+            get_texts(getattr(target_user, 'language', 'ru'))
+            .t(
+                'TARIFF_PURCHASE_ADMIN_TRANSACTION_DESCRIPTION',
+                'Покупка тарифа {tariff} на {days} дней (администратор)',
+            )
+            .format(tariff=tariff.name, days=period),
             mark_as_paid_subscription=True,
         )
 
@@ -6487,7 +6492,12 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
             user_id=target_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price_kopeks,
-            description=f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
+            description=get_texts(getattr(target_user, 'language', 'ru'))
+            .t(
+                'TARIFF_PURCHASE_ADMIN_TRANSACTION_DESCRIPTION',
+                'Покупка тарифа {tariff} на {days} дней (администратор)',
+            )
+            .format(tariff=tariff.name, days=period),
         )
 
         target_user_link = user_html_link(target_user)
@@ -6938,7 +6948,12 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=0,
-            description=f"Смена тарифа администратором на '{tariff.name}'",
+            description=get_texts(getattr(user, 'language', 'ru'))
+            .t(
+                'TARIFF_SWITCH_ADMIN_TRANSACTION_DESCRIPTION',
+                "Смена тарифа администратором на '{tariff}'",
+            )
+            .format(tariff=tariff.name),
             commit=False,
         )
 

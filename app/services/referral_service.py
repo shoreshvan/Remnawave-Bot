@@ -867,22 +867,34 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
         return False
 
 
-def _format_reward_line(outcome) -> str:
+def _format_reward_line(outcome, texts=None) -> str:
     """Одна строка «что получено» для уведомления.
 
     Дни и деньги называются раздельно и своими словами: обобщать их в «награду»
     нельзя — получатель должен понимать, куда идти смотреть начисленное.
     """
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+
     parts = []
     if outcome.money_credited > 0:
         parts.append(settings.format_price(outcome.money_credited))
     if outcome.days_credited > 0:
-        tariff_suffix = f' тарифа «{html.escape(outcome.tariff_name)}»' if outcome.tariff_name else ''
-        parts.append(f'{outcome.days_credited} дн. подписки{tariff_suffix}')
+        if outcome.tariff_name:
+            parts.append(
+                texts.t(
+                    'REFERRAL_REWARD_DAYS_TARIFF',
+                    '{days} дн. подписки тарифа «{tariff}»',
+                ).format(days=outcome.days_credited, tariff=html.escape(outcome.tariff_name))
+            )
+        else:
+            parts.append(
+                texts.t('REFERRAL_REWARD_DAYS', '{days} дн. подписки').format(days=outcome.days_credited)
+            )
     return ' + '.join(parts)
 
 
-def _level_event_phrase(event: str, level: int, referee_name: str) -> str:
+def _level_event_phrase(event: str, level: int, referee_name: str, texts=None) -> str:
     """Из-за чего пришла награда — своими словами.
 
     Две вещи, которые нельзя писать наугад. Первое: при триггере «регистрация»
@@ -899,16 +911,29 @@ def _level_event_phrase(event: str, level: int, referee_name: str) -> str:
     from app.config import settings
     from app.services.referral_reward_service import RewardEvent
 
+    if texts is None:
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
+
     if level > 1 and not settings.is_referral_tier_levels():
-        source = f'участник вашей сети (уровень {level})'
+        source = texts.t(
+            'REFERRAL_LEVEL_EVENT_SOURCE_NETWORK', 'участник вашей сети (уровень {level})'
+        ).format(level=level)
     else:
-        source = f'ваш реферал <b>{html.escape(referee_name)}</b>'
+        source = texts.t('REFERRAL_LEVEL_EVENT_SOURCE_REFERRAL', 'ваш реферал <b>{name}</b>').format(
+            name=html.escape(referee_name)
+        )
 
     if event == RewardEvent.REGISTRATION:
-        return f'По вашей ссылке зарегистрировался {source}.'
+        return texts.t(
+            'REFERRAL_LEVEL_EVENT_REGISTERED', 'По вашей ссылке зарегистрировался {source}.'
+        ).format(source=source)
     if event == RewardEvent.FIRST_TOPUP:
-        return f'{source[0].upper()}{source[1:]} сделал первое пополнение.'
-    return f'{source[0].upper()}{source[1:]} пополнил баланс.'
+        return texts.t('REFERRAL_LEVEL_EVENT_FIRST_TOPUP', '{source} сделал первое пополнение.').format(
+            source=source[0].upper() + source[1:]
+        )
+    return texts.t('REFERRAL_LEVEL_EVENT_REPEAT_TOPUP', '{source} пополнил баланс.').format(
+        source=source[0].upper() + source[1:]
+    )
 
 
 async def _notify_level_outcome(bot, db: AsyncSession, referee, outcome, *, event: str) -> None:
@@ -924,13 +949,13 @@ async def _notify_level_outcome(bot, db: AsyncSession, referee, outcome, *, even
         return
 
     texts = get_texts(recipient.language)
-    reward_line = _format_reward_line(outcome)
+    reward_line = _format_reward_line(outcome, texts)
     if outcome.component.is_referrer:
         text = texts.t(
             'REFERRAL_LEVEL_REWARD_REFERRER',
             '💰 <b>Реферальная награда!</b>\n\n{phrase}\n\n🎁 Начислено: {reward}',
         ).format(
-            phrase=_level_event_phrase(event, outcome.component.level, referee.full_name),
+            phrase=_level_event_phrase(event, outcome.component.level, referee.full_name, texts),
             reward=reward_line,
         )
     else:
@@ -1076,7 +1101,12 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         db,
                         referrer,
                         commission_amount,
-                        f'Комиссия {commission_percent}% с пополнения {user.full_name}',
+                        get_texts(getattr(referrer, 'language', None))
+                        .t(
+                            'REFERRAL_TRANSACTION_COMMISSION_TOPUP',
+                            'Комиссия {percent}% с пополнения {name}',
+                        )
+                        .format(percent=commission_percent, name=user.full_name),
                         transaction_type=TransactionType.REFERRAL_REWARD,
                         bot=bot,
                     )
@@ -1148,7 +1178,10 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     db,
                     user,
                     settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
-                    'Бонус за первое пополнение по реферальной программе',
+                    get_texts(getattr(user, 'language', None)).t(
+                        'REFERRAL_TRANSACTION_FIRST_TOPUP_BONUS_REFEREE',
+                        'Бонус за первое пополнение по реферальной программе',
+                    ),
                     transaction_type=TransactionType.REFERRAL_REWARD,
                     bot=bot,
                 )
@@ -1188,7 +1221,12 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     db,
                     referrer,
                     inviter_bonus,
-                    f'Бонус за первое пополнение реферала {user.full_name}',
+                    get_texts(getattr(referrer, 'language', None))
+                    .t(
+                        'REFERRAL_TRANSACTION_FIRST_TOPUP_BONUS_REFERRER',
+                        'Бонус за первое пополнение реферала {name}',
+                    )
+                    .format(name=user.full_name),
                     transaction_type=TransactionType.REFERRAL_REWARD,
                     bot=bot,
                 )
@@ -1262,7 +1300,12 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                 db,
                 referrer,
                 commission_amount,
-                f'Комиссия {commission_percent}% с пополнения {user.full_name}',
+                get_texts(getattr(referrer, 'language', None))
+                .t(
+                    'REFERRAL_TRANSACTION_COMMISSION_TOPUP',
+                    'Комиссия {percent}% с пополнения {name}',
+                )
+                .format(percent=commission_percent, name=user.full_name),
                 transaction_type=TransactionType.REFERRAL_REWARD,
                 bot=bot,
             )
@@ -1350,7 +1393,16 @@ async def process_referral_purchase(
 
         if commission_amount > 0:
             await add_user_balance(
-                db, referrer, commission_amount, f'Комиссия {commission_percent}% с покупки {user.full_name}', bot=bot
+                db,
+                referrer,
+                commission_amount,
+                get_texts(getattr(referrer, 'language', None))
+                .t(
+                    'REFERRAL_TRANSACTION_COMMISSION_PURCHASE',
+                    'Комиссия {percent}% с покупки {name}',
+                )
+                .format(percent=commission_percent, name=user.full_name),
+                bot=bot,
             )
 
             campaign_id = await get_user_campaign_id(db, user.id)

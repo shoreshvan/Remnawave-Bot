@@ -1023,7 +1023,11 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     # профиль (по id из базы: у callback admin_user_<telegram_id> обработчика нет).
     notification_service = AdminNotificationService(callback.bot)
     admin_keyboard = get_withdrawal_request_keyboard(
-        request.id, request.status, user_db_id=db_user.id, role=notification_service.resolve_recipient_role()
+        request.id,
+        request.status,
+        user_db_id=db_user.id,
+        role=notification_service.resolve_recipient_role(),
+        texts=texts,
     )
 
     try:

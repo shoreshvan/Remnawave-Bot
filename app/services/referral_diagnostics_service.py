@@ -795,7 +795,10 @@ class ReferralDiagnosticsService:
                                     db,
                                     user,
                                     settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
-                                    'Восстановленный бонус за первое пополнение (потерянный реферал)',
+                                    get_texts(user.language).t(
+                                        'REFERRAL_TRANSACTION_RESTORED_FIRST_TOPUP_LOST',
+                                        'Восстановленный бонус за первое пополнение (потерянный реферал)',
+                                    ),
                                     create_transaction=True,
                                     transaction_type=TransactionType.REFERRAL_REWARD,
                                 )
@@ -822,7 +825,12 @@ class ReferralDiagnosticsService:
                                     db,
                                     referrer,
                                     inviter_bonus,
-                                    f'Восстановленный бонус за реферала {user.full_name or user.username or user.telegram_id}',
+                                    get_texts(referrer.language)
+                                    .t(
+                                        'REFERRAL_TRANSACTION_RESTORED_REFERRAL',
+                                        'Восстановленный бонус за реферала {name}',
+                                    )
+                                    .format(name=user.full_name or user.username or user.telegram_id),
                                     create_transaction=True,
                                     transaction_type=TransactionType.REFERRAL_REWARD,
                                 )
@@ -1064,7 +1072,10 @@ class ReferralDiagnosticsService:
                             db,
                             referral,
                             missing.referral_bonus_amount,
-                            'Восстановленный бонус за первое пополнение',
+                            get_texts(referral.language).t(
+                                'REFERRAL_TRANSACTION_RESTORED_FIRST_TOPUP',
+                                'Восстановленный бонус за первое пополнение',
+                            ),
                             create_transaction=True,
                             transaction_type=TransactionType.REFERRAL_REWARD,
                         )
@@ -1085,7 +1096,12 @@ class ReferralDiagnosticsService:
                             db,
                             referrer,
                             missing.referrer_bonus_amount,
-                            f'Восстановленный бонус за реферала {referral.full_name or referral.username or referral.telegram_id}',
+                            get_texts(referrer.language)
+                            .t(
+                                'REFERRAL_TRANSACTION_RESTORED_REFERRAL',
+                                'Восстановленный бонус за реферала {name}',
+                            )
+                            .format(name=referral.full_name or referral.username or referral.telegram_id),
                             create_transaction=True,
                             transaction_type=TransactionType.REFERRAL_REWARD,
                         )

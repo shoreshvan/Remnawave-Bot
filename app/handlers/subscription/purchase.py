@@ -3255,7 +3255,10 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                 db,
                 db_user,
                 daily_price,
-                f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                texts.t(
+                    'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION',
+                    'Суточная оплата тарифа «{tariff_name}» (возобновление)',
+                ).format(tariff_name=tariff.name),
                 mark_as_paid_subscription=True,
             )
             if not deducted:
@@ -3277,7 +3280,10 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                     user_id=db_user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=daily_price,
-                    description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    description=texts.t(
+                        'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION',
+                        'Суточная оплата тарифа «{tariff_name}» (возобновление)',
+                    ).format(tariff_name=tariff.name),
                 )
             except Exception as tx_error:
                 logger.warning('Не удалось создать транзакцию при возобновлении', error=tx_error)

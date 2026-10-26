@@ -3032,6 +3032,7 @@ class AdminNotificationService:
                     WithdrawalRequestStatus.PENDING.value,
                     user_db_id=getattr(user, 'id', None),
                     role=self.resolve_recipient_role(),
+                    texts=texts,
                 )
 
             return await self._send_message(
@@ -3101,6 +3102,7 @@ class AdminNotificationService:
                 WithdrawalRequestStatus.PENDING.value,
                 user_db_id=getattr(request, 'user_id', None) or getattr(user, 'id', None),
                 role=self.resolve_recipient_role(),
+                texts=texts,
             )
 
             topic_id = getattr(settings, 'REFERRAL_WITHDRAWAL_NOTIFICATIONS_TOPIC_ID', None) or None

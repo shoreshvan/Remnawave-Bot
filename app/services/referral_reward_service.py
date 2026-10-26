@@ -1070,6 +1070,7 @@ async def _grant_one(
     from app.database.crud.referral import create_referral_earning
     from app.database.crud.user import add_user_balance
     from app.database.models import TransactionType
+    from app.localization.texts import get_texts
 
     recipient = await get_user_by_id(db, component.recipient_id)
     if recipient is None:
@@ -1120,10 +1121,13 @@ async def _grant_one(
             )
 
     if component.money_kopeks > 0:
+        texts = get_texts(recipient.language)
         description = (
-            f'Реферальная награда, уровень {component.level}'
+            texts.t('REFERRAL_TRANSACTION_LEVEL_REWARD_REFERRER', 'Реферальная награда, уровень {level}').format(
+                level=component.level
+            )
             if component.is_referrer
-            else 'Бонус по реферальной программе'
+            else texts.t('REFERRAL_TRANSACTION_REFEREE_BONUS', 'Бонус по реферальной программе')
         )
         credited = await add_user_balance(
             db,

@@ -1428,11 +1428,24 @@ class EmailNotificationTemplates:
         level_note_ru = f'<p>Уровень вашей сети: {level_label}</p>' if show_level else ''
         level_note_en = f'<p>Network level: {level_label}</p>' if show_level else ''
 
+        texts_fa = get_texts('fa')
+        level_note_fa = (
+            texts_fa.t('EMAIL_REFERRAL_BONUS_LEVEL_NOTE', '<p>سطح شبکهٔ شما: {level}</p>').format(level=level_label)
+            if show_level
+            else ''
+        )
+        thanks_fa = (
+            texts_fa.t('EMAIL_REFERRAL_BONUS_THANKS', '<p>به لطف کاربر: {name}</p>').format(name=referral_name)
+            if referral_name
+            else ''
+        )
+
         subjects = {
             'ru': f'Реферальный бонус: +{bonus}',
             'en': f'Referral bonus: +{bonus}',
             'zh': f'推荐奖励: +{bonus}',
             'ua': f'Реферальний бонус: +{bonus}',
+            'fa': texts_fa.t('EMAIL_REFERRAL_BONUS_SUBJECT', 'پاداش معرفی: +{bonus}').format(bonus=bonus),
         }
 
         bodies = {
@@ -1456,6 +1469,24 @@ class EmailNotificationTemplates:
                 <p>Keep inviting friends and earn more!</p>
                 {self._get_cabinet_button(language)}
             """,
+            'fa': texts_fa.t(
+                'EMAIL_REFERRAL_BONUS_BODY',
+                """
+                <h2>پاداش معرفی!</h2>
+                <div class="highlight success">
+                    <p>پاداش معرفی دریافت کردید: <span class="amount">+{bonus}</span></p>
+                    {thanks}
+                    {level_note}
+                </div>
+                <p>به دعوت دوستانتان ادامه دهید و بیشتر درآمد کسب کنید!</p>
+                {cabinet_button}
+            """,
+            ).format(
+                bonus=bonus,
+                thanks=thanks_fa,
+                level_note=level_note_fa,
+                cabinet_button=self._get_cabinet_button(language),
+            ),
         }
 
         return {
@@ -1546,12 +1577,15 @@ class EmailNotificationTemplates:
     def _referral_registered_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for new referral registered notification."""
         referral_name = html.escape(context.get('referral_name', ''))
+        texts_fa = get_texts('fa')
+        referral_fa = f': <strong>{referral_name}</strong>' if referral_name else ''
 
         subjects = {
             'ru': 'Новый реферал зарегистрирован',
             'en': 'New Referral Registered',
             'zh': '新推荐用户已注册',
             'ua': 'Новий реферал зареєстрований',
+            'fa': texts_fa.t('EMAIL_REFERRAL_REGISTERED_SUBJECT', 'معرفی جدیدی ثبت‌نام کرد'),
         }
 
         bodies = {
@@ -1571,6 +1605,17 @@ class EmailNotificationTemplates:
                 <p>You will receive bonuses from their top-ups!</p>
                 {self._get_cabinet_button(language)}
             """,
+            'fa': texts_fa.t(
+                'EMAIL_REFERRAL_REGISTERED_BODY',
+                """
+                <h2>معرفی جدید!</h2>
+                <div class="highlight success">
+                    <p>کاربری با لینک شما ثبت‌نام کرد{referral}.</p>
+                </div>
+                <p>از شارژهای او پاداش دریافت می‌کنید!</p>
+                {cabinet_button}
+            """,
+            ).format(referral=referral_fa, cabinet_button=self._get_cabinet_button(language)),
         }
 
         return {
@@ -1592,11 +1637,26 @@ class EmailNotificationTemplates:
         promise_ru = f'<p>Ваш бонус: <span class="amount">{bonus_promise}</span></p>' if bonus_promise else ''
         promise_en = f'<p>Your bonus: <span class="amount">{bonus_promise}</span></p>' if bonus_promise else ''
 
+        texts_fa = get_texts('fa')
+        by_whom_fa = (
+            texts_fa.t('EMAIL_REFERRAL_WELCOME_BY', ' <strong>{name}</strong>').format(name=referrer_name)
+            if referrer_name
+            else ''
+        )
+        promise_fa = (
+            texts_fa.t(
+                'EMAIL_REFERRAL_WELCOME_PROMISE', '<p>پاداش شما: <span class="amount">{promise}</span></p>'
+            ).format(promise=bonus_promise)
+            if bonus_promise
+            else ''
+        )
+
         subjects = {
             'ru': 'Добро пожаловать по приглашению',
             'en': 'Welcome by invitation',
             'zh': '欢迎通过邀请加入',
             'ua': 'Ласкаво просимо за запрошенням',
+            'fa': texts_fa.t('EMAIL_REFERRAL_WELCOME_SUBJECT', 'خوش آمدید! با دعوت ثبت‌نام کردید'),
         }
 
         bodies = {
@@ -1618,6 +1678,22 @@ class EmailNotificationTemplates:
                 <p>Glad to have you with us!</p>
                 {self._get_cabinet_button(language)}
             """,
+            'fa': texts_fa.t(
+                'EMAIL_REFERRAL_WELCOME_BODY',
+                """
+                <h2>خوش آمدید!</h2>
+                <div class="highlight success">
+                    <p>شما با لینک معرفی{referrer} ثبت‌نام کردید.</p>
+                    {promise}
+                </div>
+                <p>خوشحالیم که در کنار ما هستید!</p>
+                {cabinet_button}
+            """,
+            ).format(
+                referrer=by_whom_fa,
+                promise=promise_fa,
+                cabinet_button=self._get_cabinet_button(language),
+            ),
         }
 
         return {
@@ -1633,12 +1709,19 @@ class EmailNotificationTemplates:
         """Template for partner application approved notification."""
         commission = context.get('commission_percent', 0)
         comment = html.escape(context.get('comment', ''))
+        texts_fa = get_texts('fa')
+        comment_fa = (
+            texts_fa.t('EMAIL_PARTNER_APPROVED_COMMENT', '<p>توضیح: {comment}</p>').format(comment=comment)
+            if comment
+            else ''
+        )
 
         subjects = {
             'ru': 'Заявка на партнёрство одобрена',
             'en': 'Partner Application Approved',
             'zh': '合作伙伴申请已批准',
             'ua': 'Заявка на партнерство схвалена',
+            'fa': texts_fa.t('EMAIL_PARTNER_APPROVED_SUBJECT', 'درخواست همکاری تأیید شد'),
         }
 
         bodies = {
@@ -1682,6 +1765,23 @@ class EmailNotificationTemplates:
                 <p>Тепер ви можете запрошувати користувачів та отримувати винагороду!</p>
                 {self._get_cabinet_button(language)}
             """,
+            'fa': texts_fa.t(
+                'EMAIL_PARTNER_APPROVED_BODY',
+                """
+                <h2>درخواست همکاری تأیید شد!</h2>
+                <div class="highlight success">
+                    <p>درخواست همکاری شما تأیید شد.</p>
+                    <p>کمیسیون شما: <strong>{commission}%</strong></p>
+                    {comment}
+                </div>
+                <p>اکنون می‌توانید کاربران را دعوت کنید و پاداش بگیرید!</p>
+                {cabinet_button}
+            """,
+            ).format(
+                commission=commission,
+                comment=comment_fa,
+                cabinet_button=self._get_cabinet_button(language),
+            ),
         }
 
         return {
@@ -1692,12 +1792,19 @@ class EmailNotificationTemplates:
     def _partner_rejected_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for partner application rejected notification."""
         comment = html.escape(context.get('comment', ''))
+        texts_fa = get_texts('fa')
+        comment_fa = (
+            texts_fa.t('EMAIL_PARTNER_REJECTED_REASON', '<p>دلیل: {comment}</p>').format(comment=comment)
+            if comment
+            else ''
+        )
 
         subjects = {
             'ru': 'Заявка на партнёрство отклонена',
             'en': 'Partner Application Rejected',
             'zh': '合作伙伴申请被拒绝',
             'ua': 'Заявка на партнерство відхилена',
+            'fa': texts_fa.t('EMAIL_PARTNER_REJECTED_SUBJECT', 'درخواست همکاری رد شد'),
         }
 
         bodies = {
@@ -1737,6 +1844,18 @@ class EmailNotificationTemplates:
                 <p>Ви можете подати нову заявку пізніше.</p>
                 {self._get_cabinet_button(language)}
             """,
+            'fa': texts_fa.t(
+                'EMAIL_PARTNER_REJECTED_BODY',
+                """
+                <h2>درخواست همکاری رد شد</h2>
+                <div class="highlight danger">
+                    <p>متأسفیم، درخواست همکاری شما رد شد.</p>
+                    {reason}
+                </div>
+                <p>می‌توانید بعداً درخواست جدیدی ارسال کنید.</p>
+                {cabinet_button}
+            """,
+            ).format(reason=comment_fa, cabinet_button=self._get_cabinet_button(language)),
         }
 
         return {
@@ -1752,12 +1871,21 @@ class EmailNotificationTemplates:
         """Template for withdrawal approved notification."""
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} تومان')
         comment = html.escape(context.get('comment', ''))
+        texts_fa = get_texts('fa')
+        comment_fa = (
+            texts_fa.t('EMAIL_WITHDRAWAL_APPROVED_COMMENT', '<p>توضیح: {comment}</p>').format(comment=comment)
+            if comment
+            else ''
+        )
 
         subjects = {
             'ru': f'Запрос на вывод {amount} одобрен',
             'en': f'Withdrawal request for {amount} approved',
             'zh': f'提现请求 {amount} 已批准',
             'ua': f'Запит на виведення {amount} схвалено',
+            'fa': texts_fa.t('EMAIL_WITHDRAWAL_APPROVED_SUBJECT', 'درخواست برداشت {amount} تأیید شد').format(
+                amount=amount
+            ),
         }
 
         bodies = {
@@ -1801,6 +1929,23 @@ class EmailNotificationTemplates:
                 <p>Кошти будуть переведені найближчим часом.</p>
                 {self._get_cabinet_button(language)}
             """,
+            'fa': texts_fa.t(
+                'EMAIL_WITHDRAWAL_APPROVED_BODY',
+                """
+                <h2>درخواست برداشت تأیید شد!</h2>
+                <div class="highlight success">
+                    <p>درخواست برداشت شما تأیید شد.</p>
+                    <p>مبلغ: <span class="amount">{amount}</span></p>
+                    {comment}
+                </div>
+                <p>مبلغ به‌زودی منتقل می‌شود.</p>
+                {cabinet_button}
+            """,
+            ).format(
+                amount=amount,
+                comment=comment_fa,
+                cabinet_button=self._get_cabinet_button(language),
+            ),
         }
 
         return {
@@ -1812,12 +1957,21 @@ class EmailNotificationTemplates:
         """Template for withdrawal rejected notification."""
         amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} تومان')
         comment = html.escape(context.get('comment', ''))
+        texts_fa = get_texts('fa')
+        comment_fa = (
+            texts_fa.t('EMAIL_WITHDRAWAL_REJECTED_REASON', '<p>دلیل: {comment}</p>').format(comment=comment)
+            if comment
+            else ''
+        )
 
         subjects = {
             'ru': f'Запрос на вывод {amount} отклонён',
             'en': f'Withdrawal request for {amount} rejected',
             'zh': f'提现请求 {amount} 被拒绝',
             'ua': f'Запит на виведення {amount} відхилено',
+            'fa': texts_fa.t('EMAIL_WITHDRAWAL_REJECTED_SUBJECT', 'درخواست برداشت {amount} رد شد').format(
+                amount=amount
+            ),
         }
 
         bodies = {
@@ -1861,6 +2015,23 @@ class EmailNotificationTemplates:
                 <p>Кошти повернуто на ваш баланс.</p>
                 {self._get_cabinet_button(language)}
             """,
+            'fa': texts_fa.t(
+                'EMAIL_WITHDRAWAL_REJECTED_BODY',
+                """
+                <h2>درخواست برداشت رد شد</h2>
+                <div class="highlight danger">
+                    <p>درخواست برداشت شما رد شد.</p>
+                    <p>مبلغ: <strong>{amount}</strong></p>
+                    {reason}
+                </div>
+                <p>مبلغ به موجودی شما بازگشت.</p>
+                {cabinet_button}
+            """,
+            ).format(
+                amount=amount,
+                reason=comment_fa,
+                cabinet_button=self._get_cabinet_button(language),
+            ),
         }
 
         return {

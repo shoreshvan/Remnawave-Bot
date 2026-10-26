@@ -618,7 +618,10 @@ async def show_pending_withdrawal_requests(callback: types.CallbackQuery, db_use
         keyboard_rows.append(
             [
                 types.InlineKeyboardButton(
-                    text=f'#{req.id} — {req.amount_kopeks / 100:.0f} تومان', callback_data=f'admin_withdrawal_view_{req.id}'
+                    text=texts.t('ADMIN_REFERRALS_WITHDRAWALS_BTN_ROW', '#{id} — {amount:.0f} تومان').format(
+                        id=req.id, amount=req.amount_kopeks / 100
+                    ),
+                    callback_data=f'admin_withdrawal_view_{req.id}',
                 )
             ]
         )
@@ -706,7 +709,12 @@ async def view_withdrawal_request(callback: types.CallbackQuery, db_user: User, 
     # открыли бы админку в общем чате. В личке — полная карточка.
     role = 'group' if callback_from_group(callback) else 'admin'
     keyboard = get_withdrawal_request_keyboard(
-        request.id, request.status, user_db_id=user.id if user else None, role=role, navigation=(role == 'admin')
+        request.id,
+        request.status,
+        user_db_id=user.id if user else None,
+        role=role,
+        navigation=(role == 'admin'),
+        texts=texts,
     )
 
     await callback.message.edit_text(text, reply_markup=keyboard)
@@ -779,7 +787,10 @@ async def reject_withdrawal_request(callback: types.CallbackQuery, db_user: User
         return
 
     success, _error = await referral_withdrawal_service.reject_request(
-        db, request_id, db_user.id, 'Отклонено администратором'
+        db,
+        request_id,
+        db_user.id,
+        get_texts(db_user.language).t('ADMIN_REFERRALS_REJECT_COMMENT', 'Отклонено администратором'),
     )
 
     if success:
@@ -829,7 +840,12 @@ async def complete_withdrawal_request(callback: types.CallbackQuery, db_user: Us
         )
         return
 
-    success, _error = await referral_withdrawal_service.complete_request(db, request_id, db_user.id, 'Перевод выполнен')
+    success, _error = await referral_withdrawal_service.complete_request(
+        db,
+        request_id,
+        db_user.id,
+        get_texts(db_user.language).t('ADMIN_REFERRALS_COMPLETE_COMMENT', 'Перевод выполнен'),
+    )
 
     if success:
         # Уведомляем пользователя (только если есть telegram_id)

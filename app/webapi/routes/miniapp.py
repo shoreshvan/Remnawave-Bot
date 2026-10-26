@@ -7315,17 +7315,17 @@ async def purchase_tariff_endpoint(
 
     # Списываем баланс
     if is_daily_tariff:
-        description = get_texts().t(
+        description = get_texts(getattr(user, 'language', 'ru')).t(
             'MINIAPP_TRANSACTION_DAILY_TARIFF_ACTIVATION',
             "Активация суточного тарифа '{tariff}' (первый день)",
         ).format(tariff=tariff.name)
     elif discount_percent > 0:
-        description = get_texts().t(
+        description = get_texts(getattr(user, 'language', 'ru')).t(
             'MINIAPP_TRANSACTION_TARIFF_PURCHASE_DISCOUNT',
             "Покупка тарифа '{tariff}' на {days} дней (скидка {percent}%)",
         ).format(tariff=tariff.name, days=payload.period_days, percent=discount_percent)
     else:
-        description = get_texts().t(
+        description = get_texts(getattr(user, 'language', 'ru')).t(
             'MINIAPP_TRANSACTION_TARIFF_PURCHASE',
             "Покупка тарифа '{tariff}' на {days} дней",
         ).format(tariff=tariff.name, days=payload.period_days)
@@ -8325,7 +8325,7 @@ async def toggle_daily_subscription_pause_endpoint(
                     db,
                     user,
                     daily_price,
-                    get_texts().t(
+                    get_texts(getattr(user, 'language', 'ru')).t(
                         'MINIAPP_TRANSACTION_DAILY_CHARGE_RESUME',
                         'Суточная оплата тарифа «{tariff}» (возобновление)',
                     ).format(tariff=tariff.name),
@@ -8351,7 +8351,7 @@ async def toggle_daily_subscription_pause_endpoint(
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=daily_price,
-                    description=get_texts().t(
+                    description=get_texts(getattr(user, 'language', 'ru')).t(
                         'MINIAPP_TRANSACTION_DAILY_CHARGE_RESUME',
                         'Суточная оплата тарифа «{tariff}» (возобновление)',
                     ).format(tariff=tariff.name),
@@ -8389,7 +8389,7 @@ async def toggle_daily_subscription_pause_endpoint(
                 amount_kopeks=daily_price,
                 user_id=user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
-                description=get_texts()
+                description=get_texts(getattr(user, 'language', 'ru'))
                 .t(
                     'MINIAPP_TRANSACTION_DAILY_CHARGE_RESUME',
                     'Суточная оплата тарифа «{tariff}» (возобновление)',

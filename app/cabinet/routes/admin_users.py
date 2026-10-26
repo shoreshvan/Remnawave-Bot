@@ -1595,7 +1595,10 @@ async def update_user_subscription(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=0,
-            description=f"Смена тарифа администратором на '{tariff.name}'",
+            description=get_texts(user.language).t(
+                'TARIFF_SWITCH_ADMIN_TRANSACTION_DESCRIPTION',
+                "Смена тарифа администратором на '{tariff}'",
+            ).format(tariff=tariff.name),
             commit=False,
         )
 

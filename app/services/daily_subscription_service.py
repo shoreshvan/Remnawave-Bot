@@ -187,7 +187,10 @@ class DailySubscriptionService:
             return 'suspended'
 
         # Списываем средства
-        description = f'Суточная оплата тарифа «{tariff.name}»'
+        description = get_texts(getattr(user, 'language', 'ru')).t(
+            'DAILY_CHARGE_TRANSACTION_DESCRIPTION',
+            'Суточная оплата тарифа «{tariff_name}»',
+        ).format(tariff_name=tariff.name)
 
         try:
             # commit=False для атомарности: баланс, транзакция и charge_time коммитятся вместе

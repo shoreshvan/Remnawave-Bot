@@ -137,7 +137,7 @@ async def toggle_subscription_pause(
                     db,
                     user,
                     daily_price,
-                    get_texts().t(
+                    get_texts(user.language).t(
                         'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION',
                         'Суточная оплата тарифа «{tariff_name}» (возобновление)',
                     ).format(tariff_name=tariff.name),
@@ -165,7 +165,7 @@ async def toggle_subscription_pause(
                         user_id=user.id,
                         type=TransactionType.SUBSCRIPTION_PAYMENT,
                         amount_kopeks=daily_price,
-                        description=get_texts().t(
+                        description=get_texts(user.language).t(
                             'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION',
                             'Суточная оплата тарифа «{tariff_name}» (возобновление)',
                         ).format(tariff_name=tariff.name),

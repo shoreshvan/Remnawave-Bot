@@ -905,7 +905,12 @@ async def purchase_tariff(
                     'saved_cart': True,
                     'missing_amount': missing,
                     'return_to_cart': True,
-                    'description': f'Покупка тарифа {tariff.name} на {period_days} дней',
+                    'description': get_texts(user.language)
+                    .t(
+                        'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION',
+                        'Покупка тарифа {tariff} на {days} дней',
+                    )
+                    .format(tariff=tariff.name, days=period_days),
                     'traffic_limit_gb': traffic_limit_gb,
                     'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
@@ -947,14 +952,24 @@ async def purchase_tariff(
             squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
         # Charge balance
+        purchase_texts = get_texts(user.language)
         if is_daily_tariff:
             description = f"Активация суточного тарифа '{tariff.name}'"
         else:
-            description = f"Покупка тарифа '{tariff.name}' на {period_days} дней"
+            description = purchase_texts.t(
+                'MINIAPP_TRANSACTION_TARIFF_PURCHASE',
+                "Покупка тарифа '{tariff}' на {days} дней",
+            ).format(tariff=tariff.name, days=period_days)
         if discount_percent > 0:
-            description += f' (скидка {discount_percent}%)'
+            description += purchase_texts.t(
+                'TARIFF_PURCHASE_DISCOUNT_SUFFIX',
+                ' (скидка {percent}%)',
+            ).format(percent=discount_percent)
         if promo_offer_discount_value > 0:
-            description += f' (промо -{promo_offer_discount_percent}%)'
+            description += purchase_texts.t(
+                'TARIFF_PURCHASE_PROMO_SUFFIX',
+                ' (промо -{percent}%)',
+            ).format(percent=promo_offer_discount_percent)
         success = await subtract_user_balance(
             db,
             user,
