@@ -590,28 +590,22 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
     subscription_link = get_display_subscription_link(subscription)
     hide_subscription_link = settings.should_hide_subscription_link()
 
-    if subscription_link and actual_status in ['trial_active', 'paid_active']:
+    if subscription_link and actual_status in ['trial_active', 'paid_active'] and not hide_subscription_link:
+        subscription_link_display = subscription_link
+
         if settings.is_happ_cryptolink_mode():
-            # В режиме Happ подключение идёт через кнопку и страницу-редирект,
-            # поэтому саму ссылку показываем только если её не скрыли.
-            message += '\n\n' + texts.t(
-                'SUBSCRIPTION_HAPP_LINK_PROMPT',
-                '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
-            )
-            if not hide_subscription_link:
-                message += '\n\n' + texts.t(
-                    'SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK',
-                    '<blockquote expandable><code>{crypto_link}</code></blockquote>',
-                ).format(crypto_link=subscription_link)
-        elif not hide_subscription_link:
-            message += '\n\n' + texts.t(
-                'SUBSCRIPTION_CONNECT_LINK_SECTION',
-                '🔗 <b>Ссылка для подключения:</b>\n{subscription_url}',
-            ).format(subscription_url=f'<code>{subscription_link}</code>')
-            message += '\n\n' + texts.t(
-                'SUBSCRIPTION_CONNECT_LINK_PROMPT',
-                '📱 Скопируйте ссылку и добавьте в ваше VPN приложение',
-            )
+            subscription_link_display = f'<blockquote expandable><code>{subscription_link}</code></blockquote>'
+        else:
+            subscription_link_display = f'<code>{subscription_link}</code>'
+
+        message += '\n\n' + texts.t(
+            'SUBSCRIPTION_CONNECT_LINK_SECTION',
+            '🔗 <b>Ссылка для подключения:</b>\n{subscription_url}',
+        ).format(subscription_url=subscription_link_display)
+        message += '\n\n' + texts.t(
+            'SUBSCRIPTION_CONNECT_LINK_PROMPT',
+            '📱 Скопируйте ссылку и добавьте в ваше VPN приложение',
+        )
 
     await callback.message.edit_text(
         message,
