@@ -3864,10 +3864,13 @@ class Settings(BaseSettings):
         return self.is_happ_cryptolink_mode() and self.CONNECT_BUTTON_HAPP_DOWNLOAD_ENABLED
 
     def should_hide_subscription_link(self) -> bool:
-        """Returns True when subscription links must be hidden from the interface."""
+        """Returns True when subscription links must be hidden from the interface.
 
-        if self.is_happ_cryptolink_mode():
-            return False
+        Works in the Happ cryptolink mode too: when the operator enables
+        ``HIDE_SUBSCRIPTION_LINK``, users connect only through the redirect page
+        button and never see the raw ``happ://`` link in the chat.
+        """
+
         return self.HIDE_SUBSCRIPTION_LINK
 
     def is_contests_enabled(self) -> bool:

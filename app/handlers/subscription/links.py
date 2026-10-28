@@ -265,6 +265,7 @@ async def handle_open_subscription_link(
     if subscription is None:
         return
     subscription_link = get_display_subscription_link(subscription)
+    hide_subscription_link = settings.should_hide_subscription_link()
     back_cb = f'sm:{sub_id}' if settings.is_multi_tariff_enabled() else 'menu_subscription'
 
     if not subscription_link:
@@ -276,23 +277,29 @@ async def handle_open_subscription_link(
 
     if settings.is_happ_cryptolink_mode():
         redirect_link = get_happ_cryptolink_redirect_link(subscription_link)
-        happ_scheme_link = convert_subscription_link_to_happ_scheme(subscription_link)
-        happ_message = (
-            texts.t(
-                'SUBSCRIPTION_HAPP_OPEN_TITLE',
-                '🔗 <b>Подключение через Happ</b>',
-            )
-            + '\n\n'
-            + texts.t(
-                'SUBSCRIPTION_HAPP_OPEN_LINK',
-                '<a href="{subscription_link}">🔓 Открыть ссылку в Happ</a>',
-            ).format(subscription_link=happ_scheme_link)
-            + '\n\n'
-            + texts.t(
-                'SUBSCRIPTION_HAPP_OPEN_HINT',
-                '💡 Если ссылка не открывается автоматически, скопируйте её вручную:',
-            )
+        # Сырую happ://-ссылку показываем только если оператор не скрыл ссылки
+        # или если шаблон редиректа не настроен (иначе пользователю некуда нажать).
+        show_raw_link = not hide_subscription_link or not redirect_link
+
+        happ_message = texts.t(
+            'SUBSCRIPTION_HAPP_OPEN_TITLE',
+            '🔗 <b>Подключение через Happ</b>',
         )
+
+        if show_raw_link:
+            happ_scheme_link = convert_subscription_link_to_happ_scheme(subscription_link)
+            happ_message += (
+                '\n\n'
+                + texts.t(
+                    'SUBSCRIPTION_HAPP_OPEN_LINK',
+                    '<a href="{subscription_link}">🔓 Открыть ссылку в Happ</a>',
+                ).format(subscription_link=happ_scheme_link)
+                + '\n\n'
+                + texts.t(
+                    'SUBSCRIPTION_HAPP_OPEN_HINT',
+                    '💡 Если ссылка не открывается автоматически, скопируйте её вручную:',
+                )
+            )
 
         if redirect_link:
             happ_message += '\n\n' + texts.t(
@@ -300,10 +307,11 @@ async def handle_open_subscription_link(
                 '▶️ Нажмите кнопку "Подключиться" ниже, чтобы открыть Happ и добавить подписку автоматически.',
             )
 
-        happ_message += '\n\n' + texts.t(
-            'SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK',
-            '<blockquote expandable><code>{crypto_link}</code></blockquote>',
-        ).format(crypto_link=subscription_link)
+        if show_raw_link:
+            happ_message += '\n\n' + texts.t(
+                'SUBSCRIPTION_HAPP_CRYPTOLINK_BLOCK',
+                '<blockquote expandable><code>{crypto_link}</code></blockquote>',
+            ).format(crypto_link=subscription_link)
 
         keyboard = get_happ_cryptolink_keyboard(
             subscription_link,

@@ -332,6 +332,11 @@ async def show_subscription_detail(
 
     if subscription.subscription_url and not settings.should_hide_subscription_link():
         text += f'\n🔗 <code>{subscription.subscription_url}</code>'
+    elif settings.is_happ_cryptolink_mode():
+        text += '\n\n' + texts.t(
+            'SUBSCRIPTION_HAPP_LINK_PROMPT',
+            '🔒 Ссылка на подписку создана. Нажмите кнопку "Подключиться" ниже, чтобы открыть её в Happ.',
+        )
 
     keyboard = _build_subscription_detail_keyboard(sub_id, sub=subscription, texts=texts)
 

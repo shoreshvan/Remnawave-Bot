@@ -8972,5 +8972,6 @@
   "TARIFF_SWITCH_ADMIN_TRANSACTION_DESCRIPTION": "تغییر تعرفه توسط مدیر به «{tariff}»",
   "DEVICE_CHANGE_TRANSACTION_DESCRIPTION": "تغییر تعداد دستگاه‌ها از {old} به {new} برای {days} روز",
   "TARIFF_PURCHASE_DISCOUNT_SUFFIX": " (تخفیف {percent}٪)",
-  "TARIFF_PURCHASE_PROMO_SUFFIX": " (تخفیف تبلیغاتی ‎-{percent}%‎)"
+  "TARIFF_PURCHASE_PROMO_SUFFIX": " (تخفیف تبلیغاتی ‎-{percent}%‎)",
+  "WEB_AUTH_DENIED": "❌ ورود لغو شد."
 }

@@ -3352,7 +3352,12 @@ async def process_webauth_confirm(
         return
 
     if callback.data == 'webauth_deny':
-        await callback.message.edit_text('❌ Вход отменён.')
+        user = await get_user_by_telegram_id(db, callback.from_user.id)
+        await callback.message.edit_text(
+            get_texts(user.language if user else DEFAULT_LANGUAGE).t(
+                'WEB_AUTH_DENIED', '❌ Вход отменён.'
+            )
+        )
         return
 
     # Extract token from callback_data: "webauth_confirm:{token}"
