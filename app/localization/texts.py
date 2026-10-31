@@ -204,17 +204,18 @@ class Texts:
     def format_price(kopeks: int, round_kopeks: bool | None = None) -> str:
         return settings.format_price(kopeks, round_kopeks=round_kopeks)
 
-    @staticmethod
-    def format_traffic(gb: float, is_limit: bool = True, language: str = 'ru') -> str:
+    def format_traffic(self, gb: float, is_limit: bool = True, language: str | None = None) -> str:
         """Format traffic value.
 
         Args:
             gb: Traffic in gigabytes
             is_limit: If True, 0 means unlimited. If False, 0 means zero used.
-            language: Display language; 'fa' renders Persian units, anything
-                else keeps the legacy English/Russian rendering unchanged.
+            language: Display language; defaults to this texts instance's
+                language. 'fa' renders Persian units, anything else keeps the
+                legacy English/Russian rendering unchanged.
         """
-        is_fa = (language or 'ru').split('-')[0].lower() == 'fa'
+        lang = language or self.language or DEFAULT_LANGUAGE
+        is_fa = lang.split('-')[0].lower() == 'fa'
         if gb == 0:
             if is_limit:
                 return '∞ (نامحدود)' if is_fa else '∞ (безлимит)'

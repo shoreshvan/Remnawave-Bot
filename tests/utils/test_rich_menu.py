@@ -20,7 +20,7 @@ class DummyTexts:
         return default
 
     @staticmethod
-    def format_traffic(gb, is_limit=True):
+    def format_traffic(gb, is_limit=True, language=None):
         if not gb and is_limit:
             return '∞'
         return f'{gb:g} ГБ'
@@ -619,7 +619,7 @@ async def test_multi_tariff_table_is_fully_localized(monkeypatch):
             return f'[{key}]'
 
         @staticmethod
-        def format_traffic(gb, is_limit=True):
+        def format_traffic(gb, is_limit=True, language=None):
             return 'GB'
 
     _patch_content_sources(monkeypatch)
