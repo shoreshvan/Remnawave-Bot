@@ -2081,7 +2081,9 @@ async def _auto_add_traffic(
         return False
 
     # Deduct balance
-    description = f'Докупка {traffic_gb} ГБ трафика'
+    description = get_texts(getattr(user, 'language', 'ru')).t(
+        'TRAFFIC_PURCHASE_TRANSACTION_DESCRIPTION', 'Докупка {gb} ГБ трафика'
+    ).format(gb=traffic_gb)
     try:
         success = await subtract_user_balance(
             db,

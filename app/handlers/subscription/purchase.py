@@ -736,7 +736,7 @@ async def show_trial_offer(callback: types.CallbackQuery, db_user: User, db: Asy
 
     trial_text = texts.TRIAL_AVAILABLE.format(
         days=trial_days,
-        traffic=texts.format_traffic(trial_traffic),
+        traffic=texts.format_traffic(trial_traffic, language=texts.language),
         devices=trial_device_limit if trial_device_limit is not None else '',
         devices_line=devices_line,
         server_name=trial_server_name,
@@ -1913,7 +1913,7 @@ async def handle_extend_subscription(
         texts.t('RENEWAL_CURRENT_CONFIG', '<b>Ваша текущая конфигурация:</b>'),
         texts.t('RENEWAL_SERVERS', '🌍 Серверов: {count}').format(count=len(subscription.connected_squads or [])),
         texts.t('RENEWAL_TRAFFIC', '📊 Трафик: {traffic}').format(
-            traffic=texts.format_traffic(subscription.traffic_limit_gb)
+            traffic=texts.format_traffic(subscription.traffic_limit_gb, language=texts.language)
         ),
     ]
 

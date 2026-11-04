@@ -376,7 +376,9 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
         type=type_text,
         end_date=format_local_datetime(subscription.end_date, '%d.%m.%Y %H:%M'),
         days_left=local_days_until(subscription.end_date) if subscription.end_date else 0,
-        traffic_used=texts.format_traffic(subscription.traffic_used_gb, is_limit=False),
+        traffic_used=texts.format_traffic(
+            subscription.traffic_used_gb, is_limit=False, language=texts.language
+        ),
         traffic_limit=traffic_text,
         countries_count=len(subscription.connected_squads or []),
         devices_used=devices_used,

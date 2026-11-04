@@ -1197,7 +1197,7 @@ class Settings(BaseSettings):
     # Отдельный от API-ключа: утечка одного не даёт подделать другое.
     HOOSHPAY_API_SECRET: str | None = None
     HOOSHPAY_BASE_URL: str = 'https://hooshpay.xyz/api/v1'
-    HOOSHPAY_DISPLAY_NAME: str = 'کارت به کارت(1)'
+    HOOSHPAY_DISPLAY_NAME: str = 'کارت به کارت'
     # fee_mode: '' | 'seller' | 'buyer' | 'split'. Пусто = берётся из настроек
     # аккаунта HooshPay (комиссия по умолчанию 20%).
     HOOSHPAY_FEE_MODE: str | None = None
@@ -1213,7 +1213,7 @@ class Settings(BaseSettings):
     TONPAYS_ENABLED: bool = False
     TONPAYS_API_KEY: str | None = None  # X-API-Key — кастомный TG-ключ из панели магазина
     TONPAYS_BASE_URL: str = 'https://tonpays.online'
-    TONPAYS_DISPLAY_NAME: str = 'کارت به کارت(2)'
+    TONPAYS_DISPLAY_NAME: str = 'کارت به کارت'
     # Лимиты провайдера в документации не указаны — взяты как у соседнего
     # карточного шлюза (HooshPay real: 50000..1500000), подтвердить живым тестом.
     TONPAYS_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان
@@ -1230,7 +1230,7 @@ class Settings(BaseSettings):
     ATLASPAY_API_KEY: str | None = None  # X-API-Key из панели магазина
     ATLASPAY_WEBHOOK_SECRET: str | None = None  # Секрет подписи вебхука (X-Webhook-Signature, HMAC-SHA256)
     ATLASPAY_BASE_URL: str = 'https://api.atlaspay.space/api/v1'
-    ATLASPAY_DISPLAY_NAME: str = 'کارت به کارت(3)'
+    ATLASPAY_DISPLAY_NAME: str = 'کارت به کارت'
     ATLASPAY_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان
     ATLASPAY_MAX_AMOUNT_KOPEKS: int = 250000000  # 2500000 تومان
     ATLASPAY_WEBHOOK_PATH: str = '/atlaspay-webhook'
@@ -3578,7 +3578,7 @@ class Settings(BaseSettings):
 
     def get_tonpays_display_name(self) -> str:
         name = (self.TONPAYS_DISPLAY_NAME or '').strip()
-        return name or 'کارت به کارت(2)'
+        return name or 'کارت به کارت'
 
     def get_tonpays_display_name_html(self) -> str:
         return html.escape(self.get_tonpays_display_name())
@@ -3598,7 +3598,7 @@ class Settings(BaseSettings):
 
     def get_atlaspay_display_name(self) -> str:
         name = (self.ATLASPAY_DISPLAY_NAME or '').strip()
-        return name or 'کارت به کارت(3)'
+        return name or 'کارت به کارت'
 
     def get_atlaspay_display_name_html(self) -> str:
         return html.escape(self.get_atlaspay_display_name())

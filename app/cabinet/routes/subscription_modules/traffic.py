@@ -173,7 +173,7 @@ async def purchase_traffic(
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t(
+            detail=get_texts(user.language).t(
                 'CABINET_TRAFFIC_PURCHASES_RESTRICTED',
                 'Subscription purchases are restricted for this account',
             ),
@@ -190,7 +190,7 @@ async def purchase_traffic(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_TRAFFIC_NO_SUBSCRIPTION', 'No subscription found'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_NO_SUBSCRIPTION', 'No subscription found'),
         )
     tariff = None
     base_price_kopeks = 0
@@ -202,14 +202,14 @@ async def purchase_traffic(
         if not tariff:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_texts().t('CABINET_TRAFFIC_TARIFF_NOT_FOUND', 'Tariff not found'),
+                detail=get_texts(user.language).t('CABINET_TRAFFIC_TARIFF_NOT_FOUND', 'Tariff not found'),
             )
 
         # Проверяем, разрешена ли докупка
         if not getattr(tariff, 'traffic_topup_enabled', False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
+                detail=get_texts(user.language).t(
                     'CABINET_TRAFFIC_TOPUP_DISABLED_TARIFF', 'Traffic top-up is disabled for this tariff'
                 ),
             )
@@ -218,7 +218,7 @@ async def purchase_traffic(
         if tariff.traffic_limit_gb == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
+                detail=get_texts(user.language).t(
                     'CABINET_TRAFFIC_CANNOT_ADD_UNLIMITED', 'Cannot add traffic to unlimited subscription'
                 ),
             )
@@ -232,7 +232,7 @@ async def purchase_traffic(
                 available_gb = max(0, max_topup_limit - current_traffic)
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=get_texts().t(
+                    detail=get_texts(user.language).t(
                         'CABINET_TRAFFIC_LIMIT_EXCEEDED',
                         'Traffic limit exceeded. Max: {max} GB, available: {available} GB',
                     ).format(max=max_topup_limit, available=available_gb),
@@ -243,7 +243,7 @@ async def purchase_traffic(
         if request.gb not in packages:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
+                detail=get_texts(user.language).t(
                     'CABINET_TRAFFIC_PACKAGE_NOT_AVAILABLE', 'Traffic package {gb}GB is not available'
                 ).format(gb=request.gb),
             )
@@ -251,7 +251,7 @@ async def purchase_traffic(
         if base_price_kopeks <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
+                detail=get_texts(user.language).t(
                     'CABINET_TRAFFIC_PACKAGE_NO_PRICE', 'Traffic package {gb}GB has no price configured'
                 ).format(gb=request.gb),
             )
@@ -261,7 +261,7 @@ async def purchase_traffic(
         if not settings.is_traffic_topup_enabled():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('CABINET_TRAFFIC_TOPUP_FEATURE_DISABLED', 'Traffic top-up feature is disabled'),
+                detail=get_texts(user.language).t('CABINET_TRAFFIC_TOPUP_FEATURE_DISABLED', 'Traffic top-up feature is disabled'),
             )
 
         # Проверяем настройку тарифа (allow_traffic_topup)
@@ -270,7 +270,7 @@ async def purchase_traffic(
             if tariff and not tariff.allow_traffic_topup:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=get_texts().t(
+                    detail=get_texts(user.language).t(
                         'CABINET_TRAFFIC_TOPUP_NOT_AVAILABLE_TARIFF',
                         'Traffic top-up is not available for your tariff',
                     ),
@@ -282,13 +282,13 @@ async def purchase_traffic(
         if not matching_pkg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('CABINET_TRAFFIC_INVALID_PACKAGE', 'Invalid traffic package'),
+                detail=get_texts(user.language).t('CABINET_TRAFFIC_INVALID_PACKAGE', 'Invalid traffic package'),
             )
         base_price_kopeks = matching_pkg['price']
         if base_price_kopeks <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
+                detail=get_texts(user.language).t(
                     'CABINET_TRAFFIC_PACKAGE_NO_PRICE_CONFIGURED', 'Traffic package has no price configured'
                 ),
             )
@@ -337,7 +337,7 @@ async def purchase_traffic(
             'base_price_kopeks': prorated_price,
             'discount_percent': traffic_discount_percent,
             'source': 'cabinet',
-            'description': get_texts()
+            'description': get_texts(user.language)
             .t('CABINET_TRAFFIC_PURCHASE_DESCRIPTION', 'Докупка {gb} ГБ трафика')
             .format(gb=request.gb),
         }
@@ -357,7 +357,7 @@ async def purchase_traffic(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': get_texts()
+                'message': get_texts(user.language)
                 .t('CABINET_TRAFFIC_INSUFFICIENT_FUNDS_MESSAGE', 'Недостаточно средств. Не хватает {amount}')
                 .format(amount=settings.format_price(missing, round_kopeks=False)),
                 'missing_amount': missing,
@@ -368,12 +368,12 @@ async def purchase_traffic(
 
     # Формируем описание
     if traffic_discount_percent > 0:
-        traffic_description = get_texts().t(
+        traffic_description = get_texts(user.language).t(
             'CABINET_TRAFFIC_PURCHASE_DESCRIPTION_DISCOUNT',
             'Докупка {gb} ГБ трафика (скидка {percent}%)',
         ).format(gb=request.gb, percent=traffic_discount_percent)
     else:
-        traffic_description = get_texts().t(
+        traffic_description = get_texts(user.language).t(
             'CABINET_TRAFFIC_PURCHASE_DESCRIPTION', 'Докупка {gb} ГБ трафика'
         ).format(gb=request.gb)
 
@@ -382,7 +382,7 @@ async def purchase_traffic(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts().t('CABINET_TRAFFIC_CHARGE_FAILED', 'Failed to charge balance'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_CHARGE_FAILED', 'Failed to charge balance'),
         )
 
     # Добавляем трафик (add_subscription_traffic обновляет purchased_traffic_gb, traffic_reset_at и коммитит)
@@ -476,7 +476,7 @@ async def purchase_traffic(
 
     response: dict[str, Any] = {
         'success': True,
-        'message': get_texts().t('CABINET_TRAFFIC_PURCHASED_SUCCESS', 'Traffic purchased successfully'),
+        'message': get_texts(user.language).t('CABINET_TRAFFIC_PURCHASED_SUCCESS', 'Traffic purchased successfully'),
         'gb_added': request.gb,
         'new_traffic_limit_gb': subscription.traffic_limit_gb,
         'amount_paid_kopeks': final_price,
@@ -512,19 +512,19 @@ async def save_traffic_cart(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_TRAFFIC_SAVECART_NO_ACTIVE_SUBSCRIPTION', 'У вас нет активной подписки'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_NO_ACTIVE_SUBSCRIPTION', 'У вас нет активной подписки'),
         )
 
     if subscription.status not in ['active', 'trial']:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_TRAFFIC_SAVECART_SUBSCRIPTION_INACTIVE', 'Ваша подписка неактивна'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_SUBSCRIPTION_INACTIVE', 'Ваша подписка неактивна'),
         )
 
     if subscription.is_trial:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t(
+            detail=get_texts(user.language).t(
                 'CABINET_TRAFFIC_SAVECART_TRIAL_NOT_ALLOWED',
                 'Докупка трафика недоступна на пробном периоде',
             ),
@@ -533,7 +533,7 @@ async def save_traffic_cart(
     if subscription.traffic_limit_gb == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_TRAFFIC_SAVECART_ALREADY_UNLIMITED', 'У вас уже безлимитный трафик'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_ALREADY_UNLIMITED', 'У вас уже безлимитный трафик'),
         )
 
     # Get traffic price from tariff or settings
@@ -546,13 +546,13 @@ async def save_traffic_cart(
         if not tariff:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_texts().t('CABINET_TRAFFIC_SAVECART_TARIFF_NOT_FOUND', 'Тариф не найден'),
+                detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_TARIFF_NOT_FOUND', 'Тариф не найден'),
             )
 
         if not getattr(tariff, 'traffic_topup_enabled', False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
+                detail=get_texts(user.language).t(
                     'CABINET_TRAFFIC_SAVECART_TOPUP_NOT_AVAILABLE_TARIFF',
                     'Докупка трафика недоступна на вашем тарифе',
                 ),
@@ -562,7 +562,7 @@ async def save_traffic_cart(
         if request.gb not in packages:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts()
+                detail=get_texts(user.language)
                 .t('CABINET_TRAFFIC_SAVECART_PACKAGE_NOT_AVAILABLE', 'Пакет трафика {gb} ГБ недоступен')
                 .format(gb=request.gb),
             )
@@ -571,7 +571,7 @@ async def save_traffic_cart(
         if not settings.is_traffic_topup_enabled():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('CABINET_TRAFFIC_SAVECART_TOPUP_DISABLED', 'Докупка трафика отключена'),
+                detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_TOPUP_DISABLED', 'Докупка трафика отключена'),
             )
 
         packages = settings.get_traffic_topup_packages()
@@ -579,7 +579,7 @@ async def save_traffic_cart(
         if not matching_pkg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('CABINET_TRAFFIC_SAVECART_INVALID_PACKAGE', 'Недоступный пакет трафика'),
+                detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_INVALID_PACKAGE', 'Недоступный пакет трафика'),
             )
         base_price_kopeks = matching_pkg['price']
 
@@ -608,7 +608,7 @@ async def save_traffic_cart(
         'base_price_kopeks': base_price_kopeks,
         'discount_percent': traffic_discount_percent,
         'source': 'cabinet',
-        'description': get_texts()
+        'description': get_texts(user.language)
         .t('CABINET_TRAFFIC_PURCHASE_DESCRIPTION', 'Докупка {gb} ГБ трафика')
         .format(gb=request.gb),
     }
@@ -643,13 +643,13 @@ async def switch_traffic_package(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_TRAFFIC_NO_SUBSCRIPTION', 'No subscription found'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_NO_SUBSCRIPTION', 'No subscription found'),
         )
 
     if subscription.is_trial:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t(
+            detail=get_texts(user.language).t(
                 'CABINET_TRAFFIC_MANAGEMENT_PAID_ONLY',
                 'Traffic management is only available for paid subscriptions',
             ),
@@ -661,7 +661,7 @@ async def switch_traffic_package(
     if current_traffic == new_traffic:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_TRAFFIC_ALREADY_ON_PACKAGE', 'Already on this traffic package'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_ALREADY_ON_PACKAGE', 'Already on this traffic package'),
         )
 
     # Get available packages
@@ -700,20 +700,20 @@ async def switch_traffic_package(
         if final_price > 0 and user.balance_kopeks < final_price:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=get_texts()
+                detail=get_texts(user.language)
                 .t('CABINET_TRAFFIC_INSUFFICIENT_BALANCE_SWITCH', 'Insufficient balance. Need {amount:.2f} تومان')
                 .format(amount=final_price / 100),
             )
 
         # Charge balance
-        description = get_texts().t(
+        description = get_texts(user.language).t(
             'CABINET_TRAFFIC_UPGRADE_DESCRIPTION', 'Traffic upgrade from {current}GB to {new}GB'
         ).format(current=current_traffic, new=new_traffic)
         success = await subtract_user_balance(db, user, final_price, description)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=get_texts().t('CABINET_TRAFFIC_CHARGE_FAILED', 'Failed to charge balance'),
+                detail=get_texts(user.language).t('CABINET_TRAFFIC_CHARGE_FAILED', 'Failed to charge balance'),
             )
 
         # Create transaction
@@ -789,7 +789,7 @@ async def switch_traffic_package(
 
     return {
         'success': True,
-        'message': get_texts()
+        'message': get_texts(user.language)
         .t('CABINET_TRAFFIC_CHANGED_MESSAGE', 'Traffic changed from {current}GB to {new}GB')
         .format(current=current_traffic, new=new_traffic),
         'old_traffic_gb': current_traffic,
@@ -827,7 +827,7 @@ async def refresh_traffic(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_TRAFFIC_NO_ACTIVE_SUBSCRIPTION', 'No active subscription'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_NO_ACTIVE_SUBSCRIPTION', 'No active subscription'),
         )
 
     # Use per-subscription key when subscription_id is available so that refreshing
@@ -858,7 +858,7 @@ async def refresh_traffic(
 
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=get_texts()
+            detail=get_texts(user.language)
             .t('CABINET_TRAFFIC_RATE_LIMITED', 'Rate limited. Try again in {seconds} seconds.')
             .format(seconds=TRAFFIC_REFRESH_RATE_WINDOW),
             headers={'Retry-After': str(TRAFFIC_REFRESH_RATE_WINDOW)},
@@ -943,5 +943,5 @@ async def refresh_traffic(
         logger.error('Error refreshing traffic for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts().t('CABINET_TRAFFIC_REFRESH_FAILED', 'Failed to refresh traffic data'),
+            detail=get_texts(user.language).t('CABINET_TRAFFIC_REFRESH_FAILED', 'Failed to refresh traffic data'),
         )

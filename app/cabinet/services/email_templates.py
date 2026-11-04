@@ -876,6 +876,11 @@ class EmailNotificationTemplates:
                 '<p>Ваша підписка{tariff} {why}. На <strong>{hours} год.</strong> доступно лише: <strong>{allowed}</strong>. Трафіку на цей час — {traffic_gb} ГБ, щоб ви встигли продовжити підписку.</p><p>Решта не працює до продовження. Доступ діє до <strong>{until}</strong>.</p>',
                 {'expired': 'закінчилась', 'limited': 'вичерпала трафік'},
             ),
+            'fa': (
+                'اشتراک به پایان رسید، اما ارتباط قطع نشد',
+                '<p>اشتراک شما{tariff} {why}. برای <strong>{hours} ساعت</strong> فقط این موارد در دسترس است: <strong>{allowed}</strong>. ترافیک این مدت — {traffic_gb} گیگ، تا فرصت تمدید داشته باشید.</p><p>بقیه موارد تا تمدید کار نمی‌کنند. دسترسی تا <strong>{until}</strong> فعال است.</p>',
+                {'expired': 'به پایان رسید', 'limited': 'ترافیک آن تمام شد'},
+            ),
         },
         'ended': {
             'ru': (
@@ -898,11 +903,16 @@ class EmailNotificationTemplates:
                 '<p>Підписку{tariff} так і не продовжено, тимчасовий доступ закрито. Більше не працює і те, що залишалось: <strong>{allowed}</strong>.</p><p>Продовжте підписку, щоб повернути VPN.</p>',
                 {},
             ),
+            'fa': (
+                'دسترسی موقت پایان یافت',
+                '<p>اشتراک{tariff} تمدید نشد و دسترسی موقت بسته شد. مواردی که باقی مانده بود نیز دیگر در دسترس نیست: <strong>{allowed}</strong>.</p><p>برای بازگشت VPN، اشتراک را تمدید کنید.</p>',
+                {},
+            ),
         },
     }
 
     def _grace_access_email(self, event: str, language: str, context: dict[str, Any]) -> dict[str, str]:
-        lang = language if language in ('ru', 'en', 'zh', 'ua') else 'ru'
+        lang = language if language in ('ru', 'en', 'zh', 'ua', 'fa') else 'ru'
         subject, body, why_by_reason = self.GRACE_EMAIL_COPY[event][lang]
         tariff_name = str(context.get('tariff_name') or '').strip()
         reason = str(context.get('reason') or 'expired').strip().lower()

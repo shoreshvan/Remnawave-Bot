@@ -8973,5 +8973,11 @@
   "DEVICE_CHANGE_TRANSACTION_DESCRIPTION": "تغییر تعداد دستگاه‌ها از {old} به {new} برای {days} روز",
   "TARIFF_PURCHASE_DISCOUNT_SUFFIX": " (تخفیف {percent}٪)",
   "TARIFF_PURCHASE_PROMO_SUFFIX": " (تخفیف تبلیغاتی ‎-{percent}%‎)",
-  "WEB_AUTH_DENIED": "❌ ورود لغو شد."
+  "WEB_AUTH_DENIED": "❌ ورود لغو شد.",
+  "GRACE_ACCESS_GRANTED_EXPIRED": "🛟 <b>اشتراک{tariff_label} به پایان رسید، اما ارتباط قطع نشد</b>\n\nبرای {hours} ساعت فقط این موارد در دسترس است: {allowed}. ترافیک این مدت — {traffic_gb} گیگ، تا فرصت تمدید داشته باشید. بقیه موارد تا تمدید کار نمی‌کنند.\n\n⏳ تا {until}.",
+  "GRACE_ACCESS_GRANTED_LIMITED": "🛟 <b>ترافیک اشتراک{tariff_label} تمام شد، اما ارتباط قطع نشد</b>\n\nبرای {hours} ساعت فقط این موارد در دسترس است: {allowed}. ترافیک این مدت — {traffic_gb} گیگ، تا فرصت خرید ترافیک یا تمدید داشته باشید. بقیه موارد تا پرداخت کار نمی‌کنند.\n\n⏳ تا {until}.",
+  "GRACE_ACCESS_ENDED": "⌛ <b>دسترسی موقت پایان یافت</b>\n\nاشتراک{tariff_label} تمدید نشد و دسترسی موقت بسته شد. مواردی که باقی مانده بود نیز دیگر در دسترس نیست: {allowed}. برای بازگشت VPN، اشتراک را تمدید کنید.",
+  "TRAFFIC_PURCHASE_TRANSACTION_DESCRIPTION": "خرید {gb} گیگ ترافیک",
+  "TRAFFIC_ADD_TRANSACTION_DESCRIPTION": "افزودن {gb} گیگ ترافیک",
+  "MINIAPP_TRAFFIC_PACKAGE_NOT_PRICED": "برای بستهٔ ترافیک {gb} گیگ قیمتی تنظیم نشده است"
 }

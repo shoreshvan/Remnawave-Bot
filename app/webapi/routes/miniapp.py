@@ -556,19 +556,21 @@ def _format_gb(value: float | None) -> float:
         return 0.0
 
 
-def _format_gb_label(value: float) -> str:
+def _format_gb_label(value: float, language: str = 'ru') -> str:
+    texts = get_texts(language)
     absolute = abs(value)
     if absolute >= 100:
-        return get_texts().t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.0f}')
+        return texts.t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.0f}')
     if absolute >= 10:
-        return get_texts().t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.1f}')
-    return get_texts().t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.2f}')
+        return texts.t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.1f}')
+    return texts.t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.2f}')
 
 
-def _format_limit_label(limit: int | None) -> str:
+def _format_limit_label(limit: int | None, language: str = 'ru') -> str:
+    texts = get_texts(language)
     if not limit:
-        return get_texts().t('MINIAPP_UNLIMITED_LABEL', 'Unlimited')
-    return get_texts().t('MINIAPP_GB_LABEL', '{value} GB').format(value=limit)
+        return texts.t('MINIAPP_UNLIMITED_LABEL', 'Unlimited')
+    return texts.t('MINIAPP_GB_LABEL', '{value} GB').format(value=limit)
 
 
 async def _resolve_user_from_init_data(
@@ -3701,9 +3703,9 @@ async def get_subscription_details(
         expires_at=getattr(subscription, 'end_date', None),
         device_limit=device_limit_value,
         traffic_used_gb=round(traffic_used_value, 2),
-        traffic_used_label=_format_gb_label(traffic_used_value),
+        traffic_used_label=_format_gb_label(traffic_used_value, getattr(user, 'language', 'ru')),
         traffic_limit_gb=traffic_limit_value,
-        traffic_limit_label=_format_limit_label(traffic_limit_value),
+        traffic_limit_label=_format_limit_label(traffic_limit_value, getattr(user, 'language', 'ru')),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {'active', 'trial'},
         promo_offer_discount_percent=active_discount_percent,
@@ -3919,7 +3921,9 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
         traffic_limit_gb=tariff.traffic_limit_gb,
         traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb)
         if settings.is_tariffs_mode()
-        else get_texts().t('MINIAPP_TRAFFIC_GB_LABEL', '{traffic} ГБ').format(traffic=tariff.traffic_limit_gb),
+        else get_texts(getattr(user, 'language', 'ru'))
+        .t('MINIAPP_TRAFFIC_GB_LABEL', '{traffic} ГБ')
+        .format(traffic=tariff.traffic_limit_gb),
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
@@ -6427,7 +6431,9 @@ async def update_subscription_servers_endpoint(
                 status.HTTP_502_BAD_GATEWAY,
                 detail={
                     'code': 'balance_charge_failed',
-                    'message': get_texts().t('MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'),
+                    'message': get_texts(user.language).t(
+                        'MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'
+                    ),
                 },
             )
 
@@ -6517,7 +6523,9 @@ async def update_subscription_traffic_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'validation_error',
-                'message': get_texts().t('MINIAPP_TRAFFIC_AMOUNT_REQUIRED', 'Traffic amount is required'),
+                'message': get_texts(user.language).t(
+                    'MINIAPP_TRAFFIC_AMOUNT_REQUIRED', 'Traffic amount is required'
+                ),
             },
         )
 
@@ -6528,7 +6536,7 @@ async def update_subscription_traffic_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'validation_error',
-                'message': get_texts().t('MINIAPP_TRAFFIC_AMOUNT_INVALID', 'Invalid traffic amount'),
+                'message': get_texts(user.language).t('MINIAPP_TRAFFIC_AMOUNT_INVALID', 'Invalid traffic amount'),
             },
         ) from None
 
@@ -6537,7 +6545,7 @@ async def update_subscription_traffic_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'validation_error',
-                'message': get_texts().t(
+                'message': get_texts(user.language).t(
                     'MINIAPP_TRAFFIC_AMOUNT_NEGATIVE',
                     'Traffic amount must be non-negative',
                 ),
@@ -6547,7 +6555,7 @@ async def update_subscription_traffic_endpoint(
     if new_traffic == subscription.traffic_limit_gb:
         return MiniAppSubscriptionUpdateResponse(
             success=True,
-            message=get_texts().t('MINIAPP_NO_CHANGES', 'No changes'),
+            message=get_texts(user.language).t('MINIAPP_NO_CHANGES', 'No changes'),
         )
 
     # В режиме fixed полностью блокируем изменение трафика
@@ -6557,7 +6565,7 @@ async def update_subscription_traffic_endpoint(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'traffic_fixed',
-                'message': get_texts().t(
+                'message': get_texts(user.language).t(
                     'MINIAPP_TRAFFIC_CHANGE_BLOCKED',
                     'Traffic cannot be changed for this subscription',
                 ),
@@ -6581,7 +6589,7 @@ async def update_subscription_traffic_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'traffic_unavailable',
-                'message': get_texts().t(
+                'message': get_texts(user.language).t(
                     'MINIAPP_TRAFFIC_PACKAGE_UNAVAILABLE',
                     'Selected traffic package is not available',
                 ),
@@ -6614,14 +6622,14 @@ async def update_subscription_traffic_endpoint(
                 status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_funds',
-                    'message': get_texts().t(
+                    'message': get_texts(user.language).t(
                         'MINIAPP_INSUFFICIENT_BALANCE_MISSING',
                         'Недостаточно средств на балансе. Не хватает {amount}',
                     ).format(amount=settings.format_price(missing, round_kopeks=False)),
                 },
             )
 
-        description = get_texts().t(
+        description = get_texts(user.language).t(
             'MINIAPP_TRANSACTION_TRAFFIC_SWITCH',
             'Переключение трафика с {old}GB на {new}GB',
         ).format(old=subscription.traffic_limit_gb, new=new_traffic)
@@ -6637,7 +6645,9 @@ async def update_subscription_traffic_endpoint(
                 status.HTTP_502_BAD_GATEWAY,
                 detail={
                     'code': 'balance_charge_failed',
-                    'message': get_texts().t('MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'),
+                    'message': get_texts(user.language).t(
+                        'MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'
+                    ),
                 },
             )
 
@@ -6646,7 +6656,7 @@ async def update_subscription_traffic_endpoint(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=total_price_difference,
-            description=get_texts().t(
+            description=get_texts(user.language).t(
                 'MINIAPP_TRANSACTION_DESCRIPTION_FOR_DAYS',
                 '{description} за {days} дн.',
             ).format(description=description, days=days_remaining),
@@ -6855,7 +6865,9 @@ async def update_subscription_devices_endpoint(
                 status.HTTP_502_BAD_GATEWAY,
                 detail={
                     'code': 'balance_charge_failed',
-                    'message': get_texts().t('MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'),
+                    'message': get_texts(user.language).t(
+                        'MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'
+                    ),
                 },
             )
 
@@ -6950,11 +6962,12 @@ async def update_subscription_devices_endpoint(
 # =============================================================================
 
 
-def _format_traffic_limit_label(traffic_gb: int) -> str:
+def _format_traffic_limit_label(traffic_gb: int, language: str = 'ru') -> str:
     """Форматирует лимит трафика для отображения."""
+    texts = get_texts(language)
     if traffic_gb == 0:
-        return get_texts().t('MINIAPP_TRAFFIC_UNLIMITED_LABEL', '♾️ Безлимит')
-    return get_texts().t('MINIAPP_TRAFFIC_GB_LABEL', '{traffic} ГБ').format(traffic=traffic_gb)
+        return texts.t('MINIAPP_TRAFFIC_UNLIMITED_LABEL', '♾️ Безлимит')
+    return texts.t('MINIAPP_TRAFFIC_GB_LABEL', '{traffic} ГБ').format(traffic=traffic_gb)
 
 
 async def _build_tariff_model(
@@ -7068,7 +7081,9 @@ async def _build_tariff_model(
         description=tariff.description,
         tier_level=tariff.tier_level,
         traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
+        traffic_limit_label=_format_traffic_limit_label(
+            tariff.traffic_limit_gb, getattr(user, 'language', 'ru')
+        ),
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
@@ -7123,7 +7138,9 @@ async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None
         description=tariff.description,
         tier_level=tariff.tier_level,
         traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
+        traffic_limit_label=_format_traffic_limit_label(
+            tariff.traffic_limit_gb, getattr(user, 'language', 'ru')
+        ),
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
@@ -7998,7 +8015,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'tariffs_mode_disabled',
-                'message': get_texts().t(
+                'message': get_texts(user.language).t(
                     'MINIAPP_TRAFFIC_TOPUP_TARIFFS_MODE_ONLY',
                     'Traffic top-up is only available in tariffs mode',
                 ),
@@ -8012,7 +8029,9 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'no_tariff',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_HAS_NO_TARIFF', 'Subscription has no tariff'),
+                'message': get_texts(user.language).t(
+                    'MINIAPP_SUBSCRIPTION_HAS_NO_TARIFF', 'Subscription has no tariff'
+                ),
             },
         )
 
@@ -8022,7 +8041,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
                 'code': 'tariff_not_found',
-                'message': get_texts().t('MINIAPP_TARIFF_NOT_FOUND', 'Tariff not found'),
+                'message': get_texts(user.language).t('MINIAPP_TARIFF_NOT_FOUND', 'Tariff not found'),
             },
         )
 
@@ -8032,7 +8051,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'traffic_topup_disabled',
-                'message': get_texts().t(
+                'message': get_texts(user.language).t(
                     'MINIAPP_TRAFFIC_TOPUP_DISABLED_FOR_TARIFF',
                     'Traffic top-up is disabled for this tariff',
                 ),
@@ -8045,7 +8064,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'unlimited_traffic',
-                'message': get_texts().t(
+                'message': get_texts(user.language).t(
                     'MINIAPP_TRAFFIC_TOPUP_UNLIMITED',
                     'Cannot add traffic to unlimited subscription',
                 ),
@@ -8063,7 +8082,7 @@ async def purchase_traffic_topup_endpoint(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'topup_limit_exceeded',
-                    'message': get_texts().t(
+                    'message': get_texts(user.language).t(
                         'MINIAPP_TRAFFIC_TOPUP_LIMIT_EXCEEDED',
                         'Traffic top-up limit exceeded. Maximum allowed: {max} GB, '
                         'current: {current} GB, available: {available} GB',
@@ -8081,7 +8100,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'invalid_package',
-                'message': get_texts().t(
+                'message': get_texts(user.language).t(
                     'MINIAPP_TRAFFIC_PACKAGE_NOT_AVAILABLE',
                     'Traffic package {gb}GB is not available',
                 ).format(gb=payload.gb),
@@ -8098,7 +8117,12 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'package_not_priced',
-                'message': f'Traffic package {payload.gb}GB has no price configured',
+                'message': get_texts(user.language)
+                .t(
+                    'MINIAPP_TRAFFIC_PACKAGE_NOT_PRICED',
+                    'Traffic package {gb}GB has no price configured',
+                )
+                .format(gb=payload.gb),
             },
         )
 
@@ -8127,7 +8151,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_balance',
-                'message': get_texts().t('MINIAPP_INSUFFICIENT_BALANCE', 'Insufficient balance'),
+                'message': get_texts(user.language).t('MINIAPP_INSUFFICIENT_BALANCE', 'Insufficient balance'),
                 'required': final_price,
                 'balance': user.balance_kopeks,
             },
@@ -8135,12 +8159,12 @@ async def purchase_traffic_topup_endpoint(
 
     # Списываем баланс
     if traffic_discount_percent > 0:
-        traffic_description = get_texts().t(
+        traffic_description = get_texts(user.language).t(
             'MINIAPP_TRANSACTION_TRAFFIC_TOPUP_DISCOUNT',
             'Докупка {gb} ГБ трафика (скидка {percent}%)',
         ).format(gb=payload.gb, percent=traffic_discount_percent)
     else:
-        traffic_description = get_texts().t(
+        traffic_description = get_texts(user.language).t(
             'MINIAPP_TRANSACTION_TRAFFIC_TOPUP',
             'Докупка {gb} ГБ трафика',
         ).format(gb=payload.gb)
@@ -8150,7 +8174,9 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 'code': 'balance_error',
-                'message': get_texts().t('MINIAPP_BALANCE_SUBTRACT_FAILED', 'Failed to subtract balance'),
+                'message': get_texts(user.language).t(
+                    'MINIAPP_BALANCE_SUBTRACT_FAILED', 'Failed to subtract balance'
+                ),
             },
         )
 
@@ -8199,7 +8225,9 @@ async def purchase_traffic_topup_endpoint(
 
     return MiniAppTrafficTopupResponse(
         success=True,
-        message=get_texts().t('MINIAPP_TRAFFIC_ADDED', 'Добавлено {gb} ГБ трафика').format(gb=payload.gb),
+        message=get_texts(user.language)
+        .t('MINIAPP_TRAFFIC_ADDED', 'Добавлено {gb} ГБ трафика')
+        .format(gb=payload.gb),
         new_traffic_limit_gb=subscription.traffic_limit_gb,
         new_balance_kopeks=user.balance_kopeks,
         charged_kopeks=final_price,
@@ -8238,7 +8266,9 @@ async def toggle_daily_subscription_pause_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'no_tariff',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_HAS_NO_TARIFF', 'Subscription has no tariff'),
+                'message': get_texts(user.language).t(
+                    'MINIAPP_SUBSCRIPTION_HAS_NO_TARIFF', 'Subscription has no tariff'
+                ),
             },
         )
 

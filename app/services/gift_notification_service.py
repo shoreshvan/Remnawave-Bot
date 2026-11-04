@@ -198,7 +198,7 @@ def build_gift_result_presentation(
     # Localized message body (HTML formatted)
     escaped_tariff_name = html.escape(quote.tariff_name)
     traffic_str = (
-        texts.format_traffic(quote.traffic_limit_gb)
+        texts.format_traffic(quote.traffic_limit_gb, language=texts.language)
         if quote.traffic_limit_gb is not None
         else texts.t('GIFT_TRAFFIC_UNLIMITED', '∞ (безлимит)')
     )
@@ -283,7 +283,7 @@ def build_gift_history_detail_presentation(
     texts = get_texts(language)
     escaped_tariff_name = html.escape(item.tariff_name or texts.t('GIFT_TARIFF_DELETED', 'Архивный тариф'))
     traffic_str = (
-        texts.format_traffic(item.traffic_limit_gb)
+        texts.format_traffic(item.traffic_limit_gb, language=texts.language)
         if item.traffic_limit_gb is not None
         else texts.t('GIFT_TRAFFIC_UNLIMITED', '∞ (безлимит)')
     )

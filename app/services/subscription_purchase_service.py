@@ -528,7 +528,7 @@ class MiniAppSubscriptionPurchaseService:
             value = int(package.get('gb') or 0)
             price_per_month = int(package.get('price') or 0)
             discounted_per_month, discount_value = apply_percentage_discount(price_per_month, discount_percent)
-            label = texts.format_traffic(value or 0)
+            label = texts.format_traffic(value or 0, language=texts.language)
             options.append(
                 PurchaseTrafficOption(
                     value=value,

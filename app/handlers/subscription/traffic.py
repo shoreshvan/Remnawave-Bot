@@ -709,7 +709,9 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             'base_price_kopeks': discounted_per_month,
             'discount_percent': traffic_discount_pct,
             'source': 'bot',
-            'description': f'Докупка {traffic_gb} ГБ трафика',
+            'description': texts.t(
+                'TRAFFIC_PURCHASE_TRANSACTION_DESCRIPTION', 'Докупка {gb} ГБ трафика'
+            ).format(gb=traffic_gb),
         }
         try:
             await user_cart_service.save_user_cart(db_user.id, cart_data)
@@ -753,7 +755,7 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             db,
             db_user,
             price,
-            f'Добавление {traffic_gb} ГБ трафика',
+            texts.t('TRAFFIC_ADD_TRANSACTION_DESCRIPTION', 'Добавление {gb} ГБ трафика').format(gb=traffic_gb),
         )
 
         if not success:
@@ -797,7 +799,9 @@ async def add_traffic(callback: types.CallbackQuery, db_user: User, db: AsyncSes
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price,
-            description=f'Добавление {traffic_gb} ГБ трафика',
+            description=texts.t('TRAFFIC_ADD_TRANSACTION_DESCRIPTION', 'Добавление {gb} ГБ трафика').format(
+                gb=traffic_gb
+            ),
         )
 
         await db.refresh(db_user)
