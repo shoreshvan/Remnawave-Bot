@@ -2,6 +2,7 @@
 Сервис колеса удачи (Fortune Wheel) с RTP алгоритмом.
 """
 
+import math
 import random
 import secrets
 from dataclasses import dataclass
@@ -201,60 +202,69 @@ class FortuneWheelService:
         Алгоритм:
         1. Целевая средняя выплата = spin_cost * (RTP / 100)
         2. Для призов с manual_probability - используем его напрямую
-        3. Для остальных - рассчитываем веса обратно пропорционально стоимости приза
-        4. "Nothing" сектор балансирует систему
+        3. Из остатка бюджета выводим вероятности обратно пропорционально стоимости приза
+        4. Нулевые призы делят оставшуюся вероятность; недостижимая цель логируется
         """
         if not prizes:
             return []
 
         target_payout = spin_cost_kopeks * (config.rtp_percent / 100)
-
-        # Разделяем призы с ручной вероятностью и автоматической
         manual_prizes = []
         auto_prizes = []
-        manual_prob_sum = 0.0
-
         for prize in prizes:
             if prize.manual_probability is not None and prize.manual_probability > 0:
                 manual_prizes.append((prize, prize.manual_probability))
-                manual_prob_sum += prize.manual_probability
             else:
                 auto_prizes.append(prize)
 
-        # Оставшаяся вероятность для авто-призов
-        remaining_prob = max(0, 1.0 - manual_prob_sum)
+        manual_prob_sum = math.fsum(prob for _, prob in manual_prizes)
+        manual_payout = math.fsum(prize.prize_value_kopeks * prob for prize, prob in manual_prizes)
+        remaining_prob = max(0.0, 1.0 - manual_prob_sum)
+        reasons = []
 
         if not auto_prizes or remaining_prob <= 0:
-            # Только ручные призы, нормализуем их
-            if manual_prizes:
-                total = sum(p[1] for p in manual_prizes)
-                return [(p[0], p[1] / total) for p in manual_prizes]
-            return []
-
-        # Рассчитываем веса для авто-призов
-        # Вес обратно пропорционален стоимости приза (более дорогие выпадают реже)
-        weights = []
-        for prize in auto_prizes:
-            if prize.prize_value_kopeks > 0:
-                # Чем дороже приз, тем меньше вес
-                weight = target_payout / prize.prize_value_kopeks
+            # Preserve the existing relative-weight policy for manual-only tables.
+            result = [(prize, prob / manual_prob_sum) for prize, prob in manual_prizes] if manual_prob_sum else []
+            if not math.isclose(manual_prob_sum, 1.0):
+                reasons.append('manual_probabilities_normalized')
+        else:
+            paid = [prize for prize in auto_prizes if prize.prize_value_kopeks > 0]
+            zero_count = len(auto_prizes) - len(paid)
+            inverse_sum = math.fsum(1.0 / prize.prize_value_kopeks for prize in paid)
+            if not zero_count:
+                # Without a zero-value outcome all probability must pay out.
+                # Keep inverse-value weighting, but report that RTP is not controllable.
+                reasons.append('no_zero_value_auto_prize')
+                result = manual_prizes + [
+                    (prize, remaining_prob / (prize.prize_value_kopeks * inverse_sum)) for prize in auto_prizes
+                ]
             else:
-                # "Nothing" или нулевой приз - даем базовый вес
-                weight = 1.0
-            weights.append((prize, max(weight, 0.01)))  # Минимальный вес 1%
+                budget = max(0.0, target_payout - manual_payout)
+                scale = budget / len(paid) if paid else 0.0
+                if inverse_sum and scale * inverse_sum > remaining_prob:
+                    scale = remaining_prob / inverse_sum
+                    reasons.append('insufficient_probability_for_target')
+                paid_probability = math.fsum(scale / prize.prize_value_kopeks for prize in paid)
+                zero_probability = max(0.0, remaining_prob - paid_probability) / zero_count
+                result = manual_prizes + [
+                    (prize, scale / prize.prize_value_kopeks if prize.prize_value_kopeks > 0 else zero_probability)
+                    for prize in auto_prizes
+                ]
+                if manual_payout > target_payout:
+                    reasons.append('manual_payout_exceeds_target')
 
-        # Нормализуем веса авто-призов до remaining_prob
-        total_weight = sum(w[1] for w in weights)
-        auto_probabilities = [(prize, (weight / total_weight) * remaining_prob) for prize, weight in weights]
-
-        # Объединяем
-        result = manual_prizes + auto_probabilities
-
-        # Финальная нормализация (на случай погрешностей)
-        total = sum(p[1] for p in result)
-        if total > 0:
-            result = [(p[0], p[1] / total) for p in result]
-
+        actual_payout = math.fsum(prize.prize_value_kopeks * prob for prize, prob in result)
+        if not math.isclose(actual_payout, target_payout, rel_tol=1e-9, abs_tol=1e-7):
+            reasons.append('target_unreachable')
+        if reasons:
+            logger.warning(
+                'Wheel RTP target unreachable for prize configuration',
+                config_id=getattr(config, 'id', None),
+                reasons=reasons,
+                target_payout_kopeks=target_payout,
+                expected_payout_kopeks=actual_payout,
+                spin_cost_kopeks=spin_cost_kopeks,
+            )
         return result
 
     def _select_prize(self, prizes_with_probabilities: list[tuple[WheelPrize, float]]) -> WheelPrize:
@@ -267,11 +277,14 @@ class FortuneWheelService:
 
         for prize, probability in prizes_with_probabilities:
             cumulative += probability
-            if rand <= cumulative:
+            if probability > 0 and rand < cumulative:
                 return prize
 
-        # Fallback на последний приз
-        return prizes_with_probabilities[-1][0]
+        # Floating-point accumulation may finish just below one; never select a zero-probability outcome.
+        for prize, probability in reversed(prizes_with_probabilities):
+            if probability > 0:
+                return prize
+        raise ValueError('No prizes with positive probability')
 
     def _calculate_rotation(self, prizes: list[WheelPrize], selected_prize: WheelPrize) -> float:
         """
@@ -316,14 +329,12 @@ class FortuneWheelService:
         user = await lock_user_for_update(db, user)
 
         if user.balance_kopeks < kopeks:
-            raise ValueError(
-                get_texts(user.language).t('WHEEL_ERROR_INSUFFICIENT_BALANCE', 'Недостаточно средств на балансе')
-            )
+            raise ValueError('Недостаточно средств на балансе')
 
         # Списываем с баланса
         user.balance_kopeks -= kopeks
         logger.info(
-            '💫 Списано تومان (⭐) с баланса user_id',
+            '💫 Списано ₽ (⭐) с баланса user_id',
             kopeks=round(kopeks / 100, 2),
             spin_cost_stars=config.spin_cost_stars,
             user_id=user.id,
@@ -340,19 +351,14 @@ class FortuneWheelService:
         """
         if not subscription:
             if settings.is_multi_tariff_enabled():
-                raise ValueError(
-                    get_texts(user.language).t(
-                        'WHEEL_ERROR_SUBSCRIPTION_REQUIRED_MULTI',
-                        'Необходимо указать подписку для оплаты днями (мульти-тариф)',
-                    )
-                )
+                raise ValueError('Необходимо указать подписку для оплаты днями (мульти-тариф)')
             subscription = await get_subscription_by_user_id(db, user.id)
 
         if not subscription or not subscription.is_active:
-            raise ValueError(get_texts(user.language).t('WHEEL_ERROR_NO_ACTIVE_SUBSCRIPTION', 'Нет активной подписки'))
+            raise ValueError('Нет активной подписки')
 
         if subscription.days_left < config.min_subscription_days_for_day_payment + config.spin_cost_days:
-            raise ValueError(get_texts(user.language).t('WHEEL_ERROR_INSUFFICIENT_DAYS', 'Недостаточно дней подписки'))
+            raise ValueError('Недостаточно дней подписки')
 
         # Уменьшаем end_date
         subscription.end_date -= timedelta(days=config.spin_cost_days)
@@ -368,18 +374,48 @@ class FortuneWheelService:
 
         logger.info('📅 Списано дней подписки у user_id', spin_cost_days=config.spin_cost_days, user_id=user.id)
 
-        # Синхронизируем с RemnaWave
-        try:
-            subscription_service = SubscriptionService()
-            result = await subscription_service.update_remnawave_user(db, subscription)
-            if result is not None:
-                logger.info('✅ Списание дней синхронизировано с RemnaWave для user_id', user_id=user.id)
-            else:
-                logger.error('⚠️ Не удалось синхронизировать списание дней с RemnaWave', user_id=user.id)
-        except Exception as e:
-            logger.error('⚠️ Ошибка синхронизации списания дней с RemnaWave', error=e, user_id=user.id)
-
         return kopeks
+
+    async def _sync_subscription_after_spin(
+        self,
+        user: User,
+        prize: WheelPrize,
+        subscription: Subscription | None = None,
+        *,
+        payment_type: str | None = None,
+    ) -> None:
+        """Sync committed entitlements in a separate session; panel rollback cannot expire spin results."""
+        spent_days = payment_type == WheelSpinPaymentType.SUBSCRIPTION_DAYS.value
+        prize_type = prize.prize_type
+        if not spent_days and prize_type not in (
+            WheelPrizeType.SUBSCRIPTION_DAYS.value,
+            WheelPrizeType.TRAFFIC_GB.value,
+        ):
+            return
+        user_id = user.id
+        subscription_id = subscription.id if subscription else None
+        if subscription_id is None and settings.is_multi_tariff_enabled():
+            return  # Untargeted multi-tariff prizes are converted to balance.
+        try:
+            from app.database.crud.subscription import get_subscription_by_id_for_user
+            from app.database.database import AsyncSessionLocal
+
+            async with AsyncSessionLocal() as sync_db:
+                if subscription_id is not None:
+                    current = await get_subscription_by_id_for_user(sync_db, subscription_id, user_id)
+                else:
+                    current = await get_subscription_by_user_id(sync_db, user_id)
+                if current is None:
+                    return
+                daily = current.tariff and getattr(current.tariff, 'is_daily', False)
+                days_changed = prize_type == WheelPrizeType.SUBSCRIPTION_DAYS.value and not daily
+                traffic_changed = prize_type == WheelPrizeType.TRAFFIC_GB.value and current.traffic_limit_gb > 0
+                if spent_days or days_changed or traffic_changed:
+                    result = await SubscriptionService().update_remnawave_user(sync_db, current)
+                    if result is None:
+                        logger.warning('Wheel subscription panel sync did not complete', user_id=user_id)
+        except Exception as error:
+            logger.warning('Wheel subscription panel sync failed after committed spin', error=str(error))
 
     async def _apply_prize(
         self,
@@ -394,7 +430,6 @@ class FortuneWheelService:
         Возвращает промокод (если приз - промокод), иначе None.
         """
         prize_type = prize.prize_type
-        texts = get_texts(user.language)
 
         if prize_type == WheelPrizeType.NOTHING.value:
             logger.info('🎰 Пустой приз для user_id', user_id=user.id)
@@ -406,14 +441,12 @@ class FortuneWheelService:
                 db,
                 user,
                 prize.prize_value,
-                description=texts.t('WHEEL_PRIZE_TX_BALANCE', 'Выигрыш в колесе удачи: {amount} تومان').format(
-                    amount=f'{prize.prize_value / 100:.2f}'
-                ),
+                description=f'Выигрыш в колесе удачи: {prize.prize_value / 100:.2f}₽',
                 create_transaction=True,
                 commit=False,
             )
             logger.info(
-                '💰 Начислено تومان на баланс user_id', prize_value=round(prize.prize_value / 100, 2), user_id=user.id
+                '💰 Начислено ₽ на баланс user_id', prize_value=round(prize.prize_value / 100, 2), user_id=user.id
             )
             return None
 
@@ -426,10 +459,7 @@ class FortuneWheelService:
                         db,
                         user,
                         prize.prize_value_kopeks,
-                        description=texts.t(
-                            'WHEEL_PRIZE_TX_DAYS_TO_BALANCE_MULTI',
-                            'Выигрыш в колесе удачи: {days} дней (на баланс, мульти-тариф)',
-                        ).format(days=prize.prize_value),
+                        description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс, мульти-тариф)',
                         create_transaction=True,
                         commit=False,
                     )
@@ -458,15 +488,12 @@ class FortuneWheelService:
                             db,
                             user,
                             balance_bonus,
-                            description=texts.t(
-                                'WHEEL_PRIZE_TX_DAYS_TO_BALANCE_DAILY',
-                                'Выигрыш в колесе удачи: {days} дней → {amount} تومان',
-                            ).format(days=prize.prize_value, amount=f'{balance_bonus / 100:.2f}'),
+                            description=f'Выигрыш в колесе удачи: {prize.prize_value} дней → {balance_bonus / 100:.2f}₽',
                             create_transaction=True,
                             commit=False,
                         )
                         logger.info(
-                            '💰 Суточный тариф: дней конвертированы в تومان для user_id',
+                            '💰 Суточный тариф: дней конвертированы в ₽ для user_id',
                             prize_value=prize.prize_value,
                             balance_bonus=round(balance_bonus / 100, 2),
                             user_id=user.id,
@@ -477,10 +504,7 @@ class FortuneWheelService:
                             db,
                             user,
                             prize.prize_value_kopeks,
-                            description=texts.t(
-                                'WHEEL_PRIZE_TX_DAYS_TO_BALANCE',
-                                'Выигрыш в колесе удачи: {days} дней (на баланс)',
-                            ).format(days=prize.prize_value),
+                            description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)',
                             create_transaction=True,
                             commit=False,
                         )
@@ -499,22 +523,13 @@ class FortuneWheelService:
                     await reconcile_tariff_traffic_limit(db, subscription)
                     logger.info('📅 Начислено дней подписки user_id', prize_value=prize.prize_value, user_id=user.id)
 
-                    # Синхронизируем с RemnaWave
-                    try:
-                        subscription_service = SubscriptionService()
-                        await subscription_service.update_remnawave_user(db, subscription)
-                        logger.info('✅ Синхронизировано с RemnaWave для user_id', user_id=user.id)
-                    except Exception as e:
-                        logger.error('⚠️ Ошибка синхронизации с RemnaWave', error=e)
             else:
                 # Если нет подписки - начисляем на баланс эквивалент
                 await add_user_balance(
                     db,
                     user,
                     prize.prize_value_kopeks,
-                    description=texts.t(
-                        'WHEEL_PRIZE_TX_DAYS_TO_BALANCE', 'Выигрыш в колесе удачи: {days} дней (на баланс)'
-                    ).format(days=prize.prize_value),
+                    description=f'Выигрыш в колесе удачи: {prize.prize_value} дней (на баланс)',
                     create_transaction=True,
                     commit=False,
                 )
@@ -530,10 +545,7 @@ class FortuneWheelService:
                         db,
                         user,
                         prize.prize_value_kopeks,
-                        description=texts.t(
-                            'WHEEL_PRIZE_TX_TRAFFIC_TO_BALANCE_MULTI',
-                            'Выигрыш в колесе удачи: {gb}GB (на баланс, мульти-тариф)',
-                        ).format(gb=prize.prize_value),
+                        description=f'Выигрыш в колесе удачи: {prize.prize_value}GB (на баланс, мульти-тариф)',
                         create_transaction=True,
                         commit=False,
                     )
@@ -549,22 +561,13 @@ class FortuneWheelService:
                 subscription.updated_at = datetime.now(UTC)
                 logger.info('📊 Начислено трафика user_id', prize_value=prize.prize_value, user_id=user.id)
 
-                # Синхронизируем с RemnaWave
-                try:
-                    subscription_service = SubscriptionService()
-                    await subscription_service.update_remnawave_user(db, subscription)
-                    logger.info('✅ Трафик синхронизирован с RemnaWave для user_id', user_id=user.id)
-                except Exception as e:
-                    logger.error('⚠️ Ошибка синхронизации трафика с RemnaWave', error=e)
             else:
                 # Если безлимит или нет подписки - на баланс
                 await add_user_balance(
                     db,
                     user,
                     prize.prize_value_kopeks,
-                    description=texts.t(
-                        'WHEEL_PRIZE_TX_TRAFFIC_TO_BALANCE', 'Выигрыш в колесе удачи: {gb}GB (на баланс)'
-                    ).format(gb=prize.prize_value),
+                    description=f'Выигрыш в колесе удачи: {prize.prize_value}GB (на баланс)',
                     create_transaction=True,
                     commit=False,
                 )
@@ -621,7 +624,6 @@ class FortuneWheelService:
         5. Создать запись WheelSpin
         6. Вернуть результат
         """
-        texts = get_texts(user.language)
         try:
             # 1. Проверяем доступность
             availability = await self.check_availability(db, user)
@@ -639,7 +641,7 @@ class FortuneWheelService:
                 return SpinResult(
                     success=False,
                     error='no_prizes',
-                    message=texts.t('WHEEL_ERROR_PRIZES_NOT_CONFIGURED', 'Призы не настроены'),
+                    message='Призы не настроены',
                 )
 
             # Serialize all of this user's spins on the user row and re-check the
@@ -673,7 +675,7 @@ class FortuneWheelService:
                     return SpinResult(
                         success=False,
                         error='invalid_subscription',
-                        message=texts.t('WHEEL_ERROR_SUBSCRIPTION_NOT_FOUND', 'Подписка не найдена или неактивна'),
+                        message='Подписка не найдена или неактивна',
                     )
             elif not settings.is_multi_tariff_enabled():
                 # Single-tariff: auto-resolve
@@ -688,7 +690,7 @@ class FortuneWheelService:
                 return SpinResult(
                     success=False,
                     error='subscription_required',
-                    message=texts.t('WHEEL_ERROR_SELECT_SUBSCRIPTION_DAYS', 'Выберите подписку для оплаты днями'),
+                    message='Выберите подписку для оплаты днями',
                 )
 
             # 2. Обрабатываем оплату
@@ -697,7 +699,7 @@ class FortuneWheelService:
                     return SpinResult(
                         success=False,
                         error='cannot_pay_stars',
-                        message=texts.t('WHEEL_ERROR_STARS_UNAVAILABLE', 'Оплата Stars недоступна'),
+                        message='Оплата Stars недоступна',
                     )
                 payment_amount = config.spin_cost_stars
                 payment_value_kopeks = await self._process_stars_payment(db, user, config)
@@ -706,7 +708,7 @@ class FortuneWheelService:
                     return SpinResult(
                         success=False,
                         error='cannot_pay_days',
-                        message=texts.t('WHEEL_ERROR_DAYS_UNAVAILABLE', 'Оплата днями подписки недоступна'),
+                        message='Оплата днями подписки недоступна',
                     )
                 payment_amount = config.spin_cost_days
                 payment_value_kopeks = await self._process_days_payment(db, user, config, target_subscription)
@@ -714,8 +716,12 @@ class FortuneWheelService:
                 return SpinResult(
                     success=False,
                     error='invalid_payment_type',
-                    message=texts.t('WHEEL_ERROR_INVALID_PAYMENT_TYPE', 'Неверный способ оплаты'),
+                    message='Неверный способ оплаты',
                 )
+
+            # Prize helpers reload locked user/subscription rows with populate_existing.
+            # Persist the debit inside this transaction before those reads can overwrite it.
+            await db.flush()
 
             # 3. Рассчитываем вероятности и выбираем приз
             prizes_with_probs = self.calculate_prize_probabilities(config, prizes, payment_value_kopeks)
@@ -755,6 +761,12 @@ class FortuneWheelService:
             )
 
             await db.commit()
+            await self._sync_subscription_after_spin(
+                user,
+                selected_prize,
+                target_subscription,
+                payment_type=payment_type,
+            )
 
             # 7. Формируем результат
             message = self._get_prize_message(selected_prize, generated_promocode)
@@ -785,7 +797,7 @@ class FortuneWheelService:
             return SpinResult(
                 success=False,
                 error='internal_error',
-                message=texts.t('WHEEL_ERROR_INTERNAL', 'Произошла ошибка, попробуйте позже'),
+                message='Произошла ошибка, попробуйте позже',
             )
 
     def _get_error_message(self, reason: str | None) -> str:
@@ -807,7 +819,7 @@ class FortuneWheelService:
             return 'К сожалению, в этот раз не повезло. Попробуйте еще!'
 
         if prize_type == WheelPrizeType.BALANCE_BONUS.value:
-            return f'Поздравляем! Вы выиграли {prize.prize_value / 100:.0f} تومان на баланс!'
+            return f'Поздравляем! Вы выиграли {prize.prize_value / 100:.0f}₽ на баланс!'
 
         if prize_type == WheelPrizeType.SUBSCRIPTION_DAYS.value:
             days_word = self._pluralize_days(prize.prize_value)

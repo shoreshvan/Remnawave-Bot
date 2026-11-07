@@ -18,38 +18,83 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_price_kopeks
 
 
-def _days(value: int | None) -> str:
-    return f'{value} дн.' if value is not None and value > 0 else 'Не задано'
+_VALIDATION_ERROR_KEYS = {
+    'не указана цена за 1 день': 'ADMIN_TARIFF_VALIDATION_DAYS_PRICE_MISSING',
+    'цена за 1 день должна быть больше нуля': 'ADMIN_TARIFF_VALIDATION_DAYS_PRICE_POSITIVE',
+    'не указан минимум дней': 'ADMIN_TARIFF_VALIDATION_DAYS_MIN_MISSING',
+    'минимум дней должен быть больше нуля': 'ADMIN_TARIFF_VALIDATION_DAYS_MIN_POSITIVE',
+    'не указан максимум дней': 'ADMIN_TARIFF_VALIDATION_DAYS_MAX_MISSING',
+    'максимум дней должен быть больше нуля': 'ADMIN_TARIFF_VALIDATION_DAYS_MAX_POSITIVE',
+    'максимум дней не может быть меньше минимума': 'ADMIN_TARIFF_VALIDATION_DAYS_RANGE',
+}
 
 
-def _price(value: int | None) -> str:
-    return format_price_kopeks(value) if value is not None and value > 0 else 'Не задано'
+def _localized_validation_error(error: str, language: str) -> str:
+    # Closed error vocabulary from the tariff validator; unknown errors retain their original text.
+    key = _VALIDATION_ERROR_KEYS.get(error)
+    return get_texts(language).t(key, error) if key else error
 
 
-def format_custom_days_settings(tariff: Tariff) -> str:
-    """Блок для карточки тарифа."""
-    enabled = getattr(tariff, 'custom_days_enabled', False)
-    status = '✅ Включено' if enabled else '❌ Выключено'
+def _days(value: int | None, language: str = 'ru') -> str:
     return (
-        f'{status}\n'
-        f'• Цена за 1 день: {_price(getattr(tariff, "price_per_day_kopeks", None))}\n'
-        f'• Минимум: {_days(getattr(tariff, "min_days", None))}\n'
-        f'• Максимум: {_days(getattr(tariff, "max_days", None))}'
+        get_texts(language).t('ADMIN_TARIFF_HELPER_DAYS_1', '{v0} дн.').format(v0=value)
+        if value is not None and value > 0
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_UNSET', 'Не задано')
     )
 
 
-def render_custom_days_settings(tariff: Tariff) -> str:
+def _price(value: int | None, language: str = 'ru') -> str:
+    return (
+        format_price_kopeks(value)
+        if value is not None and value > 0
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_UNSET', 'Не задано')
+    )
+
+
+def format_custom_days_settings(tariff: Tariff, language: str = 'ru') -> str:
+    """Блок для карточки тарифа."""
+    enabled = getattr(tariff, 'custom_days_enabled', False)
+    status = (
+        get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLED_STATE', '✅ Включено')
+        if enabled
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_STATE', '❌ Выключено')
+    )
+    return (
+        get_texts(language)
+        .t(
+            'ADMIN_TARIFF_HELPER_FORMAT_CUSTOM_DAYS_SETTINGS_1',
+            '{v0}\n• Цена за 1 день: {v1}\n• Минимум: {v2}\n• Максимум: {v3}',
+        )
+        .format(
+            v0=status,
+            v1=_price(getattr(tariff, 'price_per_day_kopeks', None), language=language),
+            v2=_days(getattr(tariff, 'min_days', None), language=language),
+            v3=_days(getattr(tariff, 'max_days', None), language=language),
+        )
+    )
+
+
+def render_custom_days_settings(tariff: Tariff, language: str = 'ru') -> str:
     """Отдельный экран настроек."""
     enabled = getattr(tariff, 'custom_days_enabled', False)
-    status = '✅ Включён' if enabled else '❌ Выключен'
+    status = (
+        get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLED_MODE', '✅ Включён')
+        if enabled
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_MODE', '❌ Выключен')
+    )
     return (
-        f'📅 <b>Произвольное количество дней</b>\n\n'
-        f'Тариф: <b>{html.escape(tariff.name)}</b>\n\n'
-        f'Статус: {status}\n'
-        f'Цена за 1 день: <b>{_price(getattr(tariff, "price_per_day_kopeks", None))}</b>\n'
-        f'Минимум: <b>{_days(getattr(tariff, "min_days", None))}</b>\n'
-        f'Максимум: <b>{_days(getattr(tariff, "max_days", None))}</b>\n\n'
-        'Пользователь сможет выбрать срок в указанных границах; цена — дни × цена за день.'
+        get_texts(language)
+        .t(
+            'ADMIN_TARIFF_HELPER_RENDER_CUSTOM_DAYS_SETTINGS_1',
+            '📅 <b>Произвольное количество дней</b>\n\nТариф: <b>{v0}</b>\n\nСтатус: {v1}\nЦена за 1 день: <b>{v2}</b>\nМинимум: <b>{v3}</b>\nМаксимум: <b>{v4}</b>\n\nПользователь сможет выбрать срок в указанных границах; цена — дни × цена за день.',
+        )
+        .format(
+            v0=html.escape(tariff.name),
+            v1=status,
+            v2=_price(getattr(tariff, 'price_per_day_kopeks', None), language=language),
+            v3=_days(getattr(tariff, 'min_days', None), language=language),
+            v4=_days(getattr(tariff, 'max_days', None), language=language),
+        )
     )
 
 
@@ -60,29 +105,27 @@ def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMar
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=(
-                        texts.t('ADMIN_TARIFF_CT_TOGGLE_DISABLE', '❌ Выключить')
-                        if enabled
-                        else texts.t('ADMIN_TARIFF_CT_TOGGLE_ENABLE', '✅ Включить')
-                    ),
+                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLE_BUTTON', '❌ Выключить')
+                    if enabled
+                    else get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLE_BUTTON', '✅ Включить'),
                     callback_data=f'admin_tariff_toggle_custom_days:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_CD_PRICE_BUTTON', '💰 Цена за 1 день'),
+                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_DAY_PRICE_BUTTON', '💰 Цена за 1 день'),
                     callback_data=f'admin_tariff_edit_custom_days_price:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_CD_MIN_BUTTON', '📉 Минимум дней'),
+                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_MIN_DAYS_BUTTON', '📉 Минимум дней'),
                     callback_data=f'admin_tariff_edit_custom_days_min:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_CD_MAX_BUTTON', '📈 Максимум дней'),
+                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_MAX_DAYS_BUTTON', '📈 Максимум дней'),
                     callback_data=f'admin_tariff_edit_custom_days_max:{tariff.id}',
                 )
             ],
@@ -95,13 +138,14 @@ def get_custom_days_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMar
 @error_handler
 async def show_custom_days_settings(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     await state.clear()
-    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
     await callback.message.edit_text(
-        render_custom_days_settings(tariff),
+        render_custom_days_settings(tariff, language=db_user.language),
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -111,15 +155,18 @@ async def show_custom_days_settings(callback: types.CallbackQuery, db_user: User
 @admin_required
 @error_handler
 async def toggle_custom_days(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     if getattr(tariff, 'custom_days_enabled', False):
         tariff = await update_tariff(db, tariff, custom_days_enabled=False)
-        await callback.answer(texts.t('ADMIN_TARIFF_CD_DISABLED_TOAST', 'Произвольные дни выключены'))
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_DAYS_DISABLED', 'Произвольные дни выключены')
+        )
     else:
         errors = validate_custom_days_configuration(
             price_per_day_kopeks=getattr(tariff, 'price_per_day_kopeks', None),
@@ -127,19 +174,21 @@ async def toggle_custom_days(callback: types.CallbackQuery, db_user: User, db: A
             max_days=getattr(tariff, 'max_days', None),
         )
         if errors:
-            details = '\n'.join(f'• {error}' for error in errors)
+            details = '\n'.join(f'• {_localized_validation_error(error, db_user.language)}' for error in errors)
             await callback.answer(
-                texts.t('ADMIN_TARIFF_CD_CANNOT_ENABLE', 'Нельзя включить произвольные дни:\n{details}').format(
-                    details=details
-                ),
+                get_texts(db_user.language)
+                .t('ADMIN_TARIFF_HELPER_TOGGLE_CUSTOM_DAYS_1', 'Нельзя включить произвольные дни:\n{v0}')
+                .format(v0=details),
                 show_alert=True,
             )
             return
         tariff = await update_tariff(db, tariff, custom_days_enabled=True)
-        await callback.answer(texts.t('ADMIN_TARIFF_CD_ENABLED_TOAST', 'Произвольные дни включены'))
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_DAYS_ENABLED', 'Произвольные дни включены')
+        )
 
     await callback.message.edit_text(
-        render_custom_days_settings(tariff),
+        render_custom_days_settings(tariff, language=db_user.language),
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -160,10 +209,12 @@ async def _start_field_edit(
     await state.update_data(tariff_id=tariff.id, language=db_user.language)
     texts = get_texts(db_user.language)
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_CT_FIELD_EDIT_BODY',
-            '{title}\n\nТариф: <b>{tariff_name}</b>\nТекущее значение: <b>{current_value}</b>\n\n{prompt}',
-        ).format(title=title, tariff_name=html.escape(tariff.name), current_value=current_value, prompt=prompt),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
+            '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
+        )
+        .format(v0=title, v1=html.escape(tariff.name), v2=current_value, v3=prompt),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_edit_custom_days:{tariff.id}')]
@@ -179,10 +230,11 @@ async def _start_field_edit(
 async def start_edit_custom_days_price(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
 ):
-    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
     await _start_field_edit(
         callback,
@@ -190,11 +242,11 @@ async def start_edit_custom_days_price(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_price,
-        title=texts.t('ADMIN_TARIFF_CD_PRICE_TITLE', '💰 <b>Цена за 1 день</b>'),
-        current_value=_price(getattr(tariff, 'price_per_day_kopeks', None)),
-        prompt=texts.t(
-            'ADMIN_TARIFF_CD_PRICE_PROMPT',
-            'Введите цену за 1 день в تومان.\nПример: <code>15</code> или <code>12.50</code>',
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_DAY_PRICE_TITLE', '💰 <b>Цена за 1 день</b>'),
+        current_value=_price(getattr(tariff, 'price_per_day_kopeks', None), language=db_user.language),
+        prompt=get_texts(db_user.language).t(
+            'ADMIN_TARIFF_HELPER_DAY_PRICE_PROMPT',
+            'Введите цену за 1 день в рублях.\nПример: <code>15</code> или <code>12.50</code>',
         ),
     )
 
@@ -202,10 +254,11 @@ async def start_edit_custom_days_price(
 @admin_required
 @error_handler
 async def start_edit_custom_days_min(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
     await _start_field_edit(
         callback,
@@ -213,11 +266,10 @@ async def start_edit_custom_days_min(callback: types.CallbackQuery, db_user: Use
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_min,
-        title=texts.t('ADMIN_TARIFF_CD_MIN_TITLE', '📉 <b>Минимум дней</b>'),
-        current_value=_days(getattr(tariff, 'min_days', None)),
-        prompt=texts.t(
-            'ADMIN_TARIFF_CD_MIN_PROMPT',
-            'Введите минимальный срок целым числом дней.\nПример: <code>3</code>',
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_MIN_DAYS_TITLE', '📉 <b>Минимум дней</b>'),
+        current_value=_days(getattr(tariff, 'min_days', None), language=db_user.language),
+        prompt=get_texts(db_user.language).t(
+            'ADMIN_TARIFF_HELPER_MIN_DAYS_PROMPT', 'Введите минимальный срок целым числом дней.\nПример: <code>3</code>'
         ),
     )
 
@@ -225,10 +277,11 @@ async def start_edit_custom_days_min(callback: types.CallbackQuery, db_user: Use
 @admin_required
 @error_handler
 async def start_edit_custom_days_max(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
-    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, int(callback.data.split(':')[1]))
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
     await _start_field_edit(
         callback,
@@ -236,20 +289,22 @@ async def start_edit_custom_days_max(callback: types.CallbackQuery, db_user: Use
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_days_max,
-        title=texts.t('ADMIN_TARIFF_CD_MAX_TITLE', '📈 <b>Максимум дней</b>'),
-        current_value=_days(getattr(tariff, 'max_days', None)),
-        prompt=texts.t(
-            'ADMIN_TARIFF_CD_MAX_PROMPT',
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_MAX_DAYS_TITLE', '📈 <b>Максимум дней</b>'),
+        current_value=_days(getattr(tariff, 'max_days', None), language=db_user.language),
+        prompt=get_texts(db_user.language).t(
+            'ADMIN_TARIFF_HELPER_MAX_DAYS_PROMPT',
             'Введите максимальный срок целым числом дней.\nПример: <code>90</code>',
         ),
     )
 
 
-async def _load_tariff_from_state(message: types.Message, db: AsyncSession, state: FSMContext) -> Tariff | None:
+async def _load_tariff_from_state(
+    message: types.Message, db: AsyncSession, state: FSMContext, language: str = 'ru'
+) -> Tariff | None:
     tariff_id = (await state.get_data()).get('tariff_id')
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
-        await message.answer('Тариф не найден')
+        await message.answer(get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
     return tariff
 
@@ -257,7 +312,7 @@ async def _load_tariff_from_state(message: types.Message, db: AsyncSession, stat
 async def _finish(message: types.Message, db_user: User, state: FSMContext, tariff: Tariff, confirmation: str) -> None:
     await state.clear()
     await message.answer(
-        f'{confirmation}\n\n{render_custom_days_settings(tariff)}',
+        f'{confirmation}\n\n{render_custom_days_settings(tariff, language=db_user.language)}',
         reply_markup=get_custom_days_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -266,18 +321,16 @@ async def _finish(message: types.Message, db_user: User, state: FSMContext, tari
 @admin_required
 @error_handler
 async def process_custom_days_price_input(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
-    texts = get_texts(db_user.language)
-    tariff = await _load_tariff_from_state(message, db, state)
+    tariff = await _load_tariff_from_state(message, db, state, language=db_user.language)
     if tariff is None:
         return
     try:
         price_kopeks = parse_positive_rubles_to_kopeks(message.text or '')
     except ValueError:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_CD_PRICE_INVALID',
-                '❌ Некорректная цена. Введите положительную сумму в تومان с точностью не более двух знаков.\n'
-                'Пример: <code>15</code> или <code>12.50</code>',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_HELPER_INVALID_DAY_PRICE',
+                '❌ Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>15</code> или <code>12.50</code>',
             ),
             parse_mode='HTML',
         )
@@ -288,34 +341,38 @@ async def process_custom_days_price_input(message: types.Message, db_user: User,
         db_user,
         state,
         tariff,
-        texts.t('ADMIN_TARIFF_CD_PRICE_SAVED', '✅ Цена за 1 день установлена: {price}').format(
-            price=format_price_kopeks(price_kopeks)
-        ),
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_PRICE_INPUT_1', '✅ Цена за 1 день установлена: {v0}')
+        .format(v0=format_price_kopeks(price_kopeks)),
     )
 
 
 @admin_required
 @error_handler
 async def process_custom_days_min_input(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
-    texts = get_texts(db_user.language)
-    tariff = await _load_tariff_from_state(message, db, state)
+    tariff = await _load_tariff_from_state(message, db, state, language=db_user.language)
     if tariff is None:
         return
     try:
         minimum = parse_positive_days(message.text or '')
     except ValueError:
         await message.answer(
-            texts.t('ADMIN_TARIFF_CD_MIN_INVALID', '❌ Введите положительное целое число дней.\nПример: <code>3</code>'),
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_HELPER_INVALID_MIN_DAYS',
+                '❌ Введите положительное целое число дней.\nПример: <code>3</code>',
+            ),
             parse_mode='HTML',
         )
         return
     maximum = getattr(tariff, 'max_days', None)
     if maximum is not None and maximum > 0 and minimum > maximum:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_CD_MIN_ABOVE_MAX',
-                '❌ Минимум дней не может быть больше текущего максимума ({maximum} дн.).',
-            ).format(maximum=maximum)
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MIN_INPUT_2',
+                '❌ Минимум дней не может быть больше текущего максимума ({v0} дн.).',
+            )
+            .format(v0=maximum)
         )
         return
     tariff = await update_tariff(db, tariff, min_days=minimum)
@@ -324,32 +381,38 @@ async def process_custom_days_min_input(message: types.Message, db_user: User, d
         db_user,
         state,
         tariff,
-        texts.t('ADMIN_TARIFF_CD_MIN_SAVED', '✅ Минимум установлен: {minimum} дн.').format(minimum=minimum),
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MIN_INPUT_1', '✅ Минимум установлен: {v0} дн.')
+        .format(v0=minimum),
     )
 
 
 @admin_required
 @error_handler
 async def process_custom_days_max_input(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
-    texts = get_texts(db_user.language)
-    tariff = await _load_tariff_from_state(message, db, state)
+    tariff = await _load_tariff_from_state(message, db, state, language=db_user.language)
     if tariff is None:
         return
     try:
         maximum = parse_positive_days(message.text or '')
     except ValueError:
         await message.answer(
-            texts.t('ADMIN_TARIFF_CD_MAX_INVALID', '❌ Введите положительное целое число дней.\nПример: <code>90</code>'),
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_HELPER_INVALID_MAX_DAYS',
+                '❌ Введите положительное целое число дней.\nПример: <code>90</code>',
+            ),
             parse_mode='HTML',
         )
         return
     minimum = getattr(tariff, 'min_days', None)
     if minimum is not None and minimum > 0 and maximum < minimum:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_CD_MAX_BELOW_MIN',
-                '❌ Максимум дней не может быть меньше текущего минимума ({minimum} дн.).',
-            ).format(minimum=minimum)
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MAX_INPUT_2',
+                '❌ Максимум дней не может быть меньше текущего минимума ({v0} дн.).',
+            )
+            .format(v0=minimum)
         )
         return
     tariff = await update_tariff(db, tariff, max_days=maximum)
@@ -358,7 +421,9 @@ async def process_custom_days_max_input(message: types.Message, db_user: User, d
         db_user,
         state,
         tariff,
-        texts.t('ADMIN_TARIFF_CD_MAX_SAVED', '✅ Максимум установлен: {maximum} дн.').format(maximum=maximum),
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_DAYS_MAX_INPUT_1', '✅ Максимум установлен: {v0} дн.')
+        .format(v0=maximum),
     )
 
 

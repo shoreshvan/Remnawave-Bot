@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.topup_retry import format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -42,7 +43,9 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     keyboard = []
     support_url = settings.get_support_contact_url()
     if support_url:
-        keyboard.append([InlineKeyboardButton(text='\U0001f198 Обжаловать', url=support_url)])
+        keyboard.append(
+            [InlineKeyboardButton(text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+        )
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -103,7 +106,7 @@ async def _create_lava_payment_and_respond(
     name = display_name or settings.get_lava_display_name()
 
     # Без URL mixin вернул бы None ещё до этого блока; здесь URL гарантирован.
-    pay_button_text = texts.t('PAY_BUTTON', '\U0001f4b3 Оплатить {amount} تومان').format(
+    pay_button_text = texts.t('PAY_BUTTON', '\U0001f4b3 Оплатить {amount}₽').format(
         amount=f'{amount_rub:.0f}',
     )
 
@@ -122,7 +125,7 @@ async def _create_lava_payment_and_respond(
     response_text = texts.t(
         'LAVA_PAYMENT_CREATED',
         '\U0001f4b3 <b>Оплата через {name}</b>\n\n'
-        'Сумма: <b>{amount} تومان</b>\n\n'
+        'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для перехода к оплате.\n'
         'После подтверждения платежа баланс будет пополнен автоматически.',
     ).format(name=name, amount=f'{amount_rub:.2f}')
@@ -148,9 +151,14 @@ async def process_lava_payment_amount(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         await message.answer(
-            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -162,23 +170,15 @@ async def process_lava_payment_amount(
 
     if amount_kopeks < min_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount} تومان',
-            ).format(min_amount=min_amount // 100),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            format_topup_amount_retry(db_user.language, min_amount, max_amount, too_low=True),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_kopeks > max_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount} تومان',
-            ).format(max_amount=max_amount // 100),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            format_topup_amount_retry(db_user.language, min_amount, max_amount, too_low=False),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
@@ -211,9 +211,14 @@ async def _start_lava_topup_impl(
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         await callback.message.edit_text(
-            f'\U0001f6ab <b>Пополнение ограничено</b>\n\n{reason}',
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -233,9 +238,9 @@ async def _start_lava_topup_impl(
         texts.t(
             'LAVA_ENTER_AMOUNT',
             '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в تومان.\n\n'
-            'Минимум: {min_amount} تومان\n'
-            'Максимум: {max_amount} تومان',
+            'Введите сумму пополнения в рублях.\n\n'
+            'Минимум: {min_amount}₽\n'
+            'Максимум: {max_amount}₽',
         ).format(
             name=display_name,
             min_amount=min_amount,

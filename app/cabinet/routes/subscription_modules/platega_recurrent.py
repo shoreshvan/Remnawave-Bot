@@ -12,6 +12,8 @@ most other lazy imports here) so tests can monkeypatch it directly, mirroring
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,56 +34,36 @@ router = APIRouter()
 async def enable_platega_recurrent(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(
-        None,
-        description=get_texts().t(
-            'CABINET_PLATEGA_RECURRENT_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
     """Enable Platega SBP auto-renewal for the resolved subscription."""
     from app.config import settings
 
     if not settings.is_platega_recurrent_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_DISABLED', 'Platega recurrent disabled'),
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Platega recurrent disabled')
 
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
     # Паритет с бот-флоу: триальная подписка не должна авторизовывать реальное
     # рекуррентное списание в банке (бот блокирует это в handle_sbp_recurring_enable).
     if getattr(subscription, 'is_trial', False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t(
-                'CABINET_PLATEGA_RECURRENT_TRIAL_NOT_ALLOWED',
-                'Trial subscriptions cannot enable SBP auto-payment',
-            ),
+            detail='Trial subscriptions cannot enable SBP auto-payment',
         )
 
     # Load the tariff explicitly — subscription.tariff is an async lazy-load
     # relationship that would raise MissingGreenlet if touched here.
     if not subscription.tariff_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_SUBSCRIPTION_NO_TARIFF', 'Subscription has no tariff'),
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Subscription has no tariff')
 
     from app.database.crud.tariff import get_tariff_by_id
 
     tariff = await get_tariff_by_id(db, subscription.tariff_id)
     if not tariff:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_TARIFF_NOT_FOUND', 'Tariff not found'),
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Tariff not found')
 
     from app.services.payment.platega import enable_platega_sbp_recurring
 
@@ -102,14 +84,9 @@ async def enable_platega_recurrent(
         from app.services.platega_service import PlategaApiError
 
         detail = (
-            get_texts().t(
-                'CABINET_PLATEGA_RECURRENT_CREATE_FAILED_DETAIL',
-                'Could not create Platega subscription: {error}',
-            ).format(error=error)
+            f'Could not create Platega subscription: {error}'
             if isinstance(error, PlategaApiError)
-            else get_texts().t(
-                'CABINET_PLATEGA_RECURRENT_CREATE_FAILED', 'Could not create Platega subscription'
-            )
+            else 'Could not create Platega subscription'
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from error
 
@@ -118,10 +95,11 @@ async def enable_platega_recurrent(
 
 @router.post('/platega-recurrent/purchase')
 async def purchase_with_platega_recurrent(
-    tariff_id: int = Query(
-        ...,
-        description=get_texts().t('CABINET_PLATEGA_RECURRENT_TARIFF_ID_QUERY_DESCRIPTION', 'Tariff to subscribe to'),
-    ),
+    tariff_id: int = Query(..., description='Tariff to subscribe to'),
+    subscription_id: int | None = None,
+    selected_device_limit: int | None = None,
+    quote_id: UUID | None = None,
+    checkout_id: UUID | None = None,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -134,38 +112,37 @@ async def purchase_with_platega_recurrent(
     from app.config import settings
 
     if not settings.is_platega_recurrent_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_DISABLED', 'Platega recurrent disabled'),
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Platega recurrent disabled')
 
     from app.database.crud.tariff import get_tariff_by_id
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not getattr(tariff, 'is_active', False):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_TARIFF_NOT_FOUND', 'Tariff not found'),
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Tariff not found')
 
     from app.services.payment.platega import purchase_tariff_with_sbp_recurring
 
     try:
-        result = await purchase_tariff_with_sbp_recurring(db, user=user, tariff=tariff)
+        result = await purchase_tariff_with_sbp_recurring(
+            db,
+            user=user,
+            tariff=tariff,
+            **({'subscription_id': subscription_id} if subscription_id is not None else {}),
+            **(
+                {'selected_device_limit': selected_device_limit, 'quote_id': quote_id, 'checkout_id': checkout_id}
+                if any(value is not None for value in (selected_device_limit, quote_id, checkout_id))
+                else {}
+            ),
+        )
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     except RuntimeError as error:
         from app.services.platega_service import PlategaApiError
 
         detail = (
-            get_texts().t(
-                'CABINET_PLATEGA_RECURRENT_CREATE_FAILED_DETAIL',
-                'Could not create Platega subscription: {error}',
-            ).format(error=error)
+            f'Could not create Platega subscription: {error}'
             if isinstance(error, PlategaApiError)
-            else get_texts().t(
-                'CABINET_PLATEGA_RECURRENT_CREATE_FAILED', 'Could not create Platega subscription'
-            )
+            else 'Could not create Platega subscription'
         )
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from error
 
@@ -180,28 +157,17 @@ async def purchase_with_platega_recurrent(
 async def get_platega_recurrent(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(
-        None,
-        description=get_texts().t(
-            'CABINET_PLATEGA_RECURRENT_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
     """Return the current Platega SBP auto-renewal state for the subscription."""
     from app.config import settings
 
     if not settings.is_platega_recurrent_enabled():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_DISABLED', 'Platega recurrent disabled'),
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Platega recurrent disabled')
 
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
     from app.database.crud import platega_subscription as sub_crud
 
@@ -222,12 +188,7 @@ async def get_platega_recurrent(
 async def cancel_platega_recurrent(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(
-        None,
-        description=get_texts().t(
-            'CABINET_PLATEGA_RECURRENT_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
     """Cancel Platega SBP auto-renewal for the resolved subscription (best-effort).
 
@@ -237,13 +198,40 @@ async def cancel_platega_recurrent(
     """
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_PLATEGA_RECURRENT_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No subscription found')
 
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
     await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
 
     return {'status': 'cancelled'}
+
+
+@router.get('/platega-recurrent/purchase-preview')
+async def preview_platega_recurrent_purchase(
+    tariff_id: int,
+    selected_device_limit: int = Query(..., ge=1, le=2_147_483_647),
+    subscription_id: int | None = None,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    from app.config import settings
+    from app.database.crud.tariff import get_tariff_by_id
+    from app.services.recurrent_purchase_selection import preview_recurrent_purchase
+
+    if not settings.is_platega_recurrent_enabled():
+        raise HTTPException(status_code=403, detail='platega recurrent disabled')
+    tariff = await get_tariff_by_id(db, tariff_id)
+    if tariff is None:
+        raise HTTPException(status_code=400, detail='Tariff not found')
+    try:
+        return await preview_recurrent_purchase(
+            db,
+            user=user,
+            tariff=tariff,
+            provider='platega',
+            selected_device_limit=selected_device_limit,
+            subscription_id=subscription_id,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error

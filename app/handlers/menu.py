@@ -65,7 +65,7 @@ def _format_rubles(amount_kopeks: int) -> str:
     else:
         formatted = f'{rubles:,.2f}'
 
-    return f'{formatted.replace(",", " ")} تومان'
+    return f'{formatted.replace(",", " ")} ₽'
 
 
 def _resolve_info_page_text(values: dict | None, language: str) -> str:
@@ -1198,7 +1198,7 @@ async def process_language_change(
     }
 
     if normalized_selected not in available_map:
-        await callback.answer(texts.t('MENU_LANGUAGE_UNSUPPORTED', '❌ Unsupported language'), show_alert=True)
+        await callback.answer('❌ Unsupported language', show_alert=True)
         return
 
     resolved_language = available_map[normalized_selected].lower()
@@ -1368,9 +1368,7 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     current_time = datetime.now(UTC)
     lines: list[str] = []
     for sub in subscriptions:
-        tariff_name = (
-            html.escape(sub.tariff.name) if sub.tariff else texts.t('MAIN_MENU_RICH_TARIFF_FALLBACK', 'Подписка')
-        )
+        tariff_name = html.escape(sub.tariff.name) if sub.tariff else 'Подписка'
         actual = sub.actual_status
 
         if actual in ('active', 'trial'):
@@ -1381,17 +1379,15 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
             emoji = '🔴'
 
         if actual == 'expired':
-            status_suffix = texts.t('MENU_SUB_STATUS_SUFFIX_EXPIRED', ' — истекла')
+            status_suffix = ' — истекла'
         elif actual == 'disabled':
-            status_suffix = texts.t('MENU_SUB_STATUS_SUFFIX_DISABLED', ' — отключена')
+            status_suffix = ' — отключена'
         elif actual == 'limited':
-            status_suffix = texts.t('MENU_SUB_STATUS_SUFFIX_LIMITED', ' — лимит трафика')
+            status_suffix = ' — лимит трафика'
         elif sub.end_date and sub.end_date > current_time:
             days_left = local_days_until(sub.end_date, current_time)
             end_str = format_local_datetime(sub.end_date, '%d.%m.%Y')
-            status_suffix = texts.t('MENU_SUB_STATUS_SUFFIX_UNTIL', ' — до {end_str} ({days_left} дн.)').format(
-                end_str=end_str, days_left=days_left
-            )
+            status_suffix = f' — до {end_str} ({days_left} дн.)'
         else:
             status_suffix = ''
 
@@ -1431,9 +1427,7 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
                 tariff = await get_tariff_by_id(db, subscription.tariff_id)
                 if tariff:
                     is_daily_tariff = getattr(tariff, 'is_daily', False)
-                    tariff_info_block = texts.t('MENU_MAIN_TARIFF_INFO', '\n📦 Тариф: {name}').format(
-                        name=html.escape(tariff.name)
-                    )
+                    tariff_info_block = f'\n📦 Тариф: {html.escape(tariff.name)}'
             except Exception as e:
                 logger.debug('Не удалось загрузить тариф для главного меню', error=e)
 
@@ -1607,16 +1601,13 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
             # «не хватает 0.40 ₽» вместо обрезанного «0 ₽» от integer division.
             missing_label = texts.format_price(missing, round_kopeks=False)
             await callback.answer(
-                texts.t(
-                    'INSUFFICIENT_FUNDS_DETAILED',
-                    '❌ Недостаточно средств. Не хватает {missing_label}',
-                ).format(missing_label=missing_label),
+                texts.t('INSUFFICIENT_FUNDS_DETAILED').format(missing=missing_label),
                 show_alert=True,
             )
             return
     except Exception as e:
         logger.error('Ошибка расчёта стоимости при активации', error=e)
-        await callback.answer(texts.t('MENU_PRICE_CALC_ERROR', '❌ Ошибка расчёта стоимости'), show_alert=True)
+        await callback.answer(texts.t('PURCHASE_PRICE_CALCULATION_ERROR'), show_alert=True)
         return
 
     try:
@@ -1631,17 +1622,14 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 db_user,
                 subscription,
                 pricing,
-                description=texts.t('MENU_TX_AUTO_RENEWAL', 'Автоматическое продление на {days} дней').format(
-                    days=best_period
-                ),
+                description=f'Автоматическое продление на {best_period} дней',
                 payment_method=PaymentMethod.BALANCE,
             )
 
             await callback.answer(
                 texts.t(
-                    'ACTIVATION_SUCCESS',
-                    '✅ Подписка продлена на {days} дней за {price} تومان!',
-                ).format(days=best_period, price=pricing.final_total // 100),
+                    'SUBSCRIPTION_QUICK_RENEWED',
+                ).format(days=best_period, amount=pricing.final_total // 100),
                 show_alert=True,
             )
         else:
@@ -1651,16 +1639,12 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 db,
                 db_user,
                 best_price,
-                texts.t('MENU_TX_SUBSCRIPTION_ACTIVATION', 'Активация подписки на {days} дней').format(
-                    days=best_period
-                ),
+                f'Активация подписки на {best_period} дней',
                 mark_as_paid_subscription=True,
                 consume_promo_offer=consume_promo,
             )
             if not success:
-                await callback.answer(
-                    texts.t('TARIFF_PURCHASE_INSUFFICIENT_FUNDS', '❌ Недостаточно средств'), show_alert=True
-                )
+                await callback.answer(texts.t('TARIFF_PURCHASE_INSUFFICIENT_FUNDS'), show_alert=True)
                 return
 
             # Создание новой подписки
@@ -1683,16 +1667,12 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=best_price,
-                description=texts.t('MENU_TX_SUBSCRIPTION_ACTIVATION', 'Активация подписки на {days} дней').format(
-                    days=best_period
-                ),
+                description=f'Активация подписки на {best_period} дней',
                 payment_method=PaymentMethod.BALANCE,
             )
 
             await callback.answer(
-                texts.t(
-                    'ACTIVATION_SUCCESS', f'✅ Подписка активирована на {best_period} дней за {best_price // 100} تومان!'
-                ),
+                texts.t('SUBSCRIPTION_QUICK_ACTIVATED').format(days=best_period, amount=best_price // 100),
                 show_alert=True,
             )
 

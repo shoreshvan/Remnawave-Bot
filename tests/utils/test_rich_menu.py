@@ -20,7 +20,7 @@ class DummyTexts:
         return default
 
     @staticmethod
-    def format_traffic(gb, is_limit=True, language=None):
+    def format_traffic(gb, is_limit=True):
         if not gb and is_limit:
             return '∞'
         return f'{gb:g} ГБ'
@@ -223,8 +223,8 @@ async def test_builder_single_subscription_structure(monkeypatch):
     assert 'format="r"' in html_out
     # Прогресс-бар остатка дней
     assert '<code>[' in html_out
-    # Баланс из format_price (с разделителем тысяч)
-    assert '1,250' in html_out
+    # Баланс из format_price
+    assert '1250' in html_out
 
 
 async def test_builder_links_username_used_instead_of_name(monkeypatch):
@@ -619,7 +619,7 @@ async def test_multi_tariff_table_is_fully_localized(monkeypatch):
             return f'[{key}]'
 
         @staticmethod
-        def format_traffic(gb, is_limit=True, language=None):
+        def format_traffic(gb, is_limit=True):
             return 'GB'
 
     _patch_content_sources(monkeypatch)
@@ -1434,3 +1434,26 @@ async def test_edit_clears_old_keyboard_when_buttons_move_inside(monkeypatch):
     assert '<tg-button' in request.rich_message.html
     assert request.reply_markup is not None
     assert request.reply_markup.inline_keyboard == []
+
+
+@pytest.mark.parametrize('hidden', [False, True])
+@pytest.mark.parametrize('crypto', [None, 'happ://crypt4/local-test-payload'])
+def test_happ_connect_without_redirect_never_falls_back_to_raw_url(monkeypatch, hidden, crypto):
+    monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', 'happ_cryptolink')
+    monkeypatch.setattr(settings, 'HIDE_SUBSCRIPTION_LINK', hidden)
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_REDIRECT_TEMPLATE', '')
+    sub = _make_subscription(datetime.now(UTC))
+    sub.subscription_crypto_link = crypto
+    assert rich_menu._connect_link(sub, DummyTexts()) == ''
+
+
+@pytest.mark.parametrize('hidden', [False, True])
+def test_happ_connect_with_real_redirect_contains_crypto_only(monkeypatch, hidden):
+    monkeypatch.setattr(settings, 'CONNECT_BUTTON_MODE', 'happ_cryptolink')
+    monkeypatch.setattr(settings, 'HIDE_SUBSCRIPTION_LINK', hidden)
+    monkeypatch.setattr(settings, 'HAPP_CRYPTOLINK_REDIRECT_TEMPLATE', 'https://redirect.example/?link={link}')
+    sub = _make_subscription(datetime.now(UTC))
+    sub.subscription_crypto_link = 'happ://crypt4/local-test-payload'
+    result = rich_menu._connect_link(sub, DummyTexts())
+    assert 'https://redirect.example/?link=happ%3A%2F%2Fcrypt4%2Flocal-test-payload' in result
+    assert sub.subscription_url not in result

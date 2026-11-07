@@ -15,6 +15,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.topup_retry import format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -51,7 +52,7 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     support_url = settings.get_support_contact_url()
     if support_url:
         keyboard.append(
-            [InlineKeyboardButton(text=texts.t('OVERPAY_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+            [InlineKeyboardButton(text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
         )
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -72,7 +73,7 @@ async def _create_overpay_payment_and_respond(
 
     description = settings.PAYMENT_BALANCE_TEMPLATE.format(
         service_name=settings.PAYMENT_SERVICE_NAME,
-        description=texts.t('OVERPAY_PAYMENT_DESCRIPTION', 'Пополнение баланса'),
+        description='Пополнение баланса',
     )
 
     result = await payment_service.create_overpay_payment(
@@ -115,19 +116,19 @@ async def _create_overpay_payment_and_respond(
         response_text = texts.t(
             'OVERPAY_INT_PAYMENT_CREATED',
             '\U0001f30d <b>Оплата через {name}</b>\n\n'
-            'Сумма: <b>{amount} تومان</b> (≈ <b>{amount_eur}€</b>)\n\n'
-            'Оплата проходит в евро, баланс будет пополнен в تومان.\n'
+            'Сумма: <b>{amount}₽</b> (≈ <b>{amount_eur}€</b>)\n\n'
+            'Оплата проходит в евро, баланс будет пополнен в рублях.\n'
             'Нажмите кнопку ниже для оплаты.',
         ).format(name=display_name, amount=f'{amount_rub:.2f}', amount_eur=f'{amount_eur:.2f}')
     else:
         pay_button_text = texts.t(
             'PAY_BUTTON',
-            '\U0001f4b3 Оплатить {amount} تومان',
+            '\U0001f4b3 Оплатить {amount}₽',
         ).format(amount=f'{amount_rub:.0f}')
         response_text = texts.t(
             'OVERPAY_PAYMENT_CREATED',
             '\U0001f4b3 <b>Оплата через {name}</b>\n\n'
-            'Сумма: <b>{amount} تومان</b>\n\n'
+            'Сумма: <b>{amount}₽</b>\n\n'
             'Нажмите кнопку ниже для оплаты.\n'
             'После успешной оплаты баланс будет пополнен автоматически.',
         ).format(name=display_name, amount=f'{amount_rub:.2f}')
@@ -174,10 +175,12 @@ async def process_overpay_payment_amount(
     if restriction_kb:
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('OVERPAY_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await message.answer(
-            texts.t('OVERPAY_TOPUP_RESTRICTED', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(reason=reason),
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -189,23 +192,15 @@ async def process_overpay_payment_amount(
 
     if amount_kopeks < min_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount} تومان',
-            ).format(min_amount=min_amount // 100),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            format_topup_amount_retry(db_user.language, min_amount, max_amount, too_low=True),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_kopeks > max_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount} تومان',
-            ).format(max_amount=max_amount // 100),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            format_topup_amount_retry(db_user.language, min_amount, max_amount, too_low=False),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
@@ -229,9 +224,16 @@ async def process_overpay_payment_amount(
             await message.answer(
                 texts.t(
                     'OVERPAY_INT_AMOUNT_TOO_LOW',
-                    'Минимальная сумма для оплаты в евро: {min_eur}€ (≈ {min_rub} تومان)',
-                ).format(min_eur=f'{settings.OVERPAY_INT_MIN_EUR:g}', min_rub=min_rub),
-                reply_markup=get_back_keyboard(db_user.language),
+                    'Минимальная сумма для оплаты в евро: {min_eur}€ (≈ {min_rub}₽)',
+                ).format(min_eur=f'{settings.OVERPAY_INT_MIN_EUR:g}', min_rub=min_rub)
+                + '\n\n'
+                + format_topup_amount_retry(
+                    db_user.language,
+                    max(min_amount, min_rub * 100),
+                    max_amount,
+                    too_low=True,
+                ),
+                reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
                 parse_mode='HTML',
             )
             return
@@ -261,10 +263,12 @@ async def start_overpay_topup(
     if restriction_kb:
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('OVERPAY_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await callback.message.edit_text(
-            texts.t('OVERPAY_TOPUP_RESTRICTED', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(reason=reason),
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -307,10 +311,12 @@ async def _start_overpay_option_topup_impl(
     if restriction_kb:
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('OVERPAY_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await callback.message.edit_text(
-            texts.t('OVERPAY_TOPUP_RESTRICTED', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(reason=reason),
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -344,10 +350,10 @@ async def _start_overpay_option_topup_impl(
         text = texts.t(
             'OVERPAY_INT_ENTER_AMOUNT',
             '\U0001f30d <b>Пополнение через {name} (EUR)</b>\n\n'
-            'Введите сумму пополнения в تومان.\n'
-            'Оплата проходит в евро по курсу {rate} تومان за 1€, баланс пополняется в تومان.\n\n'
-            'Минимум: {min_amount} تومان\n'
-            'Максимум: {max_amount} تومان',
+            'Введите сумму пополнения в рублях.\n'
+            'Оплата проходит в евро по курсу {rate}₽ за 1€, баланс пополняется в рублях.\n\n'
+            'Минимум: {min_amount}₽\n'
+            'Максимум: {max_amount}₽',
         ).format(
             name=display_name,
             rate=f'{settings.OVERPAY_RUB_PER_EUR:.2f}',
@@ -358,9 +364,9 @@ async def _start_overpay_option_topup_impl(
         text = texts.t(
             'OVERPAY_ENTER_AMOUNT',
             '\U0001f4b3 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в تومان.\n\n'
-            'Минимум: {min_amount} تومان\n'
-            'Максимум: {max_amount} تومان',
+            'Введите сумму пополнения в рублях.\n\n'
+            'Минимум: {min_amount}₽\n'
+            'Максимум: {max_amount}₽',
         ).format(
             name=display_name,
             min_amount=min_amount,

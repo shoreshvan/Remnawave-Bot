@@ -22,22 +22,22 @@ from app.database.models import WithdrawalRequestStatus
 from app.localization.texts import get_texts
 
 
-def _actions(request_id: int, status: str, texts) -> list[InlineKeyboardButton]:
+def _actions(request_id: int, status: str, language: str = 'ru') -> list[InlineKeyboardButton]:
     if status == WithdrawalRequestStatus.PENDING.value:
         return [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_REFERRALS_BTN_APPROVE', '✅ Одобрить'),
+                text=get_texts(language).t('ADMIN_WITHDRAWAL_UI_019', '✅ Одобрить'),
                 callback_data=f'admin_withdrawal_approve_{request_id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_REFERRALS_BTN_REJECT', '❌ Отклонить'),
+                text=get_texts(language).t('ADMIN_WITHDRAWAL_UI_020', '❌ Отклонить'),
                 callback_data=f'admin_withdrawal_reject_{request_id}',
             ),
         ]
     if status == WithdrawalRequestStatus.APPROVED.value:
         return [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_REFERRALS_BTN_MONEY_SENT', '✅ Деньги переведены'),
+                text=get_texts(language).t('ADMIN_WITHDRAWAL_UI_021', '✅ Деньги переведены'),
                 callback_data=f'admin_withdrawal_complete_{request_id}',
             )
         ]
@@ -51,17 +51,14 @@ def get_withdrawal_request_keyboard(
     user_db_id: int | None = None,
     role: str = 'admin',
     navigation: bool = False,
-    texts=None,
+    language: str = 'ru',
 ) -> InlineKeyboardMarkup | None:
     """Клавиатура заявки по её статусу и роли получателя; ``None`` — кнопок нет."""
     if role not in ('admin', 'group'):
         return None
 
-    if texts is None:
-        texts = get_texts()
-
     rows: list[list[InlineKeyboardButton]] = []
-    actions = _actions(request_id, status, texts)
+    actions = _actions(request_id, status, language=language)
     if actions:
         rows.append(actions)
 
@@ -70,7 +67,7 @@ def get_withdrawal_request_keyboard(
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('ADMIN_REFERRALS_BTN_USER_PROFILE', '👤 Профиль пользователя'),
+                        text=get_texts(language).t('ADMIN_WITHDRAWAL_UI_022', '👤 Профиль пользователя'),
                         callback_data=f'admin_user_manage_{user_db_id}',
                     )
                 ]
@@ -79,7 +76,7 @@ def get_withdrawal_request_keyboard(
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('ADMIN_REFERRALS_BTN_BACK', '⬅️ К списку'),
+                        text=get_texts(language).t('ADMIN_WITHDRAWAL_UI_023', '⬅️ К списку'),
                         callback_data='admin_withdrawal_requests',
                     )
                 ]

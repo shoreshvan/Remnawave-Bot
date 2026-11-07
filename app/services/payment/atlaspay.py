@@ -360,6 +360,8 @@ class AtlaspayPaymentMixin:
             return True
 
         internal_status, _ = ATLASPAY_STATUS_MAP[raw_status]
+        if raw_status in ATLASPAY_SUCCESS_STATUSES:
+            internal_status = 'processing'
         atlaspay_crud.remember_atlaspay_event(payment, event_key)
         await atlaspay_crud.update_atlaspay_payment_status(
             db=db,
@@ -606,6 +608,8 @@ class AtlaspayPaymentMixin:
         self,
         db: AsyncSession,
         order_id: str,
+        *,
+        polling: bool = False,
     ) -> dict[str, Any] | None:
         """Checks an order via verify (authoritative paid flag) and syncs the DB.
 
@@ -629,7 +633,12 @@ class AtlaspayPaymentMixin:
                 return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': False}
 
             try:
-                status_data = await atlaspay_service.verify_order(order_id=payment.atlaspay_payment_id)
+                if polling:
+                    status_data = await atlaspay_service.get_order(order_id=payment.atlaspay_payment_id)
+                    if status_data and (status_data.get('status') or '').strip().lower() in ATLASPAY_SUCCESS_STATUSES:
+                        status_data = await atlaspay_service.verify_order(order_id=payment.atlaspay_payment_id)
+                else:
+                    status_data = await atlaspay_service.verify_order(order_id=payment.atlaspay_payment_id)
             except Exception as e:
                 logger.error('Error checking AtlasPay order via API', error=e)
                 return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': payment.is_paid}
@@ -649,18 +658,18 @@ class AtlaspayPaymentMixin:
                 return {'payment': payment, 'status': 'success', 'is_paid': True}
 
             event_key = f'{payment.order_id}:api_check:{(status_data.get("status") or "").strip().lower()}'
-            if atlaspay_crud.is_atlaspay_event_processed(payment, event_key):
-                return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': payment.is_paid}
-
             logger.info('AtlasPay order re-checked via API', order_id=payment.order_id)
 
-            await self._apply_atlaspay_status(
+            applied = await self._apply_atlaspay_status(
                 db,
                 payment=payment,
                 status_data=status_data,
                 event_key=event_key,
                 trigger='api_check',
             )
+            if not applied:
+                await db.rollback()
+                return None
 
             return {'payment': payment, 'status': payment.status or 'pending', 'is_paid': payment.is_paid}
 

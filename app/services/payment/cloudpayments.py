@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaymentMethod, TransactionType
+from app.localization.texts import get_texts
 from app.services.cloudpayments_service import CloudPaymentsAPIError
 from app.utils.payment_logger import payment_logger as logger
 from app.utils.user_utils import format_referrer_info
@@ -112,7 +113,7 @@ class CloudPaymentsPaymentMixin:
             return None
 
         logger.info(
-            'Создан CloudPayments платёж: invoice amount= تومان, user',
+            'Создан CloudPayments платёж: invoice amount=₽, user',
             invoice_id=invoice_id,
             amount_kopeks=amount_kopeks / 100,
             user_id=user_id,
@@ -327,7 +328,7 @@ class CloudPaymentsPaymentMixin:
 
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
         logger.info(
-            'CloudPayments платёж успешно обработан: invoice amount= تومان, user',
+            'CloudPayments платёж успешно обработан: invoice amount=₽, user',
             invoice_id=invoice_id,
             amount_kopeks=amount_kopeks / 100,
             user_id_display=user_id_display,
@@ -448,6 +449,7 @@ class CloudPaymentsPaymentMixin:
                         await self._send_cloudpayments_fail_notification(
                             telegram_id=user.telegram_id,
                             message=card_holder_message,
+                            language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                         )
         except Exception as error:
             logger.exception('Ошибка отправки уведомления о неуспешном платеже', error=error)
@@ -483,9 +485,9 @@ class CloudPaymentsPaymentMixin:
         message = texts.t(
             'PAYMENT_SUCCESS_CLOUDPAYMENTS',
             '✅ <b>Оплата получена!</b>\n\n'
-            '💰 Сумма: {amount} تومان\n'
+            '💰 Сумма: {amount}₽\n'
             '💳 Способ: CloudPayments\n'
-            '💵 Баланс: {balance} تومان\n\n'
+            '💵 Баланс: {balance}₽\n\n'
             'Спасибо за пополнение!',
         ).format(
             amount=f'{amount_rub:.2f}',
@@ -512,6 +514,7 @@ class CloudPaymentsPaymentMixin:
         self,
         telegram_id: int,
         message: str,
+        language: str = 'ru',
     ) -> None:
         """Send failure notification to user via Telegram."""
         if not settings.is_notifications_enabled():
@@ -519,7 +522,7 @@ class CloudPaymentsPaymentMixin:
 
         from app.bot_factory import create_bot
 
-        text = f'❌ <b>Оплата не прошла</b>\n\n{message}'
+        text = get_texts(language).t('PAYMENT_NOTICE_020', '❌ <b>Оплата не прошла</b>\n\n{v0}').format(v0=message)
 
         async with create_bot() as bot:
             try:

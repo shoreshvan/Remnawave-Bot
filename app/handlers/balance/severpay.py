@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.topup_retry import format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -30,7 +31,7 @@ def _check_topup_restriction(db_user: User, texts) -> InlineKeyboardMarkup | Non
     support_url = settings.get_support_contact_url()
     if support_url:
         keyboard.append(
-            [InlineKeyboardButton(text=texts.t('SEVERPAY_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+            [InlineKeyboardButton(text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
         )
     keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -54,7 +55,7 @@ async def _create_severpay_payment_and_respond(
 
     description = settings.PAYMENT_BALANCE_TEMPLATE.format(
         service_name=settings.PAYMENT_SERVICE_NAME,
-        description=texts.t('SEVERPAY_PAYMENT_DESCRIPTION', 'Пополнение баланса'),
+        description='Пополнение баланса',
     )
 
     result = await payment_service.create_severpay_payment(
@@ -94,7 +95,7 @@ async def _create_severpay_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        '💳 Оплатить {amount} تومان',
+                        '💳 Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                 )
@@ -111,7 +112,7 @@ async def _create_severpay_payment_and_respond(
     response_text = texts.t(
         'SEVERPAY_PAYMENT_CREATED',
         '💳 <b>Оплата через {name}</b>\n\n'
-        'Сумма: <b>{amount} تومان</b>\n\n'
+        'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
     ).format(name=display_name, amount=f'{amount_rub:.2f}')
@@ -149,10 +150,12 @@ async def process_severpay_payment_amount(
     if restriction_kb:
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('SEVERPAY_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await message.answer(
-            texts.t('SEVERPAY_TOPUP_RESTRICTED', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(reason=reason),
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -165,23 +168,15 @@ async def process_severpay_payment_amount(
 
     if amount_kopeks < min_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount} تومان',
-            ).format(min_amount=min_amount // 100),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            format_topup_amount_retry(db_user.language, min_amount, max_amount, too_low=True),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_kopeks > max_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount} تومان',
-            ).format(max_amount=max_amount // 100),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            format_topup_amount_retry(db_user.language, min_amount, max_amount, too_low=False),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
@@ -212,10 +207,12 @@ async def start_severpay_topup(
     if restriction_kb:
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('SEVERPAY_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         await callback.message.edit_text(
-            texts.t('SEVERPAY_TOPUP_RESTRICTED', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(reason=reason),
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=restriction_kb,
         )
@@ -234,9 +231,9 @@ async def start_severpay_topup(
         texts.t(
             'SEVERPAY_ENTER_AMOUNT',
             '💳 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в تومان.\n\n'
-            'Минимум: {min_amount} تومان\n'
-            'Максимум: {max_amount} تومان',
+            'Введите сумму пополнения в рублях.\n\n'
+            'Минимум: {min_amount}₽\n'
+            'Максимум: {max_amount}₽',
         ).format(
             name=display_name,
             min_amount=min_amount,

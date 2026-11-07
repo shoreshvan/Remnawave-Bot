@@ -1070,7 +1070,6 @@ async def _grant_one(
     from app.database.crud.referral import create_referral_earning
     from app.database.crud.user import add_user_balance
     from app.database.models import TransactionType
-    from app.localization.texts import get_texts
 
     recipient = await get_user_by_id(db, component.recipient_id)
     if recipient is None:
@@ -1121,13 +1120,10 @@ async def _grant_one(
             )
 
     if component.money_kopeks > 0:
-        texts = get_texts(recipient.language)
         description = (
-            texts.t('REFERRAL_TRANSACTION_LEVEL_REWARD_REFERRER', 'Реферальная награда, уровень {level}').format(
-                level=component.level
-            )
+            f'Реферальная награда, уровень {component.level}'
             if component.is_referrer
-            else texts.t('REFERRAL_TRANSACTION_REFEREE_BONUS', 'Бонус по реферальной программе')
+            else 'Бонус по реферальной программе'
         )
         credited = await add_user_balance(
             db,
@@ -1749,7 +1745,7 @@ def format_reward_total(money_kopeks: int, days: int, language: str | None = Non
     return settings.format_price(money)
 
 
-def legacy_percent_for_import() -> tuple[int, list[str]]:
+def legacy_percent_for_import(language: str = 'ru') -> tuple[int, list[str]]:
     """Процент для переносимого уровня и то, о чём нужно предупредить.
 
     Общий на два интерфейса: перенос из бота и из кабинета обязан давать один и
@@ -1767,8 +1763,8 @@ def legacy_percent_for_import() -> tuple[int, list[str]]:
     """
     from app.localization.texts import get_texts
 
+    texts = get_texts(language)
     notes: list[str] = []
-    texts = get_texts(settings.DEFAULT_LANGUAGE)
 
     percent = settings.REFERRAL_COMMISSION_PERCENT
     first_payment = settings.REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT
@@ -1776,17 +1772,16 @@ def legacy_percent_for_import() -> tuple[int, list[str]]:
         percent = first_payment
         notes.append(
             texts.t(
-                'REFERRAL_LEGACY_FIRST_PAYMENT_PERCENT',
-                'Взят процент первого платежа ({first}%), а не общий ({total}%) — повод уровня «первое пополнение».',
-            ).format(first=first_payment, total=settings.REFERRAL_COMMISSION_PERCENT)
+                'ADMIN_REFERRAL_LEVEL_LEGACY_FIRST',
+                'Взят процент первого платежа ({first_payment}%), а не общий ({general_percent}%) — повод уровня «первое пополнение».',
+            ).format(first_payment=first_payment, general_percent=settings.REFERRAL_COMMISSION_PERCENT)
         )
 
     if (settings.REFERRAL_RECURRING_COMMISSION_TIERS or '').strip():
         notes.append(
             texts.t(
-                'REFERRAL_LEGACY_TIERS_NOT_MIGRATED',
-                'Ступени комиссии (REFERRAL_RECURRING_COMMISSION_TIERS) НЕ перенесены: '
-                'у уровня одна ставка, лестницы по числу рефералов в нём нет.',
+                'ADMIN_REFERRAL_LEVEL_LEGACY_TIERS',
+                'Ступени комиссии (REFERRAL_RECURRING_COMMISSION_TIERS) НЕ перенесены: у уровня одна ставка, лестницы по числу рефералов в нём нет.',
             )
         )
 

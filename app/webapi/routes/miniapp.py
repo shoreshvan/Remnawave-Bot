@@ -60,6 +60,7 @@ from app.database.models import (
 from app.localization.texts import get_texts
 from app.services.faq_service import FaqService
 from app.services.maintenance_service import maintenance_service
+from app.services.payment_method_config_service import get_anore_checkout_policy
 from app.services.payment_service import PaymentService, get_wata_payment_by_link_id
 from app.services.pricing_engine import PricingEngine
 from app.services.privacy_policy_service import PrivacyPolicyService
@@ -87,6 +88,7 @@ from app.services.subscription_renewal_service import (
 )
 from app.services.subscription_service import SubscriptionService
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
+from app.services.traffic_reset_policy import should_reset_traffic_on_tariff_purchase
 from app.services.trial_activation_service import (
     TrialPaymentChargeFailed,
     TrialPaymentInsufficientFunds,
@@ -106,7 +108,7 @@ from app.utils.pricing_utils import (
 )
 from app.utils.promo_offer import get_user_active_promo_discount_percent
 from app.utils.subscription_time import days_left_rounded_up
-from app.utils.subscription_utils import get_happ_cryptolink_redirect_link
+from app.utils.subscription_utils import get_happ_cryptolink_redirect_link, resolve_tariff_renewal_device_limit
 from app.utils.telegram_webapp import (
     TelegramWebAppAuthError,
     parse_webapp_init_data,
@@ -556,21 +558,19 @@ def _format_gb(value: float | None) -> float:
         return 0.0
 
 
-def _format_gb_label(value: float, language: str = 'ru') -> str:
-    texts = get_texts(language)
+def _format_gb_label(value: float) -> str:
     absolute = abs(value)
     if absolute >= 100:
-        return texts.t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.0f}')
+        return f'{value:.0f} GB'
     if absolute >= 10:
-        return texts.t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.1f}')
-    return texts.t('MINIAPP_GB_LABEL', '{value} GB').format(value=f'{value:.2f}')
+        return f'{value:.1f} GB'
+    return f'{value:.2f} GB'
 
 
-def _format_limit_label(limit: int | None, language: str = 'ru') -> str:
-    texts = get_texts(language)
+def _format_limit_label(limit: int | None) -> str:
     if not limit:
-        return texts.t('MINIAPP_UNLIMITED_LABEL', 'Unlimited')
-    return texts.t('MINIAPP_GB_LABEL', '{value} GB').format(value=limit)
+        return 'Unlimited'
+    return f'{limit} GB'
 
 
 async def _resolve_user_from_init_data(
@@ -580,7 +580,7 @@ async def _resolve_user_from_init_data(
     if not init_data:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
-            detail=get_texts().t('MINIAPP_MISSING_INIT_DATA', 'Missing initData'),
+            detail='Missing initData',
         )
 
     try:
@@ -595,7 +595,7 @@ async def _resolve_user_from_init_data(
     if not isinstance(telegram_user, dict) or 'id' not in telegram_user:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_PAYLOAD', 'Invalid Telegram user payload'),
+            detail='Invalid Telegram user payload',
         )
 
     try:
@@ -603,14 +603,14 @@ async def _resolve_user_from_init_data(
     except (TypeError, ValueError):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_ID', 'Invalid Telegram user identifier'),
+            detail='Invalid Telegram user identifier',
         ) from None
 
     user = await get_user_by_telegram_id(db, telegram_id)
     if not user:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('MINIAPP_USER_NOT_FOUND', 'User not found'),
+            detail='User not found',
         )
 
     # Block access for banned/deleted users
@@ -618,7 +618,7 @@ async def _resolve_user_from_init_data(
     if user_status in ('blocked', 'deleted'):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('MINIAPP_ACCOUNT_BLOCKED', 'Account is blocked or deleted'),
+            detail='Account is blocked or deleted',
         )
 
     return user, webapp_data
@@ -667,11 +667,11 @@ async def get_maintenance_status(
     payload: MiniAppSubscriptionRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppMaintenanceStatusResponse:
-    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    user, _ = await _resolve_user_from_init_data(db, payload.init_data)
     status_info = maintenance_service.get_status_info()
     return MiniAppMaintenanceStatusResponse(
         is_active=bool(status_info.get('is_active')),
-        message=maintenance_service.get_maintenance_message(),
+        message=maintenance_service.get_maintenance_message(user.language),
         reason=status_info.get('reason'),
     )
 
@@ -684,7 +684,7 @@ async def get_payment_methods(
     payload: MiniAppPaymentMethodsRequest,
     db: AsyncSession = Depends(get_db_session),
 ) -> MiniAppPaymentMethodsResponse:
-    _, _ = await _resolve_user_from_init_data(db, payload.init_data)
+    user, _ = await _resolve_user_from_init_data(db, payload.init_data)
 
     methods: list[MiniAppPaymentMethod] = []
 
@@ -695,7 +695,7 @@ async def get_payment_methods(
                 id='stars',
                 icon='⭐',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=stars_min_amount,
                 amount_step_kopeks=stars_min_amount,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -709,7 +709,7 @@ async def get_payment_methods(
                     id='yookassa_sbp',
                     icon='🏦',
                     requires_amount=True,
-                    currency=settings.HOME_CURRENCY_CODE,
+                    currency='RUB',
                     min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
                     max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
                     integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -721,7 +721,7 @@ async def get_payment_methods(
                 id='yookassa',
                 icon='💳',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -739,7 +739,7 @@ async def get_payment_methods(
                 name=settings.get_mulenpay_display_name(),
                 icon='💳',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=settings.MULENPAY_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.MULENPAY_MAX_AMOUNT_KOPEKS,
                 integration_type=mulenpay_integration,
@@ -753,7 +753,7 @@ async def get_payment_methods(
                 id='pal24',
                 icon='🏦',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=settings.PAL24_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.PAL24_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -763,28 +763,44 @@ async def get_payment_methods(
                         icon='🏦',
                         title_key='topup.method.pal24.option.sbp.title',
                         description_key='topup.method.pal24.option.sbp.description',
-                        title=get_texts().t('MINIAPP_PAL24_SBP_TITLE', 'Faster Payments (SBP)'),
-                        description=get_texts().t('MINIAPP_PAL24_SBP_DESC', 'Instant SBP transfer with no fees.'),
+                        title='Faster Payments (SBP)',
+                        description='Instant SBP transfer with no fees.',
                     ),
                     MiniAppPaymentOption(
                         id='card',
                         icon='💳',
                         title_key='topup.method.pal24.option.card.title',
                         description_key='topup.method.pal24.option.card.description',
-                        title=get_texts().t('MINIAPP_PAL24_CARD_TITLE', 'Bank card'),
-                        description=get_texts().t('MINIAPP_PAL24_CARD_DESC', 'Pay with a bank card via PayPalych.'),
+                        title='Bank card',
+                        description='Pay with a bank card via PayPalych.',
                     ),
                 ],
             )
         )
 
+    anore_policy = await get_anore_checkout_policy(db, user)
+    if anore_policy:
+        methods.append(
+            MiniAppPaymentMethod(
+                id='anore',
+                icon='💳',
+                requires_amount=True,
+                currency='RUB',
+                min_amount_kopeks=anore_policy['min_amount_kopeks'],
+                max_amount_kopeks=anore_policy['max_amount_kopeks'],
+                integration_type=MiniAppPaymentIntegrationType.REDIRECT,
+                options=[
+                    MiniAppPaymentOption(id=option['id'], title=option['name']) for option in anore_policy['options']
+                ],
+            )
+        )
     if settings.is_wata_enabled():
         methods.append(
             MiniAppPaymentMethod(
                 id='wata',
                 icon='🌊',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=settings.WATA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.WATA_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -804,9 +820,7 @@ async def get_payment_methods(
                     icon=info.get('icon') or ('🏦' if method_code == 2 else '💳'),
                     title_key=f'topup.method.platega.option.{method_code}.title',
                     description_key=f'topup.method.platega.option.{method_code}.description',
-                    title=info.get('title')
-                    or info.get('name')
-                    or get_texts().t('MINIAPP_PLATEGA_METHOD_TITLE', 'Platega {method}').format(method=method_code),
+                    title=info.get('title') or info.get('name') or f'Platega {method_code}',
                     description=info.get('description') or info.get('name'),
                 )
             )
@@ -832,7 +846,7 @@ async def get_payment_methods(
                 id='cryptobot',
                 icon='🪙',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=min_amount_kopeks,
                 max_amount_kopeks=max_amount_kopeks,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -845,7 +859,7 @@ async def get_payment_methods(
                 id='heleket',
                 icon='🪙',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=100 * 100,
                 max_amount_kopeks=100_000 * 100,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -858,7 +872,7 @@ async def get_payment_methods(
                 id='cloudpayments',
                 icon='💳',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -871,7 +885,7 @@ async def get_payment_methods(
                 id='freekassa',
                 icon='💳',
                 requires_amount=True,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 min_amount_kopeks=settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
                 max_amount_kopeks=settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
@@ -884,7 +898,7 @@ async def get_payment_methods(
                 id='tribute',
                 icon='💎',
                 requires_amount=False,
-                currency=settings.HOME_CURRENCY_CODE,
+                currency='RUB',
                 integration_type=MiniAppPaymentIntegrationType.REDIRECT,
             )
         )
@@ -899,6 +913,7 @@ async def get_payment_methods(
         'pal24': 7,
         'platega': 8,
         'wata': 9,
+        'anore': 10,
         'cryptobot': 10,
         'heleket': 11,
         'tribute': 12,
@@ -921,14 +936,14 @@ async def create_payment_link(
     if getattr(user, 'restriction_topup', False):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('MINIAPP_TOPUP_RESTRICTED', 'Balance top-up is restricted for this account'),
+            detail='Balance top-up is restricted for this account',
         )
 
     method = (payload.method or '').strip().lower()
     if not method:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('MINIAPP_PAYMENT_METHOD_REQUIRED', 'Payment method is required'),
+            detail='Payment method is required',
         )
 
     amount_kopeks = _normalize_amount_kopeks(
@@ -938,20 +953,11 @@ async def create_payment_link(
 
     if method == 'stars':
         if not settings.TELEGRAM_STARS_ENABLED:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
         if not settings.BOT_TOKEN:
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=get_texts().t('MINIAPP_BOT_TOKEN_NOT_CONFIGURED', 'Bot token is not configured'),
-            )
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Bot token is not configured')
 
         requested_amount_kopeks = amount_kopeks
         try:
@@ -960,7 +966,7 @@ async def create_payment_link(
             logger.error('Failed to normalize Stars amount', exc=exc)
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=get_texts().t('MINIAPP_STARS_PREPARE_FAILED', 'Failed to prepare Stars payment'),
+                detail='Failed to prepare Stars payment',
             ) from exc
 
         bot = create_bot()
@@ -968,6 +974,7 @@ async def create_payment_link(
         try:
             payment_service = PaymentService(bot)
             invoice_link = await payment_service.create_stars_invoice(
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 amount_kopeks=amount_kopeks,
                 description=settings.get_balance_payment_description(
                     amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
@@ -979,10 +986,7 @@ async def create_payment_link(
             await bot.session.close()
 
         if not invoice_link:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_INVOICE_CREATE_FAILED', 'Failed to create invoice'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create invoice')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -998,25 +1002,13 @@ async def create_payment_link(
 
     if method == 'yookassa_sbp':
         if not settings.is_yookassa_enabled() or not getattr(settings, 'YOOKASSA_SBP_ENABLED', False):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
         if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_BELOW_MINIMUM', 'Amount is below minimum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
         if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_EXCEEDS_MAXIMUM', 'Amount exceeds maximum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
 
         payment_service = PaymentService()
         result = await payment_service.create_yookassa_sbp_payment(
@@ -1029,10 +1021,7 @@ async def create_payment_link(
         )
         confirmation_url = result.get('confirmation_url') if result else None
         if not result or not confirmation_url:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         extra: dict[str, Any] = {
             'local_payment_id': result.get('local_payment_id'),
@@ -1053,25 +1042,13 @@ async def create_payment_link(
 
     if method == 'yookassa':
         if not settings.is_yookassa_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
         if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_BELOW_MINIMUM', 'Amount is below minimum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
         if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_EXCEEDS_MAXIMUM', 'Amount exceeds maximum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
 
         payment_service = PaymentService()
         result = await payment_service.create_yookassa_payment(
@@ -1083,10 +1060,7 @@ async def create_payment_link(
             ),
         )
         if not result or not result.get('confirmation_url'):
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1102,25 +1076,13 @@ async def create_payment_link(
 
     if method == 'mulenpay':
         if not settings.is_mulenpay_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
         if amount_kopeks < settings.MULENPAY_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_BELOW_MINIMUM', 'Amount is below minimum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
         if amount_kopeks > settings.MULENPAY_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_EXCEEDS_MAXIMUM', 'Amount exceeds maximum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
 
         payment_service = PaymentService()
         result = await payment_service.create_mulenpay_payment(
@@ -1133,10 +1095,7 @@ async def create_payment_link(
             language=user.language,
         )
         if not result or not result.get('payment_url'):
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1151,41 +1110,23 @@ async def create_payment_link(
 
     if method == 'platega':
         if not settings.is_platega_enabled() or not settings.get_platega_active_methods():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
         if amount_kopeks < settings.PLATEGA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_BELOW_MINIMUM', 'Amount is below minimum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
         if amount_kopeks > settings.PLATEGA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_EXCEEDS_MAXIMUM', 'Amount exceeds maximum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
 
         active_methods = settings.get_platega_active_methods()
         method_option = payload.payment_option or str(active_methods[0])
         try:
             method_code = int(str(method_option).strip())
         except (TypeError, ValueError):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PLATEGA_OPTION_INVALID', 'Invalid Platega payment option'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Invalid Platega payment option')
 
         if method_code not in active_methods:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PLATEGA_METHOD_UNAVAILABLE', 'Selected Platega method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Selected Platega method is unavailable')
 
         payment_service = PaymentService()
         result = await payment_service.create_platega_payment(
@@ -1201,10 +1142,7 @@ async def create_payment_link(
 
         redirect_url = result.get('redirect_url') if result else None
         if not result or not redirect_url:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1220,27 +1158,59 @@ async def create_payment_link(
             },
         )
 
+    if method == 'anore':
+        anore_policy = await get_anore_checkout_policy(db, user)
+        if anore_policy is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
+        if amount_kopeks is None or amount_kopeks <= 0:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
+        if amount_kopeks < anore_policy['min_amount_kopeks']:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
+        if amount_kopeks > anore_policy['max_amount_kopeks']:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
+
+        if payload.payment_option and payload.payment_option not in {
+            option['id'] for option in anore_policy['options']
+        }:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment option is unavailable')
+        payment_service = PaymentService()
+        result = await payment_service.create_anore_payment(
+            db=db,
+            user_id=user.id,
+            amount_kopeks=amount_kopeks,
+            description=settings.get_balance_payment_description(
+                amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+            ),
+            language=user.language,
+            payment_method_type=payload.payment_option,
+        )
+        payment_url = result.get('payment_url') if result else None
+        if not result or not payment_url:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
+
+        return MiniAppPaymentCreateResponse(
+            method=method,
+            payment_url=payment_url,
+            amount_kopeks=amount_kopeks,
+            extra={
+                'local_payment_id': result.get('local_payment_id'),
+                'invoice_id': result.get('payment_id'),
+                'payment_id': result.get('payment_id'),
+                'status': result.get('status'),
+                'order_id': result.get('order_id'),
+                'requested_at': _current_request_timestamp(),
+            },
+        )
+
     if method == 'wata':
         if not settings.is_wata_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
         if amount_kopeks < settings.WATA_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_BELOW_MINIMUM', 'Amount is below minimum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
         if amount_kopeks > settings.WATA_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_EXCEEDS_MAXIMUM', 'Amount exceeds maximum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
 
         payment_service = PaymentService()
         result = await payment_service.create_wata_payment(
@@ -1254,10 +1224,7 @@ async def create_payment_link(
         )
         payment_url = result.get('payment_url') if result else None
         if not result or not payment_url:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1275,25 +1242,13 @@ async def create_payment_link(
 
     if method == 'pal24':
         if not settings.is_pal24_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
         if amount_kopeks < settings.PAL24_MIN_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_BELOW_MINIMUM', 'Amount is below minimum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount is below minimum')
         if amount_kopeks > settings.PAL24_MAX_AMOUNT_KOPEKS:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_EXCEEDS_MAXIMUM', 'Amount exceeds maximum'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount exceeds maximum')
 
         option = (payload.payment_option or '').strip().lower()
         if option not in {'card', 'sbp'}:
@@ -1314,10 +1269,7 @@ async def create_payment_link(
             payment_method=provider_method,
         )
         if not result:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         preferred_urls: list[str | None] = []
         if option == 'sbp':
@@ -1334,10 +1286,7 @@ async def create_payment_link(
         )
         payment_url = next((url for url in preferred_urls if url), None)
         if not payment_url:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_URL_MISSING', 'Failed to obtain payment url'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to obtain payment url')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1360,32 +1309,20 @@ async def create_payment_link(
 
     if method == 'cryptobot':
         if not settings.is_cryptobot_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
         rate = await _get_usd_to_rub_rate()
         min_amount_kopeks, max_amount_kopeks = _compute_cryptobot_limits(rate)
         if amount_kopeks < min_amount_kopeks:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                    'Amount is below minimum ({amount} تومان)',
-                ).format(amount=f'{min_amount_kopeks / 100:.2f}'),
+                detail=f'Amount is below minimum ({min_amount_kopeks / 100:.2f} RUB)',
             )
         if amount_kopeks > max_amount_kopeks:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                    'Amount exceeds maximum ({amount} تومان)',
-                ).format(amount=f'{max_amount_kopeks / 100:.2f}'),
+                detail=f'Amount exceeds maximum ({max_amount_kopeks / 100:.2f} RUB)',
             )
 
         try:
@@ -1397,7 +1334,7 @@ async def create_payment_link(
         except (InvalidOperation, ValueError):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_USD_CONVERSION_FAILED', 'Unable to convert amount to USD'),
+                detail='Unable to convert amount to USD',
             )
 
         payment_service = PaymentService()
@@ -1412,20 +1349,14 @@ async def create_payment_link(
             payload=f'balance_{user.id}_{amount_kopeks}',
         )
         if not result:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         # Priority: web_app for desktop/browser, mini_app for mobile, bot as fallback
         payment_url = (
             result.get('web_app_invoice_url') or result.get('mini_app_invoice_url') or result.get('bot_invoice_url')
         )
         if not payment_url:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_URL_MISSING', 'Failed to obtain payment url'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to obtain payment url')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1442,33 +1373,21 @@ async def create_payment_link(
 
     if method == 'heleket':
         if not settings.is_heleket_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
 
         min_amount_kopeks = 100 * 100
         max_amount_kopeks = 100_000 * 100
         if amount_kopeks < min_amount_kopeks:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                    'Amount is below minimum ({amount} تومان)',
-                ).format(amount=f'{min_amount_kopeks / 100:.2f}'),
+                detail=f'Amount is below minimum ({min_amount_kopeks / 100:.2f} RUB)',
             )
         if amount_kopeks > max_amount_kopeks:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                    'Amount exceeds maximum ({amount} تومان)',
-                ).format(amount=f'{max_amount_kopeks / 100:.2f}'),
+                detail=f'Amount exceeds maximum ({max_amount_kopeks / 100:.2f} RUB)',
             )
 
         payment_service = PaymentService()
@@ -1483,10 +1402,7 @@ async def create_payment_link(
         )
 
         if not result or not result.get('payment_url'):
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1506,31 +1422,19 @@ async def create_payment_link(
 
     if method == 'cloudpayments':
         if not settings.is_cloudpayments_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
 
         if amount_kopeks < settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                    'Amount is below minimum ({amount} تومان)',
-                ).format(amount=f'{settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS / 100:.2f}'),
+                detail=f'Amount is below minimum ({settings.CLOUDPAYMENTS_MIN_AMOUNT_KOPEKS / 100:.2f} RUB)',
             )
         if amount_kopeks > settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                    'Amount exceeds maximum ({amount} تومان)',
-                ).format(amount=f'{settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS / 100:.2f}'),
+                detail=f'Amount exceeds maximum ({settings.CLOUDPAYMENTS_MAX_AMOUNT_KOPEKS / 100:.2f} RUB)',
             )
 
         payment_service = PaymentService()
@@ -1546,10 +1450,7 @@ async def create_payment_link(
         )
 
         if not result or not result.get('payment_url'):
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1564,31 +1465,19 @@ async def create_payment_link(
 
     if method == 'freekassa':
         if not settings.is_freekassa_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if amount_kopeks is None or amount_kopeks <= 0:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_AMOUNT_MUST_BE_POSITIVE', 'Amount must be positive'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Amount must be positive')
 
         if amount_kopeks < settings.FREEKASSA_MIN_AMOUNT_KOPEKS:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                    'Amount is below minimum ({amount} تومان)',
-                ).format(amount=f'{settings.FREEKASSA_MIN_AMOUNT_KOPEKS / 100:.2f}'),
+                detail=f'Amount is below minimum ({settings.FREEKASSA_MIN_AMOUNT_KOPEKS / 100:.2f} RUB)',
             )
         if amount_kopeks > settings.FREEKASSA_MAX_AMOUNT_KOPEKS:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                    'Amount exceeds maximum ({amount} تومان)',
-                ).format(amount=f'{settings.FREEKASSA_MAX_AMOUNT_KOPEKS / 100:.2f}'),
+                detail=f'Amount exceeds maximum ({settings.FREEKASSA_MAX_AMOUNT_KOPEKS / 100:.2f} RUB)',
             )
 
         payment_service = PaymentService()
@@ -1604,10 +1493,7 @@ async def create_payment_link(
         )
 
         if not result or not result.get('payment_url'):
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1622,15 +1508,9 @@ async def create_payment_link(
 
     if method == 'tribute':
         if not settings.TRIBUTE_ENABLED:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
         if not settings.BOT_TOKEN:
-            raise HTTPException(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=get_texts().t('MINIAPP_BOT_TOKEN_NOT_CONFIGURED', 'Bot token is not configured'),
-            )
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Bot token is not configured')
 
         bot = create_bot()
         try:
@@ -1646,10 +1526,7 @@ async def create_payment_link(
             await bot.session.close()
 
         if not payment_url:
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                detail=get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-            )
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail='Failed to create payment')
 
         return MiniAppPaymentCreateResponse(
             method=method,
@@ -1660,10 +1537,7 @@ async def create_payment_link(
             },
         )
 
-    raise HTTPException(
-        status.HTTP_400_BAD_REQUEST,
-        detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNKNOWN', 'Unknown payment method'),
-    )
+    raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Unknown payment method')
 
 
 @router.post(
@@ -1708,7 +1582,7 @@ async def _resolve_payment_status_entry(
         return MiniAppPaymentStatusResult(
             method='',
             status='unknown',
-            message=get_texts().t('MINIAPP_PAYMENT_METHOD_REQUIRED', 'Payment method is required'),
+            message='Payment method is required',
         )
 
     if method in {'yookassa', 'yookassa_sbp'}:
@@ -1722,6 +1596,8 @@ async def _resolve_payment_status_entry(
         return await _resolve_mulenpay_payment_status(payment_service, db, user, query)
     if method == 'platega':
         return await _resolve_platega_payment_status(payment_service, db, user, query)
+    if method == 'anore':
+        return await _resolve_anore_payment_status(payment_service, db, user, query)
     if method == 'wata':
         return await _resolve_wata_payment_status(payment_service, db, user, query)
     if method == 'pal24':
@@ -1742,7 +1618,7 @@ async def _resolve_payment_status_entry(
     return MiniAppPaymentStatusResult(
         method=method,
         status='unknown',
-        message=get_texts().t('MINIAPP_PAYMENT_METHOD_UNSUPPORTED', 'Unsupported payment method'),
+        message='Unsupported payment method',
     )
 
 
@@ -1770,7 +1646,7 @@ async def _resolve_yookassa_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'payment_id': query.payment_id,
@@ -1817,7 +1693,7 @@ async def _resolve_mulenpay_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_ID_MISSING', 'Missing payment identifier'),
+            message='Missing payment identifier',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'invoice_id': query.invoice_id,
@@ -1836,7 +1712,7 @@ async def _resolve_mulenpay_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'invoice_id': query.invoice_id,
@@ -1854,7 +1730,7 @@ async def _resolve_mulenpay_payment_status(
     if status == 'failed':
         remote_status = status_info.get('remote_status_code') or status_raw
         if remote_status:
-            message = get_texts().t('MINIAPP_PAYMENT_STATUS_MESSAGE', 'Status: {status}').format(status=remote_status)
+            message = f'Status: {remote_status}'
 
     return MiniAppPaymentStatusResult(
         method='mulenpay',
@@ -1908,7 +1784,7 @@ async def _resolve_platega_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'payment_id': query.payment_id,
@@ -1978,7 +1854,7 @@ async def _resolve_wata_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_ID_MISSING', 'Missing payment identifier'),
+            message='Missing payment identifier',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'payment_link_id': payment_link_id,
@@ -1998,7 +1874,7 @@ async def _resolve_wata_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': local_id,
                 'payment_link_id': (payment_link_id or getattr(payment, 'payment_link_id', None)),
@@ -2077,7 +1953,7 @@ async def _resolve_pal24_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_ID_MISSING', 'Missing payment identifier'),
+            message='Missing payment identifier',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'bill_id': query.invoice_id,
@@ -2096,7 +1972,7 @@ async def _resolve_pal24_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': local_id,
                 'bill_id': query.invoice_id,
@@ -2114,7 +1990,7 @@ async def _resolve_pal24_payment_status(
     if status == 'failed':
         remote_status = status_info.get('remote_status') or status_raw
         if remote_status:
-            message = get_texts().t('MINIAPP_PAYMENT_STATUS_MESSAGE', 'Status: {status}').format(status=remote_status)
+            message = f'Status: {remote_status}'
 
     links_info = status_info.get('links') if status_info else {}
 
@@ -2171,7 +2047,7 @@ async def _resolve_cryptobot_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'invoice_id': query.invoice_id,
@@ -2245,7 +2121,7 @@ async def _resolve_heleket_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'uuid': query.payment_id or query.invoice_id,
@@ -2310,7 +2186,7 @@ async def _resolve_cloudpayments_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'invoice_id': query.invoice_id,
@@ -2370,7 +2246,7 @@ async def _resolve_freekassa_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_NOT_FOUND', 'Payment not found'),
+            message='Payment not found',
             extra={
                 'local_payment_id': query.local_payment_id,
                 'order_id': query.payment_id,
@@ -2426,7 +2302,7 @@ async def _resolve_stars_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_WAITING_CONFIRMATION', 'Waiting for confirmation'),
+            message='Waiting for confirmation',
             extra={
                 'payload': query.payload,
                 'started_at': query.started_at,
@@ -2438,7 +2314,7 @@ async def _resolve_stars_payment_status(
         status='paid',
         is_paid=True,
         amount_kopeks=transaction.amount_kopeks,
-        currency=settings.HOME_CURRENCY_CODE,
+        currency='RUB',
         completed_at=transaction.completed_at or transaction.created_at,
         transaction_id=transaction.id,
         external_id=transaction.external_id,
@@ -2469,7 +2345,7 @@ async def _resolve_tribute_payment_status(
             status='pending',
             is_paid=False,
             amount_kopeks=query.amount_kopeks,
-            message=get_texts().t('MINIAPP_PAYMENT_WAITING_CONFIRMATION', 'Waiting for confirmation'),
+            message='Waiting for confirmation',
             extra={
                 'payload': query.payload,
                 'started_at': query.started_at,
@@ -2481,7 +2357,7 @@ async def _resolve_tribute_payment_status(
         status='paid',
         is_paid=True,
         amount_kopeks=transaction.amount_kopeks,
-        currency=settings.HOME_CURRENCY_CODE,
+        currency='RUB',
         completed_at=transaction.completed_at or transaction.created_at,
         transaction_id=transaction.id,
         external_id=transaction.external_id,
@@ -2915,12 +2791,11 @@ def _bytes_to_gb(bytes_value: int | None) -> float:
 
 
 def _status_label(status: str) -> str:
-    texts = get_texts()
     mapping = {
-        'active': texts.t('MINIAPP_STATUS_LABEL_ACTIVE', 'Active'),
-        'trial': texts.t('MINIAPP_STATUS_LABEL_TRIAL', 'Trial'),
-        'expired': texts.t('MINIAPP_STATUS_LABEL_EXPIRED', 'Expired'),
-        'disabled': texts.t('MINIAPP_STATUS_LABEL_DISABLED', 'Disabled'),
+        'active': 'Active',
+        'trial': 'Trial',
+        'expired': 'Expired',
+        'disabled': 'Disabled',
     }
     return mapping.get(status, status.title())
 
@@ -3058,9 +2933,7 @@ def _resolve_display_name(user_data: dict[str, Any]) -> str:
         return ' '.join(parts)
 
     telegram_id = user_data.get('telegram_id')
-    if telegram_id:
-        return get_texts().t('MINIAPP_USER_DISPLAY_NAME', 'User {telegram_id}').format(telegram_id=telegram_id)
-    return get_texts().t('MINIAPP_USER_DISPLAY_NAME_FALLBACK', 'User')
+    return f'User {telegram_id}' if telegram_id else 'User'
 
 
 def _is_remnawave_configured() -> bool:
@@ -3308,8 +3181,7 @@ async def get_subscription_details(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 'code': 'maintenance',
-                'message': maintenance_service.get_maintenance_message()
-                or get_texts().t('MINIAPP_MAINTENANCE_ACTIVE', 'Service is under maintenance'),
+                'message': maintenance_service.get_maintenance_message() or 'Service is under maintenance',
                 'reason': status_info.get('reason'),
             },
         )
@@ -3326,7 +3198,7 @@ async def get_subscription_details(
     if not isinstance(telegram_user, dict) or 'id' not in telegram_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_PAYLOAD', 'Invalid Telegram user payload'),
+            detail='Invalid Telegram user payload',
         )
 
     try:
@@ -3334,7 +3206,7 @@ async def get_subscription_details(
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_ID', 'Invalid Telegram user identifier'),
+            detail='Invalid Telegram user identifier',
         ) from None
 
     # Check required channel subscription
@@ -3349,10 +3221,7 @@ async def get_subscription_details(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     'code': 'channel_subscription_required',
-                    'message': get_texts().t(
-                        'MINIAPP_CHANNEL_SUBSCRIPTION_REQUIRED',
-                        'Please subscribe to the required channels to continue',
-                    ),
+                    'message': 'Please subscribe to the required channels to continue',
                     'channels': channels_with_status,
                 },
             )
@@ -3363,11 +3232,8 @@ async def get_subscription_details(
     if not user:
         detail: dict[str, Any] = {
             'code': 'user_not_found',
-            'message': get_texts().t(
-                'MINIAPP_USER_NOT_REGISTERED',
-                'User not found. Please register in the bot to continue.',
-            ),
-            'title': get_texts().t('MINIAPP_REGISTRATION_REQUIRED_TITLE', 'Registration required'),
+            'message': 'User not found. Please register in the bot to continue.',
+            'title': 'Registration required',
         }
         if purchase_url:
             detail['purchase_url'] = purchase_url
@@ -3663,21 +3529,8 @@ async def get_subscription_details(
             is_daily_tariff = True
             is_daily_paused = getattr(subscription, 'is_daily_paused', False)
             daily_tariff_name = tariff.name
-            daily_price_kopeks = getattr(tariff, 'daily_price_kopeks', 0)
-            # Применяем скидку промогруппы + promo-offer для отображения
-            if daily_price_kopeks > 0:
-                _promo_group = user.get_primary_promo_group() if hasattr(user, 'get_primary_promo_group') else None
-                _group_pct = _promo_group.get_discount_percent('period', 1) if _promo_group else 0
-                _offer_pct = get_user_active_promo_discount_percent(user) if user else 0
-                if _group_pct > 0 or _offer_pct > 0:
-                    daily_price_kopeks, _, _ = PricingEngine.apply_stacked_discounts(
-                        daily_price_kopeks, _group_pct, _offer_pct
-                    )
-            daily_price_label = (
-                settings.format_price(daily_price_kopeks) + get_texts().t('MINIAPP_PRICE_PER_DAY_SUFFIX', '/день')
-                if daily_price_kopeks > 0
-                else None
-            )
+            daily_price_kopeks = PricingEngine.daily_subscription_price(subscription, tariff, user)
+            daily_price_label = settings.format_price(daily_price_kopeks) + '/день' if daily_price_kopeks > 0 else None
             # Оставшееся время подписки (показываем даже при паузе)
             if subscription.end_date:
                 daily_next_charge_at = subscription.end_date
@@ -3703,9 +3556,9 @@ async def get_subscription_details(
         expires_at=getattr(subscription, 'end_date', None),
         device_limit=device_limit_value,
         traffic_used_gb=round(traffic_used_value, 2),
-        traffic_used_label=_format_gb_label(traffic_used_value, getattr(user, 'language', 'ru')),
+        traffic_used_label=_format_gb_label(traffic_used_value),
         traffic_limit_gb=traffic_limit_value,
-        traffic_limit_label=_format_limit_label(traffic_limit_value, getattr(user, 'language', 'ru')),
+        traffic_limit_label=_format_limit_label(traffic_limit_value),
         lifetime_used_traffic_gb=lifetime_used,
         has_active_subscription=status_actual in {'active', 'trial'},
         promo_offer_discount_percent=active_discount_percent,
@@ -3921,9 +3774,7 @@ async def _get_current_tariff_model(db: AsyncSession, subscription, user=None) -
         traffic_limit_gb=tariff.traffic_limit_gb,
         traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb)
         if settings.is_tariffs_mode()
-        else get_texts(getattr(user, 'language', 'ru'))
-        .t('MINIAPP_TRAFFIC_GB_LABEL', '{traffic} ГБ')
-        .format(traffic=tariff.traffic_limit_gb),
+        else f'{tariff.traffic_limit_gb} ГБ',
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
@@ -3960,10 +3811,7 @@ async def update_subscription_autopay_endpoint(
                 status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'autopay_not_available_for_daily',
-                    'message': get_texts().t(
-                        'MINIAPP_AUTOPAY_NOT_AVAILABLE_FOR_DAILY',
-                        'Autopay is not available for daily subscriptions',
-                    ),
+                    'message': 'Autopay is not available for daily subscriptions',
                 },
             )
 
@@ -3984,10 +3832,7 @@ async def update_subscription_autopay_endpoint(
                 status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'autopay_no_days',
-                    'message': get_texts().t(
-                        'MINIAPP_AUTOPAY_NO_DAYS',
-                        'Auto-pay day selection is temporarily unavailable',
-                    ),
+                    'message': 'Auto-pay day selection is temporarily unavailable',
                 },
             )
         normalized_days = default_day
@@ -4065,7 +3910,7 @@ async def activate_subscription_trial_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'subscription_exists',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_ALREADY_ACTIVE', 'Subscription is already active'),
+                'message': 'Subscription is already active',
             },
         )
 
@@ -4079,7 +3924,7 @@ async def activate_subscription_trial_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': error_code,
-                'message': get_texts().t('MINIAPP_TRIAL_UNAVAILABLE', 'Trial is not available for this user'),
+                'message': 'Trial is not available for this user',
             },
         )
 
@@ -4091,7 +3936,7 @@ async def activate_subscription_trial_endpoint(
             status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': get_texts().t('MINIAPP_TRIAL_INSUFFICIENT_FUNDS', 'Not enough funds to activate the trial'),
+                'message': 'Not enough funds to activate the trial',
                 'missing_amount_kopeks': missing,
                 'required_amount_kopeks': error.required_amount,
                 'balance_kopeks': error.balance_amount,
@@ -4134,6 +3979,13 @@ async def activate_subscription_trial_endpoint(
         except Exception as e:
             logger.error('Ошибка получения триального тарифа', error=e)
 
+    from app.services.checkout_squad_validation import CheckoutSquadsUnavailableError, validate_checkout_squads
+
+    try:
+        await validate_checkout_squads(trial_squads)
+    except CheckoutSquadsUnavailableError as error:
+        raise HTTPException(status_code=409, detail={'code': error.code, 'message': error.message}) from error
+
     try:
         subscription = await create_trial_subscription(
             db,
@@ -4150,7 +4002,7 @@ async def activate_subscription_trial_endpoint(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 'code': 'trial_activation_failed',
-                'message': get_texts().t('MINIAPP_TRIAL_ACTIVATION_FAILED', 'Failed to activate trial subscription'),
+                'message': 'Failed to activate trial subscription',
             },
         ) from error
 
@@ -4165,10 +4017,7 @@ async def activate_subscription_trial_endpoint(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     'code': 'trial_rollback_failed',
-                    'message': get_texts().t(
-                        'MINIAPP_TRIAL_REVERT_AFTER_CHARGE_FAILED',
-                        'Failed to revert trial activation after charge error',
-                    ),
+                    'message': 'Failed to revert trial activation after charge error',
                 },
             ) from error
 
@@ -4177,7 +4026,7 @@ async def activate_subscription_trial_endpoint(
             status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': get_texts().t('MINIAPP_TRIAL_INSUFFICIENT_FUNDS', 'Not enough funds to activate the trial'),
+                'message': 'Not enough funds to activate the trial',
                 'missing_amount_kopeks': error.missing_amount,
                 'required_amount_kopeks': error.required_amount,
                 'balance_kopeks': error.balance_amount,
@@ -4191,10 +4040,7 @@ async def activate_subscription_trial_endpoint(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     'code': 'trial_rollback_failed',
-                    'message': get_texts().t(
-                        'MINIAPP_TRIAL_REVERT_AFTER_CHARGE_FAILED',
-                        'Failed to revert trial activation after charge error',
-                    ),
+                    'message': 'Failed to revert trial activation after charge error',
                 },
             ) from error
 
@@ -4207,10 +4053,7 @@ async def activate_subscription_trial_endpoint(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 'code': 'charge_failed',
-                'message': get_texts().t(
-                    'MINIAPP_TRIAL_CHARGE_FAILED',
-                    'Failed to charge balance for trial activation',
-                ),
+                'message': 'Failed to charge balance for trial activation',
             },
         ) from error
 
@@ -4227,20 +4070,14 @@ async def activate_subscription_trial_endpoint(
             user,
             subscription,
             charged_amount,
-            refund_description=get_texts().t(
-                'MINIAPP_TRIAL_REFUND_DESCRIPTION',
-                'Возврат оплаты за активацию триала в мини-приложении',
-            ),
+            refund_description='Возврат оплаты за активацию триала в мини-приложении',
         )
         if not revert_result.subscription_rolled_back:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     'code': 'trial_rollback_failed',
-                    'message': get_texts().t(
-                        'MINIAPP_TRIAL_REVERT_AFTER_REMNAWAVE_FAILED',
-                        'Failed to revert trial activation after RemnaWave error',
-                    ),
+                    'message': 'Failed to revert trial activation after RemnaWave error',
                 },
             ) from error
         if charged_amount > 0 and not revert_result.refunded:
@@ -4248,10 +4085,7 @@ async def activate_subscription_trial_endpoint(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     'code': 'trial_refund_failed',
-                    'message': get_texts().t(
-                        'MINIAPP_TRIAL_REFUND_AFTER_REMNAWAVE_FAILED',
-                        'Failed to refund trial activation charge after RemnaWave error',
-                    ),
+                    'message': 'Failed to refund trial activation charge after RemnaWave error',
                 },
             ) from error
 
@@ -4259,10 +4093,7 @@ async def activate_subscription_trial_endpoint(
             status.HTTP_502_BAD_GATEWAY,
             detail={
                 'code': 'remnawave_configuration_error',
-                'message': get_texts().t(
-                    'MINIAPP_TRIAL_REMNAWAVE_CONFIG_ERROR',
-                    'Trial activation failed due to RemnaWave configuration. Charge refunded.',
-                ),
+                'message': 'Trial activation failed due to RemnaWave configuration. Charge refunded.',
             },
         ) from error
     except Exception as error:  # pragma: no cover - defensive logging
@@ -4274,20 +4105,14 @@ async def activate_subscription_trial_endpoint(
             user,
             subscription,
             charged_amount,
-            refund_description=get_texts().t(
-                'MINIAPP_TRIAL_REFUND_DESCRIPTION',
-                'Возврат оплаты за активацию триала в мини-приложении',
-            ),
+            refund_description='Возврат оплаты за активацию триала в мини-приложении',
         )
         if not revert_result.subscription_rolled_back:
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     'code': 'trial_rollback_failed',
-                    'message': get_texts().t(
-                        'MINIAPP_TRIAL_REVERT_AFTER_REMNAWAVE_FAILED',
-                        'Failed to revert trial activation after RemnaWave error',
-                    ),
+                    'message': 'Failed to revert trial activation after RemnaWave error',
                 },
             ) from error
         if charged_amount > 0 and not revert_result.refunded:
@@ -4295,10 +4120,7 @@ async def activate_subscription_trial_endpoint(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
                     'code': 'trial_refund_failed',
-                    'message': get_texts().t(
-                        'MINIAPP_TRIAL_REFUND_AFTER_REMNAWAVE_FAILED',
-                        'Failed to refund trial activation charge after RemnaWave error',
-                    ),
+                    'message': 'Failed to refund trial activation charge after RemnaWave error',
                 },
             ) from error
 
@@ -4306,10 +4128,7 @@ async def activate_subscription_trial_endpoint(
             status.HTTP_502_BAD_GATEWAY,
             detail={
                 'code': 'remnawave_provisioning_failed',
-                'message': get_texts().t(
-                    'MINIAPP_TRIAL_REMNAWAVE_PROVISIONING_FAILED',
-                    'Trial activation failed due to RemnaWave provisioning. Charge refunded.',
-                ),
+                'message': 'Trial activation failed due to RemnaWave provisioning. Charge refunded.',
             },
         ) from error
 
@@ -4332,37 +4151,19 @@ async def activate_subscription_trial_endpoint(
     charged_amount_label = settings.format_price(charged_amount) if charged_amount > 0 else None
     if language_code in {'ru', 'fa'}:
         if duration_days:
-            message = get_texts(language_code).t(
-                'MINIAPP_TRIAL_ACTIVATED_DAYS',
-                'Триал активирован на {days} дн. Приятного пользования!',
-            ).format(days=duration_days)
+            message = f'Триал активирован на {duration_days} дн. Приятного пользования!'
         else:
-            message = get_texts(language_code).t(
-                'MINIAPP_TRIAL_ACTIVATED',
-                'Триал активирован. Приятного пользования!',
-            )
+            message = 'Триал активирован. Приятного пользования!'
     elif duration_days:
-        message = get_texts(language_code).t(
-            'MINIAPP_TRIAL_ACTIVATED_DAYS_EN',
-            'Trial activated for {days} days. Enjoy!',
-        ).format(days=duration_days)
+        message = f'Trial activated for {duration_days} days. Enjoy!'
     else:
-        message = get_texts(language_code).t(
-            'MINIAPP_TRIAL_ACTIVATED_EN',
-            'Trial activated successfully. Enjoy!',
-        )
+        message = 'Trial activated successfully. Enjoy!'
 
     if charged_amount_label:
         if language_code in {'ru', 'fa'}:
-            message = get_texts(language_code).t(
-                'MINIAPP_TRIAL_CHARGE_NOTE',
-                '{message}\n\n💳 С вашего баланса списано {amount}.',
-            ).format(message=message, amount=charged_amount_label)
+            message = f'{message}\n\n💳 С вашего баланса списано {charged_amount_label}.'
         else:
-            message = get_texts(language_code).t(
-                'MINIAPP_TRIAL_CHARGE_NOTE_EN',
-                '{message}\n\n💳 {amount} has been deducted from your balance.',
-            ).format(message=message, amount=charged_amount_label)
+            message = f'{message}\n\n💳 {charged_amount_label} has been deducted from your balance.'
 
     await with_admin_notification_service(
         lambda service: service.send_trial_activation_notification(
@@ -4405,10 +4206,7 @@ async def activate_promo_code(
     if not isinstance(telegram_user, dict) or 'id' not in telegram_user:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_user',
-                'message': get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_PAYLOAD', 'Invalid Telegram user payload'),
-            },
+            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user payload'},
         )
 
     try:
@@ -4416,27 +4214,21 @@ async def activate_promo_code(
     except (TypeError, ValueError):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_user',
-                'message': get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_ID', 'Invalid Telegram user identifier'),
-            },
+            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user identifier'},
         ) from None
 
     user = await get_user_by_telegram_id(db, telegram_id)
     if not user:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail={'code': 'user_not_found', 'message': get_texts().t('MINIAPP_USER_NOT_FOUND', 'User not found')},
+            detail={'code': 'user_not_found', 'message': 'User not found'},
         )
 
     code = (payload.code or '').strip().upper()
     if not code:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid',
-                'message': get_texts().t('MINIAPP_PROMOCODE_INVALID', 'Promo code must not be empty'),
-            },
+            detail={'code': 'invalid', 'message': 'Promo code must not be empty'},
         )
 
     result = await promo_code_service.activate_promocode(db, user.id, code, subscription_id=payload.subscription_id)
@@ -4499,51 +4291,27 @@ async def activate_promo_code(
         'server_error': status.HTTP_500_INTERNAL_SERVER_ERROR,
     }
     message_map = {
-        'invalid': get_texts().t('MINIAPP_PROMOCODE_INVALID', 'Promo code must not be empty'),
-        'not_found': get_texts().t('MINIAPP_PROMOCODE_NOT_FOUND', 'Promo code not found'),
-        'expired': get_texts().t('MINIAPP_PROMOCODE_EXPIRED', 'Promo code expired'),
-        'inactive': get_texts().t('MINIAPP_PROMOCODE_INACTIVE', 'Promo code is deactivated'),
-        'not_yet_valid': get_texts().t('MINIAPP_PROMOCODE_NOT_YET_VALID', 'Promo code is not yet active'),
-        'used': get_texts().t('MINIAPP_PROMOCODE_USED', 'Promo code already used'),
-        'already_used_by_user': get_texts().t(
-            'MINIAPP_PROMOCODE_ALREADY_USED_BY_USER',
-            'Promo code already used by this user',
-        ),
-        'no_subscription_for_days': get_texts().t(
-            'MINIAPP_PROMOCODE_NO_SUBSCRIPTION_FOR_DAYS',
-            'This promo code requires an active or expired subscription',
-        ),
-        'subscription_not_found': get_texts().t('MINIAPP_PROMOCODE_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
-        'active_discount_exists': get_texts().t(
-            'MINIAPP_PROMOCODE_ACTIVE_DISCOUNT_EXISTS',
-            'You already have an active discount',
-        ),
-        'not_first_purchase': get_texts().t(
-            'MINIAPP_PROMOCODE_NOT_FIRST_PURCHASE',
-            'This promo code is only available for first purchase',
-        ),
-        'daily_limit': get_texts().t('MINIAPP_PROMOCODE_DAILY_LIMIT', 'Too many promo code activations today'),
-        'trial_subscription_exists': get_texts().t(
-            'MINIAPP_PROMOCODE_TRIAL_SUBSCRIPTION_EXISTS',
-            'You already have a subscription, so this trial code cannot be applied',
-        ),
-        'trial_provisioning_failed': get_texts().t(
-            'MINIAPP_PROMOCODE_TRIAL_PROVISIONING_FAILED',
-            'Could not provision the trial right now, please try again later',
-        ),
-        'traffic_not_applicable': get_texts().t(
-            'MINIAPP_PROMOCODE_TRAFFIC_NOT_APPLICABLE',
-            'This promo code only grants traffic, and your subscription is already unlimited',
-        ),
-        'user_not_found': get_texts().t('MINIAPP_PROMOCODE_USER_NOT_FOUND', 'User not found'),
-        'server_error': get_texts().t('MINIAPP_PROMOCODE_SERVER_ERROR', 'Failed to activate promo code'),
+        'invalid': 'Promo code must not be empty',
+        'not_found': 'Promo code not found',
+        'expired': 'Promo code expired',
+        'inactive': 'Promo code is deactivated',
+        'not_yet_valid': 'Promo code is not yet active',
+        'used': 'Promo code already used',
+        'already_used_by_user': 'Promo code already used by this user',
+        'no_subscription_for_days': 'This promo code requires an active or expired subscription',
+        'subscription_not_found': 'Subscription not found',
+        'active_discount_exists': 'You already have an active discount',
+        'not_first_purchase': 'This promo code is only available for first purchase',
+        'daily_limit': 'Too many promo code activations today',
+        'trial_subscription_exists': 'You already have a subscription, so this trial code cannot be applied',
+        'trial_provisioning_failed': 'Could not provision the trial right now, please try again later',
+        'traffic_not_applicable': 'This promo code only grants traffic, and your subscription is already unlimited',
+        'user_not_found': 'User not found',
+        'server_error': 'Failed to activate promo code',
     }
 
     http_status = status_map.get(error_code, status.HTTP_400_BAD_REQUEST)
-    message = message_map.get(
-        error_code,
-        get_texts().t('MINIAPP_PROMOCODE_ACTIVATION_FAILED', 'Unable to activate promo code'),
-    )
+    message = message_map.get(error_code, 'Unable to activate promo code')
 
     raise HTTPException(
         http_status,
@@ -4572,10 +4340,7 @@ async def claim_promo_offer(
     if not isinstance(telegram_user, dict) or 'id' not in telegram_user:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_user',
-                'message': get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_PAYLOAD', 'Invalid Telegram user payload'),
-            },
+            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user payload'},
         )
 
     try:
@@ -4583,34 +4348,28 @@ async def claim_promo_offer(
     except (TypeError, ValueError):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_user',
-                'message': get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_ID', 'Invalid Telegram user identifier'),
-            },
+            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user identifier'},
         ) from None
 
     user = await get_user_by_telegram_id(db, telegram_id)
     if not user:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail={'code': 'user_not_found', 'message': get_texts().t('MINIAPP_USER_NOT_FOUND', 'User not found')},
+            detail={'code': 'user_not_found', 'message': 'User not found'},
         )
 
     offer = await get_offer_by_id(db, offer_id)
     if not offer or offer.user_id != user.id:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail={'code': 'offer_not_found', 'message': get_texts().t('MINIAPP_OFFER_NOT_FOUND', 'Offer not found')},
+            detail={'code': 'offer_not_found', 'message': 'Offer not found'},
         )
 
     now = datetime.now(UTC)
     if offer.claimed_at is not None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            detail={
-                'code': 'already_claimed',
-                'message': get_texts().t('MINIAPP_OFFER_ALREADY_CLAIMED', 'Offer already claimed'),
-            },
+            detail={'code': 'already_claimed', 'message': 'Offer already claimed'},
         )
 
     if not offer.is_active or offer.expires_at <= now:
@@ -4618,7 +4377,7 @@ async def claim_promo_offer(
         await db.commit()
         raise HTTPException(
             status.HTTP_410_GONE,
-            detail={'code': 'offer_expired', 'message': get_texts().t('MINIAPP_OFFER_EXPIRED', 'Offer expired')},
+            detail={'code': 'offer_expired', 'message': 'Offer expired'},
         )
 
     effect_type = _normalize_effect_type(getattr(offer, 'effect_type', None))
@@ -4633,32 +4392,14 @@ async def claim_promo_offer(
         if not success:
             code = error_code or 'claim_failed'
             message_map = {
-                'subscription_missing': get_texts().t(
-                    'MINIAPP_OFFER_SUBSCRIPTION_REQUIRED',
-                    'Active subscription required',
-                ),
-                'squads_missing': get_texts().t(
-                    'MINIAPP_OFFER_SQUADS_MISSING',
-                    'No squads configured for test access',
-                ),
-                'already_connected': get_texts().t(
-                    'MINIAPP_OFFER_SERVERS_ALREADY_CONNECTED',
-                    'Servers already connected',
-                ),
-                'remnawave_sync_failed': get_texts().t(
-                    'MINIAPP_OFFER_SERVERS_APPLY_FAILED',
-                    'Failed to apply servers',
-                ),
+                'subscription_missing': 'Active subscription required',
+                'squads_missing': 'No squads configured for test access',
+                'already_connected': 'Servers already connected',
+                'remnawave_sync_failed': 'Failed to apply servers',
             }
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': code,
-                    'message': message_map.get(
-                        code,
-                        get_texts().t('MINIAPP_OFFER_ACTIVATION_FAILED', 'Unable to activate offer'),
-                    ),
-                },
+                detail={'code': code, 'message': message_map.get(code, 'Unable to activate offer')},
             )
 
         await mark_offer_claimed(
@@ -4677,10 +4418,7 @@ async def claim_promo_offer(
     if discount_percent <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_discount',
-                'message': get_texts().t('MINIAPP_OFFER_NO_DISCOUNT', 'Offer does not contain discount'),
-            },
+            detail={'code': 'invalid_discount', 'message': 'Offer does not contain discount'},
         )
 
     user.promo_offer_discount_percent = discount_percent
@@ -4747,10 +4485,7 @@ async def remove_connected_device(
     if not isinstance(telegram_user, dict) or 'id' not in telegram_user:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_user',
-                'message': get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_PAYLOAD', 'Invalid Telegram user payload'),
-            },
+            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user payload'},
         )
 
     try:
@@ -4758,17 +4493,14 @@ async def remove_connected_device(
     except (TypeError, ValueError):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_user',
-                'message': get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_ID', 'Invalid Telegram user identifier'),
-            },
+            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user identifier'},
         ) from None
 
     user = await get_user_by_telegram_id(db, telegram_id)
     if not user:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail={'code': 'user_not_found', 'message': get_texts().t('MINIAPP_USER_NOT_FOUND', 'User not found')},
+            detail={'code': 'user_not_found', 'message': 'User not found'},
         )
 
     # NB: pre-existing — в multi-tariff панельная идентичность живёт на подписке, а не
@@ -4779,33 +4511,21 @@ async def remove_connected_device(
     if not panel_user_id:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            detail={
-                'code': 'remnawave_unavailable',
-                'message': get_texts().t('MINIAPP_REMNAWAVE_USER_NOT_LINKED', 'RemnaWave user is not linked'),
-            },
+            detail={'code': 'remnawave_unavailable', 'message': 'RemnaWave user is not linked'},
         )
 
     hwid = (payload.hwid or '').strip()
     if not hwid:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_hwid',
-                'message': get_texts().t('MINIAPP_DEVICE_ID_REQUIRED', 'Device identifier is required'),
-            },
+            detail={'code': 'invalid_hwid', 'message': 'Device identifier is required'},
         )
 
     service = RemnaWaveService()
     if not service.is_configured:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                'code': 'service_unavailable',
-                'message': get_texts().t(
-                    'MINIAPP_DEVICE_MANAGEMENT_UNAVAILABLE',
-                    'Device management is temporarily unavailable',
-                ),
-            },
+            detail={'code': 'service_unavailable', 'message': 'Device management is temporarily unavailable'},
         )
 
     try:
@@ -4820,19 +4540,13 @@ async def remove_connected_device(
         logger.warning('Failed to remove device for user', hwid=hwid, telegram_id=telegram_id, error=error)
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
-            detail={
-                'code': 'remnawave_error',
-                'message': get_texts().t('MINIAPP_DEVICE_REMOVE_FAILED', 'Failed to remove device'),
-            },
+            detail={'code': 'remnawave_error', 'message': 'Failed to remove device'},
         ) from error
 
     if not success:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
-            detail={
-                'code': 'remnawave_error',
-                'message': get_texts().t('MINIAPP_DEVICE_REMOVE_FAILED', 'Failed to remove device'),
-            },
+            detail={'code': 'remnawave_error', 'message': 'Failed to remove device'},
         )
 
     return MiniAppDeviceRemovalResponse(success=True)
@@ -4887,14 +4601,8 @@ def _normalize_language_code(user: User | None) -> str:
 def _build_renewal_status_message(user: User | None) -> str:
     language_code = _normalize_language_code(user)
     if language_code in {'ru', 'fa'}:
-        return get_texts(language_code).t(
-            'MINIAPP_RENEWAL_PRICE_HINT',
-            'Стоимость указана с учётом ваших текущих серверов, трафика и устройств.',
-        )
-    return get_texts(language_code).t(
-        'MINIAPP_RENEWAL_PRICE_HINT_EN',
-        'Prices already include your current servers, traffic, and devices.',
-    )
+        return 'Стоимость указана с учётом ваших текущих серверов, трафика и устройств.'
+    return 'Prices already include your current servers, traffic, and devices.'
 
 
 def _build_promo_offer_payload(user: User | None) -> dict[str, Any] | None:
@@ -4910,15 +4618,9 @@ def _build_promo_offer_payload(user: User | None) -> dict[str, Any] | None:
 
     language_code = _normalize_language_code(user)
     if language_code in {'ru', 'fa'}:
-        payload['message'] = get_texts(language_code).t(
-            'MINIAPP_PROMO_OFFER_AUTO_DISCOUNT',
-            'Дополнительная скидка применяется автоматически.',
-        )
+        payload['message'] = 'Дополнительная скидка применяется автоматически.'
     else:
-        payload['message'] = get_texts(language_code).t(
-            'MINIAPP_PROMO_OFFER_AUTO_DISCOUNT_EN',
-            'Extra discount is applied automatically.',
-        )
+        payload['message'] = 'Extra discount is applied automatically.'
 
     return payload
 
@@ -4927,13 +4629,14 @@ def _format_payment_method_title(method: str) -> str:
     mapping = {
         'cryptobot': 'CryptoBot',
         'yookassa': 'YooKassa',
-        'yookassa_sbp': get_texts().t('MINIAPP_PAYMENT_METHOD_YOOKASSA_SBP', 'YooKassa СБП'),
+        'yookassa_sbp': 'YooKassa СБП',
         'mulenpay': 'MulenPay',
         'pal24': 'Pal24',
         'wata': 'WataPay',
+        'anore': settings.get_anore_display_name(),
         'heleket': 'Heleket',
         'tribute': 'Tribute',
-        'stars': get_texts().t('MINIAPP_PAYMENT_METHOD_STARS', 'Telegram Stars'),
+        'stars': 'Telegram Stars',
     }
     key = (method or '').lower()
     return mapping.get(key, method.title() if method else '')
@@ -4955,68 +4658,36 @@ def _build_renewal_success_message(
 
     if language_code in {'ru', 'fa'}:
         if charged_amount > 0:
-            if date_label:
-                prefix = get_texts(language_code).t(
-                    'MINIAPP_RENEWAL_SUCCESS_UNTIL_PREFIX',
-                    'Подписка{tariff} продлена до {date}. ',
-                ).format(tariff=tariff_label, date=date_label)
-            else:
-                prefix = get_texts(language_code).t(
-                    'MINIAPP_RENEWAL_SUCCESS_PREFIX',
-                    'Подписка{tariff} продлена. ',
-                ).format(tariff=tariff_label)
-            message = prefix + get_texts(language_code).t(
-                'MINIAPP_RENEWAL_SUCCESS_CHARGED',
-                'Списано {amount}.',
-            ).format(amount=amount_label)
-        elif date_label:
-            message = get_texts(language_code).t(
-                'MINIAPP_RENEWAL_SUCCESS_UNTIL',
-                'Подписка{tariff} продлена до {date}.',
-            ).format(tariff=tariff_label, date=date_label)
+            message = (
+                f'Подписка{tariff_label} продлена до {date_label}. '
+                if date_label
+                else f'Подписка{tariff_label} продлена. '
+            ) + f'Списано {amount_label}.'
         else:
-            message = get_texts(language_code).t(
-                'MINIAPP_RENEWAL_SUCCESS',
-                'Подписка{tariff} успешно продлена.',
-            ).format(tariff=tariff_label)
+            message = (
+                f'Подписка{tariff_label} продлена до {date_label}.'
+                if date_label
+                else f'Подписка{tariff_label} успешно продлена.'
+            )
     elif charged_amount > 0:
-        if date_label:
-            prefix = get_texts(language_code).t(
-                'MINIAPP_RENEWAL_SUCCESS_UNTIL_PREFIX_EN',
-                'Subscription{tariff} renewed until {date}. ',
-            ).format(tariff=tariff_label, date=date_label)
-        else:
-            prefix = get_texts(language_code).t(
-                'MINIAPP_RENEWAL_SUCCESS_PREFIX_EN',
-                'Subscription{tariff} renewed. ',
-            ).format(tariff=tariff_label)
-        message = prefix + get_texts(language_code).t(
-            'MINIAPP_RENEWAL_SUCCESS_CHARGED_EN',
-            'Charged {amount}.',
-        ).format(amount=amount_label)
-    elif date_label:
-        message = get_texts(language_code).t(
-            'MINIAPP_RENEWAL_SUCCESS_UNTIL_EN',
-            'Subscription{tariff} renewed until {date}.',
-        ).format(tariff=tariff_label, date=date_label)
+        message = (
+            f'Subscription{tariff_label} renewed until {date_label}. '
+            if date_label
+            else f'Subscription{tariff_label} renewed. '
+        ) + f'Charged {amount_label}.'
     else:
-        message = get_texts(language_code).t(
-            'MINIAPP_RENEWAL_SUCCESS_EN',
-            'Subscription{tariff} renewed successfully.',
-        ).format(tariff=tariff_label)
+        message = (
+            f'Subscription{tariff_label} renewed until {date_label}.'
+            if date_label
+            else f'Subscription{tariff_label} renewed successfully.'
+        )
 
     if promo_discount_value > 0:
         discount_label = settings.format_price(promo_discount_value)
         if language_code in {'ru', 'fa'}:
-            message += get_texts(language_code).t(
-                'MINIAPP_RENEWAL_EXTRA_DISCOUNT',
-                ' Применена дополнительная скидка {discount}.',
-            ).format(discount=discount_label)
+            message += f' Применена дополнительная скидка {discount_label}.'
         else:
-            message += get_texts(language_code).t(
-                'MINIAPP_RENEWAL_EXTRA_DISCOUNT_EN',
-                ' Promo discount applied: {discount}.',
-            ).format(discount=discount_label)
+            message += f' Promo discount applied: {discount_label}.'
 
     return message
 
@@ -5032,24 +4703,15 @@ def _build_renewal_pending_message(
 
     if language_code in {'ru', 'fa'}:
         if method_title:
-            return get_texts(language_code).t(
-                'MINIAPP_RENEWAL_PENDING_WITH_METHOD',
-                'Недостаточно средств на балансе. Доплатите {amount} через {method}, чтобы завершить продление.',
-            ).format(amount=amount_label, method=method_title)
-        return get_texts(language_code).t(
-            'MINIAPP_RENEWAL_PENDING',
-            'Недостаточно средств на балансе. Доплатите {amount}, чтобы завершить продление.',
-        ).format(amount=amount_label)
+            return (
+                f'Недостаточно средств на балансе. Доплатите {amount_label} через {method_title}, '
+                'чтобы завершить продление.'
+            )
+        return f'Недостаточно средств на балансе. Доплатите {amount_label}, чтобы завершить продление.'
 
     if method_title:
-        return get_texts(language_code).t(
-            'MINIAPP_RENEWAL_PENDING_WITH_METHOD_EN',
-            'Not enough balance. Pay the remaining {amount} via {method} to finish the renewal.',
-        ).format(amount=amount_label, method=method_title)
-    return get_texts(language_code).t(
-        'MINIAPP_RENEWAL_PENDING_EN',
-        'Not enough balance. Pay the remaining {amount} to finish the renewal.',
-    ).format(amount=amount_label)
+        return f'Not enough balance. Pay the remaining {amount_label} via {method_title} to finish the renewal.'
+    return f'Not enough balance. Pay the remaining {amount_label} to finish the renewal.'
 
 
 def _parse_period_identifier(identifier: str | None) -> int | None:
@@ -5209,7 +4871,7 @@ def _validate_subscription_id(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'invalid_subscription_id',
-                'message': get_texts().t('MINIAPP_INVALID_SUBSCRIPTION_ID', 'Invalid subscription identifier'),
+                'message': 'Invalid subscription identifier',
             },
         ) from None
 
@@ -5218,10 +4880,7 @@ def _validate_subscription_id(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'subscription_mismatch',
-                'message': get_texts().t(
-                    'MINIAPP_SUBSCRIPTION_MISMATCH',
-                    'Subscription does not belong to the authorized user',
-                ),
+                'message': 'Subscription does not belong to the authorized user',
             },
         )
 
@@ -5233,10 +4892,7 @@ async def _authorize_miniapp_user(
     if not init_data:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
-            detail={
-                'code': 'unauthorized',
-                'message': get_texts().t('MINIAPP_AUTH_DATA_MISSING', 'Authorization data is missing'),
-            },
+            detail={'code': 'unauthorized', 'message': 'Authorization data is missing'},
         )
 
     try:
@@ -5251,10 +4907,7 @@ async def _authorize_miniapp_user(
     if not isinstance(telegram_user, dict) or 'id' not in telegram_user:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_user',
-                'message': get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_PAYLOAD', 'Invalid Telegram user payload'),
-            },
+            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user payload'},
         )
 
     try:
@@ -5262,17 +4915,14 @@ async def _authorize_miniapp_user(
     except (TypeError, ValueError):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_user',
-                'message': get_texts().t('MINIAPP_INVALID_TELEGRAM_USER_ID', 'Invalid Telegram user identifier'),
-            },
+            detail={'code': 'invalid_user', 'message': 'Invalid Telegram user identifier'},
         ) from None
 
     user = await get_user_by_telegram_id(db, telegram_id)
     if not user:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail={'code': 'user_not_found', 'message': get_texts().t('MINIAPP_USER_NOT_FOUND', 'User not found')},
+            detail={'code': 'user_not_found', 'message': 'User not found'},
         )
 
     # Block access for banned/deleted users
@@ -5280,10 +4930,7 @@ async def _authorize_miniapp_user(
     if user_status in ('blocked', 'deleted'):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'account_blocked',
-                'message': get_texts().t('MINIAPP_ACCOUNT_BLOCKED_OR_DELETED', 'Account is blocked or deleted'),
-            },
+            detail={'code': 'account_blocked', 'message': 'Account is blocked or deleted'},
         )
 
     # Mini App — тоже активность: по метке карточка показывает «последнюю
@@ -5317,10 +4964,7 @@ def _ensure_paid_subscription(
     if not subscription:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail={
-                'code': 'subscription_not_found',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
-            },
+            detail={'code': 'subscription_not_found', 'message': 'Subscription not found'},
         )
 
     normalized_allowed_statuses = set(allowed_statuses or {'active'})
@@ -5330,10 +4974,7 @@ def _ensure_paid_subscription(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'paid_subscription_required',
-                'message': get_texts().t(
-                    'MINIAPP_PAID_SUBSCRIPTION_ONLY',
-                    'This action is available only for paid subscriptions',
-                ),
+                'message': 'This action is available only for paid subscriptions',
             },
         )
 
@@ -5343,31 +4984,22 @@ def _ensure_paid_subscription(
         if actual_status == 'trial':
             detail = {
                 'code': 'paid_subscription_required',
-                'message': get_texts().t(
-                    'MINIAPP_PAID_SUBSCRIPTION_ONLY',
-                    'This action is available only for paid subscriptions',
-                ),
+                'message': 'This action is available only for paid subscriptions',
             }
         elif actual_status == 'disabled':
             detail = {
                 'code': 'subscription_disabled',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_DISABLED', 'Subscription is disabled'),
+                'message': 'Subscription is disabled',
             }
         elif actual_status == 'limited':
             detail = {
                 'code': 'traffic_exhausted',
-                'message': get_texts().t(
-                    'MINIAPP_TRAFFIC_LIMIT_REACHED',
-                    'Traffic limit reached. Please purchase additional traffic.',
-                ),
+                'message': 'Traffic limit reached. Please purchase additional traffic.',
             }
         else:
             detail = {
                 'code': 'subscription_inactive',
-                'message': get_texts().t(
-                    'MINIAPP_SUBSCRIPTION_MUST_BE_ACTIVE',
-                    'Subscription must be active to manage settings',
-                ),
+                'message': 'Subscription must be active to manage settings',
             }
 
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=detail)
@@ -5377,10 +5009,7 @@ def _ensure_paid_subscription(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'subscription_inactive',
-                'message': get_texts().t(
-                    'MINIAPP_SUBSCRIPTION_MUST_BE_ACTIVE',
-                    'Subscription must be active to manage settings',
-                ),
+                'message': 'Subscription must be active to manage settings',
             },
         )
 
@@ -5504,9 +5133,7 @@ async def _prepare_server_catalog(
                 discount_percent=discount_value,
                 is_connected=is_connected,
                 is_available=option_available,
-                disabled_reason=None
-                if option_available
-                else get_texts().t('MINIAPP_SERVER_NOT_AVAILABLE', 'Server is not available'),
+                disabled_reason=None if option_available else 'Server is not available',
             )
         )
 
@@ -5606,7 +5233,7 @@ async def _build_subscription_settings(
 
     settings_payload = MiniAppSubscriptionSettings(
         subscription_id=subscription.id,
-        currency=(getattr(user, 'balance_currency', None) or settings.HOME_CURRENCY_CODE).upper(),
+        currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
         current=MiniAppSubscriptionCurrentSettings(
             servers=current_servers,
             traffic_limit_gb=subscription.traffic_limit_gb,
@@ -5665,13 +5292,10 @@ async def get_subscription_renewal_options_endpoint(
     if settings.is_tariffs_mode() and not subscription.tariff_id:
         return MiniAppSubscriptionRenewalOptionsResponse(
             periods=[],
-            currency=(getattr(user, 'balance_currency', None) or settings.HOME_CURRENCY_CODE).upper(),
+            currency=(getattr(user, 'balance_currency', None) or 'RUB').upper(),
             balance_kopeks=getattr(user, 'balance_kopeks', 0),
             balance_label=settings.format_price(getattr(user, 'balance_kopeks', 0)),
-            status_message=get_texts().t(
-                'MINIAPP_CLASSIC_SUBSCRIPTION_RENEWAL_BLOCKED',
-                'Classic subscriptions cannot be renewed. Please purchase a tariff.',
-            ),
+            status_message='Classic subscriptions cannot be renewed. Please purchase a tariff.',
             sales_mode=settings.get_sales_mode(),
         )
 
@@ -5682,7 +5306,7 @@ async def get_subscription_renewal_options_endpoint(
     )
 
     balance_kopeks = getattr(user, 'balance_kopeks', 0)
-    currency = (getattr(user, 'balance_currency', None) or settings.HOME_CURRENCY_CODE).upper()
+    currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
 
     promo_group = getattr(user, 'promo_group', None)
     promo_group_model = (
@@ -5755,10 +5379,7 @@ async def submit_subscription_renewal_endpoint(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'subscription_restricted',
-                'message': get_texts().t(
-                    'MINIAPP_SUBSCRIPTION_PURCHASE_RESTRICTED',
-                    'Subscription purchases are restricted for this account',
-                ),
+                'message': 'Subscription purchases are restricted for this account',
             },
         )
 
@@ -5775,10 +5396,7 @@ async def submit_subscription_renewal_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'classic_subscription_blocked',
-                'message': get_texts().t(
-                    'MINIAPP_CLASSIC_SUBSCRIPTION_RENEWAL_BLOCKED',
-                    'Classic subscriptions cannot be renewed. Please purchase a tariff.',
-                ),
+                'message': 'Classic subscriptions cannot be renewed. Please purchase a tariff.',
             },
         )
 
@@ -5789,10 +5407,7 @@ async def submit_subscription_renewal_endpoint(
         except (TypeError, ValueError) as error:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'invalid_period',
-                    'message': get_texts().t('MINIAPP_INVALID_RENEWAL_PERIOD', 'Invalid renewal period'),
-                },
+                detail={'code': 'invalid_period', 'message': 'Invalid renewal period'},
             ) from error
 
     if period_days is None:
@@ -5801,10 +5416,7 @@ async def submit_subscription_renewal_endpoint(
     if period_days is None or period_days <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'invalid_period',
-                'message': get_texts().t('MINIAPP_INVALID_RENEWAL_PERIOD', 'Invalid renewal period'),
-            },
+            detail={'code': 'invalid_period', 'message': 'Invalid renewal period'},
         )
 
     # Валидация периода и расчёт цены через PricingEngine
@@ -5822,10 +5434,7 @@ async def submit_subscription_renewal_endpoint(
                 status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'period_unavailable',
-                    'message': get_texts().t(
-                        'MINIAPP_RENEWAL_PERIOD_UNAVAILABLE_FOR_TARIFF',
-                        'Selected renewal period is not available for this tariff',
-                    ),
+                    'message': 'Selected renewal period is not available for this tariff',
                 },
             )
     else:
@@ -5833,13 +5442,7 @@ async def submit_subscription_renewal_endpoint(
         if period_days not in available_periods:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'period_unavailable',
-                    'message': get_texts().t(
-                        'MINIAPP_RENEWAL_PERIOD_UNAVAILABLE',
-                        'Selected renewal period is not available',
-                    ),
-                },
+                detail={'code': 'period_unavailable', 'message': 'Selected renewal period is not available'},
             )
 
     from app.database.crud.user import lock_user_for_pricing
@@ -5859,10 +5462,7 @@ async def submit_subscription_renewal_endpoint(
         )
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
-            detail={
-                'code': 'pricing_failed',
-                'message': get_texts().t('MINIAPP_RENEWAL_PRICING_FAILED', 'Failed to calculate renewal pricing'),
-            },
+            detail={'code': 'pricing_failed', 'message': 'Failed to calculate renewal pricing'},
         ) from error
 
     final_total = pricing_result.final_total
@@ -5872,10 +5472,7 @@ async def submit_subscription_renewal_endpoint(
 
     balance_kopeks = getattr(user, 'balance_kopeks', 0)
     missing_amount = calculate_missing_amount(balance_kopeks, final_total)
-    description = get_texts().t(
-        'MINIAPP_TRANSACTION_SUBSCRIPTION_RENEWAL',
-        'Продление подписки на {days} дней',
-    ).format(days=period_days)
+    description = f'Продление подписки на {period_days} дней'
 
     if missing_amount <= 0:
         # Both tariff and classic modes use finalize() for consistent renewal handling
@@ -5895,10 +5492,7 @@ async def submit_subscription_renewal_endpoint(
             )
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    'code': 'charge_failed',
-                    'message': get_texts().t('MINIAPP_CHARGE_FAILED', 'Failed to charge balance'),
-                },
+                detail={'code': 'charge_failed', 'message': 'Failed to charge balance'},
             ) from error
 
         updated_subscription = result.subscription
@@ -5924,10 +5518,7 @@ async def submit_subscription_renewal_endpoint(
                 status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_funds',
-                    'message': get_texts().t(
-                        'MINIAPP_RENEWAL_INSUFFICIENT_FUNDS',
-                        'Not enough funds to renew the subscription',
-                    ),
+                    'message': 'Not enough funds to renew the subscription',
                     'missing_amount_kopeks': missing,
                 },
             )
@@ -5936,10 +5527,7 @@ async def submit_subscription_renewal_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'payment_method_required',
-                'message': get_texts().t(
-                    'MINIAPP_PAYMENT_METHOD_REQUIRED_INSUFFICIENT',
-                    'Payment method is required when balance is insufficient',
-                ),
+                'message': 'Payment method is required when balance is insufficient',
             },
         )
 
@@ -5947,21 +5535,12 @@ async def submit_subscription_renewal_endpoint(
     if method not in supported_methods:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'unsupported_method',
-                'message': get_texts().t(
-                    'MINIAPP_RENEWAL_METHOD_UNSUPPORTED',
-                    'Payment method is not supported for renewal',
-                ),
-            },
+            detail={'code': 'unsupported_method', 'message': 'Payment method is not supported for renewal'},
         )
 
     if method == 'cryptobot':
         if not settings.is_cryptobot_enabled():
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t('MINIAPP_PAYMENT_METHOD_UNAVAILABLE', 'Payment method is unavailable'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Payment method is unavailable')
 
         rate = await _get_usd_to_rub_rate()
         min_amount_kopeks, max_amount_kopeks = _compute_cryptobot_limits(rate)
@@ -5970,10 +5549,7 @@ async def submit_subscription_renewal_endpoint(
                 status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'amount_below_minimum',
-                    'message': get_texts().t(
-                        'MINIAPP_AMOUNT_BELOW_MINIMUM_VALUE',
-                        'Amount is below minimum ({amount} تومان)',
-                    ).format(amount=f'{min_amount_kopeks / 100:.2f}'),
+                    'message': f'Amount is below minimum ({min_amount_kopeks / 100:.2f} RUB)',
                 },
             )
         if missing_amount > max_amount_kopeks:
@@ -5981,10 +5557,7 @@ async def submit_subscription_renewal_endpoint(
                 status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'amount_above_maximum',
-                    'message': get_texts().t(
-                        'MINIAPP_AMOUNT_EXCEEDS_MAXIMUM_VALUE',
-                        'Amount exceeds maximum ({amount} تومان)',
-                    ).format(amount=f'{max_amount_kopeks / 100:.2f}'),
+                    'message': f'Amount exceeds maximum ({max_amount_kopeks / 100:.2f} RUB)',
                 },
             )
 
@@ -5994,10 +5567,7 @@ async def submit_subscription_renewal_endpoint(
         except (InvalidOperation, ValueError) as error:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={
-                    'code': 'conversion_failed',
-                    'message': get_texts().t('MINIAPP_USD_CONVERSION_FAILED', 'Unable to convert amount to USD'),
-                },
+                detail={'code': 'conversion_failed', 'message': 'Unable to convert amount to USD'},
             ) from error
 
         if amount_usd <= 0:
@@ -6025,10 +5595,7 @@ async def submit_subscription_renewal_endpoint(
         if not result:
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
-                detail={
-                    'code': 'payment_creation_failed',
-                    'message': get_texts().t('MINIAPP_PAYMENT_CREATE_FAILED', 'Failed to create payment'),
-                },
+                detail={'code': 'payment_creation_failed', 'message': 'Failed to create payment'},
             )
 
         # Priority: web_app for desktop/browser, mini_app for mobile, bot as fallback
@@ -6038,10 +5605,7 @@ async def submit_subscription_renewal_endpoint(
         if not payment_url:
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
-                detail={
-                    'code': 'payment_url_missing',
-                    'message': get_texts().t('MINIAPP_PAYMENT_URL_MISSING', 'Failed to obtain payment url'),
-                },
+                detail={'code': 'payment_url_missing', 'message': 'Failed to obtain payment url'},
             )
 
         extra_payload = {
@@ -6070,13 +5634,7 @@ async def submit_subscription_renewal_endpoint(
 
     raise HTTPException(
         status.HTTP_400_BAD_REQUEST,
-        detail={
-            'code': 'unsupported_method',
-            'message': get_texts().t(
-                'MINIAPP_RENEWAL_METHOD_UNSUPPORTED',
-                'Payment method is not supported for renewal',
-            ),
-        },
+        detail={'code': 'unsupported_method', 'message': 'Payment method is not supported for renewal'},
     )
 
 
@@ -6154,10 +5712,7 @@ async def subscription_purchase_endpoint(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'subscription_restricted',
-                'message': get_texts().t(
-                    'MINIAPP_SUBSCRIPTION_PURCHASE_RESTRICTED',
-                    'Subscription purchases are restricted for this account',
-                ),
+                'message': 'Subscription purchases are restricted for this account',
             },
         )
 
@@ -6292,7 +5847,7 @@ async def update_subscription_servers_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'validation_error',
-                'message': get_texts().t('MINIAPP_SERVER_SELECTION_REQUIRED', 'At least one server must be selected'),
+                'message': 'At least one server must be selected',
             },
         )
 
@@ -6306,7 +5861,7 @@ async def update_subscription_servers_endpoint(
     if not added and not removed:
         return MiniAppSubscriptionUpdateResponse(
             success=True,
-            message=get_texts().t('MINIAPP_NO_CHANGES', 'No changes'),
+            message='No changes',
         )
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo discount
@@ -6334,10 +5889,7 @@ async def update_subscription_servers_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'validation_error',
-                'message': get_texts().t(
-                    'MINIAPP_AUTHORIZED_SERVER_SELECTION_REQUIRED',
-                    'At least one authorized server must be selected',
-                ),
+                'message': 'At least one authorized server must be selected',
             },
         )
     # Recompute added/removed after authorization filter
@@ -6348,7 +5900,7 @@ async def update_subscription_servers_endpoint(
     if not added and not removed:
         return MiniAppSubscriptionUpdateResponse(
             success=True,
-            message=get_texts().t('MINIAPP_NO_CHANGES', 'No changes'),
+            message='No changes',
         )
 
     invalid_servers = [uuid for uuid in selected_order if uuid not in catalog]
@@ -6357,10 +5909,7 @@ async def update_subscription_servers_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'invalid_servers',
-                'message': get_texts().t(
-                    'MINIAPP_SERVERS_PARTIALLY_UNAVAILABLE',
-                    'Some of the selected servers are not available',
-                ),
+                'message': 'Some of the selected servers are not available',
             },
         )
 
@@ -6371,10 +5920,7 @@ async def update_subscription_servers_endpoint(
                 status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'server_unavailable',
-                    'message': get_texts().t(
-                        'MINIAPP_SELECTED_SERVER_UNAVAILABLE',
-                        'Selected server is not available',
-                    ),
+                    'message': 'Selected server is not available',
                 },
             )
 
@@ -6402,22 +5948,18 @@ async def update_subscription_servers_endpoint(
             status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': get_texts().t(
-                    'MINIAPP_INSUFFICIENT_BALANCE_MISSING',
-                    'Недостаточно средств на балансе. Не хватает {amount}',
-                ).format(amount=settings.format_price(missing, round_kopeks=False)),
+                'message': (
+                    f'Недостаточно средств на балансе. Не хватает {settings.format_price(missing, round_kopeks=False)}'
+                ),
             },
         )
 
     if total_cost > 0:
         added_names = [catalog[uuid].get('name', uuid) for uuid in added]
         description = (
-            get_texts().t(
-                'MINIAPP_TRANSACTION_SERVERS_ADDED',
-                'Добавление серверов: {servers} за {days} дн.',
-            ).format(servers=', '.join(added_names), days=charged_days)
+            f'Добавление серверов: {", ".join(added_names)} за {charged_days} дн.'
             if added_names
-            else get_texts().t('MINIAPP_TRANSACTION_SERVERS_CHANGED', 'Изменение списка серверов')
+            else 'Изменение списка серверов'
         )
 
         success = await subtract_user_balance(
@@ -6431,9 +5973,7 @@ async def update_subscription_servers_endpoint(
                 status.HTTP_502_BAD_GATEWAY,
                 detail={
                     'code': 'balance_charge_failed',
-                    'message': get_texts(user.language).t(
-                        'MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'
-                    ),
+                    'message': 'Failed to charge user balance',
                 },
             )
 
@@ -6521,12 +6061,7 @@ async def update_subscription_traffic_endpoint(
     if raw_value is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'validation_error',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_TRAFFIC_AMOUNT_REQUIRED', 'Traffic amount is required'
-                ),
-            },
+            detail={'code': 'validation_error', 'message': 'Traffic amount is required'},
         )
 
     try:
@@ -6534,29 +6069,17 @@ async def update_subscription_traffic_endpoint(
     except (TypeError, ValueError):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'validation_error',
-                'message': get_texts(user.language).t('MINIAPP_TRAFFIC_AMOUNT_INVALID', 'Invalid traffic amount'),
-            },
+            detail={'code': 'validation_error', 'message': 'Invalid traffic amount'},
         ) from None
 
     if new_traffic < 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'validation_error',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_TRAFFIC_AMOUNT_NEGATIVE',
-                    'Traffic amount must be non-negative',
-                ),
-            },
+            detail={'code': 'validation_error', 'message': 'Traffic amount must be non-negative'},
         )
 
     if new_traffic == subscription.traffic_limit_gb:
-        return MiniAppSubscriptionUpdateResponse(
-            success=True,
-            message=get_texts(user.language).t('MINIAPP_NO_CHANGES', 'No changes'),
-        )
+        return MiniAppSubscriptionUpdateResponse(success=True, message='No changes')
 
     # В режиме fixed полностью блокируем изменение трафика
     # В режиме fixed_with_topup разрешаем докупку (is_traffic_topup_blocked = False)
@@ -6565,10 +6088,7 @@ async def update_subscription_traffic_endpoint(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'traffic_fixed',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_TRAFFIC_CHANGE_BLOCKED',
-                    'Traffic cannot be changed for this subscription',
-                ),
+                'message': 'Traffic cannot be changed for this subscription',
             },
         )
 
@@ -6589,13 +6109,18 @@ async def update_subscription_traffic_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'traffic_unavailable',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_TRAFFIC_PACKAGE_UNAVAILABLE',
-                    'Selected traffic package is not available',
-                ),
+                'message': 'Selected traffic package is not available',
             },
         )
 
+    from app.services.traffic_purchase_service import prepare_user_tariff_switch
+
+    subscription, accounting_panel = await prepare_user_tariff_switch(db, subscription)
+    if subscription.user_id != user.id or subscription.status not in {'active', 'trial'}:
+        raise HTTPException(status_code=403, detail='Traffic management is unavailable for this subscription')
+    old_traffic = subscription.traffic_limit_gb
+    if new_traffic == old_traffic:
+        return MiniAppSubscriptionUpdateResponse(success=True, message='No changes')
     days_remaining = max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))
     period_hint_days = days_remaining
 
@@ -6614,6 +6139,7 @@ async def update_subscription_traffic_endpoint(
     price_difference_per_month = discounted_new_per_month - discounted_old_per_month
     total_price_difference = 0
 
+    payment_transaction = None
     if price_difference_per_month > 0:
         total_price_difference = max(100, int(price_difference_per_month * days_remaining / 30))
         if getattr(user, 'balance_kopeks', 0) < total_price_difference:
@@ -6622,57 +6148,68 @@ async def update_subscription_traffic_endpoint(
                 status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_funds',
-                    'message': get_texts(user.language).t(
-                        'MINIAPP_INSUFFICIENT_BALANCE_MISSING',
-                        'Недостаточно средств на балансе. Не хватает {amount}',
-                    ).format(amount=settings.format_price(missing, round_kopeks=False)),
+                    'message': (
+                        f'Недостаточно средств на балансе. Не хватает {settings.format_price(missing, round_kopeks=False)}'
+                    ),
                 },
             )
 
-        description = get_texts(user.language).t(
-            'MINIAPP_TRANSACTION_TRAFFIC_SWITCH',
-            'Переключение трафика с {old}GB на {new}GB',
-        ).format(old=subscription.traffic_limit_gb, new=new_traffic)
+        description = f'Переключение трафика с {subscription.traffic_limit_gb}GB на {new_traffic}GB'
 
         success = await subtract_user_balance(
             db,
             user,
             total_price_difference,
             description,
+            commit=False,
         )
         if not success:
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail={
                     'code': 'balance_charge_failed',
-                    'message': get_texts(user.language).t(
-                        'MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'
-                    ),
+                    'message': 'Failed to charge user balance',
                 },
             )
 
-        await create_transaction(
+        payment_transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=total_price_difference,
-            description=get_texts(user.language).t(
-                'MINIAPP_TRANSACTION_DESCRIPTION_FOR_DAYS',
-                '{description} за {days} дн.',
-            ).format(description=description, days=days_remaining),
+            description=f'{description} за {days_remaining} дн.',
+            commit=False,
         )
 
     subscription.traffic_limit_gb = new_traffic
     subscription.updated_at = datetime.now(UTC)
+    if accounting_panel is not None:
+        from uuid import uuid4
+
+        from app.services.traffic_base_grant_service import stage_paid_base_grant
+
+        # This MiniApp action historically keeps purchased packages. Resize the
+        # base only, preserving spent base and every unexpired package remainder.
+        operation = str(payment_transaction.id) if payment_transaction is not None else uuid4().hex
+        await stage_paid_base_grant(db, subscription, operation_key=f'classic-traffic:{operation}', reset_base=False)
     await db.commit()
+    from app.services.traffic_purchase_service import finish_traffic_purchase
+
+    await finish_traffic_purchase(db, subscription, payment_transaction)
     await db.refresh(subscription)
     try:
         await db.refresh(user)
     except Exception:  # pragma: no cover - defensive refresh safeguard
         pass
 
-    service = SubscriptionService()
-    await service.update_remnawave_user(db, subscription)
+    try:
+        service = SubscriptionService()
+        await service.update_remnawave_user(db, subscription)
+    except Exception as error:
+        from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+        remnawave_retry_queue.enqueue(subscription_id=subscription.id, user_id=user.id, action='update')
+        logger.warning('Paid traffic switch committed; panel delivery queued', error_type=type(error).__name__)
 
     await with_admin_notification_service(
         lambda service: service.send_subscription_update_notification(
@@ -6709,10 +6246,7 @@ async def update_subscription_devices_endpoint(
     if raw_value is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'validation_error',
-                'message': get_texts().t('MINIAPP_DEVICE_LIMIT_REQUIRED', 'Device limit is required'),
-            },
+            detail={'code': 'validation_error', 'message': 'Device limit is required'},
         )
 
     try:
@@ -6720,19 +6254,13 @@ async def update_subscription_devices_endpoint(
     except (TypeError, ValueError):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'validation_error',
-                'message': get_texts().t('MINIAPP_DEVICE_LIMIT_INVALID', 'Invalid device limit'),
-            },
+            detail={'code': 'validation_error', 'message': 'Invalid device limit'},
         ) from None
 
     if new_devices <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'validation_error',
-                'message': get_texts().t('MINIAPP_DEVICE_LIMIT_NOT_POSITIVE', 'Device limit must be positive'),
-            },
+            detail={'code': 'validation_error', 'message': 'Device limit must be positive'},
         )
 
     # Load tariff for device price and max limit
@@ -6751,10 +6279,7 @@ async def update_subscription_devices_endpoint(
     if not tariff_device_price or tariff_device_price <= 0:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'devices_unavailable',
-                'message': get_texts().t('MINIAPP_DEVICE_TOPUP_UNAVAILABLE', 'Докупка устройств недоступна'),
-            },
+            detail={'code': 'devices_unavailable', 'message': 'Докупка устройств недоступна'},
         )
 
     # Enforce tariff max device limit
@@ -6768,10 +6293,7 @@ async def update_subscription_devices_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'devices_below_tariff',
-                'message': get_texts().t(
-                    'MINIAPP_DEVICE_LIMIT_BELOW_TARIFF',
-                    'Нельзя уменьшить количество устройств ниже {limit} — столько включено в тариф',
-                ).format(limit=min_device_limit),
+                'message': f'Нельзя уменьшить количество устройств ниже {min_device_limit} — столько включено в тариф',
             },
         )
 
@@ -6780,13 +6302,13 @@ async def update_subscription_devices_endpoint(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'devices_limit_exceeded',
-                'message': get_texts().t(
-                    'MINIAPP_DEVICE_LIMIT_EXCEEDED',
-                    'Превышен максимальный лимит устройств ({limit})',
-                ).format(limit=tariff_max_device_limit),
+                'message': f'Превышен максимальный лимит устройств ({tariff_max_device_limit})',
             },
         )
 
+    from app.database.crud.user import lock_user_for_pricing
+
+    user = await lock_user_for_pricing(db, user.id)
     # Re-read subscription under row lock to prevent concurrent device purchases exceeding limit
     locked_result = await db.execute(
         select(Subscription)
@@ -6805,10 +6327,7 @@ async def update_subscription_devices_endpoint(
     old_devices = current_devices
 
     if new_devices == current_devices:
-        return MiniAppSubscriptionUpdateResponse(
-            success=True,
-            message=get_texts().t('MINIAPP_NO_CHANGES', 'No changes'),
-        )
+        return MiniAppSubscriptionUpdateResponse(success=True, message='No changes')
 
     devices_difference = new_devices - current_devices
     price_to_charge = 0
@@ -6822,11 +6341,6 @@ async def update_subscription_devices_endpoint(
         price_per_month = chargeable_diff * tariff_device_price
         days_remaining = max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))
         period_hint_days = days_remaining
-
-        # Lock user BEFORE price computation to prevent TOCTOU on promo discount
-        from app.database.crud.user import lock_user_for_pricing
-
-        user = await lock_user_for_pricing(db, user.id)
 
         devices_discount = PricingEngine.get_addon_discount_percent(user, 'devices', period_hint_days)
 
@@ -6842,18 +6356,14 @@ async def update_subscription_devices_endpoint(
             status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': get_texts().t(
-                    'MINIAPP_INSUFFICIENT_BALANCE_MISSING',
-                    'Недостаточно средств на балансе. Не хватает {amount}',
-                ).format(amount=settings.format_price(missing, round_kopeks=False)),
+                'message': (
+                    f'Недостаточно средств на балансе. Не хватает {settings.format_price(missing, round_kopeks=False)}'
+                ),
             },
         )
 
     if price_to_charge > 0:
-        description = get_texts().t(
-            'MINIAPP_TRANSACTION_DEVICE_LIMIT_CHANGE',
-            'Изменение количества устройств с {old} до {new}',
-        ).format(old=current_devices, new=new_devices)
+        description = f'Изменение количества устройств с {current_devices} до {new_devices}'
         success = await subtract_user_balance(
             db,
             user,
@@ -6865,9 +6375,7 @@ async def update_subscription_devices_endpoint(
                 status.HTTP_502_BAD_GATEWAY,
                 detail={
                     'code': 'balance_charge_failed',
-                    'message': get_texts(user.language).t(
-                        'MINIAPP_BALANCE_CHARGE_FAILED', 'Failed to charge user balance'
-                    ),
+                    'message': 'Failed to charge user balance',
                 },
             )
 
@@ -6876,19 +6384,13 @@ async def update_subscription_devices_endpoint(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price_to_charge,
-            description=get_texts().t(
-                'MINIAPP_TRANSACTION_DESCRIPTION_FOR_DAYS',
-                '{description} за {days} дн.',
-            ).format(
-                description=description,
-                days=charged_days
-                or max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400)),
-            ),
+            description=f'{description} за {charged_days or max(1, math.ceil((subscription.end_date - datetime.now(UTC)).total_seconds() / 86400))} дн.',
         )
 
     if price_to_charge > 0:
         # Re-lock subscription after subtract_user_balance committed (which released all locks).
         # Re-validate to prevent concurrent device purchases from exceeding the limit or double-charging.
+        user = await lock_user_for_pricing(db, user.id)
         relock_result = await db.execute(
             select(Subscription)
             .where(Subscription.id == subscription.id)
@@ -6913,20 +6415,14 @@ async def update_subscription_devices_endpoint(
                     status.HTTP_409_CONFLICT,
                     detail={
                         'code': 'already_applied',
-                        'message': get_texts().t(
-                            'MINIAPP_CHANGE_ALREADY_APPLIED_REFUNDED',
-                            'Изменение уже применено параллельным запросом. Баланс возвращён.',
-                        ),
+                        'message': 'Изменение уже применено параллельным запросом. Баланс возвращён.',
                     },
                 )
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 detail={
                     'code': 'devices_limit_exceeded',
-                    'message': get_texts().t(
-                        'MINIAPP_DEVICE_LIMIT_EXCEEDED_REFUNDED',
-                        'Превышен максимальный лимит устройств ({limit}). Баланс возвращён.',
-                    ).format(limit=tariff_max_device_limit),
+                    'message': f'Превышен максимальный лимит устройств ({tariff_max_device_limit}). Баланс возвращён.',
                 },
             )
 
@@ -6962,12 +6458,11 @@ async def update_subscription_devices_endpoint(
 # =============================================================================
 
 
-def _format_traffic_limit_label(traffic_gb: int, language: str = 'ru') -> str:
+def _format_traffic_limit_label(traffic_gb: int) -> str:
     """Форматирует лимит трафика для отображения."""
-    texts = get_texts(language)
     if traffic_gb == 0:
-        return texts.t('MINIAPP_TRAFFIC_UNLIMITED_LABEL', '♾️ Безлимит')
-    return texts.t('MINIAPP_TRAFFIC_GB_LABEL', '{traffic} ГБ').format(traffic=traffic_gb)
+        return '♾️ Безлимит'
+    return f'{traffic_gb} ГБ'
 
 
 async def _build_tariff_model(
@@ -6998,6 +6493,8 @@ async def _build_tariff_model(
     periods: list[MiniAppTariffPeriod] = []
     if tariff.period_prices:
         for period_str, original_price_kopeks in sorted(tariff.period_prices.items(), key=lambda x: int(x[0])):
+            if original_price_kopeks is None or original_price_kopeks < 0:
+                continue
             period_days = int(period_str)
 
             # Применяем скидку промогруппы + promo-offer (stacked)
@@ -7045,11 +6542,15 @@ async def _build_tariff_model(
         and not (settings.TARIFF_SWITCH_RESET_FREE_DAYS and current_tariff.is_free)
     ):
         # PricingEngine обрабатывает все случаи: periodic↔periodic, daily→periodic, periodic→daily
-        result = _calculate_tariff_switch(current_tariff, tariff, remaining_days, user=user)
-        switch_cost_kopeks = result.upgrade_cost
-        switch_cost_label = settings.format_price(result.upgrade_cost) if result.upgrade_cost > 0 else None
-        is_upgrade = result.is_upgrade
-        is_switch_free = result.upgrade_cost == 0
+        try:
+            result = _calculate_tariff_switch(current_tariff, tariff, remaining_days, user=user)
+            switch_cost_kopeks = result.upgrade_cost
+            switch_cost_label = settings.format_price(result.upgrade_cost) if result.upgrade_cost > 0 else None
+            is_upgrade = result.is_upgrade
+            is_switch_free = result.upgrade_cost == 0
+        except HTTPException as error:
+            if error.status_code != 400:
+                raise
 
     # Суточный тариф
     is_daily = getattr(tariff, 'is_daily', False)
@@ -7070,9 +6571,7 @@ async def _build_tariff_model(
             )
 
     daily_price_label = (
-        settings.format_price(daily_price_kopeks) + get_texts().t('MINIAPP_PRICE_PER_DAY_SUFFIX', '/день')
-        if is_daily and daily_price_kopeks > 0
-        else None
+        settings.format_price(daily_price_kopeks) + '/день' if is_daily and daily_price_kopeks > 0 else None
     )
 
     return MiniAppTariff(
@@ -7081,9 +6580,7 @@ async def _build_tariff_model(
         description=tariff.description,
         tier_level=tariff.tier_level,
         traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=_format_traffic_limit_label(
-            tariff.traffic_limit_gb, getattr(user, 'language', 'ru')
-        ),
+        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
@@ -7127,9 +6624,7 @@ async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None
             )
 
     daily_price_label = (
-        settings.format_price(daily_price_kopeks) + get_texts().t('MINIAPP_PRICE_PER_DAY_SUFFIX', '/день')
-        if is_daily and daily_price_kopeks > 0
-        else None
+        settings.format_price(daily_price_kopeks) + '/день' if is_daily and daily_price_kopeks > 0 else None
     )
 
     return MiniAppCurrentTariff(
@@ -7138,9 +6633,7 @@ async def _build_current_tariff_model(db: AsyncSession, tariff, promo_group=None
         description=tariff.description,
         tier_level=tariff.tier_level,
         traffic_limit_gb=tariff.traffic_limit_gb,
-        traffic_limit_label=_format_traffic_limit_label(
-            tariff.traffic_limit_gb, getattr(user, 'language', 'ru')
-        ),
+        traffic_limit_label=_format_traffic_limit_label(tariff.traffic_limit_gb),
         is_unlimited_traffic=tariff.traffic_limit_gb == 0,
         device_limit=tariff.device_limit,
         servers_count=servers_count,
@@ -7165,7 +6658,7 @@ async def get_tariffs_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'tariffs_mode_disabled',
-                'message': get_texts().t('MINIAPP_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'),
+                'message': 'Tariffs mode is not enabled',
             },
         )
 
@@ -7245,10 +6738,7 @@ async def purchase_tariff_endpoint(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'subscription_restricted',
-                'message': get_texts().t(
-                    'MINIAPP_SUBSCRIPTION_PURCHASE_RESTRICTED',
-                    'Subscription purchases are restricted for this account',
-                ),
+                'message': 'Subscription purchases are restricted for this account',
             },
         )
 
@@ -7257,7 +6747,7 @@ async def purchase_tariff_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'tariffs_mode_disabled',
-                'message': get_texts().t('MINIAPP_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'),
+                'message': 'Tariffs mode is not enabled',
             },
         )
 
@@ -7267,7 +6757,7 @@ async def purchase_tariff_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
                 'code': 'tariff_not_found',
-                'message': get_texts().t('MINIAPP_TARIFF_NOT_FOUND_OR_INACTIVE', 'Tariff not found or inactive'),
+                'message': 'Tariff not found or inactive',
             },
         )
 
@@ -7285,10 +6775,7 @@ async def purchase_tariff_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'tariff_not_available',
-                'message': get_texts().t(
-                    'MINIAPP_TARIFF_NOT_AVAILABLE_FOR_PROMO_GROUP',
-                    'This tariff is not available for your promo group',
-                ),
+                'message': 'This tariff is not available for your promo group',
             },
         )
 
@@ -7301,6 +6788,15 @@ async def purchase_tariff_endpoint(
     subs = getattr(user, 'subscriptions', None) or []
     # Find subscription with same tariff for device limit inheritance
     matching_sub = next((s for s in subs if s.tariff_id == tariff.id and s.is_active), None)
+    if matching_sub is None:
+        if settings.is_multi_tariff_enabled():
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            matching_sub = await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
+        else:
+            candidate = await get_subscription_by_user_id(db, user.id)
+            if candidate is not None and candidate.tariff_id == tariff.id:
+                matching_sub = candidate
     device_limit = matching_sub.device_limit if matching_sub else None
 
     result = await pricing_engine.calculate_tariff_purchase_price(
@@ -7308,6 +6804,11 @@ async def purchase_tariff_endpoint(
         payload.period_days,
         device_limit=device_limit,
         user=user,
+        **(
+            {'daily_devices_billing_version': 1}
+            if getattr(matching_sub, 'daily_devices_billing_version', 0) == 1
+            else {}
+        ),
     )
     price_kopeks = result.final_total
     consume_promo_offer = result.promo_offer_discount > 0
@@ -7322,30 +6823,42 @@ async def purchase_tariff_endpoint(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': get_texts().t(
-                    'MINIAPP_INSUFFICIENT_FUNDS_MISSING',
-                    'Недостаточно средств. Не хватает {amount}',
-                ).format(amount=settings.format_price(missing, round_kopeks=False)),
+                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
                 'missing_amount': missing,
             },
         )
 
+    from app.services.checkout_squad_validation import CheckoutSquadsUnavailableError, validate_checkout_squads
+
+    try:
+        await validate_checkout_squads(tariff.allowed_squads)
+    except CheckoutSquadsUnavailableError as error:
+        raise HTTPException(status_code=409, detail={'code': error.code, 'message': error.message}) from error
+
+    # Какую подписку продлевать. Переменной здесь не было вовсе: `if subscription:`
+    # падало NameError на КАЖДОЙ покупке тарифа через этот эндпоинт. Разрешение
+    # повторяет рабочий путь бота (app/handlers/subscription/tariff_purchase.py):
+    # в мультитарифе берётся подписка на ЭТОТ тариф, в классическом режиме —
+    # единственная подписка пользователя.
+    if settings.is_multi_tariff_enabled():
+        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
+        subscription = next((s for s in active_subs if s.tariff_id == tariff.id), None)
+        if subscription is None:
+            from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+            subscription = await get_subscription_by_user_and_tariff(db, user.id, tariff.id, include_inactive=True)
+    else:
+        subscription = await get_subscription_by_user_id(db, user.id)
+
+    managed_purchase = getattr(subscription, 'traffic_accounting_mode', None) in ('managed', 'migrating')
+
     # Списываем баланс
     if is_daily_tariff:
-        description = get_texts(getattr(user, 'language', 'ru')).t(
-            'MINIAPP_TRANSACTION_DAILY_TARIFF_ACTIVATION',
-            "Активация суточного тарифа '{tariff}' (первый день)",
-        ).format(tariff=tariff.name)
+        description = f"Активация суточного тарифа '{tariff.name}' (первый день)"
     elif discount_percent > 0:
-        description = get_texts(getattr(user, 'language', 'ru')).t(
-            'MINIAPP_TRANSACTION_TARIFF_PURCHASE_DISCOUNT',
-            "Покупка тарифа '{tariff}' на {days} дней (скидка {percent}%)",
-        ).format(tariff=tariff.name, days=payload.period_days, percent=discount_percent)
+        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней (скидка {discount_percent}%)"
     else:
-        description = get_texts(getattr(user, 'language', 'ru')).t(
-            'MINIAPP_TRANSACTION_TARIFF_PURCHASE',
-            "Покупка тарифа '{tariff}' на {days} дней",
-        ).format(tariff=tariff.name, days=payload.period_days)
+        description = f"Покупка тарифа '{tariff.name}' на {payload.period_days} дней"
     success = await subtract_user_balance(
         db,
         user,
@@ -7353,23 +6866,25 @@ async def purchase_tariff_endpoint(
         description,
         consume_promo_offer=consume_promo_offer,
         mark_as_paid_subscription=True,
+        commit=not managed_purchase,
     )
     if not success:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={
                 'code': 'balance_charge_failed',
-                'message': get_texts().t('MINIAPP_CHARGE_FAILED', 'Failed to charge balance'),
+                'message': 'Failed to charge balance',
             },
         )
 
     # Создаём транзакцию
-    await create_transaction(
+    purchase_transaction = await create_transaction(
         db=db,
         user_id=user.id,
         type=TransactionType.SUBSCRIPTION_PAYMENT,
         amount_kopeks=price_kopeks,
         description=description,
+        commit=not managed_purchase,
     )
 
     # Получаем список серверов из тарифа
@@ -7382,21 +6897,21 @@ async def purchase_tariff_endpoint(
         all_servers, _ = await get_all_server_squads(db, available_only=True)
         squads = [s.squad_uuid for s in all_servers if s.squad_uuid]
 
-    # Какую подписку продлевать. Переменной здесь не было вовсе: `if subscription:`
-    # падало NameError на КАЖДОЙ покупке тарифа через этот эндпоинт. Разрешение
-    # повторяет рабочий путь бота (app/handlers/subscription/tariff_purchase.py):
-    # в мультитарифе берётся подписка на ЭТОТ тариф, в классическом режиме —
-    # единственная подписка пользователя.
-    if settings.is_multi_tariff_enabled():
-        active_subs = await get_active_subscriptions_by_user_id(db, user.id)
-        subscription = next((s for s in active_subs if s.tariff_id == tariff.id), None)
-    else:
-        subscription = await get_subscription_by_user_id(db, user.id)
+    is_tariff_renewal = subscription is not None and subscription.tariff_id == tariff.id
+    reset_used_traffic = (
+        is_daily_tariff
+        or not is_tariff_renewal
+        or should_reset_traffic_on_tariff_purchase(
+            is_tariff_change=False,
+            was_trial=subscription.is_trial,
+            paid_kopeks=price_kopeks,
+        )
+    )
 
     if subscription:
         # Preserve extra purchased devices when renewing the same tariff
         if subscription.tariff_id == tariff.id:
-            effective_device_limit = max(tariff.device_limit or 0, subscription.device_limit or 0)
+            effective_device_limit = resolve_tariff_renewal_device_limit(tariff.device_limit, subscription.device_limit)
         else:
             effective_device_limit = tariff.device_limit
         # Смена/продление тарифа
@@ -7408,6 +6923,9 @@ async def purchase_tariff_endpoint(
             traffic_limit_gb=tariff.traffic_limit_gb,
             device_limit=effective_device_limit,
             connected_squads=squads,
+            paid_traffic_reset=False,
+            reset_used_traffic=reset_used_traffic,
+            commit=not managed_purchase,
         )
     else:
         # Создание новой подписки
@@ -7430,16 +6948,30 @@ async def purchase_tariff_endpoint(
         subscription.last_daily_charge_at = datetime.now(UTC)
         # Для суточного тарифа end_date = сейчас + 1 день (первый день уже оплачен)
         subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+        subscription.pending_panel_expire_at = subscription.end_date
         await db.commit()
         await db.refresh(subscription)
 
+    if managed_purchase:
+        await db.commit()
+        from app.database.crud.transaction import emit_transaction_side_effects
+
+        await emit_transaction_side_effects(
+            db,
+            purchase_transaction,
+            amount_kopeks=price_kopeks,
+            user_id=user.id,
+            type=TransactionType.SUBSCRIPTION_PAYMENT,
+            description=description,
+        )
+
     # Синхронизируем с RemnaWave: новая подписка панели ещё не известна — sync
-    # выберет create; существующая — update. При покупке тарифа ВСЕГДА сбрасываем трафик.
+    # выберет create; существующая — update. Решение о сбросе совпадает с переданным в CRUD.
     service = SubscriptionService()
     await service.sync_remnawave_user(
         db,
         subscription,
-        reset_traffic=True,
+        reset_traffic=reset_used_traffic,
         reset_reason='покупка тарифа (miniapp)',
     )
 
@@ -7453,10 +6985,7 @@ async def purchase_tariff_endpoint(
             'period_days': payload.period_days,
             'total_price': price_kopeks,
             'tariff_id': tariff.id,
-            'description': get_texts().t(
-                'MINIAPP_TRANSACTION_TARIFF_EXTENSION',
-                'Продление тарифа {tariff} на {days} дней',
-            ).format(tariff=tariff.name, days=payload.period_days),
+            'description': f'Продление тарифа {tariff.name} на {payload.period_days} дней',
         }
         await user_cart_service.save_user_cart(user.id, cart_data)
         user_id_display = user.telegram_id or user.email or f'#{user.id}'
@@ -7470,10 +6999,7 @@ async def purchase_tariff_endpoint(
 
     return MiniAppTariffPurchaseResponse(
         success=True,
-        message=get_texts().t(
-            'MINIAPP_TARIFF_ACTIVATED',
-            "Тариф '{tariff}' успешно активирован",
-        ).format(tariff=tariff.name),
+        message=f"Тариф '{tariff.name}' успешно активирован",
         subscription_id=subscription.id,
         tariff_id=tariff.id,
         tariff_name=tariff.name,
@@ -7497,14 +7023,17 @@ def _calculate_tariff_switch(
     Returns:
         TariffSwitchResult
     """
-    from app.services.pricing_engine import pricing_engine
+    from app.services.pricing_engine import TariffSwitchPricingUnavailableError, pricing_engine
 
-    return pricing_engine.calculate_tariff_switch_cost(
-        current_tariff,
-        new_tariff,
-        remaining_days,
-        user=user,
-    )
+    try:
+        return pricing_engine.calculate_tariff_switch_cost(
+            current_tariff,
+            new_tariff,
+            remaining_days,
+            user=user,
+        )
+    except TariffSwitchPricingUnavailableError as error:
+        raise HTTPException(status_code=400, detail='Tariff pricing is unavailable') from error
 
 
 @router.post('/subscription/tariff/switch/preview')
@@ -7519,10 +7048,7 @@ async def preview_tariff_switch_endpoint(
     if not settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': get_texts().t('MINIAPP_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'),
-            },
+            detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
         )
 
     subs = getattr(user, 'subscriptions', None) or []
@@ -7535,19 +7061,13 @@ async def preview_tariff_switch_endpoint(
     if not subscription or not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'no_subscription',
-                'message': get_texts().t('MINIAPP_NO_TARIFF_SUBSCRIPTION', 'No active subscription with tariff'),
-            },
+            detail={'code': 'no_subscription', 'message': 'No active subscription with tariff'},
         )
 
     if subscription.status not in ('active', 'trial'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'subscription_inactive',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_INACTIVE', 'Subscription is not active'),
-            },
+            detail={'code': 'subscription_inactive', 'message': 'Subscription is not active'},
         )
 
     if subscription.is_trial:
@@ -7558,10 +7078,7 @@ async def preview_tariff_switch_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'trial_cannot_switch',
-                'message': get_texts().t(
-                    'MINIAPP_TRIAL_CANNOT_SWITCH_TARIFF',
-                    'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
-                ),
+                'message': 'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
                 'use_purchase_flow': True,
             },
         )
@@ -7572,16 +7089,13 @@ async def preview_tariff_switch_endpoint(
     if not new_tariff or not new_tariff.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                'code': 'tariff_not_found',
-                'message': get_texts().t('MINIAPP_TARIFF_NOT_FOUND_OR_INACTIVE', 'Tariff not found or inactive'),
-            },
+            detail={'code': 'tariff_not_found', 'message': 'Tariff not found or inactive'},
         )
 
     if subscription.tariff_id == payload.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'same_tariff', 'message': get_texts().t('MINIAPP_TARIFF_SAME', 'Already on this tariff')},
+            detail={'code': 'same_tariff', 'message': 'Already on this tariff'},
         )
 
     if settings.TARIFF_SWITCH_RESET_FREE_DAYS and current_tariff is not None and current_tariff.is_free:
@@ -7593,10 +7107,7 @@ async def preview_tariff_switch_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'free_tariff_cannot_switch',
-                'message': get_texts().t(
-                    'MINIAPP_FREE_TARIFF_CANNOT_SWITCH',
-                    'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
-                ),
+                'message': 'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
                 'use_purchase_flow': True,
             },
         )
@@ -7609,13 +7120,7 @@ async def preview_tariff_switch_endpoint(
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'tariff_not_available',
-                'message': get_texts().t(
-                    'MINIAPP_TARIFF_NOT_AVAILABLE_FOR_PROMO_GROUP_SHORT',
-                    'Tariff not available for your promo group',
-                ),
-            },
+            detail={'code': 'tariff_not_available', 'message': 'Tariff not available for your promo group'},
         )
 
     remaining_days = remaining_days_for_switch(subscription.end_date)
@@ -7637,9 +7142,7 @@ async def preview_tariff_switch_endpoint(
         new_tariff_name=new_tariff.name,
         remaining_days=remaining_days,
         upgrade_cost_kopeks=upgrade_cost,
-        upgrade_cost_label=settings.format_price(upgrade_cost)
-        if upgrade_cost > 0
-        else get_texts().t('MINIAPP_PRICE_FREE', 'Бесплатно'),
+        upgrade_cost_label=settings.format_price(upgrade_cost) if upgrade_cost > 0 else 'Бесплатно',
         balance_kopeks=balance,
         # Когда показываем missing_amount_label с копейками (round_kopeks=False),
         # balance_label тоже должен быть с копейками — иначе пары "Баланс 150 ₽,
@@ -7664,10 +7167,7 @@ async def switch_tariff_endpoint(
     if not settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'tariffs_mode_disabled',
-                'message': get_texts().t('MINIAPP_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'),
-            },
+            detail={'code': 'tariffs_mode_disabled', 'message': 'Tariffs mode is not enabled'},
         )
 
     subs = getattr(user, 'subscriptions', None) or []
@@ -7678,28 +7178,27 @@ async def switch_tariff_endpoint(
     if not subscription or not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'no_subscription',
-                'message': get_texts().t('MINIAPP_NO_TARIFF_SUBSCRIPTION', 'No active subscription with tariff'),
-            },
+            detail={'code': 'no_subscription', 'message': 'No active subscription with tariff'},
         )
 
-    # Lock subscription row to prevent concurrent switch race condition
-    locked_result = await db.execute(
-        select(Subscription)
-        .where(Subscription.id == subscription.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    subscription = locked_result.scalar_one()
+    from app.database.crud.user import lock_user_for_pricing
+    from app.services.traffic_purchase_service import prepare_user_tariff_switch
+
+    subscription, accounting_panel = await prepare_user_tariff_switch(db, subscription)
+    user = await lock_user_for_pricing(db, user.id)
+    if subscription.user_id != user.id:
+        raise HTTPException(status_code=404, detail='Subscription not found')
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+        existing_target = await get_subscription_by_user_and_tariff(db, user.id, payload.tariff_id)
+        if existing_target and existing_target.id != subscription.id:
+            raise HTTPException(status_code=409, detail='You already have an active subscription for the target tariff')
 
     if subscription.status not in ('active', 'trial'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'subscription_inactive',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_INACTIVE', 'Subscription is not active'),
-            },
+            detail={'code': 'subscription_inactive', 'message': 'Subscription is not active'},
         )
 
     if subscription.is_trial:
@@ -7710,10 +7209,7 @@ async def switch_tariff_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'trial_cannot_switch',
-                'message': get_texts().t(
-                    'MINIAPP_TRIAL_CANNOT_SWITCH_TARIFF',
-                    'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
-                ),
+                'message': 'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
                 'use_purchase_flow': True,
             },
         )
@@ -7724,16 +7220,13 @@ async def switch_tariff_endpoint(
     if not new_tariff or not new_tariff.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                'code': 'tariff_not_found',
-                'message': get_texts().t('MINIAPP_TARIFF_NOT_FOUND_OR_INACTIVE', 'Tariff not found or inactive'),
-            },
+            detail={'code': 'tariff_not_found', 'message': 'Tariff not found or inactive'},
         )
 
     if subscription.tariff_id == payload.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'same_tariff', 'message': get_texts().t('MINIAPP_TARIFF_SAME', 'Already on this tariff')},
+            detail={'code': 'same_tariff', 'message': 'Already on this tariff'},
         )
 
     if settings.TARIFF_SWITCH_RESET_FREE_DAYS and current_tariff is not None and current_tariff.is_free:
@@ -7744,10 +7237,7 @@ async def switch_tariff_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'free_tariff_cannot_switch',
-                'message': get_texts().t(
-                    'MINIAPP_FREE_TARIFF_CANNOT_SWITCH',
-                    'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
-                ),
+                'message': 'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
                 'use_purchase_flow': True,
             },
         )
@@ -7760,16 +7250,15 @@ async def switch_tariff_endpoint(
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                'code': 'tariff_not_available',
-                'message': get_texts().t('MINIAPP_TARIFF_NOT_AVAILABLE', 'Tariff not available'),
-            },
+            detail={'code': 'tariff_not_available', 'message': 'Tariff not available'},
         )
 
-    # Lock user BEFORE price computation to prevent TOCTOU on promo offer
-    from app.database.crud.user import lock_user_for_pricing
+    from app.services.checkout_squad_validation import CheckoutSquadsUnavailableError, validate_checkout_squads
 
-    user = await lock_user_for_pricing(db, user.id)
+    try:
+        await validate_checkout_squads(new_tariff.allowed_squads)
+    except CheckoutSquadsUnavailableError as error:
+        raise HTTPException(status_code=409, detail={'code': error.code, 'message': error.message}) from error
 
     # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
     from app.services.grace_access_echo import undo_grace_overlay_echo
@@ -7794,24 +7283,15 @@ async def switch_tariff_endpoint(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_funds',
-                    'message': get_texts().t(
-                        'MINIAPP_INSUFFICIENT_FUNDS_MISSING',
-                        'Недостаточно средств. Не хватает {amount}',
-                    ).format(amount=settings.format_price(missing, round_kopeks=False)),
+                    'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
                     'missing_amount': missing,
                 },
             )
 
         if switching_from_daily:
-            description = get_texts().t(
-                'MINIAPP_TRANSACTION_SWITCH_FROM_DAILY',
-                "Переход с суточного на тариф '{tariff}' ({days} дней)",
-            ).format(tariff=new_tariff.name, days=new_period_days)
+            description = f"Переход с суточного на тариф '{new_tariff.name}' ({new_period_days} дней)"
         else:
-            description = get_texts().t(
-                'MINIAPP_TRANSACTION_SWITCH_TO_TARIFF_PRORATED',
-                "Переход на тариф '{tariff}' (доплата за {days} дней)",
-            ).format(tariff=new_tariff.name, days=remaining_days)
+            description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
         success = await subtract_user_balance(
             db,
             user,
@@ -7824,10 +7304,7 @@ async def switch_tariff_endpoint(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    'code': 'balance_error',
-                    'message': get_texts().t('MINIAPP_CHARGE_FAILED', 'Failed to charge balance'),
-                },
+                detail={'code': 'balance_error', 'message': 'Failed to charge balance'},
             )
 
         # Записываем транзакцию
@@ -7842,12 +7319,9 @@ async def switch_tariff_endpoint(
         )
     else:
         # Бесплатный переход (downgrade) — записываем в историю
-        description = get_texts().t(
-            'MINIAPP_TRANSACTION_SWITCH_TO_TARIFF',
-            "Переход на тариф '{tariff}'",
-        ).format(tariff=new_tariff.name)
+        description = f"Переход на тариф '{new_tariff.name}'"
         switch_transaction = None
-        await create_transaction(
+        switch_transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
@@ -7869,7 +7343,10 @@ async def switch_tariff_endpoint(
     # Обновляем подписку - меняем тариф без изменения даты
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch
 
+    subscription.daily_devices_billing_version = 0
     subscription.tariff_id = new_tariff.id
+    if accounting_panel is not None:
+        subscription.tariff = new_tariff
     subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
     subscription.device_limit = calc_device_limit_on_tariff_switch(
         current_device_limit=subscription.device_limit,
@@ -7889,7 +7366,7 @@ async def switch_tariff_endpoint(
 
     # Счётчик трафика обнуляет только ОПЛАЧЕННОЕ переключение (см. tariff_switch_policy).
     reset_used_traffic = should_reset_used_traffic(upgrade_cost)
-    if reset_used_traffic:
+    if reset_used_traffic and accounting_panel is None:
         subscription.traffic_used_gb = 0.0
 
     # Обработка daily полей при смене тарифа
@@ -7902,6 +7379,7 @@ async def switch_tariff_endpoint(
         subscription.last_daily_charge_at = datetime.now(UTC)
         # Для суточного тарифа end_date = сейчас + 1 день
         subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+        subscription.pending_panel_expire_at = subscription.end_date
         logger.info('🔄 Смена на суточный тариф: установлены daily поля, end_date', end_date=subscription.end_date)
     elif old_is_daily and not new_is_daily:
         # Переход с суточного на обычный тариф - очищаем daily поля
@@ -7910,6 +7388,7 @@ async def switch_tariff_endpoint(
         # Устанавливаем дату окончания для периодного тарифа
         if new_period_days > 0:
             subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
+            subscription.pending_panel_expire_at = subscription.end_date
             logger.info(
                 '🔄 Смена с суточного на периодный тариф: end_date= ( дней)',
                 end_date=subscription.end_date,
@@ -7918,6 +7397,16 @@ async def switch_tariff_endpoint(
         else:
             logger.info('🔄 Смена с суточного на обычный тариф: очищены daily поля')
 
+    if accounting_panel is not None:
+        from app.services.traffic_accounting_service import change_managed_tariff_locked
+
+        await change_managed_tariff_locked(
+            db,
+            subscription,
+            accounting_panel,
+            operation_key=f'user-switch:{switch_transaction.id}',
+            reset_base=reset_used_traffic,
+        )
     await db.commit()
 
     # Emit deferred side-effects after atomic commit
@@ -7937,7 +7426,7 @@ async def switch_tariff_endpoint(
     await db.refresh(user)
 
     # Синхронизируем с RemnaWave (опционально сбрасываем трафик по настройке)
-    should_reset_traffic = reset_used_traffic
+    should_reset_traffic = reset_used_traffic and accounting_panel is None
     try:
         service = SubscriptionService()
         await service.update_remnawave_user(
@@ -7961,25 +7450,13 @@ async def switch_tariff_endpoint(
     lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
     if upgrade_cost > 0:
         if lang == 'ru':
-            message = get_texts(lang).t(
-                'MINIAPP_TARIFF_SWITCHED_CHARGED',
-                "Тариф изменён на '{tariff}'. Списано {amount}",
-            ).format(tariff=new_tariff.name, amount=settings.format_price(upgrade_cost))
+            message = f"Тариф изменён на '{new_tariff.name}'. Списано {settings.format_price(upgrade_cost)}"
         else:
-            message = get_texts(lang).t(
-                'MINIAPP_TARIFF_SWITCHED_CHARGED_EN',
-                "Switched to '{tariff}'. Charged {amount}",
-            ).format(tariff=new_tariff.name, amount=settings.format_price(upgrade_cost))
+            message = f"Switched to '{new_tariff.name}'. Charged {settings.format_price(upgrade_cost)}"
     elif lang == 'ru':
-        message = get_texts(lang).t(
-            'MINIAPP_TARIFF_SWITCHED',
-            "Тариф изменён на '{tariff}'",
-        ).format(tariff=new_tariff.name)
+        message = f"Тариф изменён на '{new_tariff.name}'"
     else:
-        message = get_texts(lang).t(
-            'MINIAPP_TARIFF_SWITCHED_EN',
-            "Switched to '{tariff}'",
-        ).format(tariff=new_tariff.name)
+        message = f"Switched to '{new_tariff.name}'"
 
     return MiniAppTariffSwitchResponse(
         success=True,
@@ -7998,10 +7475,10 @@ async def purchase_traffic_topup_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Докупка трафика для подписки."""
-    from app.database.crud.subscription import add_subscription_traffic
     from app.database.crud.transaction import create_transaction
     from app.database.crud.user import subtract_user_balance
     from app.database.models import TransactionType
+    from app.services.traffic_purchase_service import add_subscription_traffic
     from app.utils.pricing_utils import calculate_prorated_price
     from app.webapi.schemas.miniapp import MiniAppTrafficTopupResponse
 
@@ -8015,10 +7492,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'tariffs_mode_disabled',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_TRAFFIC_TOPUP_TARIFFS_MODE_ONLY',
-                    'Traffic top-up is only available in tariffs mode',
-                ),
+                'message': 'Traffic top-up is only available in tariffs mode',
             },
         )
 
@@ -8029,9 +7503,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'no_tariff',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_SUBSCRIPTION_HAS_NO_TARIFF', 'Subscription has no tariff'
-                ),
+                'message': 'Subscription has no tariff',
             },
         )
 
@@ -8041,7 +7513,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
                 'code': 'tariff_not_found',
-                'message': get_texts(user.language).t('MINIAPP_TARIFF_NOT_FOUND', 'Tariff not found'),
+                'message': 'Tariff not found',
             },
         )
 
@@ -8051,10 +7523,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'traffic_topup_disabled',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_TRAFFIC_TOPUP_DISABLED_FOR_TARIFF',
-                    'Traffic top-up is disabled for this tariff',
-                ),
+                'message': 'Traffic top-up is disabled for this tariff',
             },
         )
 
@@ -8064,10 +7533,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'unlimited_traffic',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_TRAFFIC_TOPUP_UNLIMITED',
-                    'Cannot add traffic to unlimited subscription',
-                ),
+                'message': 'Cannot add traffic to unlimited subscription',
             },
         )
 
@@ -8082,11 +7548,7 @@ async def purchase_traffic_topup_endpoint(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'topup_limit_exceeded',
-                    'message': get_texts(user.language).t(
-                        'MINIAPP_TRAFFIC_TOPUP_LIMIT_EXCEEDED',
-                        'Traffic top-up limit exceeded. Maximum allowed: {max} GB, '
-                        'current: {current} GB, available: {available} GB',
-                    ).format(max=max_topup_limit, current=current_traffic, available=available_gb),
+                    'message': f'Traffic top-up limit exceeded. Maximum allowed: {max_topup_limit} GB, current: {current_traffic} GB, available: {available_gb} GB',
                     'max_limit_gb': max_topup_limit,
                     'current_gb': current_traffic,
                     'available_gb': available_gb,
@@ -8100,10 +7562,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'invalid_package',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_TRAFFIC_PACKAGE_NOT_AVAILABLE',
-                    'Traffic package {gb}GB is not available',
-                ).format(gb=payload.gb),
+                'message': f'Traffic package {payload.gb}GB is not available',
             },
         )
 
@@ -8117,17 +7576,19 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'package_not_priced',
-                'message': get_texts(user.language)
-                .t(
-                    'MINIAPP_TRAFFIC_PACKAGE_NOT_PRICED',
-                    'Traffic package {gb}GB has no price configured',
-                )
-                .format(gb=payload.gb),
+                'message': f'Traffic package {payload.gb}GB has no price configured',
             },
         )
 
     # Lock user BEFORE price computation to prevent TOCTOU on promo discount
     from app.database.crud.user import lock_user_for_pricing
+    from app.services.traffic_purchase_service import prepare_traffic_purchase
+
+    try:
+        subscription, accounting_panel = await prepare_traffic_purchase(db, subscription, requested_gb=payload.gb)
+    except Exception as error:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail='Traffic accounting is temporarily unavailable') from error
 
     user = await lock_user_for_pricing(db, user.id)
 
@@ -8151,7 +7612,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_balance',
-                'message': get_texts(user.language).t('MINIAPP_INSUFFICIENT_BALANCE', 'Insufficient balance'),
+                'message': 'Insufficient balance',
                 'required': final_price,
                 'balance': user.balance_kopeks,
             },
@@ -8159,34 +7620,38 @@ async def purchase_traffic_topup_endpoint(
 
     # Списываем баланс
     if traffic_discount_percent > 0:
-        traffic_description = get_texts(user.language).t(
-            'MINIAPP_TRANSACTION_TRAFFIC_TOPUP_DISCOUNT',
-            'Докупка {gb} ГБ трафика (скидка {percent}%)',
-        ).format(gb=payload.gb, percent=traffic_discount_percent)
+        traffic_description = f'Докупка {payload.gb} ГБ трафика (скидка {traffic_discount_percent}%)'
     else:
-        traffic_description = get_texts(user.language).t(
-            'MINIAPP_TRANSACTION_TRAFFIC_TOPUP',
-            'Докупка {gb} ГБ трафика',
-        ).format(gb=payload.gb)
-    success = await subtract_user_balance(db, user, final_price, traffic_description)
+        traffic_description = f'Докупка {payload.gb} ГБ трафика'
+    success = await subtract_user_balance(db, user, final_price, traffic_description, commit=False)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 'code': 'balance_error',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_BALANCE_SUBTRACT_FAILED', 'Failed to subtract balance'
-                ),
+                'message': 'Failed to subtract balance',
             },
         )
 
     # Добавляем трафик (add_subscription_traffic уже создаёт TrafficPurchase и обновляет все необходимые поля)
-    await add_subscription_traffic(db, subscription, payload.gb)
+    await add_subscription_traffic(db, subscription, payload.gb, panel=accounting_panel, commit=False)
 
     # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     from app.database.crud.subscription import reactivate_subscription
 
-    await reactivate_subscription(db, subscription)
+    await reactivate_subscription(db, subscription, commit=False)
+    payment_transaction = await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=final_price,
+        description=traffic_description,
+        commit=False,
+    )
+    await db.commit()
+    from app.services.traffic_purchase_service import finish_traffic_purchase
+
+    await finish_traffic_purchase(db, subscription, payment_transaction)
 
     # Синхронизируем с RemnaWave
     try:
@@ -8211,23 +7676,12 @@ async def purchase_traffic_topup_endpoint(
                 action='update',
             )
 
-    # Создаем транзакцию
-    await create_transaction(
-        db,
-        user_id=user.id,
-        type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=final_price,
-        description=traffic_description,
-    )
-
     await db.refresh(user)
     await db.refresh(subscription)
 
     return MiniAppTrafficTopupResponse(
         success=True,
-        message=get_texts(user.language)
-        .t('MINIAPP_TRAFFIC_ADDED', 'Добавлено {gb} ГБ трафика')
-        .format(gb=payload.gb),
+        message=f'Добавлено {payload.gb} ГБ трафика',
         new_traffic_limit_gb=subscription.traffic_limit_gb,
         new_balance_kopeks=user.balance_kopeks,
         charged_kopeks=final_price,
@@ -8253,10 +7707,7 @@ async def toggle_daily_subscription_pause_endpoint(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                'code': 'no_subscription',
-                'message': get_texts().t('MINIAPP_NO_SUBSCRIPTION_FOUND', 'No subscription found'),
-            },
+            detail={'code': 'no_subscription', 'message': 'No subscription found'},
         )
 
     # Проверяем наличие тарифа
@@ -8264,25 +7715,15 @@ async def toggle_daily_subscription_pause_endpoint(
     if not tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'no_tariff',
-                'message': get_texts(user.language).t(
-                    'MINIAPP_SUBSCRIPTION_HAS_NO_TARIFF', 'Subscription has no tariff'
-                ),
-            },
+            detail={'code': 'no_tariff', 'message': 'Subscription has no tariff'},
         )
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not getattr(tariff, 'is_daily', False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                'code': 'not_daily_tariff',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_NOT_DAILY', 'Subscription is not on a daily tariff'),
-            },
+            detail={'code': 'not_daily_tariff', 'message': 'Subscription is not on a daily tariff'},
         )
-
-    raw_daily_price = getattr(tariff, 'daily_price_kopeks', 0)
 
     # Lock user BEFORE reading state and mutating to prevent TOCTOU on promo group
     # and to ensure is_daily_paused mutation is not overwritten by populate_existing
@@ -8295,11 +7736,18 @@ async def toggle_daily_subscription_pause_endpoint(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                'code': 'subscription_lost',
-                'message': get_texts().t('MINIAPP_SUBSCRIPTION_LOST_AFTER_LOCK', 'Subscription not found after lock'),
-            },
+            detail={'code': 'subscription_lost', 'message': 'Subscription not found after lock'},
         )
+
+    from app.services.traffic_purchase_service import lock_daily_accounting_subscription
+
+    try:
+        subscription = await lock_daily_accounting_subscription(db, subscription, user.id)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    tariff = await get_tariff_by_id(db, subscription.tariff_id)
+    if not tariff or not tariff.is_daily or subscription.is_trial:
+        raise HTTPException(status_code=400, detail='Daily paid subscription required')
 
     # Определяем состояние из LOCKED экземпляра
     from app.database.models import SubscriptionStatus
@@ -8317,16 +7765,14 @@ async def toggle_daily_subscription_pause_endpoint(
         new_paused_state = False  # Force resume path
     else:
         new_paused_state = not is_currently_paused
+    if not new_paused_state and user.restriction_subscription:
+        raise HTTPException(status_code=403, detail='Subscription renewal is restricted')
     subscription.is_daily_paused = new_paused_state
 
     # Apply group discount to daily price (consistent with DailySubscriptionService and resume-after-topup)
     from app.services.pricing_engine import PricingEngine
 
-    promo_group = PricingEngine.resolve_promo_group(user)
-    daily_group_pct = promo_group.get_discount_percent('period', 1) if promo_group else 0
-    daily_price = (
-        PricingEngine.apply_discount(raw_daily_price, daily_group_pct) if daily_group_pct > 0 else raw_daily_price
-    )
+    daily_price = PricingEngine.daily_subscription_price(subscription, tariff, user)
 
     resume_transaction = None
 
@@ -8337,10 +7783,7 @@ async def toggle_daily_subscription_pause_endpoint(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_balance',
-                    'message': get_texts().t(
-                        'MINIAPP_DAILY_RESUME_INSUFFICIENT_BALANCE',
-                        'Insufficient balance to resume daily subscription',
-                    ),
+                    'message': 'Insufficient balance to resume daily subscription',
                     'required': daily_price,
                     'balance': user.balance_kopeks,
                 },
@@ -8355,10 +7798,7 @@ async def toggle_daily_subscription_pause_endpoint(
                     db,
                     user,
                     daily_price,
-                    get_texts(getattr(user, 'language', 'ru')).t(
-                        'MINIAPP_TRANSACTION_DAILY_CHARGE_RESUME',
-                        'Суточная оплата тарифа «{tariff}» (возобновление)',
-                    ).format(tariff=tariff.name),
+                    f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
                     mark_as_paid_subscription=True,
                     commit=False,
                 )
@@ -8367,7 +7807,7 @@ async def toggle_daily_subscription_pause_endpoint(
                         status_code=status.HTTP_402_PAYMENT_REQUIRED,
                         detail={
                             'code': 'insufficient_balance',
-                            'message': get_texts().t('MINIAPP_BALANCE_DEDUCTION_FAILED', 'Balance deduction failed'),
+                            'message': 'Balance deduction failed',
                             'required': daily_price,
                             'balance': user.balance_kopeks,
                         },
@@ -8381,10 +7821,7 @@ async def toggle_daily_subscription_pause_endpoint(
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=daily_price,
-                    description=get_texts(getattr(user, 'language', 'ru')).t(
-                        'MINIAPP_TRANSACTION_DAILY_CHARGE_RESUME',
-                        'Суточная оплата тарифа «{tariff}» (возобновление)',
-                    ).format(tariff=tariff.name),
+                    description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
                     commit=False,
                 )
 
@@ -8393,6 +7830,7 @@ async def toggle_daily_subscription_pause_endpoint(
             subscription.status = SubscriptionStatus.ACTIVE.value
             subscription.last_daily_charge_at = now
             subscription.end_date = now + timedelta(days=1)
+            subscription.pending_panel_expire_at = subscription.end_date
 
             logger.info(
                 'Суточная подписка восстановлена в ACTIVE (miniapp)',
@@ -8403,6 +7841,11 @@ async def toggle_daily_subscription_pause_endpoint(
     # Re-apply is_daily_paused on the current identity-mapped instance
     # (subtract_user_balance with populate_existing=True may have reloaded it from DB)
     subscription.is_daily_paused = new_paused_state
+
+    if not new_paused_state and was_disabled:
+        from app.services.traffic_purchase_service import stage_daily_resume_grant
+
+        await stage_daily_resume_grant(db, subscription, tariff, resume_transaction)
 
     await db.commit()
     await db.refresh(subscription)
@@ -8419,12 +7862,7 @@ async def toggle_daily_subscription_pause_endpoint(
                 amount_kopeks=daily_price,
                 user_id=user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
-                description=get_texts(getattr(user, 'language', 'ru'))
-                .t(
-                    'MINIAPP_TRANSACTION_DAILY_CHARGE_RESUME',
-                    'Суточная оплата тарифа «{tariff}» (возобновление)',
-                )
-                .format(tariff=tariff.name),
+                description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
             )
         except Exception as exc:
             logger.warning('Failed to emit resume transaction side effects (miniapp)', error=exc)
@@ -8452,7 +7890,9 @@ async def toggle_daily_subscription_pause_endpoint(
         # общая политика суточного списания, а не жёсткая константа.
         from app.services.traffic_reset_policy import lift_panel_traffic_limit, should_reset_traffic_on_daily_charge
 
-        reset_traffic = should_reset_traffic_on_daily_charge(tariff)
+        reset_traffic = subscription.traffic_accounting_mode != 'managed' and should_reset_traffic_on_daily_charge(
+            tariff
+        )
         reset_reason = 'суточное списание (возобновление)' if reset_traffic else None
         try:
             service = SubscriptionService()
@@ -8548,14 +7988,9 @@ async def toggle_daily_subscription_pause_endpoint(
 
     lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
     if new_paused_state:
-        if lang == 'ru':
-            message = get_texts(lang).t('MINIAPP_DAILY_SUBSCRIPTION_PAUSED', 'Суточная подписка приостановлена')
-        else:
-            message = get_texts(lang).t('MINIAPP_DAILY_SUBSCRIPTION_PAUSED_EN', 'Daily subscription paused')
-    elif lang == 'ru':
-        message = get_texts(lang).t('MINIAPP_DAILY_SUBSCRIPTION_RESUMED', 'Суточная подписка возобновлена')
+        message = 'Суточная подписка приостановлена' if lang == 'ru' else 'Daily subscription paused'
     else:
-        message = get_texts(lang).t('MINIAPP_DAILY_SUBSCRIPTION_RESUMED_EN', 'Daily subscription resumed')
+        message = 'Суточная подписка возобновлена' if lang == 'ru' else 'Daily subscription resumed'
 
     return MiniAppDailySubscriptionToggleResponse(
         success=True,
@@ -8563,4 +7998,37 @@ async def toggle_daily_subscription_pause_endpoint(
         is_paused=new_paused_state,
         balance_kopeks=user.balance_kopeks,
         balance_label=settings.format_price(user.balance_kopeks),
+    )
+
+
+async def _resolve_anore_payment_status(
+    payment_service: PaymentService,
+    db: AsyncSession,
+    user: User,
+    query: MiniAppPaymentStatusQuery,
+) -> MiniAppPaymentStatusResult:
+    from app.database.crud.anore import get_anore_payment_by_id, get_anore_payment_by_invoice_id
+
+    payment = None
+    if query.local_payment_id:
+        payment = await get_anore_payment_by_id(db, query.local_payment_id)
+    elif query.payment_id or query.invoice_id:
+        payment = await get_anore_payment_by_invoice_id(db, query.payment_id or query.invoice_id)
+    # Ownership is checked before contacting the provider or changing accounting.
+    if payment is None or payment.user_id != user.id:
+        return MiniAppPaymentStatusResult(method='anore', status='pending', is_paid=False, message='Payment not found')
+    result = await payment_service.check_anore_payment_status(db, payment.order_id)
+    paid = bool((result or {}).get('is_paid')) and not payment.is_test
+    state = 'pending' if payment.is_test else _classify_status((result or {}).get('status') or payment.status, paid)
+    return MiniAppPaymentStatusResult(
+        method='anore',
+        status=state,
+        is_paid=paid,
+        amount_kopeks=payment.amount_kopeks,
+        currency=payment.currency,
+        completed_at=payment.paid_at,
+        transaction_id=payment.transaction_id,
+        external_id=payment.anore_payment_id,
+        message='Sandbox payment: no funds credited' if payment.is_test else None,
+        extra={'local_payment_id': payment.id, 'payment_id': payment.anore_payment_id, 'order_id': payment.order_id},
     )

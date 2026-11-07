@@ -2,9 +2,9 @@ import html
 import re
 from datetime import UTC, datetime
 
+from app.localization.texts import get_texts
 from app.utils.subscription_time import local_days_until
 from app.utils.timezone import format_local_datetime
-from app.localization.texts import get_texts
 
 
 # Формат Telegram-логина: 5-32 символа, первый — буква. Тот же шаблон используется
@@ -36,102 +36,60 @@ def format_date(dt: datetime | str, format_str: str = '%d.%m.%Y') -> str:
     return format_local_datetime(_coerce_datetime(dt), format_str)
 
 
+def _formatter_language(language: str) -> str:
+    code = (language or 'ru').split('-')[0].lower()
+    return 'ua' if code == 'uk' else code
+
+
 def format_time_ago(dt: datetime | str, language: str = 'ru') -> str:
-    if isinstance(dt, str):
-        if dt == 'now' or dt == '':
-            dt = datetime.now(UTC)
-        else:
-            try:
-                dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
-            except (ValueError, AttributeError):
-                dt = datetime.now(UTC)
-
-    now = datetime.now(UTC)
-    diff = now - dt
-
-    language_code = (language or 'ru').split('-')[0].lower()
-    texts = get_texts(language_code)
-
+    dt = _coerce_datetime(dt)
+    diff = datetime.now(UTC) - dt
+    texts = get_texts(_formatter_language(language))
     if diff.days > 0:
         if diff.days == 1:
-            return texts.t('TIME_AGO_YESTERDAY', 'yesterday' if language_code == 'en' else 'вчера')
+            return texts.t('FORMAT_YESTERDAY')
         if diff.days < 7:
-            value = diff.days
-            if language_code == 'en':
-                default = '{value} day ago' if value == 1 else '{value} days ago'
-            else:
-                default = '{value} дн. назад'
-            return texts.t('TIME_AGO_DAYS', default).format(value=value)
-        if diff.days < 30:
-            value = diff.days // 7
-            if language_code == 'en':
-                default = '{value} week ago' if value == 1 else '{value} weeks ago'
-            else:
-                default = '{value} нед. назад'
-            return texts.t('TIME_AGO_WEEKS', default).format(value=value)
-        if diff.days < 365:
-            value = diff.days // 30
-            if language_code == 'en':
-                default = '{value} month ago' if value == 1 else '{value} months ago'
-            else:
-                default = '{value} мес. назад'
-            return texts.t('TIME_AGO_MONTHS', default).format(value=value)
-        value = diff.days // 365
-        if language_code == 'en':
-            default = '{value} year ago' if value == 1 else '{value} years ago'
+            value, unit = diff.days, 'DAY'
+        elif diff.days < 30:
+            value, unit = diff.days // 7, 'WEEK'
+        elif diff.days < 365:
+            value, unit = diff.days // 30, 'MONTH'
         else:
-            default = '{value} г. назад'
-        return texts.t('TIME_AGO_YEARS', default).format(value=value)
-
-    if diff.seconds > 3600:
-        value = diff.seconds // 3600
-        if language_code == 'en':
-            default = '{value} hour ago' if value == 1 else '{value} hours ago'
-        else:
-            default = '{value} ч. назад'
-        return texts.t('TIME_AGO_HOURS', default).format(value=value)
-
-    if diff.seconds > 60:
-        value = diff.seconds // 60
-        if language_code == 'en':
-            default = '{value} minute ago' if value == 1 else '{value} minutes ago'
-        else:
-            default = '{value} мин. назад'
-        return texts.t('TIME_AGO_MINUTES', default).format(value=value)
-
-    return texts.t('TIME_AGO_JUST_NOW', 'just now' if language_code == 'en' else 'только что')
+            value, unit = diff.days // 365, 'YEAR'
+    elif diff.seconds > 3600:
+        value, unit = diff.seconds // 3600, 'HOUR'
+    elif diff.seconds > 60:
+        value, unit = diff.seconds // 60, 'MINUTE'
+    else:
+        return texts.t('FORMAT_JUST_NOW')
+    suffix = 'ONE' if value == 1 else 'OTHER'
+    return texts.t(f'FORMAT_AGO_{unit}_{suffix}').format(count=value)
 
 
 def format_days_declension(days: int, language: str = 'ru') -> str:
-    language_code = (language or 'ru').split('-')[0].lower()
-    texts = get_texts(language_code)
-    if language_code not in {'ru', 'fa'}:
-        default = '{days} day' if days == 1 else '{days} days'
-        return texts.t('DAYS_DECLENSION_OTHER', default).format(days=days)
+    language_code = _formatter_language(language)
+    if language_code in {'ru', 'ua'}:
+        if days % 10 == 1 and days % 100 != 11:
+            suffix = 'ONE'
+        elif days % 10 in [2, 3, 4] and days % 100 not in [12, 13, 14]:
+            suffix = 'FEW'
+        else:
+            suffix = 'MANY'
+    else:
+        suffix = 'ONE' if days == 1 else 'MANY'
+    return get_texts(language_code).t(f'FORMAT_DAYS_{suffix}').format(count=days)
 
-    if days % 10 == 1 and days % 100 != 11:
-        return texts.t('DAYS_DECLENSION_ONE', '{days} день').format(days=days)
-    if days % 10 in [2, 3, 4] and days % 100 not in [12, 13, 14]:
-        return texts.t('DAYS_DECLENSION_FEW', '{days} дня').format(days=days)
-    return texts.t('DAYS_DECLENSION_MANY', '{days} дней').format(days=days)
 
-
-def format_duration(seconds: int) -> str:
-    texts = get_texts()
-
+def format_duration(seconds: int, language: str = 'ru') -> str:
     if seconds < 60:
-        return texts.t('DURATION_SECONDS', '{seconds} сек.').format(seconds=seconds)
-
-    minutes = seconds // 60
-    if minutes < 60:
-        return texts.t('DURATION_MINUTES', '{minutes} мин.').format(minutes=minutes)
-
-    hours = minutes // 60
-    if hours < 24:
-        return texts.t('DURATION_HOURS', '{hours} ч.').format(hours=hours)
-
-    days = hours // 24
-    return texts.t('DURATION_DAYS', '{days} дн.').format(days=days)
+        value, unit = seconds, 'SECOND'
+    elif seconds // 60 < 60:
+        value, unit = seconds // 60, 'MINUTE'
+    elif seconds // 3600 < 24:
+        value, unit = seconds // 3600, 'HOUR'
+    else:
+        value, unit = seconds // 86400, 'DAY'
+    return get_texts(_formatter_language(language)).t(f'FORMAT_DURATION_{unit}').format(count=value)
 
 
 def format_bytes(bytes_value: int) -> str:
@@ -227,56 +185,30 @@ def format_subscription_status(is_active: bool, is_trial: bool, end_date: dateti
         except (ValueError, AttributeError):
             end_date = datetime.now(UTC)
 
-    language_code = (language or 'ru').split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
-    texts = get_texts(language_code)
-
+    texts = get_texts(_formatter_language(language))
     if not is_active:
-        return texts.t('ADMIN_USER_SUBSCRIPTION_STATUS_INACTIVE', '❌ Неактивна')
-
-    if is_trial:
-        status = texts.t('MAIN_MENU_RICH_STATUS_TRIAL', '🎁 Тестовая')
-    else:
-        status = texts.t('ADMIN_USER_SUBSCRIPTION_STATUS_ACTIVE', '✅ Активна')
-
+        return texts.t('FORMAT_STATUS_INACTIVE')
+    status = texts.t('FORMAT_STATUS_TRIAL' if is_trial else 'FORMAT_STATUS_ACTIVE')
     now = datetime.now(UTC)
     if end_date > now:
         days_left = local_days_until(end_date, now)
         if days_left > 0:
-            default = ' ({days} дн.)' if use_russian_fallback else ' ({days} days)'
-            status += texts.t('SUBSCRIPTION_STATUS_DAYS_LEFT', default).format(days=days_left)
+            status += texts.t('FORMAT_STATUS_DAYS').format(count=days_left)
         else:
             hours_left = (end_date - now).seconds // 3600
-            default = ' ({hours} ч.)' if use_russian_fallback else ' ({hours} hrs)'
-            status += texts.t('SUBSCRIPTION_STATUS_HOURS_LEFT', default).format(hours=hours_left)
+            status += texts.t('FORMAT_STATUS_HOURS').format(count=hours_left)
     else:
-        status = texts.t('SUBSCRIPTION_STATUS_EXPIRED_LABEL', '⏰ Истекла' if use_russian_fallback else '⏰ Expired')
-
+        status = texts.t('FORMAT_STATUS_EXPIRED')
     return status
 
 
 def format_traffic_usage(used_gb: float, limit_gb: int, language: str = 'ru') -> str:
-    language_code = (language or 'ru').split('-')[0].lower()
-    use_russian_fallback = language_code in {'ru', 'fa'}
-    texts = get_texts(language_code)
-    used = f'{used_gb:.1f}'
-
+    unit = get_texts(_formatter_language(language)).t('FORMAT_GB')
     if limit_gb == 0:
-        default = '{used} ГБ / ∞' if use_russian_fallback else '{used} GB / ∞'
-        return texts.t('TRAFFIC_USAGE_UNLIMITED', default).format(used=used)
-
+        return f'{used_gb:.1f} {unit} / ∞'
     percentage = (used_gb / limit_gb) * 100 if limit_gb > 0 else 0
-
-    if use_russian_fallback:
-        default = '{used} ГБ / {limit} ГБ ({percent}%)'
-    else:
-        default = '{used} GB / {limit} GB ({percent}%)'
-    return texts.t('TRAFFIC_USAGE_LIMITED', default).format(used=used, limit=limit_gb, percent=f'{percentage:.1f}')
+    return f'{used_gb:.1f} {unit} / {limit_gb} {unit} ({percentage:.1f}%)'
 
 
 def format_boolean(value: bool, language: str = 'ru') -> str:
-    language_code = (language or 'ru').split('-')[0].lower()
-    texts = get_texts(language_code)
-    if value:
-        return texts.t('YES', '✅ Да')
-    return texts.t('NO', '❌ Нет')
+    return get_texts(_formatter_language(language)).t('FORMAT_YES' if value else 'FORMAT_NO')

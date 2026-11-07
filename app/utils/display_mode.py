@@ -43,6 +43,6 @@ def next_display_mode(value: str | None) -> str:
     return _CYCLE_ORDER[(index + 1) % len(_CYCLE_ORDER)]
 
 
-def display_mode_label(value: str | None) -> str:
+def display_mode_label(value: str | None, language: str = 'ru') -> str:
     mode = normalize_display_mode(value)
-    return get_texts().t(_DISPLAY_MODE_LABEL_KEYS[mode], _DISPLAY_MODE_LABELS[mode])
+    return get_texts(language).t(f'DISPLAY_MODE_LABEL_{mode.upper()}', _DISPLAY_MODE_LABELS[mode])

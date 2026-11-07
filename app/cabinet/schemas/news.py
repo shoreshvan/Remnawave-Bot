@@ -15,6 +15,7 @@ import re
 from datetime import datetime
 from urllib.parse import urlparse
 
+import nh3
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.localization.texts import get_texts
@@ -89,7 +90,7 @@ def _slugify(title: str) -> str:
 def _validate_hex_color(v: str) -> str:
     """Validate a hex color string. Raises ValueError on invalid input."""
     if not _HEX_COLOR_RE.match(v):
-        msg = get_texts().t('NEWS_INVALID_HEX_COLOR', 'category_color must be a valid hex color (e.g. #00e5a0)')
+        msg = 'category_color must be a valid hex color (e.g. #00e5a0)'
         raise ValueError(msg)
     return v
 
@@ -103,70 +104,115 @@ def _validate_safe_url(v: str) -> str:
     try:
         parsed = urlparse(v)
     except Exception:
-        msg = get_texts().t('NEWS_INVALID_URL_FORMAT', 'Invalid URL format')
+        msg = 'Invalid URL format'
         raise ValueError(msg)
 
     if parsed.scheme not in _SAFE_URL_SCHEMES:
-        msg = get_texts().t(
-            'NEWS_URL_SCHEME_INVALID',
-            'URL scheme must be http or https, got: {scheme}',
-        ).format(scheme=repr(parsed.scheme))
+        msg = f'URL scheme must be http or https, got: {parsed.scheme!r}'
         raise ValueError(msg)
 
     if not parsed.netloc:
-        msg = get_texts().t('NEWS_URL_NO_HOST', 'URL must have a valid host')
+        msg = 'URL must have a valid host'
         raise ValueError(msg)
 
     return v
 
 
-# --- Server-side HTML content sanitization ---
-# Pre-compiled patterns for stripping the most dangerous HTML constructs.
-# This is a defense-in-depth measure: the frontend also sanitizes via DOMPurify.
-# Uses regex rather than a full HTML parser to avoid adding a new dependency.
-# Strips: <script>, <style>, <object>, <embed>, <applet>, <base>, <form>,
-# <link>, <meta> tags and all on* event handler attributes.
-_DANGEROUS_TAGS_RE: re.Pattern[str] = re.compile(
-    r'<\s*/?\s*(script|style|object|embed|applet|base|form|link(?:\s)|meta)\b[^>]*>',
-    re.IGNORECASE | re.DOTALL,
-)
-# Match on* event handler attributes, e.g. onclick="...", onerror='...'
-_EVENT_HANDLER_RE: re.Pattern[str] = re.compile(
-    r'\s+on[a-z]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)',
-    re.IGNORECASE,
-)
-# Match javascript:, vbscript:, data: in href/src attributes
-_DANGEROUS_URI_RE: re.Pattern[str] = re.compile(
-    r'((?:href|src)\s*=\s*["\'])\s*(javascript|vbscript|data)\s*:',
-    re.IGNORECASE,
+# Keep the same article vocabulary as the cabinet's NewsArticle renderer.
+_ARTICLE_TAGS = {
+    'p',
+    'div',
+    'br',
+    'hr',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'blockquote',
+    'pre',
+    'code',
+    'ul',
+    'ol',
+    'li',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'th',
+    'td',
+    'a',
+    'strong',
+    'b',
+    'em',
+    'i',
+    'u',
+    's',
+    'del',
+    'ins',
+    'span',
+    'mark',
+    'sub',
+    'sup',
+    'small',
+    'img',
+    'video',
+    'iframe',
+    'figure',
+    'figcaption',
+}
+_IFRAME_HOSTS = {'www.youtube.com', 'youtube.com', 'player.vimeo.com', 'www.youtube-nocookie.com'}
+
+
+def _article_attribute(tag: str, attribute: str, value: str) -> str | None:
+    if tag == 'iframe' and attribute == 'src':
+        try:
+            url = urlparse(value)
+            if (
+                url.scheme != 'https'
+                or url.hostname not in _IFRAME_HOSTS
+                or url.username is not None
+                or url.password is not None
+                or url.port not in (None, 443)
+            ):
+                return None
+        except ValueError:
+            return None
+    return value
+
+
+_ARTICLE_CLEANER = nh3.Cleaner(
+    tags=_ARTICLE_TAGS,
+    clean_content_tags={'script', 'style', 'object', 'embed', 'applet', 'form'},
+    attributes={
+        '*': {'class', 'title', 'style'},
+        'a': {'href'},
+        'img': {'src', 'alt', 'width', 'height', 'loading'},
+        'ol': {'start', 'reversed', 'type'},
+        'li': {'value'},
+        'video': {'src', 'width', 'height'},
+        'iframe': {'src', 'width', 'height', 'frameborder', 'allowfullscreen'},
+        'th': {'colspan', 'rowspan'},
+        'td': {'colspan', 'rowspan'},
+    },
+    attribute_filter=_article_attribute,
+    url_schemes={'http', 'https', 'mailto', 'tel'},
+    filter_style_properties={'text-align'},
+    set_tag_attribute_values={
+        'a': {'target': '_blank'},
+        'video': {'controls': '', 'preload': 'metadata'},
+        'iframe': {
+            'sandbox': 'allow-scripts allow-same-origin allow-presentation',
+            'allow': 'autoplay; encrypted-media; picture-in-picture',
+        },
+    },
 )
 
 
 def _sanitize_html_content(html: str) -> str:
-    """Strip dangerous HTML constructs from article content.
-
-    This is NOT a replacement for DOMPurify on the frontend. It is a
-    defense-in-depth layer that removes the most obvious XSS vectors
-    at the storage boundary. A full HTML sanitizer (nh3, bleach) would
-    be stronger, but this avoids adding a new dependency.
-    """
-    if not html:
-        return html
-
-    # 1. Remove dangerous tags and their content
-    result = _DANGEROUS_TAGS_RE.sub('', html)
-
-    # Also strip <script>...</script> content (tag + body)
-    result = re.sub(r'<script\b[^>]*>[\s\S]*?</script>', '', result, flags=re.IGNORECASE)
-    result = re.sub(r'<style\b[^>]*>[\s\S]*?</style>', '', result, flags=re.IGNORECASE)
-
-    # 2. Remove event handler attributes
-    result = _EVENT_HANDLER_RE.sub('', result)
-
-    # 3. Neutralize dangerous URI schemes in href/src
-    result = _DANGEROUS_URI_RE.sub(r'\1about:', result)
-
-    return result
+    """Parse and sanitize article HTML before storage, including encoded URLs."""
+    return _ARTICLE_CLEANER.clean(html) if html else html
 
 
 class NewsArticleResponse(BaseModel):
@@ -193,6 +239,12 @@ class NewsArticleResponse(BaseModel):
     updated_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator('content')
+    @classmethod
+    def sanitize_stored_content(cls, value: str) -> str:
+        # Existing rows predate the storage sanitizer; protect API consumers too.
+        return _sanitize_html_content(value)
 
 
 class NewsArticleListItem(BaseModel):

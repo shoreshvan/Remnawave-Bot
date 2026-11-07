@@ -44,12 +44,7 @@ router = APIRouter()
 async def get_subscription(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(
-        None,
-        description=get_texts().t(
-            'CABINET_STATUS_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
     """Get current user's subscription details."""
     # Reload user from current session to get fresh data
@@ -63,7 +58,7 @@ async def get_subscription(
 
     subscription = await resolve_subscription(db, fresh_user, subscription_id)
 
-    if not subscription:
+    if not subscription or subscription.is_pending_trial:
         # Return 200 with has_subscription: false instead of 404
         return SubscriptionStatusResponse(has_subscription=False, subscription=None)
 
@@ -88,8 +83,10 @@ async def get_subscription(
     # Fetch traffic purchases (monthly packages)
     traffic_purchases_data = []
     from app.database.models import TrafficPurchase
+    from app.services.traffic_accounting_service import traffic_accounting_summary
 
     now = datetime.now(UTC)
+    accounting = await traffic_accounting_summary(db, subscription.id, now=now)
     purchases_query = (
         select(TrafficPurchase)
         .where(TrafficPurchase.subscription_id == subscription.id)
@@ -111,6 +108,7 @@ async def get_subscription(
             {
                 'id': purchase.id,
                 'traffic_gb': purchase.traffic_gb,
+                'remaining_gb': accounting['purchase_remaining'].get(purchase.id),
                 'expires_at': purchase.expires_at,
                 'created_at': purchase.created_at,
                 'days_remaining': days_remaining,
@@ -119,7 +117,7 @@ async def get_subscription(
         )
 
     subscription_data = _subscription_to_response(
-        subscription, servers, tariff_name, traffic_purchases_data, user=fresh_user
+        subscription, servers, tariff_name, traffic_purchases_data, user=fresh_user, traffic_accounting=accounting
     )
     return SubscriptionStatusResponse(has_subscription=True, subscription=subscription_data)
 
@@ -131,12 +129,7 @@ async def get_subscription(
 async def get_connection_link(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(
-        None,
-        description=get_texts().t(
-            'CABINET_STATUS_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Get subscription connection link and instructions."""
     from app.utils.subscription_utils import (
@@ -150,16 +143,14 @@ async def get_connection_link(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_STATUS_NO_SUBSCRIPTION', 'No subscription found'),
+            detail='No subscription found',
         )
 
     subscription_url = subscription.subscription_url
     if not subscription_url:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t(
-                'CABINET_STATUS_LINK_NOT_GENERATED', 'Subscription link not yet generated'
-            ),
+            detail='Subscription link not yet generated',
         )
 
     display_link = get_display_subscription_link(subscription)
@@ -184,12 +175,10 @@ async def get_connection_link(
         'hide_link': hide_subscription_link,
         'instructions': {
             'steps': [
-                get_texts().t('CABINET_STATUS_INSTRUCTION_COPY_LINK', 'Copy the subscription link'),
-                get_texts().t('CABINET_STATUS_INSTRUCTION_OPEN_APP', 'Open your VPN application'),
-                get_texts().t(
-                    'CABINET_STATUS_INSTRUCTION_FIND_IMPORT', "Find 'Add subscription' or 'Import' option"
-                ),
-                get_texts().t('CABINET_STATUS_INSTRUCTION_PASTE_LINK', 'Paste the copied link'),
+                'Copy the subscription link',
+                'Open your VPN application',
+                "Find 'Add subscription' or 'Import' option",
+                'Paste the copied link',
             ]
         },
     }
@@ -434,12 +423,7 @@ def _resolve_button_url(
 async def get_app_config(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(
-        None,
-        description=get_texts().t(
-            'CABINET_STATUS_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Get app configuration for connection with deep links."""
     subscription = await resolve_subscription(db, user, subscription_id)
@@ -474,7 +458,7 @@ async def get_app_config(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_STATUS_APP_CONFIG_NOT_SETUP', 'App configuration not set up.'),
+            detail='App configuration not set up.',
         )
 
     config.pop('_isRemnawave', None)

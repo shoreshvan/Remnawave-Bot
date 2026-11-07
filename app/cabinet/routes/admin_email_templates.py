@@ -44,7 +44,7 @@ router = APIRouter(prefix='/admin/email-templates', tags=['Admin Email Templates
 
 # ============ Template type metadata ============
 
-EDITOR_LANGUAGES = ('ru', 'en', 'zh', 'ua')
+EDITOR_LANGUAGES = ('ru', 'en', 'zh', 'ua', 'fa')
 
 # Общая обёртка писем — псевдо-тип в том же редакторе. Не NotificationType:
 # это не письмо, а каркас, в который встают все письма (см. email_layout).
@@ -55,6 +55,7 @@ LAYOUT_TEMPLATE_META: dict[str, Any] = {
         'en': 'Email Layout (all emails)',
         'zh': '邮件通用外框（所有邮件）',
         'ua': 'Загальна обгортка листів',
+        'fa': 'قالب مشترک ایمیل\u200cها (همه ایمیل\u200cها)',
     },
     'description': {
         'ru': 'Каркас всех писем: шапка, стили, подвал. Тело письма встаёт в {content}. '
@@ -65,6 +66,7 @@ LAYOUT_TEMPLATE_META: dict[str, Any] = {
         '没有自己外框的语言使用俄语外框；未保存任何外框时使用内置外框。',
         'ua': 'Каркас усіх листів: шапка, стилі, підвал. Тіло листа стає у {content}. '
         'Якщо для мови немає своєї обгортки, береться російська; без збереженої — вбудована.',
+        'fa': 'ساختار همه ایمیل\u200cها: سربرگ، سبک\u200cها و پاورقی. محتوای ایمیل در {content} قرار می\u200cگیرد. زبان\u200cهای بدون قالب اختصاصی از قالب روسی استفاده می\u200cکنند؛ اگر هیچ قالبی ذخیره نشده باشد، قالب داخلی به کار می\u200cرود.',
     },
     'context_vars': LAYOUT_CONTEXT_VARS,
 }
@@ -74,6 +76,7 @@ _WEBHOOK_DESCRIPTION = {
     'en': 'Remnawave notification: {subject}',
     'zh': 'Remnawave 通知：{subject}',
     'ua': 'Сповіщення Remnawave: {subject}',
+    'fa': 'اعلان Remnawave: {subject}',
 }
 _WEBHOOK_SAMPLE_DEVICE = 'iPhone 15'
 
@@ -120,12 +123,14 @@ TEMPLATE_TYPES = [
             'en': 'Promo group assigned',
             'zh': '已分配促销组',
             'ua': 'Призначено промогрупу',
+            'fa': 'گروه تبلیغاتی تعیین شد',
         },
         'description': {
             'ru': 'Промогруппа назначена автоматически за сумму трат — какие скидки теперь действуют',
             'en': 'A promo group was assigned automatically for total spending — which discounts now apply',
             'zh': '根据消费总额自动分配了促销组——现在适用哪些折扣',
             'ua': 'Промогрупу призначено автоматично за суму витрат — які знижки тепер діють',
+            'fa': 'گروه تبلیغاتی بر اساس مجموع هزینه\u200cها به\u200cطور خودکار تعیین شد؛ تخفیف\u200cهای فعلی را نشان می\u200cدهد',
         },
         'context_vars': [
             'group_name',
@@ -143,12 +148,14 @@ TEMPLATE_TYPES = [
             'en': 'Grace access granted',
             'zh': '已发放宽限访问',
             'ua': 'Grace-доступ надано',
+            'fa': 'دسترسی مهلت اضافی داده شد',
         },
         'description': {
             'ru': 'Подписка закончилась, но на время оставлен доступ к тому, что назвал оператор ({allowed})',
             'en': 'The subscription ended, but access to what the operator named ({allowed}) is kept for a while',
             'zh': '订阅已到期，但暂时保留对运营者指定内容（{allowed}）的访问',
             'ua': 'Підписка закінчилась, але на час залишено доступ до того, що назвав оператор ({allowed})',
+            'fa': 'اشتراک پایان یافته، اما دسترسی به موارد مشخص\u200cشده توسط مدیر ({allowed}) برای مدتی حفظ می\u200cشود',
         },
         'context_vars': ['allowed', 'hours', 'traffic_gb', 'until', 'reason', 'tariff_name'],
     },
@@ -159,34 +166,50 @@ TEMPLATE_TYPES = [
             'en': 'Grace access ended',
             'zh': '宽限访问已结束',
             'ua': 'Grace-доступ закінчився',
+            'fa': 'دسترسی مهلت اضافی پایان یافت',
         },
         'description': {
             'ru': 'Временный доступ закрыт: подписку так и не продлили',
             'en': 'Temporary access is closed: the subscription was never renewed',
             'zh': '临时访问已关闭：订阅一直未续订',
             'ua': 'Тимчасовий доступ закрито: підписку так і не продовжили',
+            'fa': 'دسترسی موقت بسته شد؛ اشتراک تمدید نشد',
         },
         'context_vars': ['allowed', 'hours', 'traffic_gb', 'until', 'reason', 'tariff_name'],
     },
     {
         'type': 'balance_topup',
-        'label': {'ru': 'Пополнение баланса', 'en': 'Balance Top-up', 'zh': '余额充值', 'ua': 'Поповнення балансу'},
+        'label': {
+            'ru': 'Пополнение баланса',
+            'en': 'Balance Top-up',
+            'zh': '余额充值',
+            'ua': 'Поповнення балансу',
+            'fa': 'افزایش موجودی',
+        },
         'description': {
             'ru': 'Уведомление о пополнении баланса',
             'en': 'Balance top-up notification',
             'zh': '余额充值通知',
             'ua': 'Сповіщення про поповнення балансу',
+            'fa': 'اعلان افزایش موجودی',
         },
         'context_vars': ['formatted_amount', 'formatted_balance', 'amount_rubles', 'new_balance_rubles'],
     },
     {
         'type': 'balance_change',
-        'label': {'ru': 'Изменение баланса', 'en': 'Balance Change', 'zh': '余额变动', 'ua': 'Зміна балансу'},
+        'label': {
+            'ru': 'Изменение баланса',
+            'en': 'Balance Change',
+            'zh': '余额变动',
+            'ua': 'Зміна балансу',
+            'fa': 'تغییر موجودی',
+        },
         'description': {
             'ru': 'Уведомление об изменении баланса',
             'en': 'Balance change notification',
             'zh': '余额变动通知',
             'ua': 'Сповіщення про зміну балансу',
+            'fa': 'اعلان تغییر موجودی',
         },
         'context_vars': ['formatted_amount', 'formatted_balance', 'amount_rubles', 'new_balance_rubles'],
     },
@@ -197,12 +220,14 @@ TEMPLATE_TYPES = [
             'en': 'Subscription Expiring',
             'zh': '订阅即将到期',
             'ua': 'Підписка закінчується',
+            'fa': 'اشتراک رو به انقضا',
         },
         'description': {
             'ru': 'Предупреждение об истечении подписки',
             'en': 'Subscription expiring warning',
             'zh': '订阅即将到期警告',
             'ua': 'Попередження про закінчення підписки',
+            'fa': 'هشدار نزدیک بودن انقضای اشتراک',
         },
         'context_vars': ['days_left', 'expires_at'],
     },
@@ -213,12 +238,14 @@ TEMPLATE_TYPES = [
             'en': 'Subscription Expired',
             'zh': '订阅已到期',
             'ua': 'Підписка закінчилась',
+            'fa': 'اشتراک منقضی\u200cشده',
         },
         'description': {
             'ru': 'Уведомление об истечении подписки',
             'en': 'Subscription expired notification',
             'zh': '订阅已到期通知',
             'ua': 'Сповіщення про закінчення підписки',
+            'fa': 'اعلان انقضای اشتراک',
         },
         'context_vars': [],
     },
@@ -229,12 +256,14 @@ TEMPLATE_TYPES = [
             'en': 'Subscription Renewed',
             'zh': '订阅已续期',
             'ua': 'Підписка продовжена',
+            'fa': 'اشتراک تمدیدشده',
         },
         'description': {
             'ru': 'Уведомление о продлении подписки',
             'en': 'Subscription renewed notification',
             'zh': '订阅已续期通知',
             'ua': 'Сповіщення про продовження підписки',
+            'fa': 'اعلان تمدید اشتراک',
         },
         'context_vars': ['new_expires_at', 'tariff_name', 'traffic_limit_gb', 'device_limit'],
     },
@@ -245,12 +274,14 @@ TEMPLATE_TYPES = [
             'en': 'Subscription Activated',
             'zh': '订阅已激活',
             'ua': 'Підписка активована',
+            'fa': 'اشتراک فعال\u200cشده',
         },
         'description': {
             'ru': 'Уведомление об активации подписки',
             'en': 'Subscription activated notification',
             'zh': '订阅已激活通知',
             'ua': 'Сповіщення про активацію підписки',
+            'fa': 'اعلان فعال\u200cسازی اشتراک',
         },
         'context_vars': ['expires_at', 'tariff_name', 'traffic_limit_gb', 'device_limit'],
     },
@@ -261,12 +292,14 @@ TEMPLATE_TYPES = [
             'en': 'Subscription Ended (Win-back, Day 1)',
             'zh': '订阅已结束（挽回，第 1 天）',
             'ua': 'Підписка закінчилася (повернення, 1 день)',
+            'fa': 'پایان اشتراک (بازگشت کاربر، روز اول)',
         },
         'description': {
             'ru': 'Письмо через день после окончания подписки',
             'en': 'Sent one day after the subscription ended',
             'zh': '订阅结束一天后发送',
             'ua': 'Лист через день після закінчення підписки',
+            'fa': 'یک روز پس از پایان اشتراک ارسال می\u200cشود',
         },
         'context_vars': ['end_date'],
     },
@@ -277,12 +310,14 @@ TEMPLATE_TYPES = [
             'en': 'Renewal Discount (Win-back)',
             'zh': '续订折扣（挽回）',
             'ua': 'Знижка на продовження (повернення)',
+            'fa': 'تخفیف تمدید (بازگشت کاربر)',
         },
         'description': {
             'ru': 'Персональная скидка на продление после окончания подписки',
             'en': 'Personal renewal discount after the subscription ended',
             'zh': '订阅结束后的个人续订折扣',
             'ua': 'Персональна знижка на продовження після закінчення підписки',
+            'fa': 'تخفیف ویژه تمدید پس از پایان اشتراک',
         },
         'context_vars': ['percent', 'expires_at'],
     },
@@ -293,12 +328,14 @@ TEMPLATE_TYPES = [
             'en': 'Trial Ending Soon',
             'zh': '试用即将结束',
             'ua': 'Пробна підписка скоро закінчиться',
+            'fa': 'دوره آزمایشی رو به پایان',
         },
         'description': {
             'ru': 'Напоминание за 2 часа до окончания тестовой подписки',
             'en': 'Reminder 2 hours before the trial ends',
             'zh': '试用结束前 2 小时提醒',
             'ua': 'Нагадування за 2 години до кінця тестової підписки',
+            'fa': 'یادآوری دو ساعت پیش از پایان دوره آزمایشی',
         },
         'context_vars': [],
     },
@@ -309,12 +346,14 @@ TEMPLATE_TYPES = [
             'en': 'Autopay Success',
             'zh': '自动续费成功',
             'ua': 'Автоплатіж успішний',
+            'fa': 'تمدید خودکار موفق',
         },
         'description': {
             'ru': 'Уведомление об успешном автоплатеже',
             'en': 'Autopay success notification',
             'zh': '自动续费成功通知',
             'ua': 'Сповіщення про успішний автоплатіж',
+            'fa': 'اعلان موفقیت تمدید خودکار',
         },
         'context_vars': ['formatted_amount', 'amount_rubles', 'new_expires_at'],
     },
@@ -325,12 +364,14 @@ TEMPLATE_TYPES = [
             'en': 'Autopay Failed',
             'zh': '自动续费失败',
             'ua': 'Автоплатіж не вдався',
+            'fa': 'تمدید خودکار ناموفق',
         },
         'description': {
             'ru': 'Уведомление о неудачном автоплатеже',
             'en': 'Autopay failed notification',
             'zh': '自动续费失败通知',
             'ua': 'Сповіщення про невдалий автоплатіж',
+            'fa': 'اعلان ناموفق بودن تمدید خودکار',
         },
         'context_vars': ['reason'],
     },
@@ -341,23 +382,32 @@ TEMPLATE_TYPES = [
             'en': 'Insufficient Funds (Autopay)',
             'zh': '余额不足（自动续费）',
             'ua': 'Недостатньо коштів (автоплатіж)',
+            'fa': 'موجودی ناکافی (تمدید خودکار)',
         },
         'description': {
             'ru': 'Уведомление о нехватке средств для автоплатежа',
             'en': 'Insufficient funds for autopay notification',
             'zh': '自动续费余额不足通知',
             'ua': 'Сповіщення про нестачу коштів для автоплатежу',
+            'fa': 'اعلان کافی نبودن موجودی برای تمدید خودکار',
         },
         'context_vars': ['required_amount', 'current_balance'],
     },
     {
         'type': 'daily_debit',
-        'label': {'ru': 'Суточное списание', 'en': 'Daily Debit', 'zh': '每日扣费', 'ua': 'Добове списання'},
+        'label': {
+            'ru': 'Суточное списание',
+            'en': 'Daily Debit',
+            'zh': '每日扣费',
+            'ua': 'Добове списання',
+            'fa': 'برداشت روزانه',
+        },
         'description': {
             'ru': 'Уведомление о суточном списании',
             'en': 'Daily debit notification',
             'zh': '每日扣费通知',
             'ua': 'Сповіщення про добове списання',
+            'fa': 'اعلان برداشت روزانه',
         },
         'context_vars': ['formatted_amount', 'formatted_balance', 'amount_rubles', 'new_balance_rubles'],
     },
@@ -368,23 +418,32 @@ TEMPLATE_TYPES = [
             'en': 'Insufficient Funds (Daily)',
             'zh': '余额不足（每日）',
             'ua': 'Недостатньо коштів (добове)',
+            'fa': 'موجودی ناکافی (روزانه)',
         },
         'description': {
             'ru': 'Уведомление о нехватке средств для суточного списания',
             'en': 'Insufficient funds for daily debit',
             'zh': '每日扣费余额不足通知',
             'ua': 'Сповіщення про нестачу коштів для добового списання',
+            'fa': 'موجودی ناکافی برای برداشت روزانه',
         },
         'context_vars': ['required_amount', 'current_balance'],
     },
     {
         'type': 'ban_notification',
-        'label': {'ru': 'Блокировка аккаунта', 'en': 'Account Banned', 'zh': '账户被封禁', 'ua': 'Блокування акаунту'},
+        'label': {
+            'ru': 'Блокировка аккаунта',
+            'en': 'Account Banned',
+            'zh': '账户被封禁',
+            'ua': 'Блокування акаунту',
+            'fa': 'حساب مسدودشده',
+        },
         'description': {
             'ru': 'Уведомление о блокировке аккаунта',
             'en': 'Account banned notification',
             'zh': '账户被封禁通知',
             'ua': 'Сповіщення про блокування акаунту',
+            'fa': 'اعلان مسدود شدن حساب',
         },
         'context_vars': ['reason'],
     },
@@ -395,34 +454,50 @@ TEMPLATE_TYPES = [
             'en': 'Account Unbanned',
             'zh': '账户已解封',
             'ua': 'Розблокування акаунту',
+            'fa': 'رفع مسدودیت حساب',
         },
         'description': {
             'ru': 'Уведомление о разблокировке аккаунта',
             'en': 'Account unbanned notification',
             'zh': '账户已解封通知',
             'ua': 'Сповіщення про розблокування акаунту',
+            'fa': 'اعلان رفع مسدودیت حساب',
         },
         'context_vars': [],
     },
     {
         'type': 'warning_notification',
-        'label': {'ru': 'Предупреждение', 'en': 'Warning', 'zh': '警告', 'ua': 'Попередження'},
+        'label': {
+            'ru': 'Предупреждение',
+            'en': 'Warning',
+            'zh': '警告',
+            'ua': 'Попередження',
+            'fa': 'هشدار',
+        },
         'description': {
             'ru': 'Предупреждение пользователю',
             'en': 'Warning notification',
             'zh': '警告通知',
             'ua': 'Попередження користувачу',
+            'fa': 'اعلان هشدار',
         },
         'context_vars': ['message'],
     },
     {
         'type': 'referral_bonus',
-        'label': {'ru': 'Реферальный бонус', 'en': 'Referral Bonus', 'zh': '推荐奖励', 'ua': 'Реферальний бонус'},
+        'label': {
+            'ru': 'Реферальный бонус',
+            'en': 'Referral Bonus',
+            'zh': '推荐奖励',
+            'ua': 'Реферальний бонус',
+            'fa': 'پاداش معرفی',
+        },
         'description': {
             'ru': 'Уведомление о начислении реферального бонуса',
             'en': 'Referral bonus notification',
             'zh': '推荐奖励通知',
             'ua': 'Сповіщення про нарахування реферального бонусу',
+            'fa': 'اعلان پاداش معرفی',
         },
         'context_vars': [
             'formatted_bonus',
@@ -437,12 +512,19 @@ TEMPLATE_TYPES = [
     },
     {
         'type': 'referral_registered',
-        'label': {'ru': 'Новый реферал', 'en': 'New Referral', 'zh': '新推荐用户', 'ua': 'Новий реферал'},
+        'label': {
+            'ru': 'Новый реферал',
+            'en': 'New Referral',
+            'zh': '新推荐用户',
+            'ua': 'Новий реферал',
+            'fa': 'معرفی جدید',
+        },
         'description': {
             'ru': 'Уведомление о регистрации реферала',
             'en': 'New referral registered notification',
             'zh': '新推荐用户注册通知',
             'ua': 'Сповіщення про реєстрацію реферала',
+            'fa': 'اعلان ثبت\u200cنام کاربر معرفی\u200cشده جدید',
         },
         'context_vars': ['referral_name'],
     },
@@ -453,45 +535,68 @@ TEMPLATE_TYPES = [
             'en': 'Referral Welcome',
             'zh': '推荐用户欢迎',
             'ua': 'Привітання запрошеного',
+            'fa': 'خوش\u200cآمدگویی معرفی',
         },
         'description': {
             'ru': 'Письмо новому пользователю, зарегистрировавшемуся по реферальной ссылке',
             'en': 'Welcome email to a user who signed up via a referral link',
             'zh': '通过推荐链接注册的新用户的欢迎邮件',
             'ua': 'Лист новому користувачу, який зареєструвався за реферальним посиланням',
+            'fa': 'ایمیل خوش\u200cآمدگویی به کاربری که با پیوند معرفی ثبت\u200cنام کرده است',
         },
         'context_vars': ['referrer_name', 'bonus_promise'],
     },
     {
         'type': 'traffic_reset',
-        'label': {'ru': 'Сброс трафика', 'en': 'Traffic Reset', 'zh': '流量重置', 'ua': 'Скидання трафіку'},
+        'label': {
+            'ru': 'Сброс трафика',
+            'en': 'Traffic Reset',
+            'zh': '流量重置',
+            'ua': 'Скидання трафіку',
+            'fa': 'بازنشانی ترافیک',
+        },
         'description': {
             'ru': 'Уведомление о сбросе трафика',
             'en': 'Traffic reset notification',
             'zh': '流量重置通知',
             'ua': 'Сповіщення про скидання трафіку',
+            'fa': 'اعلان بازنشانی ترافیک',
         },
         'context_vars': ['reset_gb', 'current_limit_gb'],
     },
     {
         'type': 'payment_received',
-        'label': {'ru': 'Платёж получен', 'en': 'Payment Received', 'zh': '收到付款', 'ua': 'Платіж отримано'},
+        'label': {
+            'ru': 'Платёж получен',
+            'en': 'Payment Received',
+            'zh': '收到付款',
+            'ua': 'Платіж отримано',
+            'fa': 'دریافت پرداخت',
+        },
         'description': {
             'ru': 'Уведомление о получении платежа',
             'en': 'Payment received notification',
             'zh': '收到付款通知',
             'ua': 'Сповіщення про отримання платежу',
+            'fa': 'اعلان دریافت پرداخت',
         },
         'context_vars': ['formatted_amount', 'payment_method'],
     },
     {
         'type': 'ticket_reply',
-        'label': {'ru': 'Ответ поддержки', 'en': 'Support Reply', 'zh': '工单回复', 'ua': 'Відповідь підтримки'},
+        'label': {
+            'ru': 'Ответ поддержки',
+            'en': 'Support Reply',
+            'zh': '工单回复',
+            'ua': 'Відповідь підтримки',
+            'fa': 'پاسخ پشتیبانی',
+        },
         'description': {
             'ru': 'Ответ поддержки в тикете — уходит юзерам без Telegram',
             'en': 'Support reply in a ticket — sent to users without Telegram',
             'zh': '工单中的支持回复 — 发送给没有 Telegram 的用户',
             'ua': 'Відповідь підтримки в тікеті — надходить юзерам без Telegram',
+            'fa': 'پاسخ پشتیبانی در تیکت؛ برای کاربران بدون تلگرام ارسال می\u200cشود',
         },
         'context_vars': ['ticket_id', 'reply_preview'],
     },
@@ -502,23 +607,32 @@ TEMPLATE_TYPES = [
             'en': 'Email Verification',
             'zh': '邮箱验证',
             'ua': 'Підтвердження email',
+            'fa': 'تأیید ایمیل',
         },
         'description': {
             'ru': 'Письмо для подтверждения email адреса при регистрации',
             'en': 'Email address verification letter sent during registration',
             'zh': '注册时发送的邮箱验证邮件',
             'ua': 'Лист для підтвердження email адреси при реєстрації',
+            'fa': 'ایمیل تأیید آدرس که هنگام ثبت\u200cنام ارسال می\u200cشود',
         },
         'context_vars': ['username', 'verification_url', 'expire_hours'],
     },
     {
         'type': 'password_reset',
-        'label': {'ru': 'Сброс пароля', 'en': 'Password Reset', 'zh': '重置密码', 'ua': 'Скидання пароля'},
+        'label': {
+            'ru': 'Сброс пароля',
+            'en': 'Password Reset',
+            'zh': '重置密码',
+            'ua': 'Скидання пароля',
+            'fa': 'بازنشانی رمز عبور',
+        },
         'description': {
             'ru': 'Письмо для сброса пароля',
             'en': 'Password reset email',
             'zh': '密码重置邮件',
             'ua': 'Лист для скидання пароля',
+            'fa': 'ایمیل بازنشانی رمز عبور',
         },
         'context_vars': ['username', 'reset_url', 'expire_hours'],
     },
@@ -529,12 +643,14 @@ TEMPLATE_TYPES = [
             'en': 'Email Change Code',
             'zh': '邮箱更换验证码',
             'ua': 'Код зміни email',
+            'fa': 'کد تغییر ایمیل',
         },
         'description': {
             'ru': 'Письмо с кодом подтверждения для смены email адреса',
             'en': 'Email with a confirmation code for changing the email address',
             'zh': '包含更换邮箱确认码的邮件',
             'ua': 'Лист з кодом підтвердження для зміни email адреси',
+            'fa': 'ایمیل حاوی کد تأیید برای تغییر آدرس ایمیل',
         },
         'context_vars': ['username', 'code', 'expire_minutes'],
     },
@@ -545,12 +661,14 @@ TEMPLATE_TYPES = [
             'en': 'Partner Application Approved',
             'zh': '合作伙伴申请已批准',
             'ua': 'Партнерство схвалено',
+            'fa': 'تأیید درخواست همکاری',
         },
         'description': {
             'ru': 'Уведомление об одобрении заявки на партнёрство',
             'en': 'Partner application approved notification',
             'zh': '合作伙伴申请获批通知',
             'ua': 'Сповіщення про схвалення заявки на партнерство',
+            'fa': 'اعلان تأیید درخواست همکاری',
         },
         'context_vars': ['commission_percent', 'comment'],
     },
@@ -561,12 +679,14 @@ TEMPLATE_TYPES = [
             'en': 'Partner Application Rejected',
             'zh': '合作伙伴申请被拒绝',
             'ua': 'Партнерство відхилено',
+            'fa': 'رد درخواست همکاری',
         },
         'description': {
             'ru': 'Уведомление об отклонении заявки на партнёрство',
             'en': 'Partner application rejected notification',
             'zh': '合作伙伴申请被拒通知',
             'ua': 'Сповіщення про відхилення заявки на партнерство',
+            'fa': 'اعلان رد درخواست همکاری',
         },
         'context_vars': ['comment'],
     },
@@ -577,12 +697,14 @@ TEMPLATE_TYPES = [
             'en': 'Withdrawal Approved',
             'zh': '提现已批准',
             'ua': 'Виведення коштів схвалено',
+            'fa': 'تأیید برداشت',
         },
         'description': {
             'ru': 'Уведомление об одобрении запроса на вывод средств',
             'en': 'Withdrawal request approved notification',
             'zh': '提现请求获批通知',
             'ua': 'Сповіщення про схвалення запиту на виведення коштів',
+            'fa': 'اعلان تأیید درخواست برداشت',
         },
         'context_vars': ['formatted_amount', 'amount_rubles', 'comment'],
     },
@@ -593,12 +715,14 @@ TEMPLATE_TYPES = [
             'en': 'Withdrawal Rejected',
             'zh': '提现被拒绝',
             'ua': 'Виведення коштів відхилено',
+            'fa': 'رد برداشت',
         },
         'description': {
             'ru': 'Уведомление об отклонении запроса на вывод средств',
             'en': 'Withdrawal request rejected notification',
             'zh': '提现请求被拒通知',
             'ua': 'Сповіщення про відхилення запиту на виведення коштів',
+            'fa': 'اعلان رد درخواست برداشت',
         },
         'context_vars': ['formatted_amount', 'amount_rubles', 'comment'],
     },
@@ -609,12 +733,14 @@ TEMPLATE_TYPES = [
             'en': 'Quick Purchase: Subscription Delivered',
             'zh': '快捷购买：订阅已交付',
             'ua': 'Швидка покупка: підписка доставлена',
+            'fa': 'خرید سریع: تحویل اشتراک',
         },
         'description': {
             'ru': 'Письмо покупателю после успешной оплаты через лендинг',
             'en': 'Email to buyer after successful landing page payment',
             'zh': '通过落地页成功付款后发送给买家的邮件',
             'ua': 'Лист покупцю після успішної оплати через лендінг',
+            'fa': 'ایمیل خریدار پس از پرداخت موفق در صفحه فروش',
         },
         'context_vars': ['tariff_name', 'period_days', 'cabinet_url', 'cabinet_email', 'cabinet_password'],
     },
@@ -625,12 +751,14 @@ TEMPLATE_TYPES = [
             'en': 'Quick Purchase: Activation Required',
             'zh': '快捷购买：需要激活',
             'ua': 'Швидка покупка: потрібна активація',
+            'fa': 'خرید سریع: نیاز به فعال\u200cسازی',
         },
         'description': {
             'ru': 'Письмо когда у покупателя уже есть активная подписка',
             'en': 'Email when buyer already has an active subscription',
             'zh': '买家已有活跃订阅时发送的邮件',
             'ua': 'Лист коли у покупця вже є активна підписка',
+            'fa': 'ایمیل زمانی که خریدار از قبل اشتراک فعال دارد',
         },
         'context_vars': ['tariff_name', 'period_days', 'success_page_url', 'gift_message', 'is_gift'],
     },
@@ -641,12 +769,14 @@ TEMPLATE_TYPES = [
             'en': 'Quick Purchase: Gift Received',
             'zh': '快捷购买：收到礼物',
             'ua': 'Швидка покупка: подарунок отримано',
+            'fa': 'خرید سریع: دریافت هدیه',
         },
         'description': {
             'ru': 'Письмо получателю подарочной подписки',
             'en': 'Email to gift subscription recipient',
             'zh': '发送给礼物订阅接收者的邮件',
             'ua': 'Лист отримувачу подарункової підписки',
+            'fa': 'ایمیل گیرنده اشتراک هدیه',
         },
         'context_vars': [
             'tariff_name',
@@ -664,12 +794,14 @@ TEMPLATE_TYPES = [
             'en': 'Quick Purchase: Login Credentials',
             'zh': '快捷购买：登录凭据',
             'ua': 'Швидка покупка: дані для входу',
+            'fa': 'خرید سریع: اطلاعات ورود',
         },
         'description': {
             'ru': 'Письмо с логином и паролем для личного кабинета',
             'en': 'Email with login credentials for the cabinet',
             'zh': '包含个人中心登录信息的邮件',
             'ua': 'Лист з логіном та паролем для особистого кабінету',
+            'fa': 'ایمیل حاوی اطلاعات ورود به پنل کاربری',
         },
         'context_vars': ['tariff_name', 'period_days', 'cabinet_url', 'cabinet_email', 'cabinet_password'],
     },
@@ -680,12 +812,14 @@ TEMPLATE_TYPES = [
             'en': 'Personal Offer',
             'zh': '专属优惠',
             'ua': 'Персональна пропозиція',
+            'fa': 'پیشنهاد ویژه',
         },
         'description': {
             'ru': 'Промо-предложение, отправленное пользователю из админки',
             'en': 'Promo offer sent to the user from the admin panel',
             'zh': '从管理面板发送给用户的促销优惠',
             'ua': 'Промопропозиція, надіслана користувачу з адмінки',
+            'fa': 'پیشنهاد تبلیغاتی ارسال\u200cشده به کاربر از پنل مدیریت',
         },
         'context_vars': ['message_html', 'valid_hours', 'discount_percent'],
     },
@@ -696,12 +830,14 @@ TEMPLATE_TYPES = [
             'en': 'NaloGO Payment Receipt',
             'zh': 'NaloGO 付款收据',
             'ua': 'Чек NaloGO за платежем',
+            'fa': 'رسید پرداخت NaloGO',
         },
         'description': {
             'ru': 'Чек из сервиса «Мой налог» после оплаты: файл во вложении, ссылка в тексте',
             'en': 'Receipt from the “Moy Nalog” service after a payment: file attached, link in the text',
             'zh': '付款后来自“Мой налог”服务的收据：附件文件，正文含链接',
             'ua': 'Чек із сервісу «Мой налог» після оплати: файл у вкладенні, посилання в тексті',
+            'fa': 'رسید سامانه «Мой налог» پس از پرداخت: فایل پیوست و پیوند در متن',
         },
         'context_vars': ['amount', 'receipt_url'],
     },
@@ -712,12 +848,14 @@ TEMPLATE_TYPES = [
             'en': 'Gift Link for the Buyer',
             'zh': '发给购买者的礼物链接',
             'ua': 'Посилання на подарунок покупцю',
+            'fa': 'پیوند هدیه برای خریدار',
         },
         'description': {
             'ru': 'Письмо покупателю подарка со ссылкой на активацию, чтобы переслать получателю',
             'en': 'Sent to the gift buyer with the claim link to forward to the recipient',
             'zh': '发送给礼物购买者，附带可转发给接收者的领取链接',
             'ua': 'Лист покупцю подарунка з посиланням на активацію, щоб переслати отримувачу',
+            'fa': 'برای خریدار هدیه ارسال می\u200cشود تا پیوند دریافت هدیه را به گیرنده بدهد',
         },
         'context_vars': ['claim_url', 'tariff_name', 'period_days'],
     },
@@ -942,10 +1080,7 @@ def _validate_template_type(notification_type: str) -> dict[str, Any]:
     if type_meta is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t(
-                'CABINET_EMAIL_TEMPLATES_UNKNOWN_TYPE',
-                'Unknown template type: {notification_type}',
-            ).format(notification_type=notification_type),
+            detail=f'Unknown template type: {notification_type}',
         )
     return type_meta
 
@@ -1039,7 +1174,7 @@ class EmailTemplateSendTestRequest(BaseModel):
 # ============ Endpoints ============
 
 
-@router.get('', summary=get_texts().t('CABINET_EMAIL_TEMPLATES_LIST_SUMMARY', 'List all email template types'))
+@router.get('', summary='List all email template types')
 async def list_template_types(
     _admin: User = Depends(require_permission('email_templates:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -1079,10 +1214,7 @@ async def list_template_types(
     }
 
 
-@router.get(
-    '/{notification_type}',
-    summary=get_texts().t('CABINET_EMAIL_TEMPLATES_GET_SUMMARY', 'Get templates for a notification type'),
-)
+@router.get('/{notification_type}', summary='Get templates for a notification type')
 async def get_templates_for_type(
     notification_type: str,
     _admin: User = Depends(require_permission('email_templates:read')),
@@ -1149,10 +1281,7 @@ async def get_templates_for_type(
     }
 
 
-@router.put(
-    '/{notification_type}/{language}',
-    summary=get_texts().t('CABINET_EMAIL_TEMPLATES_SAVE_SUMMARY', 'Save custom template'),
-)
+@router.put('/{notification_type}/{language}', summary='Save custom template')
 async def update_template(
     notification_type: str,
     language: str,
@@ -1166,10 +1295,7 @@ async def update_template(
     if language not in AVAILABLE_LANGUAGES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t(
-                'CABINET_EMAIL_TEMPLATES_INVALID_LANGUAGE',
-                'Invalid language: {language}. Available: {available}',
-            ).format(language=language, available=AVAILABLE_LANGUAGES),
+            detail=f'Invalid language: {language}. Available: {AVAILABLE_LANGUAGES}',
         )
 
     unknown = _unknown_placeholders(notification_type, data.subject, data.body_html)
@@ -1177,29 +1303,20 @@ async def update_template(
         listed = ', '.join(f'{{{var}}}' for var in unknown)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t(
-                'CABINET_EMAIL_TEMPLATES_UNKNOWN_PLACEHOLDERS',
-                'Неизвестные плейсхолдеры: {listed} — бот их не подставит, и они уйдут в письмо как есть',
-            ).format(listed=listed),
+            detail=f'Неизвестные плейсхолдеры: {listed} — бот их не подставит, и они уйдут в письмо как есть',
         )
     missing = _missing_required_placeholders(notification_type, data.subject, data.body_html)
     if missing:
         listed = ', '.join(f'{{{var}}}' for var in missing)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t(
-                'CABINET_EMAIL_TEMPLATES_MISSING_PLACEHOLDERS',
-                'В шаблоне нет обязательных плейсхолдеров: {listed} — без них письмо бесполезно',
-            ).format(listed=listed),
+            detail=f'В шаблоне нет обязательных плейсхолдеров: {listed} — без них письмо бесполезно',
         )
     is_layout = notification_type == EMAIL_LAYOUT_TYPE
     if is_layout and not layout_is_valid(data.body_html):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t(
-                'CABINET_EMAIL_TEMPLATES_LAYOUT_NO_CONTENT',
-                'В обёртке нет плейсхолдера {content} — без него письма остались бы без текста',
-            ),
+            detail='В обёртке нет плейсхолдера {content} — без него письма остались бы без текста',
         )
     result = await save_template_override(
         notification_type=notification_type,
@@ -1219,10 +1336,7 @@ async def update_template(
     return {'status': 'ok', 'template': result}
 
 
-@router.patch(
-    '/{notification_type}/enabled',
-    summary=get_texts().t('CABINET_EMAIL_TEMPLATES_TOGGLE_SUMMARY', 'Enable or disable sending emails of a type'),
-)
+@router.patch('/{notification_type}/enabled', summary='Enable or disable sending emails of a type')
 async def set_template_enabled(
     notification_type: str,
     data: EmailTemplateEnabledRequest,
@@ -1234,10 +1348,7 @@ async def set_template_enabled(
     if not data.enabled and not can_disable_email_type(notification_type):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t(
-                'CABINET_EMAIL_TEMPLATES_CANNOT_DISABLE',
-                'Это письмо нельзя отключить: без него пользователь не сможет войти или получить купленное',
-            ),
+            detail='Это письмо нельзя отключить: без него пользователь не сможет войти или получить купленное',
         )
     disabled = await set_email_type_enabled(db, notification_type, data.enabled)
     logger.info(
@@ -1249,10 +1360,7 @@ async def set_template_enabled(
     return {'status': 'ok', 'enabled': notification_type not in disabled, 'disabled_types': sorted(disabled)}
 
 
-@router.delete(
-    '/{notification_type}/{language}',
-    summary=get_texts().t('CABINET_EMAIL_TEMPLATES_RESET_SUMMARY', 'Reset template to default'),
-)
+@router.delete('/{notification_type}/{language}', summary='Reset template to default')
 async def reset_template(
     notification_type: str,
     language: str,
@@ -1277,10 +1385,7 @@ async def reset_template(
     return {'status': 'ok', 'was_custom': deleted}
 
 
-@router.post(
-    '/{notification_type}/preview',
-    summary=get_texts().t('CABINET_EMAIL_TEMPLATES_PREVIEW_SUMMARY', 'Preview rendered template'),
-)
+@router.post('/{notification_type}/preview', summary='Preview rendered template')
 async def preview_template(
     notification_type: str,
     data: EmailTemplatePreviewRequest,
@@ -1317,8 +1422,8 @@ async def preview_template(
             rendered_html = default_template['body_html']
             subject = default_template['subject']
         else:
-            rendered_html = get_texts().t('CABINET_EMAIL_TEMPLATES_PREVIEW_NOT_FOUND', '<p>Template not found</p>')
-            subject = get_texts().t('CABINET_EMAIL_TEMPLATES_PREVIEW_SUBJECT_NA', 'N/A')
+            rendered_html = '<p>Template not found</p>'
+            subject = 'N/A'
 
     return {
         'subject': subject,
@@ -1326,10 +1431,7 @@ async def preview_template(
     }
 
 
-@router.post(
-    '/{notification_type}/test',
-    summary=get_texts().t('CABINET_EMAIL_TEMPLATES_TEST_SUMMARY', 'Send test email'),
-)
+@router.post('/{notification_type}/test', summary='Send test email')
 async def send_test_email(
     notification_type: str,
     data: EmailTemplateSendTestRequest,
@@ -1342,17 +1444,14 @@ async def send_test_email(
     if not email_service.is_configured():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_EMAIL_TEMPLATES_SMTP_NOT_CONFIGURED', 'SMTP is not configured'),
+            detail='SMTP is not configured',
         )
 
     to_email = data.email or admin.email
     if not to_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t(
-                'CABINET_EMAIL_TEMPLATES_NO_EMAIL_ADDRESS',
-                'No email address provided and admin has no email',
-            ),
+            detail='No email address provided and admin has no email',
         )
 
     _validate_template_type(notification_type)
@@ -1386,10 +1485,10 @@ async def send_test_email(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=get_texts().t('CABINET_EMAIL_TEMPLATES_NOT_FOUND', 'Template not found'),
+                    detail='Template not found',
                 )
 
-    subject = get_texts().t('CABINET_EMAIL_TEMPLATES_TEST_SUBJECT_PREFIX', '[TEST] {subject}').format(subject=subject)
+    subject = f'[TEST] {subject}'
 
     try:
         success = await asyncio.to_thread(
@@ -1402,16 +1501,13 @@ async def send_test_email(
         logger.error('Ошибка отправки тестового email', e=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts().t(
-                'CABINET_EMAIL_TEMPLATES_TEST_SEND_ERROR',
-                'Failed to send test email: {error}',
-            ).format(error=e),
+            detail=f'Failed to send test email: {e!s}',
         )
 
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts().t('CABINET_EMAIL_TEMPLATES_TEST_SEND_FAILED', 'Failed to send test email'),
+            detail='Failed to send test email',
         )
 
     logger.info(

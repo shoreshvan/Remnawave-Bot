@@ -11,11 +11,13 @@ from app.config import settings
 from app.database.models import User
 from app.keyboards.inline import get_back_keyboard
 from app.keyboards.topup_amounts import get_topup_amount_keyboard
+from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.utils.timezone import format_local_datetime
+from app.utils.topup_retry import format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -29,7 +31,7 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
     if getattr(db_user, 'restriction_topup', False):
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('YOOKASSA_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         support_url = settings.get_support_contact_url()
         keyboard = []
@@ -46,8 +48,7 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-                'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -56,7 +57,7 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
 
     if not settings.is_yookassa_enabled():
         await callback.answer(
-            texts.t('YOOKASSA_CARD_UNAVAILABLE', '❌ Оплата картой через YooKassa временно недоступна'),
+            texts.t('PAYMENT_UI_YOOKASSA_CARD_UNAVAILABLE', '❌ Оплата картой через YooKassa временно недоступна'),
             show_alert=True,
         )
         return
@@ -65,9 +66,9 @@ async def start_yookassa_payment(callback: types.CallbackQuery, db_user: User, s
     max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
 
     message_text = texts.t(
-        'YOOKASSA_CARD_AMOUNT_PROMPT',
-        '💳 <b>Оплата банковской картой</b>\n\nВведите сумму для пополнения от {min_amount} до {max_amount} تومان:',
-    ).format(min_amount=f'{min_amount_rub:.0f}', max_amount=f'{max_amount_rub:,.0f}')
+        'PAYMENT_UI_YOOKASSA_CARD_PROMPT',
+        '💳 <b>Оплата банковской картой</b>\n\nВведите сумму для пополнения от {value1} до {value2} рублей:',
+    ).format(value1=format(min_amount_rub, '.0f'), value2=format(max_amount_rub, ',.0f'))
 
     keyboard = await get_topup_amount_keyboard('yookassa', db_user.language, back_callback='back_to_menu')
 
@@ -90,7 +91,7 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
     if getattr(db_user, 'restriction_topup', False):
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('YOOKASSA_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         support_url = settings.get_support_contact_url()
         keyboard = []
@@ -107,8 +108,7 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
         await callback.message.edit_text(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-                'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -117,7 +117,7 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
 
     if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
         await callback.answer(
-            texts.t('YOOKASSA_SBP_UNAVAILABLE', '❌ Оплата через СБП временно недоступна'), show_alert=True
+            texts.t('SUBSCRIPTION_UI_SBP_UNAVAILABLE', '❌ Оплата через СБП временно недоступна'), show_alert=True
         )
         return
 
@@ -125,9 +125,9 @@ async def start_yookassa_sbp_payment(callback: types.CallbackQuery, db_user: Use
     max_amount_rub = settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100
 
     message_text = texts.t(
-        'YOOKASSA_SBP_AMOUNT_PROMPT',
-        '🏦 <b>Оплата через СБП</b>\n\nВведите сумму для пополнения от {min_amount} до {max_amount} تومان:',
-    ).format(min_amount=f'{min_amount_rub:.0f}', max_amount=f'{max_amount_rub:,.0f}')
+        'PAYMENT_UI_YOOKASSA_SBP_PROMPT',
+        '🏦 <b>Оплата через СБП</b>\n\nВведите сумму для пополнения от {value1} до {value2} рублей:',
+    ).format(value1=format(min_amount_rub, '.0f'), value2=format(max_amount_rub, ',.0f'))
 
     keyboard = await get_topup_amount_keyboard('yookassa_sbp', db_user.language, back_callback='back_to_menu')
 
@@ -152,7 +152,7 @@ async def process_yookassa_payment_amount(
     if getattr(db_user, 'restriction_topup', False):
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('YOOKASSA_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         support_url = settings.get_support_contact_url()
         keyboard = []
@@ -169,8 +169,7 @@ async def process_yookassa_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-                'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -178,40 +177,30 @@ async def process_yookassa_payment_amount(
         await state.clear()
         return
 
-    texts = get_texts(db_user.language)
-
     if not settings.is_yookassa_enabled():
-        await message.answer(texts.t('YOOKASSA_UNAVAILABLE', '❌ Оплата через YooKassa временно недоступна'))
+        await message.answer(
+            texts.t('SUBSCRIPTION_UI_YOOKASSA_UNAVAILABLE', '❌ Оплата через YooKassa временно недоступна')
+        )
         return
 
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-        min_rubles = f'{settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
-        example_rubles = max(1, (settings.YOOKASSA_MIN_AMOUNT_KOPEKS + 99) // 100)
-        retry_hint = texts.t(
-            'YOOKASSA_RETRY_HINT_MIN',
-            'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_amount} تومان.',
-        ).format(min_amount=min_rubles)
-        if example_rubles <= 50000 and example_rubles * 100 <= settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-            retry_hint += texts.t('YOOKASSA_RETRY_HINT_EXAMPLE', '\n\nНапример, отправьте: {example}').format(
-                example=example_rubles
-            )
         await message.answer(
-            texts.t(
-                'YOOKASSA_CARD_MIN_AMOUNT', '❌ Минимальная сумма пополнения картой — {min_amount} تومان.\n\n{hint}'
-            ).format(min_amount=min_rubles, hint=retry_hint),
-            reply_markup=get_back_keyboard(db_user.language),
+            format_topup_amount_retry(
+                db_user.language, settings.YOOKASSA_MIN_AMOUNT_KOPEKS, settings.YOOKASSA_MAX_AMOUNT_KOPEKS, too_low=True
+            ),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-        max_rubles = f'{settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
         await message.answer(
-            texts.t(
-                'YOOKASSA_CARD_MAX_AMOUNT',
-                '❌ Максимальная сумма пополнения картой — {max_amount} تومان.\n\n'
-                'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_amount} تومان.',
-            ).format(max_amount=max_rubles),
-            reply_markup=get_back_keyboard(db_user.language),
+            format_topup_amount_retry(
+                db_user.language,
+                settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
+                settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                too_low=False,
+            ),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
@@ -235,7 +224,7 @@ async def process_yookassa_payment_amount(
         if not payment_result:
             await message.answer(
                 texts.t(
-                    'YOOKASSA_PAYMENT_CREATE_ERROR',
+                    'PAYMENT_UI_CREATE_ERROR_SUPPORT',
                     '❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
                 )
             )
@@ -245,7 +234,9 @@ async def process_yookassa_payment_amount(
         confirmation_url = payment_result.get('confirmation_url')
         if not confirmation_url:
             await message.answer(
-                texts.t('YOOKASSA_PAYMENT_LINK_ERROR', '❌ Ошибка получения ссылки для оплаты. Обратитесь в поддержку.')
+                texts.t(
+                    'PAYMENT_UI_LINK_ERROR_SUPPORT', '❌ Ошибка получения ссылки для оплаты. Обратитесь в поддержку.'
+                )
             )
             await state.clear()
             return
@@ -254,12 +245,12 @@ async def process_yookassa_payment_amount(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('YOOKASSA_PAY_CARD_BUTTON', '💳 Оплатить картой'), url=confirmation_url
+                        text=texts.t('PAYMENT_UI_PAY_CARD_BUTTON', '💳 Оплатить картой'), url=confirmation_url
                     )
                 ],
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                        text=texts.t('SUBSCRIPTION_UI_CHECK_STATUS', '📊 Проверить статус'),
                         callback_data=f'check_yookassa_{payment_result["local_payment_id"]}',
                     )
                 ],
@@ -284,22 +275,12 @@ async def process_yookassa_payment_amount(
 
         invoice_message = await message.answer(
             texts.t(
-                'YOOKASSA_CARD_INVOICE',
-                '💳 <b>Оплата банковской картой</b>\n\n'
-                '💰 Сумма: {amount}\n'
-                '🆔 ID платежа: {payment_id}...\n\n'
-                '📱 <b>Инструкция:</b>\n'
-                "1. Нажмите кнопку 'Оплатить картой'\n"
-                '2. Введите данные вашей карты\n'
-                '3. Подтвердите платеж\n'
-                '4. Деньги поступят на баланс автоматически\n\n'
-                '🔒 Оплата происходит через защищенную систему YooKassa\n'
-                '✅ Принимаем карты: Visa, MasterCard, МИР\n\n'
-                '❓ Если возникнут проблемы, обратитесь в {support}',
+                'PAYMENT_UI_YOOKASSA_CARD_INSTRUCTIONS',
+                "💳 <b>Оплата банковской картой</b>\n\n💰 Сумма: {value1}\n🆔 ID платежа: {value2}...\n\n📱 <b>Инструкция:</b>\n1. Нажмите кнопку 'Оплатить картой'\n2. Введите данные вашей карты\n3. Подтвердите платеж\n4. Деньги поступят на баланс автоматически\n\n🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем карты: Visa, MasterCard, МИР\n\n❓ Если возникнут проблемы, обратитесь в {value3}",
             ).format(
-                amount=settings.format_price(amount_kopeks),
-                payment_id=payment_result['yookassa_payment_id'][:8],
-                support=settings.get_support_contact_display_html(),
+                value1=settings.format_price(amount_kopeks),
+                value2=payment_result['yookassa_payment_id'][:8],
+                value3=settings.get_support_contact_display_html(),
             ),
             reply_markup=keyboard,
             parse_mode='HTML',
@@ -341,7 +322,7 @@ async def process_yookassa_payment_amount(
         logger.error('Ошибка создания YooKassa платежа', error=e)
         await message.answer(
             texts.t(
-                'YOOKASSA_PAYMENT_CREATE_ERROR',
+                'PAYMENT_UI_CREATE_ERROR_SUPPORT',
                 '❌ Ошибка создания платежа. Попробуйте позже или обратитесь в поддержку.',
             )
         )
@@ -358,7 +339,7 @@ async def process_yookassa_sbp_payment_amount(
     if getattr(db_user, 'restriction_topup', False):
         reason = html.escape(
             getattr(db_user, 'restriction_reason', None)
-            or texts.t('YOOKASSA_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
         )
         support_url = settings.get_support_contact_url()
         keyboard = []
@@ -375,8 +356,7 @@ async def process_yookassa_sbp_payment_amount(
         await message.answer(
             texts.t(
                 'USER_RESTRICTION_TOPUP_BLOCKED',
-                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\n'
-                'Если вы считаете это ошибкой, вы можете обжаловать решение.',
+                '🚫 <b>Пополнение ограничено</b>\n\n{reason}\n\nЕсли вы считаете это ошибкой, вы можете обжаловать решение.',
             ).format(reason=reason),
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=keyboard),
             parse_mode='HTML',
@@ -384,41 +364,28 @@ async def process_yookassa_sbp_payment_amount(
         await state.clear()
         return
 
-    texts = get_texts(db_user.language)
-
     if not settings.is_yookassa_enabled() or not settings.YOOKASSA_SBP_ENABLED:
-        await message.answer(texts.t('YOOKASSA_SBP_UNAVAILABLE', '❌ Оплата через СБП временно недоступна'))
+        await message.answer(texts.t('SUBSCRIPTION_UI_SBP_UNAVAILABLE', '❌ Оплата через СБП временно недоступна'))
         return
 
     if amount_kopeks < settings.YOOKASSA_MIN_AMOUNT_KOPEKS:
-        min_rubles = f'{settings.YOOKASSA_MIN_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
-        example_rubles = max(1, (settings.YOOKASSA_MIN_AMOUNT_KOPEKS + 99) // 100)
-        retry_hint = texts.t(
-            'YOOKASSA_RETRY_HINT_MIN',
-            'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {min_amount} تومان.',
-        ).format(min_amount=min_rubles)
-        if example_rubles <= 50000 and example_rubles * 100 <= settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-            retry_hint += texts.t('YOOKASSA_RETRY_HINT_EXAMPLE', '\n\nНапример, отправьте: {example}').format(
-                example=example_rubles
-            )
         await message.answer(
-            texts.t(
-                'YOOKASSA_SBP_MIN_AMOUNT',
-                '❌ Минимальная сумма пополнения через СБП — {min_amount} تومان.\n\n{hint}',
-            ).format(min_amount=min_rubles, hint=retry_hint),
-            reply_markup=get_back_keyboard(db_user.language),
+            format_topup_amount_retry(
+                db_user.language, settings.YOOKASSA_MIN_AMOUNT_KOPEKS, settings.YOOKASSA_MAX_AMOUNT_KOPEKS, too_low=True
+            ),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_kopeks > settings.YOOKASSA_MAX_AMOUNT_KOPEKS:
-        max_rubles = f'{settings.YOOKASSA_MAX_AMOUNT_KOPEKS / 100:.2f}'.rstrip('0').rstrip('.')
         await message.answer(
-            texts.t(
-                'YOOKASSA_SBP_MAX_AMOUNT',
-                '❌ Максимальная сумма пополнения через СБП — {max_amount} تومان.\n\n'
-                'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не больше {max_amount} تومان.',
-            ).format(max_amount=max_rubles),
-            reply_markup=get_back_keyboard(db_user.language),
+            format_topup_amount_retry(
+                db_user.language,
+                settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
+                settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
+                too_low=False,
+            ),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
@@ -442,7 +409,7 @@ async def process_yookassa_sbp_payment_amount(
         if not payment_result:
             await message.answer(
                 texts.t(
-                    'YOOKASSA_SBP_PAYMENT_CREATE_ERROR',
+                    'PAYMENT_UI_SBP_CREATE_ERROR',
                     '❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.',
                 )
             )
@@ -455,7 +422,8 @@ async def process_yookassa_sbp_payment_amount(
         if not confirmation_url and not qr_confirmation_data:
             await message.answer(
                 texts.t(
-                    'YOOKASSA_SBP_DATA_ERROR', '❌ Ошибка получения данных для оплаты через СБП. Обратитесь в поддержку.'
+                    'PAYMENT_UI_SBP_DATA_ERROR',
+                    '❌ Ошибка получения данных для оплаты через СБП. Обратитесь в поддержку.',
                 )
             )
             await state.clear()
@@ -524,7 +492,7 @@ async def process_yookassa_sbp_payment_amount(
             keyboard_buttons.append(
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('YOOKASSA_SBP_GOTO_PAY_BUTTON', '🔗 Перейти к оплате'), url=confirmation_url
+                        text=texts.t('SUBSCRIPTION_UI_OPEN_PAYMENT', '🔗 Перейти к оплате'), url=confirmation_url
                     )
                 ]
             )
@@ -533,7 +501,7 @@ async def process_yookassa_sbp_payment_amount(
             keyboard_buttons.append(
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('YOOKASSA_SBP_BANK_APP_BUTTON', '📱 Оплатить в приложении банка'),
+                        text=texts.t('SUBSCRIPTION_UI_BANK_APP_PAYMENT', '📱 Оплатить в приложении банка'),
                         callback_data='temp_disabled',
                     )
                 ]
@@ -543,7 +511,7 @@ async def process_yookassa_sbp_payment_amount(
         keyboard_buttons.append(
             [
                 types.InlineKeyboardButton(
-                    text=texts.t('CHECK_STATUS_BUTTON', '📊 Проверить статус'),
+                    text=texts.t('SUBSCRIPTION_UI_CHECK_STATUS', '📊 Проверить статус'),
                     callback_data=f'check_yookassa_{payment_result["local_payment_id"]}',
                 )
             ]
@@ -571,31 +539,21 @@ async def process_yookassa_sbp_payment_amount(
 
         # Подготавливаем текст сообщения
         message_text = texts.t(
-            'YOOKASSA_SBP_INVOICE_HEADER',
-            '🔗 <b>Оплата через СБП</b>\n\n💰 Сумма: {amount}\n🆔 ID платежа: {payment_id}...\n\n',
-        ).format(
-            amount=settings.format_price(amount_kopeks),
-            payment_id=payment_result['yookassa_payment_id'][:8],
-        )
+            'PAYMENT_UI_SBP_PAYMENT_HEADER',
+            '🔗 <b>Оплата через СБП</b>\n\n💰 Сумма: {value1}\n🆔 ID платежа: {value2}...\n\n',
+        ).format(value1=settings.format_price(amount_kopeks), value2=payment_result['yookassa_payment_id'][:8])
 
         # Добавляем инструкции в зависимости от доступных способов оплаты
         if not confirmation_url:
             message_text += texts.t(
-                'YOOKASSA_SBP_INSTRUCTION',
-                '📱 <b>Инструкция по оплате:</b>\n'
-                '1. Откройте приложение вашего банка\n'
-                '2. Найдите функцию оплаты по реквизитам или перевод по СБП\n'
-                '3. Введите ID платежа: <code>{payment_id}</code>\n'
-                '4. Подтвердите платеж в приложении банка\n'
-                '5. Деньги поступят на баланс автоматически\n\n',
-            ).format(payment_id=payment_result['yookassa_payment_id'])
+                'PAYMENT_UI_SBP_BANK_INSTRUCTIONS',
+                '📱 <b>Инструкция по оплате:</b>\n1. Откройте приложение вашего банка\n2. Найдите функцию оплаты по реквизитам или перевод по СБП\n3. Введите ID платежа: <code>{value1}</code>\n4. Подтвердите платеж в приложении банка\n5. Деньги поступят на баланс автоматически\n\n',
+            ).format(value1=payment_result['yookassa_payment_id'])
 
         message_text += texts.t(
-            'YOOKASSA_SBP_INVOICE_FOOTER',
-            '🔒 Оплата происходит через защищенную систему YooKassa\n'
-            '✅ Принимаем СБП от всех банков-участников\n\n'
-            '❓ Если возникнут проблемы, обратитесь в {support}',
-        ).format(support=settings.get_support_contact_display_html())
+            'PAYMENT_UI_YOOKASSA_SBP_FOOTER',
+            '🔒 Оплата происходит через защищенную систему YooKassa\n✅ Принимаем СБП от всех банков-участников\n\n❓ Если возникнут проблемы, обратитесь в {value1}',
+        ).format(value1=settings.get_support_contact_display_html())
 
         # Отправляем сообщение с инструкциями и клавиатурой
         # Если есть QR-код, отправляем его как медиа-сообщение
@@ -644,7 +602,7 @@ async def process_yookassa_sbp_payment_amount(
         logger.error('Ошибка создания YooKassa СБП платежа', error=e)
         await message.answer(
             texts.t(
-                'YOOKASSA_SBP_PAYMENT_CREATE_ERROR',
+                'PAYMENT_UI_SBP_CREATE_ERROR',
                 '❌ Ошибка создания платежа через СБП. Попробуйте позже или обратитесь в поддержку.',
             )
         )
@@ -652,8 +610,15 @@ async def process_yookassa_sbp_payment_amount(
 
 
 @error_handler
-async def check_yookassa_payment_status(callback: types.CallbackQuery, db: AsyncSession):
-    texts = get_texts(callback.from_user.language_code or settings.DEFAULT_LANGUAGE)
+async def check_yookassa_payment_status(callback: types.CallbackQuery, db: AsyncSession, db_user: User | None = None):
+    texts = get_texts(
+        getattr(db_user, 'language', None)
+        or getattr(getattr(callback, 'from_user', None), 'language_code', None)
+        or DEFAULT_LANGUAGE
+    )
+    if db_user is None:
+        await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        return
     try:
         local_payment_id = int(callback.data.split('_')[-1])
 
@@ -661,8 +626,8 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
 
         payment = await get_yookassa_payment_by_local_id(db, local_payment_id)
 
-        if not payment:
-            await callback.answer(texts.t('YOOKASSA_PAYMENT_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
+        if not payment or payment.user_id != db_user.id:
+            await callback.answer(texts.t('PAYMENT_UI_NOT_FOUND', '❌ Платеж не найден'), show_alert=True)
             return
 
         status_emoji = {
@@ -674,46 +639,42 @@ async def check_yookassa_payment_status(callback: types.CallbackQuery, db: Async
         }
 
         status_text = {
-            'pending': texts.t('YOOKASSA_STATUS_PENDING', 'Ожидает оплаты'),
-            'waiting_for_capture': texts.t('YOOKASSA_STATUS_WAITING_FOR_CAPTURE', 'Ожидает подтверждения'),
-            'succeeded': texts.t('YOOKASSA_STATUS_SUCCEEDED', 'Оплачен'),
-            'canceled': texts.t('YOOKASSA_STATUS_CANCELED', 'Отменен'),
-            'failed': texts.t('YOOKASSA_STATUS_FAILED', 'Ошибка'),
+            'pending': texts.t('WATA_STATUS_OPENED', 'Ожидает оплаты'),
+            'waiting_for_capture': texts.t('PAYMENT_UI_STATUS_WAITING_CONFIRMATION', 'Ожидает подтверждения'),
+            'succeeded': texts.t('WATA_STATUS_PAID', 'Оплачен'),
+            'canceled': texts.t('PAYMENT_UI_STATUS_CANCELLED', 'Отменен'),
+            'failed': texts.t('ADMIN_PAYMENT_STATUS_FAILED', 'Ошибка'),
         }
 
         emoji = status_emoji.get(payment.status, '❓')
-        status = status_text.get(payment.status, texts.t('YOOKASSA_STATUS_UNKNOWN', 'Неизвестно'))
+        status = status_text.get(payment.status, texts.t('WATA_STATUS_UNKNOWN', 'Неизвестно'))
 
         message_text = texts.t(
-            'YOOKASSA_STATUS_TEXT',
-            '💳 Статус платежа:\n\n'
-            '🆔 ID: {payment_id}...\n'
-            '💰 Сумма: {amount}\n'
-            '📊 Статус: {emoji} {status}\n'
-            '📅 Создан: {created}\n',
+            'PAYMENT_UI_CARD_STATUS',
+            '💳 Статус платежа:\n\n🆔 ID: {value1}...\n💰 Сумма: {value2}\n📊 Статус: {value3} {value4}\n📅 Создан: {value5}\n',
         ).format(
-            payment_id=payment.yookassa_payment_id[:8],
-            amount=settings.format_price(payment.amount_kopeks),
-            emoji=emoji,
-            status=status,
-            created=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M'),
+            value1=payment.yookassa_payment_id[:8],
+            value2=settings.format_price(payment.amount_kopeks),
+            value3=emoji,
+            value4=status,
+            value5=format_local_datetime(payment.created_at, '%d.%m.%Y %H:%M'),
         )
 
         if payment.is_succeeded:
             message_text += texts.t(
-                'YOOKASSA_STATUS_SUCCEEDED_NOTE', '\n✅ Платеж успешно завершен!\n\nСредства зачислены на баланс.'
+                'PAYMENT_UI_SUCCESS_CREDITED', '\n✅ Платеж успешно завершен!\n\nСредства зачислены на баланс.'
             )
         elif payment.is_pending:
             message_text += texts.t(
-                'YOOKASSA_STATUS_PENDING_NOTE', "\n⏳ Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
+                'PAYMENT_UI_WAITING_PAY_BUTTON', "\n⏳ Платеж ожидает оплаты. Нажмите кнопку 'Оплатить' выше."
             )
         elif payment.is_failed:
             message_text += texts.t(
-                'YOOKASSA_STATUS_FAILED_NOTE', '\n❌ Платеж не прошел. Обратитесь в {support}'
-            ).format(support=settings.get_support_contact_display())
+                'PAYMENT_UI_PAYMENT_FAILED_SUPPORT', '\n❌ Платеж не прошел. Обратитесь в {value1}'
+            ).format(value1=settings.get_support_contact_display())
 
         await callback.answer(message_text, show_alert=True)
 
     except Exception as e:
         logger.error('Ошибка проверки статуса платежа', error=e)
-        await callback.answer(texts.t('YOOKASSA_STATUS_CHECK_ERROR', '❌ Ошибка проверки статуса'), show_alert=True)
+        await callback.answer(texts.t('PAYMENT_UI_STATUS_ERROR', '❌ Ошибка проверки статуса'), show_alert=True)

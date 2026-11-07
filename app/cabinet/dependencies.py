@@ -70,7 +70,7 @@ async def get_current_cabinet_user(
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=get_texts().t('CABINET_AUTH_REQUIRED', 'Authentication required'),
+            detail='Authentication required',
             headers={'WWW-Authenticate': 'Bearer'},
         )
 
@@ -80,7 +80,7 @@ async def get_current_cabinet_user(
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=get_texts().t('CABINET_AUTH_INVALID_OR_EXPIRED_TOKEN', 'Invalid or expired token'),
+            detail='Invalid or expired token',
             headers={'WWW-Authenticate': 'Bearer'},
         )
 
@@ -89,7 +89,7 @@ async def get_current_cabinet_user(
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=get_texts().t('CABINET_AUTH_INVALID_TOKEN_PAYLOAD', 'Invalid token payload'),
+            detail='Invalid token payload',
             headers={'WWW-Authenticate': 'Bearer'},
         )
 
@@ -98,7 +98,7 @@ async def get_current_cabinet_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_AUTH_USER_NOT_FOUND', 'User not found'),
+            detail='User not found',
         )
 
     # Validate Telegram initData first — we need its outcome both for the
@@ -134,10 +134,7 @@ async def get_current_cabinet_user(
                 )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=get_texts().t(
-                        'CABINET_AUTH_TELEGRAM_ACCOUNT_MISMATCH',
-                        'Session belongs to a different Telegram account. Please restart the app.',
-                    ),
+                    detail='Session belongs to a different Telegram account. Please restart the app.',
                     headers={'WWW-Authenticate': 'Bearer'},
                 )
 
@@ -153,7 +150,7 @@ async def get_current_cabinet_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     'code': 'blacklisted',
-                    'message': blacklist_reason or get_texts().t('CABINET_AUTH_ACCESS_DENIED', 'Доступ запрещен'),
+                    'message': blacklist_reason or 'Доступ запрещен',
                 },
             )
 
@@ -216,10 +213,7 @@ async def get_current_cabinet_user(
             bot_username = settings.get_bot_username()
             detail: dict[str, str | None] = {
                 'code': 'account_deleted',
-                'message': get_texts().t(
-                    'CABINET_AUTH_ACCOUNT_DEACTIVATED',
-                    'Account was deactivated for inactivity. Open the bot and press /start to restore access.',
-                ),
+                'message': 'Account was deactivated for inactivity. Open the bot and press /start to restore access.',
             }
             if bot_username:
                 detail['bot_username'] = bot_username
@@ -233,7 +227,7 @@ async def get_current_cabinet_user(
             # message — these are admin actions, not user-recoverable.
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=get_texts().t('CABINET_AUTH_ACCOUNT_NOT_ACTIVE', 'User account is not active'),
+                detail='User account is not active',
             )
 
     # Blacklist check was hoisted ABOVE the status-branching block (see
@@ -251,8 +245,8 @@ async def get_current_cabinet_user(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail={
                     'code': 'maintenance',
-                    'message': maintenance_service.get_maintenance_message()
-                    or get_texts().t('CABINET_AUTH_SERVICE_UNDER_MAINTENANCE', 'Service is under maintenance'),
+                    'message': maintenance_service.get_maintenance_message(user.language)
+                    or 'Service is under maintenance',
                     'reason': status_info.get('reason'),
                 },
             )
@@ -278,10 +272,7 @@ async def get_current_cabinet_user(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail={
                             'code': 'channel_subscription_required',
-                            'message': get_texts().t(
-                                'CABINET_AUTH_CHANNEL_SUBSCRIPTION_REQUIRED',
-                                'Please subscribe to the required channels to continue',
-                            ),
+                            'message': 'Please subscribe to the required channels to continue',
                             'channels': channels_with_status,
                         },
                     )
@@ -392,7 +383,7 @@ async def get_current_admin_user(
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail=get_texts().t('CABINET_AUTH_ADMIN_ACCESS_REQUIRED', 'Admin access required'),
+        detail='Admin access required',
     )
 
 
@@ -456,9 +447,7 @@ def require_permission(*permissions: str):
                 await db.commit()
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=get_texts().t('CABINET_AUTH_PERMISSION_DENIED', 'Permission denied: {reason}').format(
-                        reason=reason
-                    ),
+                    detail=f'Permission denied: {reason}',
                 )
 
         # Capture request details

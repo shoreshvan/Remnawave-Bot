@@ -39,7 +39,7 @@ def _safe_format_price(amount_kopeks: int) -> str:
         return settings.format_price(amount_kopeks)
     except Exception as error:  # pragma: no cover - defensive logging
         logger.error('Не удалось отформатировать сумму', amount_kopeks=amount_kopeks, error=error)
-        return f'{amount_kopeks / 100:.2f} تومان'
+        return f'{amount_kopeks / 100:.2f} ₽'
 
 
 async def _safe_delete_message(message: types.Message) -> None:
@@ -141,7 +141,7 @@ def _render_creation_progress(
     status_message: str | None = None,
     error_message: str | None = None,
 ) -> str:
-    lines: list[str] = [texts.t('ADMIN_POLLS_CREATION_HEADER', '🗳️ <b>Создание опроса</b>')]
+    lines: list[str] = [texts.t('ADMIN_POLLS_CREATION_HEADER')]
 
     title_prompt = texts.t(
         'ADMIN_POLLS_CREATION_TITLE_PROMPT',
@@ -192,7 +192,7 @@ def _render_creation_progress(
 
     reward_prompt = texts.t(
         'ADMIN_POLLS_CREATION_REWARD_PROMPT',
-        'Введите сумму награды в تومان. Отправьте 0 чтобы отключить награду.',
+        'Введите сумму награды в рублях. Отправьте 0 чтобы отключить награду.',
     )
 
     lines.append('')
@@ -914,9 +914,7 @@ async def show_poll_details(
     poll_id = int(callback.data.split(':')[1])
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_POLLS_NOT_FOUND', '❌ Опрос не найден'), show_alert=True
-        )
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND'), show_alert=True)
         return
 
     text = await _render_poll_details(poll, db_user.language)
@@ -938,9 +936,7 @@ async def start_poll_send(
     poll_id = int(callback.data.split(':')[1])
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_POLLS_NOT_FOUND', '❌ Опрос не найден'), show_alert=True
-        )
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND'), show_alert=True)
         return
 
     texts = get_texts(db_user.language)
@@ -980,9 +976,7 @@ async def _show_send_confirmation(
 ):
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_POLLS_NOT_FOUND', '❌ Опрос не найден'), show_alert=True
-        )
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND'), show_alert=True)
         return
 
     audience_name = get_target_display_name(target)
@@ -1043,9 +1037,7 @@ async def confirm_poll_send(
 
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_POLLS_NOT_FOUND', '❌ Опрос не найден'), show_alert=True
-        )
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND'), show_alert=True)
         return
 
     poll_id_value = poll.id
@@ -1087,9 +1079,7 @@ async def show_poll_stats(
     poll_id = int(callback.data.split(':')[1])
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_POLLS_NOT_FOUND', '❌ Опрос не найден'), show_alert=True
-        )
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND'), show_alert=True)
         return
 
     stats = await get_poll_statistics(db, poll_id)
@@ -1137,9 +1127,7 @@ async def confirm_poll_delete(
     poll_id = int(callback.data.split(':')[1])
     poll = await get_poll_by_id(db, poll_id)
     if not poll:
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_POLLS_NOT_FOUND', '❌ Опрос не найден'), show_alert=True
-        )
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND'), show_alert=True)
         return
 
     texts = get_texts(db_user.language)
@@ -1186,7 +1174,7 @@ async def delete_poll_handler(
             reply_markup=_build_polls_keyboard(await list_polls(db), db_user.language),
         )
     else:
-        await callback.answer(texts.t('ADMIN_POLLS_NOT_FOUND', '❌ Опрос не найден'), show_alert=True)
+        await callback.answer(get_texts(db_user.language).t('POLL_NOT_FOUND'), show_alert=True)
         return
 
     await callback.answer()

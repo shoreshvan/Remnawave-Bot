@@ -6,6 +6,7 @@
 import asyncio
 import time
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
 import structlog
@@ -15,6 +16,16 @@ from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _blacklist_raw_url(value: str) -> str:
+    """Convert only a GitHub blob URL, never host-like text in another URL."""
+    parsed = urlsplit(value)
+    parts = parsed.path.split('/', 4)
+    if parsed.hostname == 'github.com' and len(parts) == 5 and parts[3] == 'blob':
+        path = '/'.join((parts[0], parts[1], parts[2], parts[4]))
+        return urlunsplit((parsed.scheme, 'raw.githubusercontent.com', path, parsed.query, parsed.fragment))
+    return value
 
 
 class BlacklistService:
@@ -64,11 +75,7 @@ class BlacklistService:
                 return False
 
             try:
-                # Заменяем github.com на raw.githubusercontent.com для получения raw содержимого
-                if 'github.com' in github_url:
-                    raw_url = github_url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
-                else:
-                    raw_url = github_url
+                raw_url = _blacklist_raw_url(github_url)
 
                 # Получаем содержимое файла
                 async with aiohttp.ClientSession() as session, session.get(raw_url) as response:
@@ -103,9 +110,7 @@ class BlacklistService:
 
                         # 2. Обрабатываем контент: вычленяем username, если он есть в начале
                         username = ''
-                        reason = get_texts(settings.DEFAULT_LANGUAGE).t(
-                            'BLACKLIST_DEFAULT_REASON', 'Занесен в черный список'
-                        )
+                        reason = 'Занесен в черный список'
 
                         if content:
                             if content.startswith('@'):
@@ -253,12 +258,8 @@ class BlacklistService:
         """
         success = await self.update_blacklist()
         if success:
-            return True, get_texts(settings.DEFAULT_LANGUAGE).t(
-                'BLACKLIST_UPDATE_SUCCESS', 'Черный список обновлен успешно. Записей: {count}'
-            ).format(count=len(self.blacklist_data))
-        return False, get_texts(settings.DEFAULT_LANGUAGE).t(
-            'BLACKLIST_UPDATE_ERROR', 'Ошибка обновления черного списка'
-        )
+            return True, f'Черный список обновлен успешно. Записей: {len(self.blacklist_data)}'
+        return False, 'Ошибка обновления черного списка'
 
 
 # Глобальный экземпляр сервиса

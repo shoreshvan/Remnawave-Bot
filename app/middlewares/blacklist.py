@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, TelegramObje
 from app.config import settings
 from app.localization.texts import get_texts
 from app.services.blacklist_service import blacklist_service
+from app.utils.support_access import is_support_handler
 
 
 logger = structlog.get_logger(__name__)
@@ -20,6 +21,9 @@ class BlacklistMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
+        if is_support_handler(event, data, payment_only=True):
+            return await handler(event, data)
+
         user: TgUser | None = None
         if isinstance(event, (Message, CallbackQuery, PreCheckoutQuery)):
             user = event.from_user
@@ -34,11 +38,9 @@ class BlacklistMiddleware(BaseMiddleware):
 
         logger.warning('🚫 Пользователь из черного списка', user_id=user.id, username=user.username, reason=reason)
 
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        block_text = texts.t(
-            'BLACKLIST_ACCESS_DENIED',
-            '🚫 Доступ запрещен\n\nПричина: {reason}\n\nЕсли вы считаете, что это ошибка, обратитесь в поддержку.',
-        ).format(reason=reason)
+        block_text = (
+            f'🚫 Доступ запрещен\n\nПричина: {reason}\n\nЕсли вы считаете, что это ошибка, обратитесь в поддержку.'
+        )
 
         try:
             if isinstance(event, Message):
@@ -46,9 +48,7 @@ class BlacklistMiddleware(BaseMiddleware):
             elif isinstance(event, CallbackQuery):
                 await event.answer(block_text, show_alert=True)
             elif isinstance(event, PreCheckoutQuery):
-                await event.answer(
-                    ok=False, error_message=texts.t('BLACKLIST_ACCESS_DENIED_SHORT', 'Доступ запрещен')
-                )
+                await event.answer(ok=False, error_message='Доступ запрещен')
         except Exception as e:
             logger.error('Ошибка отправки сообщения о блокировке пользователю', user_id=user.id, error=e)
 

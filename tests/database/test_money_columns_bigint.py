@@ -19,7 +19,7 @@ from alembic.operations import Operations
 from app.database.models import Base
 
 ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_PATH = ROOT / 'migrations' / 'alembic' / 'versions' / '0111_money_columns_bigint.py'
+MIGRATION_PATH = ROOT / 'migrations' / 'alembic' / 'versions' / '0111a_money_columns_bigint.py'
 
 
 def _load_migration():
@@ -37,6 +37,9 @@ class TestModelColumnTypes:
         tables = Base.metadata.tables
         wrong = []
         for table_name, column_name, _nullable in migration.MONEY_COLUMNS:
+            if table_name == 'paypear_payments':
+                assert table_name not in tables
+                continue
             table = tables.get(table_name)
             if table is None:
                 wrong.append(f'{table_name}: table missing')
@@ -54,6 +57,9 @@ class TestModelColumnTypes:
         tables = Base.metadata.tables
         mismatches = []
         for table_name, column_name, nullable in migration.MONEY_COLUMNS:
+            if table_name == 'paypear_payments':
+                assert table_name not in tables
+                continue
             column = tables[table_name].columns[column_name]
             if column.nullable != nullable:
                 mismatches.append(f'{table_name}.{column_name}: model={column.nullable} migration={nullable}')

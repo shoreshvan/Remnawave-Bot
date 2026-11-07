@@ -45,11 +45,13 @@ class TelegramStarsMixin:
         payload: str | None = None,
         *,
         stars_amount: int | None = None,
+        language: str | None = None,
     ) -> str:
         """Создаёт invoice в Telegram Stars, автоматически рассчитывая количество звёзд."""
         if not self.bot or not getattr(self, 'stars_service', None):
             raise ValueError('Bot instance required for Stars payments')
 
+        texts = get_texts(language or settings.DEFAULT_LANGUAGE)
         try:
             amount_rubles = Decimal(amount_kopeks) / Decimal(100)
 
@@ -60,22 +62,13 @@ class TelegramStarsMixin:
             if stars_amount <= 0:
                 raise ValueError('Stars amount must be positive')
 
-            invoice_texts = get_texts()
             invoice_link = await self.bot.create_invoice_link(
-                title=invoice_texts.t('STARS_INVOICE_TITLE', 'Пополнение баланса VPN'),
-                description=invoice_texts.t('STARS_INVOICE_DESCRIPTION', '{description} (≈{stars_amount} ⭐)').format(
-                    description=description,
-                    stars_amount=stars_amount,
-                ),
+                title=texts.t('STARS_INVOICE_TITLE', 'Пополнение баланса VPN'),
+                description=f'{description} (≈{stars_amount} ⭐)',
                 payload=payload or f'balance_topup_{amount_kopeks}',
                 provider_token='',
                 currency='XTR',
-                prices=[
-                    LabeledPrice(
-                        label=invoice_texts.t('STARS_INVOICE_LABEL', 'Пополнение'),
-                        amount=stars_amount,
-                    )
-                ],
+                prices=[LabeledPrice(label=texts.t('STARS_INVOICE_LABEL', 'Пополнение'), amount=stars_amount)],
             )
 
             logger.info(
@@ -462,12 +455,16 @@ class TelegramStarsMixin:
 
                 from app.localization.texts import get_texts
 
-                texts = get_texts(user.language)
+                get_texts(user.language)
                 traffic_limit = getattr(subscription, 'traffic_limit_gb', 0) or 0
                 traffic_label = (
-                    texts.t('TRAFFIC_UNLIMITED_SHORT', 'Безлимит')
+                    get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
+                        'PAYMENT_NOTICE_016', 'Безлимит'
+                    )
                     if traffic_limit == 0
-                    else texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=int(traffic_limit))
+                    else get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                    .t('PAYMENT_NOTICE_017', '{v0} ГБ')
+                    .format(v0=int(traffic_limit))
                 )
 
                 tariff_line = ''
@@ -477,40 +474,44 @@ class TelegramStarsMixin:
 
                         _t = await get_tariff_by_id(db, subscription.tariff_id)
                         if _t:
-                            tariff_line = texts.t('STARS_SUBSCRIPTION_TARIFF_LINE', '\n📦 Тариф: «{name}»').format(
-                                name=_t.name
+                            tariff_line = (
+                                get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                                .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
+                                .format(v0=_t.name)
                             )
                     except Exception:
                         pass
-                success_message = texts.t(
-                    'STARS_SUBSCRIPTION_ACTIVATED',
-                    '✅ <b>Подписка успешно активирована!</b>\n\n'
-                    '📅 Период: {period} дней\n'
-                    '📱 Устройства: {devices}\n'
-                    '📊 Трафик: {traffic}\n'
-                    '⭐ Оплата: {stars} ⭐ ({price})'
-                    '{tariff_line}\n\n'
-                    "🔗 Для подключения перейдите в раздел 'Моя подписка'",
-                ).format(
-                    period=period_display,
-                    devices=getattr(subscription, 'device_limit', 1),
-                    traffic=traffic_label,
-                    stars=stars_amount,
-                    price=settings.format_price(amount_kopeks),
-                    tariff_line=tariff_line,
+                success_message = (
+                    get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                    .t(
+                        'PAYMENT_NOTICE_015',
+                        "✅ <b>Подписка успешно активирована!</b>\n\n📅 Период: {v0} дней\n📱 Устройства: {v1}\n📊 Трафик: {v2}\n⭐ Оплата: {v3} ⭐ ({v4}){v5}\n\n🔗 Для подключения перейдите в раздел 'Моя подписка'",
+                    )
+                    .format(
+                        v0=period_display,
+                        v1=getattr(subscription, 'device_limit', 1),
+                        v2=traffic_label,
+                        v3=stars_amount,
+                        v4=settings.format_price(amount_kopeks),
+                        v5=tariff_line,
+                    )
                 )
 
                 keyboard = types.InlineKeyboardMarkup(
                     inline_keyboard=[
                         [
                             types.InlineKeyboardButton(
-                                text=texts.t('MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'),
+                                text=get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
+                                    'MY_SUBSCRIPTION_BUTTON', '📱 Моя подписка'
+                                ),
                                 callback_data='menu_subscription',
                             )
                         ],
                         [
                             types.InlineKeyboardButton(
-                                text=texts.t('MAIN_MENU_BUTTON', '🏠 Главное меню'),
+                                text=get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
+                                    'MAIN_MENU_BUTTON', '🏠 Главное меню'
+                                ),
                                 callback_data='back_to_menu',
                             )
                         ],
@@ -608,12 +609,7 @@ class TelegramStarsMixin:
         promo_group = user.get_primary_promo_group()
         subscription = getattr(user, 'subscription', None)
         referrer_info = format_referrer_info(user)
-        status_texts = get_texts()
-        topup_status = (
-            status_texts.t('STARS_TOPUP_STATUS_FIRST', '🆕 Первое пополнение')
-            if was_first_topup
-            else status_texts.t('STARS_TOPUP_STATUS_REPEAT', '🔄 Пополнение')
-        )
+        topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
         await db.commit()
 

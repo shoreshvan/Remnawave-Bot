@@ -64,9 +64,7 @@ async def tribute_webhook(request):
                             db,
                             user,
                             processed_data['amount_kopeks'],
-                            get_texts(user.language)
-                            .t('TRIBUTE_DEPOSIT_DESCRIPTION', 'Пополнение через Tribute: {payment_id}')
-                            .format(payment_id=processed_data['payment_id']),
+                            f'Пополнение через Tribute: {processed_data["payment_id"]}',
                             create_transaction=False,
                             commit=False,
                         )
@@ -76,9 +74,7 @@ async def tribute_webhook(request):
                             user_id=user.id,
                             type=TransactionType.DEPOSIT,
                             amount_kopeks=processed_data['amount_kopeks'],
-                            description=get_texts(user.language).t(
-                                'TRIBUTE_DEPOSIT_DESCRIPTION_SHORT', 'Пополнение через Tribute'
-                            ),
+                            description='Пополнение через Tribute',
                             payment_method=PaymentMethod.TRIBUTE,
                             external_id=processed_data['payment_id'],
                             commit=False,
@@ -130,7 +126,7 @@ async def handle_successful_payment(message: types.Message):
                             db,
                             user,
                             amount_kopeks,
-                            get_texts(user.language).t('STARS_DEPOSIT_DESCRIPTION', 'Пополнение через Telegram Stars'),
+                            'Пополнение через Telegram Stars',
                             create_transaction=False,
                             commit=False,
                         )
@@ -140,9 +136,7 @@ async def handle_successful_payment(message: types.Message):
                             user_id=user.id,
                             type=TransactionType.DEPOSIT,
                             amount_kopeks=amount_kopeks,
-                            description=get_texts(user.language).t(
-                                'STARS_DEPOSIT_DESCRIPTION', 'Пополнение через Telegram Stars'
-                            ),
+                            description='Пополнение через Telegram Stars',
                             payment_method=PaymentMethod.TELEGRAM_STARS,
                             external_id=payment.telegram_payment_charge_id,
                             commit=False,
@@ -150,11 +144,7 @@ async def handle_successful_payment(message: types.Message):
 
                         await message.answer(
                             get_texts(user.language)
-                            .t(
-                                'STARS_BALANCE_TOPPED_UP',
-                                '✅ Баланс успешно пополнен на {amount}!\n\n'
-                                'Средства зачислены на ваш баланс!',
-                            )
+                            .t('BALANCE_TOPUP_CONFIRMED')
                             .format(amount=settings.format_price(amount_kopeks))
                         )
 

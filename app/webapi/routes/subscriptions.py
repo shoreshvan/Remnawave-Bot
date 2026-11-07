@@ -13,7 +13,6 @@ from app.database.crud.server_squad import get_effective_tariff_squad_uuids
 from app.database.crud.subscription import (
     add_subscription_devices,
     add_subscription_squad,
-    add_subscription_traffic,
     create_paid_subscription,
     create_trial_subscription,
     deactivate_subscription,
@@ -27,6 +26,7 @@ from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus
 from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
+from app.services.traffic_purchase_service import add_subscription_traffic
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.subscriptions import (
@@ -98,10 +98,7 @@ async def _get_subscription(db: AsyncSession, subscription_id: int) -> Subscript
     )
     subscription = result.scalar_one_or_none()
     if not subscription:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            get_texts().t('API_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Subscription not found')
     return subscription
 
 
@@ -155,10 +152,7 @@ async def create_subscription(
 
             existing = await get_subscription_by_id(db, payload.subscription_id)
             if existing and existing.user_id != payload.user_id:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    get_texts().t('API_SUBSCRIPTION_FOREIGN_USER', 'Subscription does not belong to this user'),
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Subscription does not belong to this user')
         elif payload.replace_existing and active_subs:
             if len(active_subs) == 1:
                 existing = active_subs[0]
@@ -169,17 +163,11 @@ async def create_subscription(
         else:
             existing = None
         if active_subs and not payload.replace_existing:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                get_texts().t('API_SUBSCRIPTION_ALREADY_EXISTS', 'User already has a subscription'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User already has a subscription')
     else:
         existing = await get_subscription_by_user_id(db, payload.user_id)
         if existing and not payload.replace_existing:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                get_texts().t('API_SUBSCRIPTION_ALREADY_EXISTS', 'User already has a subscription'),
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'User already has a subscription')
 
     forced_devices = None
     if not settings.is_devices_selection_enabled():
@@ -221,13 +209,7 @@ async def create_subscription(
                 )
         else:
             if payload.duration_days is None:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    get_texts().t(
-                        'API_SUBSCRIPTION_DURATION_REQUIRED',
-                        'duration_days is required for paid subscriptions',
-                    ),
-                )
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, 'duration_days is required for paid subscriptions')
             device_limit = payload.device_limit
             if device_limit is None:
                 if forced_devices is not None:
@@ -275,10 +257,7 @@ async def create_subscription(
             await db.rollback()
         except Exception:
             logger.exception('Rollback failed after subscription sync error')
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts().t('API_SUBSCRIPTION_SYNC_FAILED', 'Failed to sync with Remnawave'),
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Failed to sync with Remnawave')
 
     subscription = await _get_subscription(db, subscription.id)
     return _serialize_subscription(subscription)
@@ -319,7 +298,7 @@ async def extend_subscription_endpoint(
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts().t('API_SUBSCRIPTION_SYNC_FAILED', 'Failed to sync with Remnawave'),
+            detail='Failed to sync with Remnawave',
         )
 
     subscription = await _get_subscription(db, subscription.id)
@@ -334,7 +313,12 @@ async def add_subscription_traffic_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     subscription = await _get_subscription(db, subscription_id)
-    subscription = await add_subscription_traffic(db, subscription, payload.gb)
+    from app.services.traffic_purchase_service import prepare_traffic_purchase
+
+    accounting_panel = None
+    if subscription.traffic_limit_gb:
+        subscription, accounting_panel = await prepare_traffic_purchase(db, subscription)
+    subscription = await add_subscription_traffic(db, subscription, payload.gb, panel=accounting_panel)
 
     # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     await reactivate_subscription(db, subscription)
@@ -394,10 +378,7 @@ async def add_subscription_squad_endpoint(
     db: AsyncSession = Depends(get_db_session),
 ) -> SubscriptionResponse:
     if not payload.squad_uuid:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            get_texts().t('API_SUBSCRIPTION_SQUAD_UUID_REQUIRED', 'squad_uuid is required'),
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'squad_uuid is required')
 
     subscription = await _get_subscription(db, subscription_id)
     subscription = await add_subscription_squad(db, subscription, payload.squad_uuid)

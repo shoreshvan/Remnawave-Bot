@@ -283,7 +283,7 @@ class CryptoBotPaymentMixin:
                     amount_kopeks=amount_kopeks,
                     description=(
                         'Пополнение через CryptoBot '
-                        f'({updated_payment.amount} {updated_payment.asset} → {amount_rubles_rounded:.2f} تومان)'
+                        f'({updated_payment.amount} {updated_payment.asset} → {amount_rubles_rounded:.2f}₽)'
                     ),
                     payment_method=PaymentMethod.CRYPTOBOT,
                     external_id=invoice_id,
@@ -312,12 +312,7 @@ class CryptoBotPaymentMixin:
                 user.updated_at = datetime.now(UTC)
 
                 referrer_info = format_referrer_info(user)
-                status_texts = get_texts()
-                topup_status = (
-                    status_texts.t('CRYPTOBOT_TOPUP_STATUS_FIRST', '🆕 Первое пополнение')
-                    if was_first_topup
-                    else status_texts.t('CRYPTOBOT_TOPUP_STATUS_REPEAT', '🔄 Пополнение')
-                )
+                topup_status = '🆕 Первое пополнение' if was_first_topup else '🔄 Пополнение'
 
                 await db.commit()
 
@@ -367,21 +362,19 @@ class CryptoBotPaymentMixin:
 
                     try:
                         keyboard = await self.build_topup_success_keyboard(user)
-                        user_texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                        message_text = user_texts.t(
-                            'CRYPTOBOT_TOPUP_SUCCESS',
-                            '✅ <b>Пополнение успешно!</b>\n\n'
-                            '💰 Сумма: {amount}\n'
-                            '🪙 Платеж: {paid_amount} {asset}\n'
-                            '💱 Курс: 1 USD = {rate} تومان\n'
-                            '🆔 Транзакция: {invoice_id}...\n\n'
-                            'Баланс пополнен автоматически!',
-                        ).format(
-                            amount=settings.format_price(amount_kopeks),
-                            paid_amount=updated_payment.amount,
-                            asset=updated_payment.asset,
-                            rate=f'{conversion_rate:.2f}',
-                            invoice_id=invoice_id[:8],
+                        message_text = (
+                            get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                            .t(
+                                'PAYMENT_NOTICE_019',
+                                '✅ <b>Пополнение успешно!</b>\n\n💰 Сумма: {v0}\n🪙 Платеж: {v1} {v2}\n💱 Курс: 1 USD = {v3:.2f}₽\n🆔 Транзакция: {v4}...\n\nБаланс пополнен автоматически!',
+                            )
+                            .format(
+                                v0=settings.format_price(amount_kopeks),
+                                v1=updated_payment.amount,
+                                v2=updated_payment.asset,
+                                v3=conversion_rate,
+                                v4=invoice_id[:8],
+                            )
                         )
                         if settings.is_notifications_enabled():
                             user_notification = _UserNotificationPayload(

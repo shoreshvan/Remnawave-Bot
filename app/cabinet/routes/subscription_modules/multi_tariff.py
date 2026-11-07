@@ -21,6 +21,8 @@ from app.localization.texts import get_texts
 from app.utils.legacy_subscription import is_legacy_subscription
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
+from ...schemas.subscription import TrafficAccountingData
+from .helpers import _load_traffic_accounting_fields
 
 
 logger = structlog.get_logger(__name__)
@@ -28,7 +30,7 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/subscriptions', tags=['Cabinet Multi-Tariff'], redirect_slashes=False)
 
 
-class SubscriptionListItem(BaseModel):
+class SubscriptionListItem(TrafficAccountingData):
     id: int
     status: str
     tariff_id: int | None = None
@@ -86,7 +88,13 @@ async def list_subscriptions(
 ) -> SubscriptionsListResponse:
     """List all user subscriptions. Returns all subscriptions regardless of multi-tariff mode."""
     subscriptions = await get_all_subscriptions_by_user_id(db, user.id)
-    items = [_subscription_to_list_item(sub) for sub in subscriptions]
+    items = []
+    for sub in subscriptions:
+        if sub.is_pending_trial:
+            continue
+        item = _subscription_to_list_item(sub)
+        fields = await _load_traffic_accounting_fields(db, sub)
+        items.append(item.model_copy(update={k: v for k, v in fields.items() if k in type(item).model_fields}))
     return SubscriptionsListResponse(
         subscriptions=items,
         multi_tariff_enabled=settings.is_multi_tariff_enabled(),
@@ -100,14 +108,15 @@ async def get_subscription_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> SubscriptionListItem:
     """Get specific subscription details with ownership check."""
-    texts = get_texts(user.language)
     subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
-    if not subscription:
+    if not subscription or subscription.is_pending_trial:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_MULTI_TARIFF_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+            detail='Subscription not found',
         )
-    return _subscription_to_list_item(subscription)
+    item = _subscription_to_list_item(subscription)
+    fields = await _load_traffic_accounting_fields(db, subscription)
+    return item.model_copy(update={k: v for k, v in fields.items() if k in type(item).model_fields})
 
 
 @router.delete('/{subscription_id}')
@@ -117,12 +126,11 @@ async def delete_subscription(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> dict:
     """Delete an expired/disabled subscription. Active subscriptions cannot be deleted."""
-    texts = get_texts(user.language)
     subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_MULTI_TARIFF_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+            detail='Subscription not found',
         )
 
     # Only expired/disabled subscriptions can be deleted
@@ -133,10 +141,7 @@ async def delete_subscription(
     if getattr(subscription, 'actual_status', subscription.status) not in deletable_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t(
-                'CABINET_MULTI_TARIFF_ONLY_EXPIRED_DELETABLE',
-                'Only expired or disabled subscriptions can be deleted',
-            ),
+            detail='Only expired or disabled subscriptions can be deleted',
         )
 
     from app.services.grace_access_runtime import GraceAccessDeletionBlocked
@@ -147,10 +152,7 @@ async def delete_subscription(
     except GraceAccessDeletionBlocked as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=texts.t(
-                'CABINET_MULTI_TARIFF_GRACE_ACCESS_ACTIVE',
-                'Temporary renewal access is still active. Finish or restore grace access before deletion.',
-            ),
+            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
         ) from error
 
-    return {'message': texts.t('CABINET_MULTI_TARIFF_SUBSCRIPTION_DELETED', 'Subscription deleted')}
+    return {'message': 'Subscription deleted'}

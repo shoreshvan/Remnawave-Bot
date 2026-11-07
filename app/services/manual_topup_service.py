@@ -290,7 +290,7 @@ async def _notify_admins(
             user,
             transaction,
             old_balance,
-            topup_status=get_texts(settings.DEFAULT_LANGUAGE).t('MANUAL_TOPUP_STATUS', '🧾 Ручное пополнение'),
+            topup_status='🧾 Ручное пополнение',
             referrer_info=format_referrer_info(user),
             subscription=getattr(user, 'subscription', None),
             promo_group=user.get_primary_promo_group(),
@@ -324,9 +324,11 @@ async def _notify_user(
             await bot.send_message(
                 user.telegram_id,
                 texts.t(
-                    'MANUAL_TOPUP_USER_NOTIFICATION',
-                    '✅ <b>Баланс пополнен</b>\n\n💰 Сумма: {amount}\n💳 Текущий баланс: {balance}'
-                    '\n🆔 Транзакция: {transaction_id}',
+                    'MANUAL_TOPUP_SUCCESS',
+                    '✅ <b>Баланс пополнен</b>\n\n'
+                    '💰 Сумма: {amount}\n'
+                    '💳 Текущий баланс: {balance}\n'
+                    '🆔 Транзакция: {transaction_id}',
                 ).format(
                     amount=settings.format_price(amount_kopeks),
                     balance=settings.format_price(user.balance_kopeks),

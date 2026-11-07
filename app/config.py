@@ -235,6 +235,8 @@ class Settings(BaseSettings):
 
     REMNAWAVE_API_URL: str | None = None
     REMNAWAVE_API_KEY: str | None = None
+    # Calendar of the panel process, independent of the bot UI timezone.
+    REMNAWAVE_TRAFFIC_RESET_TIMEZONE: str = 'UTC'
     REMNAWAVE_SECRET_KEY: str | None = None
 
     # HTTP-таймауты запросов к панели RemnaWave (секунды). Self-hosted панели
@@ -374,7 +376,7 @@ class Settings(BaseSettings):
     SERVER_STATUS_ITEMS_PER_PAGE: int = 10
 
     BASE_SUBSCRIPTION_PRICE: int = 50000
-    AVAILABLE_SUBSCRIPTION_PERIODS: str = '14,30,60,90,180,360'
+    AVAILABLE_SUBSCRIPTION_PERIODS: str = '15,30,60,90,180,360'
     AVAILABLE_RENEWAL_PERIODS: str = '30,90,180'
     PRICE_15_DAYS: int = 2500000
     PRICE_30_DAYS: int = 10000000
@@ -711,7 +713,7 @@ class Settings(BaseSettings):
     NALOGO_INN: str | None = None
     NALOGO_PASSWORD: str | None = None
     NALOGO_DEVICE_ID: str | None = None
-    NALOGO_STORAGE_PATH: str = './nalogo_tokens.json'
+    NALOGO_STORAGE_PATH: str = './data/nalogo_tokens.json'
     NALOGO_PROXY_URL: str | None = None  # SOCKS proxy for nalog.ru; falls back to PROXY_URL if not set
     # Имя файла чека (без расширения) во вложении письма и в Telegram; {uuid} — id чека
     NALOGO_RECEIPT_FILENAME: str = 'receipt_{uuid}'
@@ -824,6 +826,21 @@ class Settings(BaseSettings):
     PLATEGA_WEBHOOK_PORT: int = 8086
     PLATEGA_RECURRENT_ENABLED: bool = False  # Рекуррентные СБП-подписки Platega (автопродление)
 
+    # Anore hosted checkout (RUB). Limits below are local operator policy.
+    ANORE_ENABLED: bool = False
+    ANORE_DISPLAY_NAME: str = 'Anore'
+    ANORE_API_URL: str = 'https://api.anore.cc/v1'
+    ANORE_API_KEY: str | None = None
+    ANORE_SECRET_KEY: str | None = None
+    ANORE_SHOP_ID: int | None = None
+    ANORE_PAYMENT_METHODS: str = 'sbp,card,yoomoney,crypto'
+    ANORE_MIN_AMOUNT_KOPEKS: int = 10000
+    ANORE_MAX_AMOUNT_KOPEKS: int = 100000000
+    ANORE_REQUEST_TIMEOUT: int = 30
+    ANORE_WEBHOOK_PATH: str = '/anore-webhook'
+    ANORE_SUCCESS_URL: str | None = None
+    ANORE_FAIL_URL: str | None = None
+
     WATA_ENABLED: bool = False
     WATA_DISPLAY_NAME: str = 'Wata'
     WATA_BASE_URL: str = 'https://api.wata.pro/api/h2h'
@@ -870,8 +887,8 @@ class Settings(BaseSettings):
     FREEKASSA_SECRET_WORD_2: str | None = None  # Для webhook
     FREEKASSA_DISPLAY_NAME: str = 'Freekassa'
     FREEKASSA_CURRENCY: str = 'RUB'
-    FREEKASSA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    FREEKASSA_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 تومان
+    FREEKASSA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
+    FREEKASSA_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
     FREEKASSA_PAYMENT_TIMEOUT_SECONDS: int = 3600
     FREEKASSA_WEBHOOK_PATH: str = '/freekassa-webhook'
     FREEKASSA_WEBHOOK_HOST: str = '0.0.0.0'
@@ -895,8 +912,8 @@ class Settings(BaseSettings):
     KASSA_AI_SECRET_WORD_2: str | None = None  # Для webhook
     KASSA_AI_DISPLAY_NAME: str = 'KassaAI'
     KASSA_AI_CURRENCY: str = 'RUB'
-    KASSA_AI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    KASSA_AI_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 تومان
+    KASSA_AI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 руб
+    KASSA_AI_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 руб
     KASSA_AI_WEBHOOK_PATH: str = '/kassa-ai-webhook'
     KASSA_AI_WEBHOOK_HOST: str = '0.0.0.0'
     KASSA_AI_WEBHOOK_PORT: int = 8089
@@ -934,8 +951,8 @@ class Settings(BaseSettings):
     RIOPAY_WEBHOOK_SECRET: str | None = None  # HMAC-SHA512 ключ для вебхуков (по умолчанию = API_TOKEN)
     RIOPAY_DISPLAY_NAME: str = 'RioPay'
     RIOPAY_CURRENCY: str = 'RUB'
-    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000 تومان
+    RIOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    RIOPAY_MAX_AMOUNT_KOPEKS: int = 100000000  # 1 000 000₽
     RIOPAY_WEBHOOK_PATH: str = '/riopay-webhook'
     RIOPAY_SUCCESS_URL: str | None = None
     RIOPAY_FAIL_URL: str | None = None
@@ -946,8 +963,8 @@ class Settings(BaseSettings):
     SEVERPAY_TOKEN: str | None = None  # Secret token for HMAC-SHA256
     SEVERPAY_DISPLAY_NAME: str = 'SeverPay'
     SEVERPAY_CURRENCY: str = 'RUB'
-    SEVERPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    SEVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    SEVERPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    SEVERPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     SEVERPAY_WEBHOOK_PATH: str = '/severpay-webhook'
     SEVERPAY_RETURN_URL: str | None = None
     SEVERPAY_LIFETIME: int = 1440  # minutes, 30-4320
@@ -972,26 +989,14 @@ class Settings(BaseSettings):
         '{"com.app.client.topup.100":10000,"com.app.client.topup.300":30000,"com.app.client.topup.500":50000}'
     )
 
-    # PayPear (paypear.ru)
-    PAYPEAR_ENABLED: bool = False
-    PAYPEAR_SHOP_ID: str | None = None
-    PAYPEAR_SECRET_KEY: str | None = None
-    PAYPEAR_DISPLAY_NAME: str = 'PayPear'
-    PAYPEAR_CURRENCY: str = 'RUB'
-    PAYPEAR_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    PAYPEAR_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
-    PAYPEAR_WEBHOOK_PATH: str = '/paypear-webhook'
-    PAYPEAR_RETURN_URL: str | None = None
-    PAYPEAR_PAYMENT_METHOD: str = 'sbp'  # bank_card, sbp, sberpay, tpay
-
     # RollyPay (rollypay.io)
     ROLLYPAY_ENABLED: bool = False
     ROLLYPAY_API_KEY: str | None = None  # X-API-Key header
     ROLLYPAY_SIGNING_SECRET: str | None = None  # HMAC webhook verification
     ROLLYPAY_DISPLAY_NAME: str = 'RollyPay'
     ROLLYPAY_CURRENCY: str = 'RUB'
-    ROLLYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    ROLLYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ROLLYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     ROLLYPAY_WEBHOOK_PATH: str = '/rollypay-webhook'
     ROLLYPAY_RETURN_URL: str | None = None
 
@@ -1027,8 +1032,8 @@ class Settings(BaseSettings):
     AURAPAY_SECRET_KEY: str | None = None  # Secret key #2 for webhook HMAC
     AURAPAY_DISPLAY_NAME: str = 'AuraPay'
     AURAPAY_CURRENCY: str = 'RUB'
-    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    AURAPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    AURAPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     AURAPAY_WEBHOOK_PATH: str = '/aurapay-webhook'
     AURAPAY_RETURN_URL: str | None = None
     AURAPAY_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1047,8 +1052,8 @@ class Settings(BaseSettings):
     ANTILOPAY_PRODUCT_NAME: str = 'VPN подписка'
     ANTILOPAY_PRODUCT_TYPE: str = 'services'
     ANTILOPAY_CURRENCY: str = 'RUB'
-    ANTILOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    ANTILOPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    ANTILOPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ANTILOPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     ANTILOPAY_WEBHOOK_PATH: str = '/antilopay-webhook'
     ANTILOPAY_RETURN_URL: str | None = None
     ANTILOPAY_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1076,8 +1081,8 @@ class Settings(BaseSettings):
     JUPITER_METHOD_DESCRIPTION: str = 'SBP'
     JUPITER_DISPLAY_NAME: str = 'Jupiter'
     JUPITER_CURRENCY: str = 'RUB'
-    JUPITER_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    JUPITER_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    JUPITER_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    JUPITER_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     JUPITER_WEBHOOK_PATH: str = '/jupiter-webhook'
     JUPITER_RETURN_URL: str | None = None
     JUPITER_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1095,8 +1100,8 @@ class Settings(BaseSettings):
     DONUT_METHOD_ID: str | None = None
     DONUT_DISPLAY_NAME: str = 'Donut'
     DONUT_CURRENCY: str = 'RUB'
-    DONUT_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    DONUT_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    DONUT_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    DONUT_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     DONUT_WEBHOOK_PATH: str = '/donut-webhook'
     DONUT_RETURN_URL: str | None = None
     DONUT_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1109,22 +1114,25 @@ class Settings(BaseSettings):
     DONUT_SBP_QR_DISPLAY_NAME: str = 'СБП QR (Donut)'
 
     # cisPay (H2H merchant API, api.cispay.app)
+    CISPAY_RECURRENT_ENABLED: bool = False
     CISPAY_ENABLED: bool = False
     CISPAY_SHOP_ID: str | None = None  # X-Shop-ID — UUID магазина
     CISPAY_API_KEY: str | None = None  # X-Api-Key — секретный ключ (cis_sec_...)
     CISPAY_BASE_URL: str = 'https://api.cispay.app'
     CISPAY_DISPLAY_NAME: str = 'CisPay'
     CISPAY_CURRENCY: str = 'RUB'
-    CISPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    CISPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    CISPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    CISPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     CISPAY_WEBHOOK_PATH: str = '/cispay-webhook'
-    # Счёт cisPay живёт 30 минут, после чего переходит в EXPIRED на стороне провайдера
+    # Legacy setting retained for compatibility; expiration comes from provider response.
     CISPAY_PAYMENT_LIFETIME_MINUTES: int = 30
     # Sub-методы cisPay (payment_method в запросе создания платежа)
     CISPAY_CARD_ENABLED: bool = False
     CISPAY_CARD_DISPLAY_NAME: str = 'Карта (CisPay)'
     CISPAY_SBP_ENABLED: bool = False
     CISPAY_SBP_DISPLAY_NAME: str = 'СБП (CisPay)'
+    CISPAY_CRYPTO_ENABLED: bool = False
+    CISPAY_CRYPTO_DISPLAY_NAME: str = 'Криптовалюта (CisPay)'
 
     # Cashera (api.cashera.cash, server-to-server; расчёты мерчанту в USDT, приём — только RUB)
     CASHERA_ENABLED: bool = False
@@ -1144,8 +1152,8 @@ class Settings(BaseSettings):
     # подтверждает, дальше Cashera списывает сама). Метод sbp_recurring должен быть
     # подключён к мерчанту в кабинете Cashera.
     CASHERA_RECURRENT_ENABLED: bool = False
-    CASHERA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان — минимум Cashera для карт
-    CASHERA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    CASHERA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽ — минимум Cashera для карт
+    CASHERA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     CASHERA_WEBHOOK_PATH: str = '/cashera-webhook'
     CASHERA_RETURN_URL: str | None = None
     CASHERA_FAILED_URL: str | None = None
@@ -1158,8 +1166,8 @@ class Settings(BaseSettings):
     TABPAY_WEBHOOK_SECRET: str | None = None
     TABPAY_BASE_URL: str = 'https://tabpay.org/api'
     TABPAY_DISPLAY_NAME: str = 'TabPay'
-    TABPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    TABPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    TABPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    TABPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     TABPAY_WEBHOOK_PATH: str = '/tabpay-webhook'
     # Окно свежести X-Timestamp: защищает от переигрывания перехваченного вебхука.
     # Требует синхронных часов на сервере (NTP), иначе свежие вебхуки не пройдут.
@@ -1179,8 +1187,8 @@ class Settings(BaseSettings):
     PARITYPAY_CALLBACK_SECRET: str | None = None
     PARITYPAY_BASE_URL: str = 'https://api.paritypay.net'
     PARITYPAY_DISPLAY_NAME: str = 'ParityPay'
-    PARITYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    PARITYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    PARITYPAY_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    PARITYPAY_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     PARITYPAY_WEBHOOK_PATH: str = '/paritypay-webhook'
     # Время жизни счёта в минутах, поле expire; у провайдера по умолчанию 60
     PARITYPAY_INVOICE_LIFETIME_MINUTES: int = 60
@@ -1259,8 +1267,8 @@ class Settings(BaseSettings):
     LAVA_WEBHOOK_SECRET: str | None = None  # secret_key_2 — для проверки подписи webhook
     LAVA_DISPLAY_NAME: str = 'Lava'
     LAVA_CURRENCY: str = 'RUB'
-    LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    LAVA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    LAVA_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    LAVA_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     LAVA_WEBHOOK_PATH: str = '/lava-webhook'
     LAVA_RETURN_URL: str | None = None
     LAVA_PAYMENT_LIFETIME_MINUTES: int = 60  # макс 7200 минут (5 дней)
@@ -1280,8 +1288,8 @@ class Settings(BaseSettings):
     ETOPLATEZHI_SECRET_KEY: str | None = None
     ETOPLATEZHI_DISPLAY_NAME: str = 'Etoplatezhi'
     ETOPLATEZHI_CURRENCY: str = 'RUB'
-    ETOPLATEZHI_MIN_AMOUNT_KOPEKS: int = 10000  # 100 تومان
-    ETOPLATEZHI_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000 تومان
+    ETOPLATEZHI_MIN_AMOUNT_KOPEKS: int = 10000  # 100₽
+    ETOPLATEZHI_MAX_AMOUNT_KOPEKS: int = 10000000  # 100 000₽
     ETOPLATEZHI_WEBHOOK_PATH: str = '/etoplatezhi-webhook'
     ETOPLATEZHI_RETURN_URL: str | None = None
     ETOPLATEZHI_PAYMENT_LIFETIME_MINUTES: int = 60
@@ -1393,7 +1401,7 @@ class Settings(BaseSettings):
     SERVICE_RULES_DISPLAY_MODE: str = 'both'
     FAQ_DISPLAY_MODE: str = 'both'
 
-    # Округление цен при отображении (дробная часть ≤0.50 вниз, >0.50 вверх)
+    # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
     PRICE_ROUNDING_ENABLED: bool = True
 
     # Домашняя валюта сервиса — иранский туман.
@@ -3165,20 +3173,6 @@ class Settings(BaseSettings):
                 return None
         return None
 
-    def is_paypear_configured(self) -> bool:
-        """Есть ли учётные данные провайдера — без учёта флага включения."""
-        return self.PAYPEAR_SHOP_ID is not None and self.PAYPEAR_SECRET_KEY is not None
-
-    def is_paypear_enabled(self) -> bool:
-        return self.PAYPEAR_ENABLED and self.PAYPEAR_SHOP_ID is not None and self.PAYPEAR_SECRET_KEY is not None
-
-    def get_paypear_display_name(self) -> str:
-        name = (self.PAYPEAR_DISPLAY_NAME or '').strip()
-        return name or 'PayPear'
-
-    def get_paypear_display_name_html(self) -> str:
-        return html.escape(self.get_paypear_display_name())
-
     def is_rollypay_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""
         return self.ROLLYPAY_API_KEY is not None and self.ROLLYPAY_SIGNING_SECRET is not None
@@ -3359,7 +3353,12 @@ class Settings(BaseSettings):
     def is_cispay_enabled(self) -> bool:
         # Пустая строка так же непригодна, как None: с пустым ключом HMAC вебхука
         # тривиально подделывается, поэтому включаем только при непустых значениях.
-        return bool(self.CISPAY_ENABLED and self.CISPAY_SHOP_ID and self.CISPAY_API_KEY)
+        return bool(
+            self.CISPAY_ENABLED
+            and self.CISPAY_SHOP_ID
+            and self.CISPAY_API_KEY
+            and self.CISPAY_CURRENCY.upper() == 'RUB'
+        )
 
     def get_cispay_display_name(self) -> str:
         name = (self.CISPAY_DISPLAY_NAME or '').strip()
@@ -3367,6 +3366,25 @@ class Settings(BaseSettings):
 
     def get_cispay_display_name_html(self) -> str:
         return html.escape(self.get_cispay_display_name())
+
+    def get_cispay_methods(self) -> list[str]:
+        # Legacy generic setup permits fiat only; crypto always requires opt-in.
+        methods = []
+        if self.CISPAY_CARD_ENABLED:
+            methods.append('card')
+        if self.CISPAY_SBP_ENABLED:
+            methods.append('sbp')
+        if not methods:
+            methods = ['card', 'sbp']
+        if self.CISPAY_CRYPTO_ENABLED:
+            methods.append('crypto')
+        return methods
+
+    def is_cispay_crypto_enabled(self) -> bool:
+        return self.CISPAY_CRYPTO_ENABLED and self.is_cispay_enabled()
+
+    def get_cispay_crypto_display_name(self) -> str:
+        return (self.CISPAY_CRYPTO_DISPLAY_NAME or '').strip() or 'Криптовалюта (CisPay)'
 
     def is_cispay_card_enabled(self) -> bool:
         return self.CISPAY_CARD_ENABLED and self.is_cispay_enabled()
@@ -3462,6 +3480,35 @@ class Settings(BaseSettings):
         if not self.WEBHOOK_URL:
             return None
         return f'{self.WEBHOOK_URL.rstrip("/")}{self.CASHERA_WEBHOOK_PATH}'
+
+    def is_anore_configured(self) -> bool:
+        account_key = (self.ANORE_API_KEY or '').startswith('an_')
+        return bool(
+            self.ANORE_API_KEY
+            and self.ANORE_SECRET_KEY
+            and (not account_key or (self.ANORE_SHOP_ID is not None and self.ANORE_SHOP_ID > 0))
+        )
+
+    def is_anore_enabled(self) -> bool:
+        return self.ANORE_ENABLED and self.is_anore_configured() and bool(self.get_anore_methods())
+
+    def get_anore_methods(self) -> list[str]:
+        allowed = {'sbp', 'card', 'yoomoney', 'crypto'}
+        return list(
+            dict.fromkeys(
+                method.strip().lower()
+                for method in self.ANORE_PAYMENT_METHODS.split(',')
+                if method.strip().lower() in allowed
+            )
+        )
+
+    def get_anore_display_name(self) -> str:
+        from app.services.payment_method_config_service import get_display_name_override
+
+        return get_display_name_override('anore') or (self.ANORE_DISPLAY_NAME or '').strip() or 'Anore'
+
+    def get_anore_display_name_html(self) -> str:
+        return html.escape(self.get_anore_display_name())
 
     def is_tabpay_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""
@@ -4739,7 +4786,7 @@ class Settings(BaseSettings):
 
     model_config = {'env_file': '.env', 'env_file_encoding': 'utf-8', 'extra': 'ignore'}
 
-    @field_validator('TIMEZONE')
+    @field_validator('TIMEZONE', 'REMNAWAVE_TRAFFIC_RESET_TIMEZONE')
     @classmethod
     def validate_timezone(cls, value: str) -> str:
         try:

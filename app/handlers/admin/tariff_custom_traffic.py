@@ -21,86 +21,95 @@ from app.utils.decorators import admin_required, error_handler
 from app.utils.formatting import format_price_kopeks
 
 
-def _format_custom_traffic_value(value: int | None, suffix: str = '', texts=None) -> str:
+_VALIDATION_ERROR_KEYS = {
+    'не указана цена за 1 ГБ': 'ADMIN_TARIFF_VALIDATION_TRAFFIC_PRICE_MISSING',
+    'цена за 1 ГБ должна быть больше нуля': 'ADMIN_TARIFF_VALIDATION_TRAFFIC_PRICE_POSITIVE',
+    'не указан минимальный объём': 'ADMIN_TARIFF_VALIDATION_TRAFFIC_MIN_MISSING',
+    'минимальный объём должен быть больше нуля': 'ADMIN_TARIFF_VALIDATION_TRAFFIC_MIN_POSITIVE',
+    'не указан максимальный объём': 'ADMIN_TARIFF_VALIDATION_TRAFFIC_MAX_MISSING',
+    'максимальный объём должен быть больше нуля': 'ADMIN_TARIFF_VALIDATION_TRAFFIC_MAX_POSITIVE',
+    'максимальный объём не может быть меньше минимального': 'ADMIN_TARIFF_VALIDATION_TRAFFIC_RANGE',
+}
+
+
+def _localized_validation_error(error: str, language: str) -> str:
+    # Closed error vocabulary from the tariff validator; unknown errors retain their original text.
+    key = _VALIDATION_ERROR_KEYS.get(error)
+    return get_texts(language).t(key, error) if key else error
+
+
+def _format_custom_traffic_value(value: int | None, suffix: str = '', language: str = 'ru') -> str:
     """Format an optional positive custom-traffic value for the admin UI."""
-    if texts is None:
-        texts = get_texts()
     if value is None or value <= 0:
-        return texts.t('ADMIN_TARIFF_CT_NOT_SET', 'Не задано')
+        return get_texts(language).t('ADMIN_TARIFF_HELPER_UNSET', 'Не задано')
     return f'{value}{suffix}'
 
 
-def format_custom_traffic_settings(tariff: Tariff, texts=None) -> str:
+def format_custom_traffic_settings(tariff: Tariff, language: str = 'ru') -> str:
     """Format custom-traffic state for the main tariff card."""
-    if texts is None:
-        texts = get_texts()
     enabled = getattr(tariff, 'custom_traffic_enabled', False)
     price = getattr(tariff, 'traffic_price_per_gb_kopeks', None)
     minimum = getattr(tariff, 'min_traffic_gb', None)
     maximum = getattr(tariff, 'max_traffic_gb', None)
 
     status = (
-        texts.t('ADMIN_TARIFF_CT_CARD_STATUS_ON', '✅ Включено')
+        get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLED_STATE', '✅ Включено')
         if enabled
-        else texts.t('ADMIN_TARIFF_CT_CARD_STATUS_OFF', '❌ Выключено')
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_STATE', '❌ Выключено')
     )
     price_display = (
         format_price_kopeks(price)
         if price is not None and price > 0
-        else texts.t('ADMIN_TARIFF_CT_NOT_SET', 'Не задано')
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_UNSET', 'Не задано')
     )
-    gb_suffix = texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ')
-    minimum_display = _format_custom_traffic_value(minimum, gb_suffix, texts)
-    maximum_display = _format_custom_traffic_value(maximum, gb_suffix, texts)
+    minimum_display = _format_custom_traffic_value(
+        minimum, get_texts(language).t('ADMIN_TARIFF_HELPER_GB_SUFFIX', ' ГБ'), language=language
+    )
+    maximum_display = _format_custom_traffic_value(
+        maximum, get_texts(language).t('ADMIN_TARIFF_HELPER_GB_SUFFIX', ' ГБ'), language=language
+    )
 
-    return texts.t(
-        'ADMIN_TARIFF_CT_CARD_BODY',
-        '{status}\n'
-        '• Цена за 1 ГБ: {price}\n'
-        '• Минимальный объём: {minimum}\n'
-        '• Максимальный объём: {maximum}',
-    ).format(status=status, price=price_display, minimum=minimum_display, maximum=maximum_display)
+    return (
+        get_texts(language)
+        .t(
+            'ADMIN_TARIFF_HELPER_FORMAT_CUSTOM_TRAFFIC_SETTINGS_1',
+            '{v0}\n• Цена за 1 ГБ: {v1}\n• Минимальный объём: {v2}\n• Максимальный объём: {v3}',
+        )
+        .format(v0=status, v1=price_display, v2=minimum_display, v3=maximum_display)
+    )
 
 
-def render_custom_traffic_settings(tariff: Tariff, texts=None) -> str:
+def render_custom_traffic_settings(tariff: Tariff, language: str = 'ru') -> str:
     """Render the dedicated custom-traffic settings screen."""
-    if texts is None:
-        texts = get_texts()
     enabled = getattr(tariff, 'custom_traffic_enabled', False)
     price = getattr(tariff, 'traffic_price_per_gb_kopeks', None)
     minimum = getattr(tariff, 'min_traffic_gb', None)
     maximum = getattr(tariff, 'max_traffic_gb', None)
 
     status = (
-        texts.t('ADMIN_TARIFF_CT_SCREEN_STATUS_ON', '✅ Включён')
+        get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLED_MODE', '✅ Включён')
         if enabled
-        else texts.t('ADMIN_TARIFF_CT_SCREEN_STATUS_OFF', '❌ Выключен')
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLED_MODE', '❌ Выключен')
     )
     price_display = (
         format_price_kopeks(price)
         if price is not None and price > 0
-        else texts.t('ADMIN_TARIFF_CT_NOT_SET', 'Не задано')
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_UNSET', 'Не задано')
     )
-    gb_suffix = texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ')
-    minimum_display = _format_custom_traffic_value(minimum, gb_suffix, texts)
-    maximum_display = _format_custom_traffic_value(maximum, gb_suffix, texts)
+    minimum_display = _format_custom_traffic_value(
+        minimum, get_texts(language).t('ADMIN_TARIFF_HELPER_GB_SUFFIX', ' ГБ'), language=language
+    )
+    maximum_display = _format_custom_traffic_value(
+        maximum, get_texts(language).t('ADMIN_TARIFF_HELPER_GB_SUFFIX', ' ГБ'), language=language
+    )
 
-    return texts.t(
-        'ADMIN_TARIFF_CT_SCREEN_BODY',
-        '⚙️ <b>Произвольный трафик</b>\n\n'
-        'Тариф: <b>{tariff_name}</b>\n\n'
-        'Статус: {status}\n'
-        'Цена за 1 ГБ: <b>{price}</b>\n'
-        'Минимальный объём: <b>{minimum}</b>\n'
-        'Максимальный объём: <b>{maximum}</b>\n\n'
-        'Пользователь сможет выбрать объём трафика в указанных границах. '
-        'Цена выбранного объёма добавляется к цене периода.',
-    ).format(
-        tariff_name=html.escape(tariff.name),
-        status=status,
-        price=price_display,
-        minimum=minimum_display,
-        maximum=maximum_display,
+    return (
+        get_texts(language)
+        .t(
+            'ADMIN_TARIFF_HELPER_RENDER_CUSTOM_TRAFFIC_SETTINGS_1',
+            '⚙️ <b>Произвольный трафик</b>\n\nТариф: <b>{v0}</b>\n\nСтатус: {v1}\nЦена за 1 ГБ: <b>{v2}</b>\nМинимальный объём: <b>{v3}</b>\nМаксимальный объём: <b>{v4}</b>\n\nПользователь сможет выбрать объём трафика в указанных границах. Цена выбранного объёма добавляется к цене периода.',
+        )
+        .format(v0=html.escape(tariff.name), v1=status, v2=price_display, v3=minimum_display, v4=maximum_display)
     )
 
 
@@ -109,9 +118,9 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
     texts = get_texts(language)
     enabled = getattr(tariff, 'custom_traffic_enabled', False)
     toggle_text = (
-        texts.t('ADMIN_TARIFF_CT_TOGGLE_DISABLE', '❌ Выключить')
+        get_texts(language).t('ADMIN_TARIFF_HELPER_DISABLE_BUTTON', '❌ Выключить')
         if enabled
-        else texts.t('ADMIN_TARIFF_CT_TOGGLE_ENABLE', '✅ Включить')
+        else get_texts(language).t('ADMIN_TARIFF_HELPER_ENABLE_BUTTON', '✅ Включить')
     )
 
     return InlineKeyboardMarkup(
@@ -124,19 +133,19 @@ def get_custom_traffic_keyboard(tariff: Tariff, language: str) -> InlineKeyboard
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_CT_PRICE_BUTTON', '💰 Цена за 1 ГБ'),
+                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_TRAFFIC_PRICE_BUTTON', '💰 Цена за 1 ГБ'),
                     callback_data=f'admin_tariff_edit_custom_traffic_price:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_CT_MIN_BUTTON', '📉 Минимальный объём'),
+                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_MIN_TRAFFIC_BUTTON', '📉 Минимальный объём'),
                     callback_data=f'admin_tariff_edit_custom_traffic_min:{tariff.id}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_CT_MAX_BUTTON', '📈 Максимальный объём'),
+                    text=get_texts(language).t('ADMIN_TARIFF_HELPER_MAX_TRAFFIC_BUTTON', '📈 Максимальный объём'),
                     callback_data=f'admin_tariff_edit_custom_traffic_max:{tariff.id}',
                 )
             ],
@@ -155,16 +164,17 @@ async def show_custom_traffic_settings(
 ):
     """Show custom-traffic settings for a tariff and leave any field-edit state."""
     await state.clear()
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await callback.message.edit_text(
-        render_custom_traffic_settings(tariff),
+        render_custom_traffic_settings(tariff, language=db_user.language),
         reply_markup=get_custom_traffic_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -179,17 +189,20 @@ async def toggle_custom_traffic(
     db: AsyncSession,
 ):
     """Enable or disable custom traffic after validating stored settings."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     if tariff.custom_traffic_enabled:
         tariff = await update_tariff(db, tariff, custom_traffic_enabled=False)
-        await callback.answer(texts.t('ADMIN_TARIFF_CT_DISABLED_TOAST', 'Произвольный трафик выключен'))
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_TRAFFIC_DISABLED', 'Произвольный трафик выключен')
+        )
     else:
         errors = validate_custom_traffic_configuration(
             price_per_gb_kopeks=getattr(tariff, 'traffic_price_per_gb_kopeks', None),
@@ -197,20 +210,22 @@ async def toggle_custom_traffic(
             max_traffic_gb=getattr(tariff, 'max_traffic_gb', None),
         )
         if errors:
-            details = '\n'.join(f'• {error}' for error in errors)
+            details = '\n'.join(f'• {_localized_validation_error(error, db_user.language)}' for error in errors)
             await callback.answer(
-                texts.t('ADMIN_TARIFF_CT_CANNOT_ENABLE', 'Нельзя включить произвольный трафик:\n{details}').format(
-                    details=details
-                ),
+                get_texts(db_user.language)
+                .t('ADMIN_TARIFF_HELPER_TOGGLE_CUSTOM_TRAFFIC_1', 'Нельзя включить произвольный трафик:\n{v0}')
+                .format(v0=details),
                 show_alert=True,
             )
             return
 
         tariff = await update_tariff(db, tariff, custom_traffic_enabled=True)
-        await callback.answer(texts.t('ADMIN_TARIFF_CT_ENABLED_TOAST', 'Произвольный трафик включён'))
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_TRAFFIC_ENABLED', 'Произвольный трафик включён')
+        )
 
     await callback.message.edit_text(
-        render_custom_traffic_settings(tariff),
+        render_custom_traffic_settings(tariff, language=db_user.language),
         reply_markup=get_custom_traffic_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -234,10 +249,12 @@ async def _start_custom_traffic_field_edit(
     texts = get_texts(db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_CT_FIELD_EDIT_BODY',
-            '{title}\n\nТариф: <b>{tariff_name}</b>\nТекущее значение: <b>{current_value}</b>\n\n{prompt}',
-        ).format(title=title, tariff_name=html.escape(tariff.name), current_value=current_value, prompt=prompt),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_HELPER_START_FIELD_EDIT_1',
+            '{v0}\n\nТариф: <b>{v1}</b>\nТекущее значение: <b>{v2}</b>\n\n{v3}',
+        )
+        .format(v0=title, v1=html.escape(tariff.name), v2=current_value, v3=prompt),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
@@ -262,18 +279,19 @@ async def start_edit_custom_traffic_price(
     state: FSMContext,
 ):
     """Start editing the custom-traffic price per gigabyte."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     price = getattr(tariff, 'traffic_price_per_gb_kopeks', None)
     current = (
         format_price_kopeks(price)
         if price is not None and price > 0
-        else texts.t('ADMIN_TARIFF_CT_NOT_SET', 'Не задано')
+        else get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_UNSET', 'Не задано')
     )
     await _start_custom_traffic_field_edit(
         callback,
@@ -281,11 +299,13 @@ async def start_edit_custom_traffic_price(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_traffic_price,
-        title=texts.t('ADMIN_TARIFF_CT_PRICE_TITLE', '💰 <b>Цена произвольного трафика</b>'),
+        title=get_texts(db_user.language).t(
+            'ADMIN_TARIFF_HELPER_TRAFFIC_PRICE_TITLE', '💰 <b>Цена произвольного трафика</b>'
+        ),
         current_value=current,
-        prompt=texts.t(
-            'ADMIN_TARIFF_CT_PRICE_PROMPT',
-            'Введите цену за 1 ГБ в تومان.\nПример: <code>2</code> или <code>2.50</code>',
+        prompt=get_texts(db_user.language).t(
+            'ADMIN_TARIFF_HELPER_TRAFFIC_PRICE_PROMPT',
+            'Введите цену за 1 ГБ в рублях.\nПример: <code>2</code> или <code>2.50</code>',
         ),
     )
 
@@ -299,15 +319,18 @@ async def start_edit_custom_traffic_min(
     state: FSMContext,
 ):
     """Start editing the minimum selectable traffic amount."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     current = _format_custom_traffic_value(
-        getattr(tariff, 'min_traffic_gb', None), texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ'), texts
+        getattr(tariff, 'min_traffic_gb', None),
+        get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_GB_SUFFIX', ' ГБ'),
+        language=db_user.language,
     )
     await _start_custom_traffic_field_edit(
         callback,
@@ -315,10 +338,10 @@ async def start_edit_custom_traffic_min(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_traffic_min,
-        title=texts.t('ADMIN_TARIFF_CT_MIN_TITLE', '📉 <b>Минимальный объём</b>'),
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_MIN_TRAFFIC_TITLE', '📉 <b>Минимальный объём</b>'),
         current_value=current,
-        prompt=texts.t(
-            'ADMIN_TARIFF_CT_MIN_PROMPT',
+        prompt=get_texts(db_user.language).t(
+            'ADMIN_TARIFF_HELPER_MIN_TRAFFIC_PROMPT',
             'Введите минимальный объём целым числом гигабайт.\nПример: <code>5</code>',
         ),
     )
@@ -333,15 +356,18 @@ async def start_edit_custom_traffic_max(
     state: FSMContext,
 ):
     """Start editing the maximum selectable traffic amount."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     current = _format_custom_traffic_value(
-        getattr(tariff, 'max_traffic_gb', None), texts.t('ADMIN_TARIFF_CT_GB_SUFFIX', ' ГБ'), texts
+        getattr(tariff, 'max_traffic_gb', None),
+        get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_GB_SUFFIX', ' ГБ'),
+        language=db_user.language,
     )
     await _start_custom_traffic_field_edit(
         callback,
@@ -349,29 +375,24 @@ async def start_edit_custom_traffic_max(
         state,
         tariff,
         state_value=AdminStates.editing_tariff_custom_traffic_max,
-        title=texts.t('ADMIN_TARIFF_CT_MAX_TITLE', '📈 <b>Максимальный объём</b>'),
+        title=get_texts(db_user.language).t('ADMIN_TARIFF_HELPER_MAX_TRAFFIC_TITLE', '📈 <b>Максимальный объём</b>'),
         current_value=current,
-        prompt=texts.t(
-            'ADMIN_TARIFF_CT_MAX_PROMPT',
+        prompt=get_texts(db_user.language).t(
+            'ADMIN_TARIFF_HELPER_MAX_TRAFFIC_PROMPT',
             'Введите максимальный объём целым числом гигабайт.\nПример: <code>100</code>',
         ),
     )
 
 
 async def _load_custom_traffic_tariff_from_state(
-    message: types.Message,
-    db: AsyncSession,
-    state: FSMContext,
-    texts=None,
+    message: types.Message, db: AsyncSession, state: FSMContext, language: str = 'ru'
 ) -> Tariff | None:
     """Resolve the selected tariff and clear stale FSM state if it disappeared."""
-    if texts is None:
-        texts = get_texts()
     state_data = await state.get_data()
     tariff_id = state_data.get('tariff_id')
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id is not None else None
     if tariff is None:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
     return tariff
 
@@ -386,7 +407,7 @@ async def _send_custom_traffic_update_result(
     """Finish a successful field edit and show the refreshed settings screen."""
     await state.clear()
     await message.answer(
-        f'{confirmation}\n\n{render_custom_traffic_settings(tariff, get_texts(db_user.language))}',
+        f'{confirmation}\n\n{render_custom_traffic_settings(tariff, language=db_user.language)}',
         reply_markup=get_custom_traffic_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -401,8 +422,7 @@ async def process_custom_traffic_price_input(
     state: FSMContext,
 ):
     """Persist a validated custom-traffic price per gigabyte."""
-    texts = get_texts(db_user.language)
-    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, texts)
+    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, language=db_user.language)
     if tariff is None:
         return
 
@@ -410,10 +430,9 @@ async def process_custom_traffic_price_input(
         price_kopeks = parse_positive_rubles_to_kopeks(message.text or '')
     except ValueError:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_CT_PRICE_INVALID',
-                '❌ Некорректная цена. Введите положительную сумму в تومان '
-                'с точностью не более двух знаков.\nПример: <code>2</code> или <code>2.50</code>',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_HELPER_INVALID_TRAFFIC_PRICE',
+                '❌ Некорректная цена. Введите положительную сумму в рублях с точностью не более двух знаков.\nПример: <code>2</code> или <code>2.50</code>',
             ),
             parse_mode='HTML',
         )
@@ -425,9 +444,9 @@ async def process_custom_traffic_price_input(
         db_user,
         state,
         tariff,
-        texts.t('ADMIN_TARIFF_CT_PRICE_SAVED', '✅ Цена за 1 ГБ установлена: {price}').format(
-            price=format_price_kopeks(price_kopeks)
-        ),
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_PRICE_INPUT_1', '✅ Цена за 1 ГБ установлена: {v0}')
+        .format(v0=format_price_kopeks(price_kopeks)),
     )
 
 
@@ -440,8 +459,7 @@ async def process_custom_traffic_min_input(
     state: FSMContext,
 ):
     """Persist a validated minimum selectable traffic amount."""
-    texts = get_texts(db_user.language)
-    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, texts)
+    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, language=db_user.language)
     if tariff is None:
         return
 
@@ -449,8 +467,8 @@ async def process_custom_traffic_min_input(
         minimum = parse_positive_gb(message.text or '')
     except ValueError:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_CT_MIN_INVALID',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_HELPER_INVALID_MIN_TRAFFIC',
                 '❌ Введите положительное целое число гигабайт.\nПример: <code>5</code>',
             ),
             parse_mode='HTML',
@@ -460,10 +478,12 @@ async def process_custom_traffic_min_input(
     maximum = getattr(tariff, 'max_traffic_gb', None)
     if maximum is not None and maximum > 0 and minimum > maximum:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_CT_MIN_ABOVE_MAX',
-                '❌ Минимальный объём не может быть больше текущего максимума ({maximum} ГБ).',
-            ).format(maximum=maximum),
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MIN_INPUT_2',
+                '❌ Минимальный объём не может быть больше текущего максимума ({v0} ГБ).',
+            )
+            .format(v0=maximum),
         )
         return
 
@@ -473,7 +493,9 @@ async def process_custom_traffic_min_input(
         db_user,
         state,
         tariff,
-        texts.t('ADMIN_TARIFF_CT_MIN_SAVED', '✅ Минимальный объём установлен: {minimum} ГБ').format(minimum=minimum),
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MIN_INPUT_1', '✅ Минимальный объём установлен: {v0} ГБ')
+        .format(v0=minimum),
     )
 
 
@@ -486,8 +508,7 @@ async def process_custom_traffic_max_input(
     state: FSMContext,
 ):
     """Persist a validated maximum selectable traffic amount."""
-    texts = get_texts(db_user.language)
-    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, texts)
+    tariff = await _load_custom_traffic_tariff_from_state(message, db, state, language=db_user.language)
     if tariff is None:
         return
 
@@ -495,8 +516,8 @@ async def process_custom_traffic_max_input(
         maximum = parse_positive_gb(message.text or '')
     except ValueError:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_CT_MAX_INVALID',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_HELPER_INVALID_MAX_TRAFFIC',
                 '❌ Введите положительное целое число гигабайт.\nПример: <code>100</code>',
             ),
             parse_mode='HTML',
@@ -506,10 +527,12 @@ async def process_custom_traffic_max_input(
     minimum = getattr(tariff, 'min_traffic_gb', None)
     if minimum is not None and minimum > 0 and maximum < minimum:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_CT_MAX_BELOW_MIN',
-                '❌ Максимальный объём не может быть меньше текущего минимума ({minimum} ГБ).',
-            ).format(minimum=minimum),
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MAX_INPUT_2',
+                '❌ Максимальный объём не может быть меньше текущего минимума ({v0} ГБ).',
+            )
+            .format(v0=minimum),
         )
         return
 
@@ -519,9 +542,9 @@ async def process_custom_traffic_max_input(
         db_user,
         state,
         tariff,
-        texts.t('ADMIN_TARIFF_CT_MAX_SAVED', '✅ Максимальный объём установлен: {maximum} ГБ').format(
-            maximum=maximum
-        ),
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_HELPER_PROCESS_CUSTOM_TRAFFIC_MAX_INPUT_1', '✅ Максимальный объём установлен: {v0} ГБ')
+        .format(v0=maximum),
     )
 
 

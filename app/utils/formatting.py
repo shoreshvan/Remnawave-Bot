@@ -18,12 +18,12 @@ def user_html_link(user) -> str:
     return f'<b>{safe}</b>'
 
 
-def format_traffic(gb: int, language: str | None = None) -> str:
-    """Форматирует трафик."""
+def format_traffic(gb: int, language: str = 'ru') -> str:
+    """Format traffic, preserving Russian output for existing callers."""
     texts = get_texts(language)
     if gb == 0:
-        return texts.t('TRAFFIC_UNLIMITED_SHORT', 'Безлимит')
-    return texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=gb)
+        return texts.t('FORMAT_TRAFFIC_UNLIMITED', 'Безлимит')
+    return texts.t('FORMAT_TRAFFIC_GB', '{value} ГБ').format(value=gb)
 
 
 def format_price_kopeks(kopeks: int, compact: bool = False) -> str:
@@ -36,17 +36,14 @@ def format_price_kopeks(kopeks: int, compact: bool = False) -> str:
     return settings.format_price(kopeks, round_kopeks=False)
 
 
-def format_period(days: int) -> str:
-    """Форматирует период."""
-    texts = get_texts()
+def format_period(days: int, language: str = 'ru') -> str:
+    """Format a day count using the requested language's plural rules."""
+    code = (language or 'ru').replace('_', '-').split('-')[0].lower()
     mod100 = days % 100
     mod10 = days % 10
-    if 11 <= mod100 <= 19:
-        key, default = 'DAYS_DECLENSION_MANY', '{days} дней'
-    elif mod10 == 1:
-        key, default = 'DAYS_DECLENSION_ONE', '{days} день'
-    elif 2 <= mod10 <= 4:
-        key, default = 'DAYS_DECLENSION_FEW', '{days} дня'
+    if code in {'ru', 'ua', 'uk'}:
+        form = 'MANY' if 11 <= mod100 <= 19 else 'ONE' if mod10 == 1 else 'FEW' if 2 <= mod10 <= 4 else 'MANY'
     else:
-        key, default = 'DAYS_DECLENSION_MANY', '{days} дней'
-    return texts.t(key, default).format(days=days)
+        form = 'ONE' if days == 1 else 'MANY'
+    defaults = {'ONE': '{count} день', 'FEW': '{count} дня', 'MANY': '{count} дней'}
+    return get_texts(language).t(f'FORMAT_PERIOD_DAYS_{form}', defaults[form]).format(count=days)

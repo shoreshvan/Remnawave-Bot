@@ -167,9 +167,7 @@ def _validate_permissions(permissions: list[str]) -> None:
     if invalid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts()
-            .t('CABINET_ROLE_INVALID_PERMISSIONS', 'Invalid permissions: {permissions}')
-            .format(permissions=', '.join(invalid)),
+            detail=f'Invalid permissions: {", ".join(invalid)}',
         )
 
 
@@ -198,9 +196,7 @@ async def _ensure_can_grant(db: AsyncSession, admin: User, admin_level: int, per
     if not_held:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts()
-            .t('CABINET_ROLE_CANNOT_GRANT_PERMISSIONS', 'You cannot grant permissions you do not hold: {permissions}')
-            .format(permissions=', '.join(not_held)),
+            detail=f'You cannot grant permissions you do not hold: {", ".join(not_held)}',
         )
 
 
@@ -267,10 +263,7 @@ async def list_role_users(
 
     role = await AdminRoleCRUD.get_by_id(db, role_id)
     if not role:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_ROLE_NOT_FOUND', 'Role not found'),
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Role not found')
 
     from sqlalchemy import select as _sa_select
 
@@ -329,10 +322,7 @@ async def create_role(
     if payload.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t(
-                'CABINET_ROLE_CANNOT_CREATE_LEVEL',
-                'Cannot create a role with level >= your own role level',
-            ),
+            detail='Cannot create a role with level >= your own role level',
         )
 
     # Cannot grant permissions the creating admin does not themselves hold.
@@ -343,7 +333,7 @@ async def create_role(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=get_texts().t('CABINET_ROLE_NAME_EXISTS', 'Role with this name already exists'),
+            detail='Role with this name already exists',
         )
 
     role = await AdminRoleCRUD.create(
@@ -374,7 +364,7 @@ async def update_role(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_ROLE_NOT_FOUND', 'Role not found'),
+            detail='Role not found',
         )
 
     admin_level = await _get_admin_level(db, admin)
@@ -383,27 +373,30 @@ async def update_role(
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('CABINET_ROLE_CANNOT_EDIT_LEVEL', 'Cannot edit a role at or above your own level'),
+            detail='Cannot edit a role at or above your own level',
         )
 
     update_data = payload.model_dump(exclude_unset=True)
 
     # System roles: only permissions can be extended, block is_active/level changes
     if role.is_system:
-        blocked = {'is_active', 'level'} & update_data.keys()
+        protected = {'is_active', 'level'} & update_data.keys()
+        blocked = {field for field in protected if update_data[field] != getattr(role, field)}
         if blocked:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=get_texts()
-                .t('CABINET_ROLE_CANNOT_CHANGE_SYSTEM', 'Cannot change {fields} on a system role')
-                .format(fields=', '.join(sorted(blocked))),
+                detail=f'Cannot change {", ".join(sorted(blocked))} on a system role',
             )
+        # Older clients send unchanged fields with every save. Accept them,
+        # but never include protected fields in the system-role write.
+        for field in protected:
+            update_data.pop(field)
 
     # Validate level change
     if 'level' in update_data and update_data['level'] >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('CABINET_ROLE_CANNOT_SET_LEVEL', 'Cannot set role level >= your own role level'),
+            detail='Cannot set role level >= your own role level',
         )
 
     # Validate permissions
@@ -418,14 +411,14 @@ async def update_role(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=get_texts().t('CABINET_ROLE_NAME_EXISTS', 'Role with this name already exists'),
+                detail='Role with this name already exists',
             )
 
     updated = await AdminRoleCRUD.update(db, role_id, **update_data)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_ROLE_NOT_FOUND', 'Role not found'),
+            detail='Role not found',
         )
 
     await db.commit()
@@ -445,36 +438,33 @@ async def delete_role(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_ROLE_NOT_FOUND', 'Role not found'),
+            detail='Role not found',
         )
 
     if role.is_system:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('CABINET_ROLE_CANNOT_DELETE_SYSTEM', 'Cannot delete a system role'),
+            detail='Cannot delete a system role',
         )
 
     admin_level = await _get_admin_level(db, admin)
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t(
-                'CABINET_ROLE_CANNOT_DELETE_LEVEL',
-                'Cannot delete a role at or above your own level',
-            ),
+            detail='Cannot delete a role at or above your own level',
         )
 
     deleted = await AdminRoleCRUD.delete(db, role_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts().t('CABINET_ROLE_DELETE_FAILED', 'Failed to delete role'),
+            detail='Failed to delete role',
         )
 
     await db.commit()
 
     logger.info('Admin deleted role', admin_id=admin.id, role_id=role_id, role_name=role.name)
-    return {'message': get_texts().t('CABINET_ROLE_DELETED', 'Role deleted'), 'role_id': role_id}
+    return {'message': 'Role deleted', 'role_id': role_id}
 
 
 @router.post('/assignments', response_model=UserRoleResponse, status_code=status.HTTP_201_CREATED)
@@ -488,18 +478,15 @@ async def assign_role(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_ROLE_NOT_FOUND', 'Role not found'),
+            detail='Role not found',
         )
 
     # Superadmin role is managed exclusively via ADMIN_IDS/ADMIN_EMAILS env config
     if role.level >= SUPERADMIN_LEVEL:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t(
-                'CABINET_ROLE_SUPERADMIN_ENV_MANAGED_ADD',
-                'Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. '
-                'Add the user there and restart the bot.',
-            ),
+            detail='Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. '
+            'Add the user there and restart the bot.',
         )
 
     admin_level = await _get_admin_level(db, admin)
@@ -508,10 +495,7 @@ async def assign_role(
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t(
-                'CABINET_ROLE_CANNOT_ASSIGN_LEVEL',
-                'Cannot assign a role with level >= your own role level',
-            ),
+            detail='Cannot assign a role with level >= your own role level',
         )
 
     # Cannot hand out a role whose permissions exceed the assigning admin's own
@@ -525,7 +509,7 @@ async def assign_role(
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_ROLE_TARGET_USER_NOT_FOUND', 'Target user not found'),
+            detail='Target user not found',
         )
 
     user_role = await UserRoleCRUD.assign_role(
@@ -575,25 +559,22 @@ async def revoke_role(
     if not user_role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_ROLE_ASSIGNMENT_NOT_FOUND', 'Role assignment not found'),
+            detail='Role assignment not found',
         )
 
     role = await AdminRoleCRUD.get_by_id(db, user_role.role_id)
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_ROLE_ASSOCIATED_NOT_FOUND', 'Associated role not found'),
+            detail='Associated role not found',
         )
 
     # Superadmin role is managed exclusively via env config
     if role.level >= SUPERADMIN_LEVEL:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t(
-                'CABINET_ROLE_SUPERADMIN_ENV_MANAGED_REMOVE',
-                'Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. '
-                'Remove the user from env and restart the bot.',
-            ),
+            detail='Superadmin role is managed via ADMIN_IDS/ADMIN_EMAILS environment variables. '
+            'Remove the user from env and restart the bot.',
         )
 
     admin_level = await _get_admin_level(db, admin)
@@ -602,10 +583,7 @@ async def revoke_role(
     if role.level >= admin_level:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t(
-                'CABINET_ROLE_CANNOT_REVOKE_LEVEL',
-                'Cannot revoke a role at or above your own level',
-            ),
+            detail='Cannot revoke a role at or above your own level',
         )
 
     # Revoke directly on the locked object (avoid CRUD re-fetch without FOR UPDATE).
@@ -625,4 +603,4 @@ async def revoke_role(
         revocation_source='ui',
     )
 
-    return {'message': get_texts().t('CABINET_ROLE_REVOKED', 'Role revoked'), 'assignment_id': assignment_id}
+    return {'message': 'Role revoked', 'assignment_id': assignment_id}

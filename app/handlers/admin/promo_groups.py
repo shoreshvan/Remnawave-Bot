@@ -230,7 +230,7 @@ def _format_auto_assign_line(texts, group: PromoGroup) -> str:
     amount = _format_rubles(threshold)
     return texts.t(
         'ADMIN_PROMO_GROUP_AUTO_ASSIGN_LINE',
-        'Автовыдача по суммарным тратам: от {amount} تومان',
+        'Автовыдача по суммарным тратам: от {amount} ₽',
     ).format(amount=amount)
 
 
@@ -485,8 +485,7 @@ async def show_promo_groups_menu(
     keyboard_rows.append(
         [
             types.InlineKeyboardButton(
-                text=texts.t('ADMIN_PROMOCODES_CREATE', '➕ Создать'),
-                callback_data='admin_promo_group_create',
+                text=texts.t('ADMIN_PROMO_GROUP_CREATE_BUTTON', '➕ Создать'), callback_data='admin_promo_group_create'
             )
         ]
     )
@@ -503,11 +502,14 @@ async def show_promo_groups_menu(
 async def _get_group_or_alert(
     callback: types.CallbackQuery,
     db: AsyncSession,
+    language: str,
 ) -> PromoGroup | None:
     group_id = int(callback.data.split('_')[-1])
     group = await get_promo_group_by_id(db, group_id)
     if not group:
-        await callback.answer('❌ Промогруппа не найдена', show_alert=True)
+        await callback.answer(
+            get_texts(language).t('ADMIN_PROMO_GROUP_NOT_FOUND', '❌ Промогруппа не найдена'), show_alert=True
+        )
         return None
     return group
 
@@ -519,7 +521,7 @@ async def show_promo_group_details(
     db_user,
     db: AsyncSession,
 ):
-    group = await _get_group_or_alert(callback, db)
+    group = await _get_group_or_alert(callback, db, db_user.language)
     if not group:
         return
 
@@ -765,7 +767,7 @@ async def process_create_group_period_discounts(
         message,
         state,
         'ADMIN_PROMO_GROUP_CREATE_AUTO_ASSIGN_PROMPT',
-        'Введите сумму общих трат (в تومان) для автоматической выдачи этой группы. Отправьте 0, чтобы отключить.',
+        'Введите сумму общих трат (в ₽) для автоматической выдачи этой группы. Отправьте 0, чтобы отключить.',
     )
 
 
@@ -786,7 +788,7 @@ async def process_create_group_auto_assign(
         await message.answer(
             texts.t(
                 'ADMIN_PROMO_GROUP_INVALID_AUTO_ASSIGN',
-                'Введите неотрицательное число в تومان или 0 для отключения.',
+                'Введите неотрицательное число в рублях или 0 для отключения.',
             )
         )
         return
@@ -835,7 +837,7 @@ async def start_edit_promo_group(
     state: FSMContext,
     db: AsyncSession,
 ):
-    group = await _get_group_or_alert(callback, db)
+    group = await _get_group_or_alert(callback, db, db_user.language)
     if not group:
         return
 
@@ -863,8 +865,7 @@ async def prompt_edit_promo_group_field(
     parts = callback.data.split('_')
     if len(parts) < 6:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_PROMO_GROUP_INVALID_COMMAND', '❌ Неверная команда'),
-            show_alert=True,
+            get_texts(db_user.language).t('ADMIN_PROMO_GROUP_INVALID_COMMAND', '❌ Неверная команда'), show_alert=True
         )
         return
 
@@ -874,8 +875,7 @@ async def prompt_edit_promo_group_field(
     group = await get_promo_group_by_id(db, group_id)
     if not group:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_PROMO_GROUP_NOT_FOUND', '❌ Промогруппа не найдена'),
-            show_alert=True,
+            get_texts(db_user.language).t('ADMIN_PROMO_GROUP_NOT_FOUND', '❌ Промогруппа не найдена'), show_alert=True
         )
         return
 
@@ -925,12 +925,10 @@ async def prompt_edit_promo_group_field(
         await state.set_state(AdminStates.editing_promo_group_auto_assign)
         prompt = texts.t(
             'ADMIN_PROMO_GROUP_EDIT_AUTO_ASSIGN_PROMPT',
-            'Введите сумму общих трат (в تومان) для автовыдачи. Текущее значение: {current}.',
+            'Введите сумму общих трат (в ₽) для автовыдачи. Текущее значение: {current}.',
         ).format(current=_format_auto_assign_value(group.auto_assign_total_spent_kopeks))
     else:
-        await callback.answer(
-            texts.t('ADMIN_PROMO_GROUP_UNKNOWN_FIELD', '❌ Неизвестный параметр'), show_alert=True
-        )
+        await callback.answer(texts.t('ADMIN_PROMO_GROUP_UNKNOWN_FIELD', '❌ Неизвестный параметр'), show_alert=True)
         return
 
     await callback.message.edit_text(prompt, reply_markup=reply_markup)
@@ -1175,7 +1173,7 @@ async def process_edit_group_auto_assign(
         await message.answer(
             texts.t(
                 'ADMIN_PROMO_GROUP_INVALID_AUTO_ASSIGN',
-                'Введите неотрицательное число в تومان или 0 для отключения.',
+                'Введите неотрицательное число в рублях или 0 для отключения.',
             )
         )
         return
@@ -1218,8 +1216,7 @@ async def show_promo_group_members(
     group = await get_promo_group_by_id(db, group_id)
     if not group:
         await callback.answer(
-            get_texts(db_user.language).t('ADMIN_PROMO_GROUP_NOT_FOUND', '❌ Промогруппа не найдена'),
-            show_alert=True,
+            get_texts(db_user.language).t('ADMIN_PROMO_GROUP_NOT_FOUND', '❌ Промогруппа не найдена'), show_alert=True
         )
         return
 
@@ -1277,7 +1274,7 @@ async def request_delete_promo_group(
     db_user,
     db: AsyncSession,
 ):
-    group = await _get_group_or_alert(callback, db)
+    group = await _get_group_or_alert(callback, db, db_user.language)
     if not group:
         return
 
@@ -1313,7 +1310,7 @@ async def delete_promo_group_confirmed(
     db_user,
     db: AsyncSession,
 ):
-    group = await _get_group_or_alert(callback, db)
+    group = await _get_group_or_alert(callback, db, db_user.language)
     if not group:
         return
 
@@ -1343,7 +1340,7 @@ async def toggle_promo_group_addon_discounts(
     db_user,
     db: AsyncSession,
 ):
-    group = await _get_group_or_alert(callback, db)
+    group = await _get_group_or_alert(callback, db, db_user.language)
     if not group:
         return
 
@@ -1361,8 +1358,10 @@ async def toggle_promo_group_addon_discounts(
         'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_UPDATED_ENABLED'
         if new_value
         else 'ADMIN_PROMO_GROUP_ADDON_DISCOUNT_UPDATED_DISABLED',
-        '🧩 Скидки на докупку доп. услуг {status}.',
-    ).format(status='<b>включены</b>' if new_value else '<b>отключены</b>')
+        '🧩 Скидки на докупку доп. услуг <b>включены</b>.'
+        if new_value
+        else '🧩 Скидки на докупку доп. услуг <b>отключены</b>.',
+    )
 
     await _send_edit_menu_after_update(
         callback.message,

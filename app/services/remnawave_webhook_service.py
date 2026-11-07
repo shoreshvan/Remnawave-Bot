@@ -34,7 +34,12 @@ from app.database.crud.subscription import (
     reactivate_subscription,
     update_subscription_usage,
 )
-from app.database.crud.user import get_user_by_id, get_user_by_remnawave_id, get_user_by_telegram_id
+from app.database.crud.user import (
+    get_user_by_id,
+    get_user_by_remnawave_id,
+    get_user_by_telegram_id,
+    lock_user_for_update,
+)
 from app.database.models import Subscription, SubscriptionServer, SubscriptionStatus, User
 from app.external.remnawave_api import RemnaWaveAPIError, RemnaWaveInvalidUserIdError
 from app.localization.texts import get_texts
@@ -397,6 +402,12 @@ class RemnaWaveWebhookService:
     async def _process_user_event(self, db: AsyncSession, event_name: str, data: dict, handler: Any) -> bool:
         """Resolve user and execute user-scoped handler."""
         user, subscription = await self._resolve_user_and_subscription(db, data)
+        if user and event_name == 'user.deleted':
+            # A merge may commit after the first lookup, transferring identity
+            # and deleting the selected row. Serialize with merge, refresh, then
+            # resolve again before any destructive handler side effects.
+            await lock_user_for_update(db, user)
+            user, subscription = await self._resolve_user_and_subscription(db, data)
         if not user:
             panel_user_id, short_uuid = self._extract_panel_identity(data)
             logger.warning(
@@ -477,7 +488,6 @@ class RemnaWaveWebhookService:
             return await self._enqueue_node_event(event_name, data)
 
         title = self._admin_handlers.get(event_name, event_name)
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
 
         # Build message from event data (escape all untrusted values to prevent HTML injection)
         lines = [f'<b>{title}</b>']
@@ -489,92 +499,70 @@ class RemnaWaveWebhookService:
             data.get('name') or data.get('nodeName') or data.get('username') or api_token.get('name') or ''
         )
         if name:
-            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_NAME', 'Имя: <code>{value}</code>').format(value=name))
+            lines.append(f'Имя: <code>{name}</code>')
 
         address = html.escape(data.get('address') or data.get('ip') or '')
         if address:
-            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_ADDRESS', 'Адрес: <code>{value}</code>').format(value=address))
+            lines.append(f'Адрес: <code>{address}</code>')
 
         port = data.get('port')
         if port:
-            lines.append(
-                texts.t('WEBHOOK_ADMIN_FIELD_PORT', 'Порт: <code>{value}</code>').format(value=html.escape(str(port)))
-            )
+            lines.append(f'Порт: <code>{html.escape(str(port))}</code>')
 
         version = html.escape(data.get('version') or data.get('panelVersion') or '')
         if version:
-            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_VERSION', 'Версия: <code>{value}</code>').format(value=version))
+            lines.append(f'Версия: <code>{version}</code>')
 
         # CRM billing fields
         provider_name = html.escape(data.get('providerName') or '')
         if provider_name:
-            lines.append(
-                texts.t('WEBHOOK_ADMIN_FIELD_PROVIDER', 'Провайдер: <code>{value}</code>').format(value=provider_name)
-            )
+            lines.append(f'Провайдер: <code>{provider_name}</code>')
 
         amount = html.escape(str(data.get('amount') or data.get('price') or ''))
         if amount:
-            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_AMOUNT', 'Сумма: <code>{value}</code>').format(value=amount))
+            lines.append(f'Сумма: <code>{amount}</code>')
 
         due_date = html.escape(data.get('dueDate') or data.get('paymentDate') or data.get('nextBillingAt') or '')
         if due_date:
-            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_DATE', 'Дата: <code>{value}</code>').format(value=due_date))
+            lines.append(f'Дата: <code>{due_date}</code>')
 
         login_url = data.get('loginUrl') or ''
         if login_url and self._is_valid_url(login_url):
-            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_PANEL', 'Панель: {value}').format(value=html.escape(login_url)))
+            lines.append(f'Панель: {html.escape(login_url)}')
 
         # Login attempt fields
         login_data = data.get('loginAttempt')
         if isinstance(login_data, dict):
             login_user = html.escape(login_data.get('username') or '')
             if login_user:
-                lines.append(
-                    texts.t('WEBHOOK_ADMIN_FIELD_USER', 'Пользователь: <code>{value}</code>').format(value=login_user)
-                )
+                lines.append(f'Пользователь: <code>{login_user}</code>')
             login_ip = html.escape(login_data.get('ip') or '')
             if login_ip:
-                lines.append(texts.t('WEBHOOK_ADMIN_FIELD_IP', 'IP: <code>{value}</code>').format(value=login_ip))
+                lines.append(f'IP: <code>{login_ip}</code>')
             login_ua = html.escape(login_data.get('userAgent') or '')
             if login_ua:
-                lines.append(
-                    texts.t('WEBHOOK_ADMIN_FIELD_USER_AGENT', 'User-Agent: <code>{value}</code>').format(
-                        value=login_ua[:100]
-                    )
-                )
+                lines.append(f'User-Agent: <code>{login_ua[:100]}</code>')
             login_desc = html.escape(login_data.get('description') or '')
             if login_desc:
-                lines.append(texts.t('WEBHOOK_ADMIN_FIELD_DESCRIPTION', 'Описание: {value}').format(value=login_desc))
+                lines.append(f'Описание: {login_desc}')
         else:
             ip_addr = html.escape(data.get('ipAddress') or data.get('ip') or '')
             if ip_addr and not address:
-                lines.append(texts.t('WEBHOOK_ADMIN_FIELD_IP', 'IP: <code>{value}</code>').format(value=ip_addr))
+                lines.append(f'IP: <code>{ip_addr}</code>')
 
         message = html.escape(data.get('message') or data.get('description') or '')
         if message:
-            lines.append(texts.t('WEBHOOK_ADMIN_FIELD_MESSAGE', 'Сообщение: {value}').format(value=message))
+            lines.append(f'Сообщение: {message}')
 
         # Subpage config fields
         subpage = data.get('subpageConfig')
         if isinstance(subpage, dict):
             action = subpage.get('action', '')
-            action_labels = {
-                'CREATED': texts.t('WEBHOOK_ADMIN_ACTION_CREATED', 'Создан'),
-                'UPDATED': texts.t('WEBHOOK_ADMIN_ACTION_UPDATED', 'Обновлён'),
-                'DELETED': texts.t('WEBHOOK_ADMIN_ACTION_DELETED', 'Удалён'),
-            }
-            lines.append(
-                texts.t('WEBHOOK_ADMIN_FIELD_ACTION', 'Действие: {value}').format(
-                    value=action_labels.get(action, html.escape(str(action)))
-                )
-            )
+            action_labels = {'CREATED': 'Создан', 'UPDATED': 'Обновлён', 'DELETED': 'Удалён'}
+            lines.append(f'Действие: {action_labels.get(action, html.escape(str(action)))}')
             sub_uuid = subpage.get('uuid', '')
             if sub_uuid:
-                lines.append(
-                    texts.t('WEBHOOK_ADMIN_FIELD_UUID', 'UUID: <code>{value}</code>').format(
-                        value=html.escape(str(sub_uuid))
-                    )
-                )
+                lines.append(f'UUID: <code>{html.escape(str(sub_uuid))}</code>')
 
         # Torrent blocker fields
         if event_name == 'torrent_blocker.report':
@@ -583,25 +571,17 @@ class RemnaWaveWebhookService:
             if isinstance(node_data, dict):
                 node_name = html.escape(node_data.get('name') or '')
                 if node_name:
-                    lines.append(
-                        texts.t('WEBHOOK_ADMIN_FIELD_NODE', 'Нода: <code>{value}</code>').format(value=node_name)
-                    )
+                    lines.append(f'Нода: <code>{node_name}</code>')
                 node_addr = html.escape(node_data.get('address') or '')
                 if node_addr:
-                    lines.append(
-                        texts.t('WEBHOOK_ADMIN_FIELD_ADDRESS', 'Адрес: <code>{value}</code>').format(value=node_addr)
-                    )
+                    lines.append(f'Адрес: <code>{node_addr}</code>')
             if isinstance(user_data, dict):
                 username = html.escape(user_data.get('username') or '')
                 if username:
-                    lines.append(
-                        texts.t('WEBHOOK_ADMIN_FIELD_USER', 'Пользователь: <code>{value}</code>').format(value=username)
-                    )
+                    lines.append(f'Пользователь: <code>{username}</code>')
                 user_status = html.escape(user_data.get('status') or '')
                 if user_status:
-                    lines.append(
-                        texts.t('WEBHOOK_ADMIN_FIELD_STATUS', 'Статус: <code>{value}</code>').format(value=user_status)
-                    )
+                    lines.append(f'Статус: <code>{user_status}</code>')
 
         try:
             await self._admin_service.send_webhook_notification('\n'.join(lines))
@@ -673,7 +653,6 @@ class RemnaWaveWebhookService:
     ) -> None:
         """Build a single summary message for N node events of the same type."""
         title = self._admin_handlers.get(event_name, event_name)
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
         max_lines = self._NODE_EVENT_SUMMARY_MAX_LINES
 
         # Dedupe by (name, address) — RemnaWave иногда ретраит один и тот же
@@ -694,11 +673,7 @@ class RemnaWaveWebhookService:
                 # лимит 4096 символов у Telegram, длинные списки уйдут в /dev/null.
                 continue
 
-            descr = (
-                f'<code>{html.escape(name)}</code>'
-                if name
-                else texts.t('WEBHOOK_ADMIN_NODE_NO_NAME', '<i>без имени</i>')
-            )
+            descr = f'<code>{html.escape(name)}</code>' if name else '<i>без имени</i>'
             if address:
                 descr += f' (<code>{html.escape(address)}</code>)'
             node_lines.append(f'• {descr}')
@@ -709,17 +684,9 @@ class RemnaWaveWebhookService:
         unique_count = len(seen)
         truncated = unique_count - len(node_lines)
         if truncated > 0:
-            node_lines.append(
-                texts.t('WEBHOOK_ADMIN_NODE_MORE_TRUNCATED', '• <i>… ещё {count} нод(ы) (truncated)</i>').format(
-                    count=truncated
-                )
-            )
+            node_lines.append(f'• <i>… ещё {truncated} нод(ы) (truncated)</i>')
         if overflow_count > 0:
-            node_lines.append(
-                texts.t(
-                    'WEBHOOK_ADMIN_NODE_OVERFLOW', '• <i>… ещё {count} событий отброшено (buffer overflow)</i>'
-                ).format(count=overflow_count)
-            )
+            node_lines.append(f'• <i>… ещё {overflow_count} событий отброшено (buffer overflow)</i>')
 
         total = unique_count + overflow_count
         header = f'<b>{title}</b>' if total <= 1 else f'<b>{title} × {total}</b>'
@@ -884,7 +851,17 @@ class RemnaWaveWebhookService:
         if panel_user_id is not None:
             filters.append(Subscription.remnawave_id == panel_user_id)
         if short_uuid:
-            filters.append(Subscription.remnawave_short_uuid == short_uuid)
+            short_filter = Subscription.remnawave_short_uuid == short_uuid
+            if panel_user_id is not None:
+                # A shortUuid fallback can recover missing numeric linkage, but
+                # cannot override a different, already bound panel account.
+                unbound = Subscription.remnawave_id.is_(None)
+                if not settings.is_multi_tariff_enabled():
+                    unbound = unbound & Subscription.user.has(
+                        User.remnawave_id.is_(None) | (User.remnawave_id == panel_user_id)
+                    )
+                short_filter = short_filter & (unbound | (Subscription.remnawave_id == panel_user_id))
+            filters.append(short_filter)
         return filters
 
     async def _find_subscription_by_panel_identity(
@@ -985,8 +962,10 @@ class RemnaWaveWebhookService:
         if not user:
             return None, None
 
-        # In multi-tariff mode, find subscription by panel identity (per-subscription)
-        if settings.is_multi_tariff_enabled() and (panel_user_id is not None or short_uuid):
+        # A panel identity addresses a subscription in BOTH modes. After a merge,
+        # telegramId can belong to the survivor while this event targets the old
+        # panel account; selecting the survivor by user_id would expire it.
+        if panel_user_id is not None or short_uuid:
             subscription = await self._find_subscription_by_panel_identity(
                 db, panel_user_id, short_uuid, user_id=user.id
             )
@@ -1016,21 +995,33 @@ class RemnaWaveWebhookService:
                     subscription_user_id=fallback1_sub.user_id,
                     subscription_id=fallback1_sub.id,
                 )
-                # Do NOT return cross-user subscription — would mutate another user's data
-                return user, None
+                # Do NOT invoke handlers against a different current identity.
+                return None, None
 
-            # Fallback 2: all lookups exhausted
+            # Per-subscription lookups exhausted; only a proven legacy User ID
+            # may still authorize a single-subscription fallback below.
             logger.warning(
-                'Webhook: подписка не найдена ни по одному методу поиска, возвращаем (user, None)',
+                'Webhook: подписка не найдена по панельной идентичности, проверяем legacy-привязку пользователя',
                 panel_user_id=panel_user_id,
                 short_uuid=short_uuid,
                 user_id=user.id,
             )
 
+        if panel_user_id is not None or short_uuid:
+            # Legacy subscriptions may store their identity only on User.
+            # Reject unmatched explicit identities even after marker expiry.
+            if panel_user_id is None or panel_user_id != user.remnawave_id:
+                return None, None
+
         if settings.is_multi_tariff_enabled():
             # In multi-tariff mode, don't fall back to arbitrary subscription
             return user, None
         subscription = await get_subscription_by_user_id(db, user.id)
+        if subscription and (panel_user_id is not None or short_uuid):
+            if subscription.remnawave_id is not None and subscription.remnawave_id != panel_user_id:
+                return None, None
+            # shortUuid rotates on credential revocation. A matching numeric
+            # legacy User ID remains authoritative when the short key changed.
         return user, subscription
 
     # ------------------------------------------------------------------
@@ -1208,6 +1199,21 @@ class RemnaWaveWebhookService:
             logger.info('Webhook user.expired: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
+        from app.database.crud.transaction import get_last_subscription_payment_at
+
+        snapshot = read_panel_user(data)
+        if snapshot.expire_at is None:
+            snapshot = replace(snapshot, expire_at=datetime.now(UTC))
+        paid_at = await get_last_subscription_payment_at(db, user.id)
+        if subscription.end_date > datetime.now(UTC) and panel_date_behind_paid_renewal(
+            subscription, snapshot, paid_at=paid_at
+        ):
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            remnawave_retry_queue.enqueue(subscription_id=subscription.id, user_id=user.id, action='update')
+            logger.info('Ignoring stale panel expiry while local renewal is pending', subscription_id=subscription.id)
+            return
+
         # Суточные подписки управляются DailySubscriptionService.
         # Remnawave может прислать user.expired если sync не дошёл (старый end_date),
         # но локально подписка ещё жива — не экспайрим её.
@@ -1250,12 +1256,64 @@ class RemnaWaveWebhookService:
             subscription=subscription,
         )
 
+    async def _reconcile_managed_status_event(self, db, subscription):
+        """Treat a managed status webhook as a hint to fetch current state.
+
+        Quota owns LIMITED locally and its DISABLED panel overlay. Neither a
+        delayed enable nor an old limit event may overwrite an admin disable.
+        """
+        mode = getattr(subscription, 'traffic_accounting_mode', None)
+        if mode not in ('managed', 'migrating'):
+            return None
+        from app.services.subscription_service import SubscriptionService
+        from app.services.traffic_accounting import AccountingConflict
+        from app.services.traffic_accounting_service import (
+            _fresh_panel,
+            lock_accounting_subscription,
+            reconcile_account_locked,
+            schedule_projection_after_commit,
+        )
+        from app.services.traffic_accounting_store import load_account
+
+        if mode == 'migrating':
+            raise AccountingConflict('Traffic accounting migration is not complete')
+        subscription, grace_open = await lock_accounting_subscription(db, subscription.id)
+        async with SubscriptionService().get_api_client() as api:
+            panel = await _fresh_panel(db, api, subscription)
+        account = await reconcile_account_locked(db, subscription, panel)
+        _, accounting = await load_account(db, subscription.id)
+        new_limited_candidate = False
+        if not grace_open and not accounting.grace_excluded:
+            current_status = getattr(panel.status, 'value', panel.status)
+            if current_status == 'DISABLED' and not accounting.quota_disabled:
+                subscription.status = SubscriptionStatus.DISABLED.value
+            elif (
+                accounting.phase == 'ready'
+                and account.remaining_bytes(datetime.now(UTC)) == 0
+                and subscription.status in (SubscriptionStatus.ACTIVE.value, SubscriptionStatus.TRIAL.value)
+            ):
+                subscription.status = SubscriptionStatus.LIMITED.value
+                subscription.grace_candidate_reason = GraceReason.LIMITED.value
+                subscription.grace_candidate_at = datetime.now(UTC)
+                new_limited_candidate = True
+            # Recovery belongs to post-commit delivery. A local administrative
+            # DISABLED (or a banned User) is never lifted by a panel event.
+        self._stamp_webhook_update(subscription)
+        schedule_projection_after_commit(db, subscription.id)
+        await db.commit()
+        if new_limited_candidate:
+            await grace_access_runtime.consider_candidate(subscription.id, GraceReason.LIMITED, source='webhook')
+        return panel
+
     async def _handle_user_disabled(
         self, db: AsyncSession, user: User, subscription: Subscription | None, data: dict
     ) -> None:
         if not subscription:
             # Подписка уже удалена из БД — фантомный хук от панели, игнорируем
             logger.info('Webhook user.disabled: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
+
+        if await self._reconcile_managed_status_event(db, subscription) is not None:
             return
 
         # Суточные подписки управляются DailySubscriptionService — не деактивируем
@@ -1307,6 +1365,9 @@ class RemnaWaveWebhookService:
             logger.info('Webhook user.enabled: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
+        if await self._reconcile_managed_status_event(db, subscription) is not None:
+            return
+
         self._stamp_webhook_update(subscription)
         if subscription.status in (SubscriptionStatus.DISABLED.value, SubscriptionStatus.LIMITED.value):
             await reactivate_subscription(db, subscription)
@@ -1323,6 +1384,9 @@ class RemnaWaveWebhookService:
     ) -> None:
         if not subscription:
             logger.info('Webhook user.limited: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
+            return
+
+        if await self._reconcile_managed_status_event(db, subscription) is not None:
             return
 
         candidate_at = datetime.now(UTC)
@@ -1357,6 +1421,20 @@ class RemnaWaveWebhookService:
             logger.info('Webhook user.traffic_reset: подписка не найдена в БД (уже удалена), пропуск', user_id=user.id)
             return
 
+        mode = getattr(subscription, 'traffic_accounting_mode', None)
+        if mode in ('managed', 'migrating'):
+            from app.services.traffic_accounting import AccountingConflict
+            from app.services.traffic_accounting_service import refresh_managed_account
+
+            if mode == 'migrating':
+                raise AccountingConflict('Traffic accounting migration is not complete')
+            # Webhooks may be duplicated or delayed. Read actual cumulative usage;
+            # a counter reset is never an entitlement grant or an enable request.
+            await refresh_managed_account(db, subscription)
+            self._stamp_webhook_update(subscription)
+            await db.commit()
+            return
+
         self._stamp_webhook_update(subscription)
         await update_subscription_usage(db, subscription, 0.0)
         # Re-enable if was disabled/limited due to traffic limit
@@ -1385,6 +1463,12 @@ class RemnaWaveWebhookService:
         """Sync subscription fields from webhook payload without notifying user."""
         if not subscription:
             return
+
+        current_panel = await self._reconcile_managed_status_event(db, subscription)
+        if current_panel is not None:
+            # Metadata may still synchronize, but never from an out-of-order
+            # webhook snapshot. Managed projection masks nominal quota/status.
+            data = current_panel
 
         grace_open = subscription.id in await get_open_grace_subscription_ids(db)
 

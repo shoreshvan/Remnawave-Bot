@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
@@ -28,10 +27,7 @@ router = APIRouter()
 async def _get_user_or_error(db: AsyncSession, user_id: int) -> User:
     user = await db.get(User, user_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('SUBSCRIPTION_EVENT_USER_NOT_FOUND', 'User not found'),
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
     return user
 
 
@@ -43,7 +39,7 @@ async def _ensure_subscription_exists(db: AsyncSession, subscription_id: int | N
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('SUBSCRIPTION_EVENT_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+            detail='Subscription not found',
         )
 
 
@@ -55,7 +51,7 @@ async def _ensure_transaction_exists(db: AsyncSession, transaction_id: int | Non
     if not transaction_exists:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('SUBSCRIPTION_EVENT_TRANSACTION_NOT_FOUND', 'Transaction not found'),
+            detail='Transaction not found',
         )
 
 
@@ -123,7 +119,7 @@ async def list_subscription_event_logs(
     db: AsyncSession = Depends(get_db_session),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    event_types: Iterable[str] | None = Query(default=None, alias='event_type'),
+    event_types: list[str] | None = Query(default=None, alias='event_type'),
     user_id: int | None = Query(default=None),
 ) -> SubscriptionEventListResponse:
     events, total = await list_subscription_events(

@@ -93,8 +93,10 @@ async def resolve_subscription_from_context(
         return active_subs[0], active_subs[0].id
 
     # 4. Cannot determine
-    texts = get_texts(db_user.language)
-    await callback.answer(texts.t('SUBSCRIPTION_SELECT_PROMPT', 'Выберите подписку'), show_alert=True)
+    await callback.answer(
+        get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_SELECT_SUBSCRIPTION', 'Выберите подписку'),
+        show_alert=True,
+    )
     return None, None
 
 
@@ -179,18 +181,19 @@ def update_traffic_prices():
     logger.info('🔄 TRAFFIC_PRICES обновлены из конфигурации')
 
 
-def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None, language: str = 'ru') -> str:
+def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None, language: str | None = None) -> str:
+    texts = get_texts(language)
     if is_fixed_mode is None:
         is_fixed_mode = settings.is_traffic_fixed()
 
     texts = get_texts((language or 'ru').split('-')[0].lower())
     if traffic_gb == 0:
         if is_fixed_mode:
-            return texts.t('SUBSCRIPTION_SUMMARY_TRAFFIC_UNLIMITED', 'Безлимитный')
-        return texts.t('SUBSCRIPTION_SUMMARY_TRAFFIC_UNLIMITED', 'Безлимитный')
+            return texts.t('SUBSCRIPTION_UI_UNLIMITED_LABEL', 'Безлимитный')
+        return texts.t('SUBSCRIPTION_UI_UNLIMITED_LABEL', 'Безлимитный')
     if is_fixed_mode:
-        return texts.t('COMMON_TRAFFIC_GB_VALUE', '{traffic} ГБ').format(traffic=traffic_gb)
-    return texts.t('COMMON_TRAFFIC_GB_VALUE', '{traffic} ГБ').format(traffic=traffic_gb)
+        return texts.t('SUBSCRIPTION_UI_GB_VALUE', '{amount} ГБ').format(amount=traffic_gb)
+    return texts.t('SUBSCRIPTION_UI_GB_VALUE', '{amount} ГБ').format(amount=traffic_gb)
 
 
 def validate_traffic_price(gb: int) -> bool:
@@ -235,7 +238,6 @@ def get_localized_value(values: Any, language: str, default_language: str = 'en'
 
 def render_guide_blocks(blocks: list[dict], language: str) -> str:
     """Render block-format guide steps to HTML text."""
-    texts = get_texts(language)
     parts: list[str] = []
     step_num = 1
     for block in blocks:
@@ -248,7 +250,7 @@ def render_guide_blocks(blocks: list[dict], language: str) -> str:
         )
         desc_text = html_mod.escape(get_localized_value(desc, language) if isinstance(desc, dict) else str(desc or ''))
         if title_text or desc_text:
-            step = texts.t('GUIDE_STEP_LABEL', '<b>Шаг {step_num}').format(step_num=step_num)
+            step = get_texts(language).t('SUBSCRIPTION_UI_GUIDE_STEP', '<b>Шаг {step}').format(step=step_num)
             if title_text:
                 step += f' - {title_text}'
             step += ':</b>'
@@ -580,14 +582,13 @@ def get_reset_devices_confirm_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('RESET_DEVICES_CONFIRM_BUTTON', '✅ Да, сбросить все устройства'),
+                    text=texts.t('SUBSCRIPTION_UI_RESET_ALL_DEVICES_CONFIRM', '✅ Да, сбросить все устройства'),
                     callback_data='confirm_reset_devices',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_CANCEL_BUTTON', '❌ Отмена'),
-                    callback_data=back_callback,
+                    text=texts.t('SUBSCRIPTION_UI_CANCEL_CROSS', '❌ Отмена'), callback_data=back_callback
                 )
             ],
         ]
@@ -602,9 +603,8 @@ def get_traffic_switch_keyboard(
     base_traffic_gb: int = None,
     back_callback: str = 'subscription_settings',
 ) -> InlineKeyboardMarkup:
-    from app.config import settings
-
     texts = get_texts(language)
+    from app.config import settings
 
     # Если базовый трафик не передан, используем текущий
     # (для обратной совместимости и случаев без докупленного трафика)
@@ -617,9 +617,9 @@ def get_traffic_switch_keyboard(
         days_left = max(1, math.ceil((subscription_end_date - now).total_seconds() / 86400))
         price_multiplier = days_left / 30
         period_text = (
-            texts.t('TRAFFIC_SWITCH_PERIOD_DAYS', ' (за {days_left} дн.)').format(days_left=days_left)
+            texts.t('SUBSCRIPTION_UI_FOR_DAYS_SUFFIX', ' (за {days} дн.)').format(days=days_left)
             if days_left > 1
-            else texts.t('TRAFFIC_SWITCH_PERIOD_ONE_DAY', ' (за 1 день)')
+            else texts.t('SUBSCRIPTION_UI_FOR_ONE_DAY_SUFFIX', ' (за 1 день)')
         )
     else:
         price_multiplier = 1
@@ -651,32 +651,31 @@ def get_traffic_switch_keyboard(
         # Сравниваем с базовым трафиком (без докупленного)
         if gb == base_traffic_gb:
             emoji = '✅'
-            action_text = texts.t('TRAFFIC_SWITCH_CURRENT', ' (текущий)')
+            action_text = texts.t('SUBSCRIPTION_UI_CURRENT_SUFFIX', ' (текущий)')
             price_text = ''
         elif total_price_diff > 0:
             emoji = '⬆️'
             action_text = ''
-            price_text = f' (+{total_price_diff // 100} تومان{period_text})'
+            price_text = f' (+{total_price_diff // 100}₽{period_text})'
             if discount_percent > 0:
                 discount_total = int((price_per_month - current_price_per_month) * price_multiplier) - total_price_diff
                 if discount_total > 0:
                     price_text += texts.t(
-                        'TRAFFIC_SWITCH_DISCOUNT_NOTE',
-                        ' (скидка {discount_percent}%: -{discount_rub} تومان)',
-                    ).format(discount_percent=discount_percent, discount_rub=discount_total // 100)
+                        'SUBSCRIPTION_UI_BREAKDOWN_DISCOUNT', ' (скидка {percent}%: -{amount}₽)'
+                    ).format(percent=discount_percent, amount=discount_total // 100)
         elif total_price_diff < 0:
             emoji = '⬇️'
             action_text = ''
-            price_text = texts.t('TRAFFIC_SWITCH_NO_REFUND', ' (без возврата)')
+            price_text = texts.t('SUBSCRIPTION_UI_NO_REFUND_SUFFIX', ' (без возврата)')
         else:
             emoji = '🔄'
             action_text = ''
-            price_text = texts.t('TRAFFIC_SWITCH_FREE', ' (бесплатно)')
+            price_text = texts.t('SUBSCRIPTION_UI_FREE_SUFFIX', ' (бесплатно)')
 
         if gb == 0:
-            traffic_text = texts.t('TRAFFIC_SWITCH_UNLIMITED', 'Безлимит')
+            traffic_text = texts.t('SUBSCRIPTION_UI_UNLIMITED', 'Безлимит')
         else:
-            traffic_text = texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=gb)
+            traffic_text = texts.t('SUBSCRIPTION_UI_GB_VALUE', '{amount} ГБ').format(amount=gb)
 
         button_text = f'{emoji} {traffic_text}{action_text}{price_text}'
 
@@ -686,10 +685,7 @@ def get_traffic_switch_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t(
-                    'TRAFFIC_SWITCH_BACK_BUTTON',
-                    '⬅️ Назад' if language_code in {'ru', 'fa'} else '⬅️ Back',
-                ),
+                text=texts.t('SUBSCRIPTION_UI_BACK_ARROW', '⬅️ Назад') if language_code in {'ru', 'fa'} else '⬅️ Back',
                 callback_data=back_callback,
             )
         ]
@@ -706,14 +702,13 @@ def get_confirm_switch_traffic_keyboard(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=texts.t('CONFIRM_SWITCH_TRAFFIC_BUTTON', '✅ Подтвердить переключение'),
+                    text=texts.t('SUBSCRIPTION_UI_CONFIRM_SWITCH', '✅ Подтвердить переключение'),
                     callback_data=f'confirm_switch_traffic_{new_traffic_gb}_{price_difference}',
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text=texts.t('SUBSCRIPTION_CANCEL_BUTTON', '❌ Отмена'),
-                    callback_data=back_callback,
+                    text=texts.t('SUBSCRIPTION_UI_CANCEL_CROSS', '❌ Отмена'), callback_data=back_callback
                 )
             ],
         ]

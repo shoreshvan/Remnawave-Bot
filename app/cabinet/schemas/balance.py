@@ -3,9 +3,9 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from app.localization.texts import get_texts
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class BalanceResponse(BaseModel):
@@ -69,22 +69,11 @@ class PaymentMethodResponse(BaseModel):
 class TopUpRequest(BaseModel):
     """Request to create payment for balance top-up."""
 
-    amount_kopeks: int = Field(
-        ...,
-        ge=1000,
-        le=2_000_000_000,
-        description=get_texts().t('CABINET_TOPUP_AMOUNT_KOPEKS_DESCRIPTION', 'Amount in kopeks (min 10 rubles)'),
-    )
-    payment_method: str = Field(
-        ..., description=get_texts().t('CABINET_TOPUP_PAYMENT_METHOD_DESCRIPTION', 'Payment method ID')
-    )
-    payment_option: str | None = Field(
-        None,
-        description=get_texts().t(
-            'CABINET_TOPUP_PAYMENT_OPTION_DESCRIPTION',
-            'Payment option (e.g. Platega method code)',
-        ),
-    )
+    # The selected provider supplies its effective minimum (including DB overrides).
+    amount_kopeks: int = Field(..., ge=1, le=2_000_000_000, description='Amount in kopeks')
+    payment_method: str = Field(..., description='Payment method ID')
+    customer_email: EmailStr | None = None
+    payment_option: str | None = Field(None, description='Payment option (e.g. Platega method code)')
 
 
 class TopUpResponse(BaseModel):

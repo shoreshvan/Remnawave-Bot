@@ -5,6 +5,7 @@
 
 import html
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -25,6 +26,63 @@ from app.database.models import (
 
 
 logger = structlog.get_logger(__name__)
+
+
+_WITHDRAWAL_DETAIL_KEYS = {
+    'LOW': 'ADMIN_WITHDRAWAL_DETAIL_LOW',
+    'MEDIUM': 'ADMIN_WITHDRAWAL_DETAIL_MEDIUM',
+    'HIGH': 'ADMIN_WITHDRAWAL_DETAIL_HIGH',
+    'CRITICAL': 'ADMIN_WITHDRAWAL_DETAIL_CRITICAL',
+    '🔴 РЕКОМЕНДУЕТСЯ ОТКЛОНИТЬ': 'ADMIN_WITHDRAWAL_DETAIL_REJECT',
+    '🟠 ТРЕБУЕТ ПРОВЕРКИ': 'ADMIN_WITHDRAWAL_DETAIL_REVIEW_HIGH',
+    '🟡 Рекомендуется проверить': 'ADMIN_WITHDRAWAL_DETAIL_REVIEW',
+    '🟢 Можно одобрить': 'ADMIN_WITHDRAWAL_DETAIL_APPROVE',
+    '🔴 Нет рефералов, но есть реферальный доход!': 'ADMIN_WITHDRAWAL_DETAIL_NO_REFERRALS',
+    '⚠️ Весь доход от одного реферала': 'ADMIN_WITHDRAWAL_DETAIL_SINGLE_REFERRAL',
+    'Заявка не найдена': 'ADMIN_WITHDRAWAL_DETAIL_NOT_FOUND',
+    'Заявка уже обработана': 'ADMIN_WITHDRAWAL_DETAIL_PROCESSED',
+    'Пользователь не найден': 'ADMIN_WITHDRAWAL_DETAIL_USER_NOT_FOUND',
+}
+_WITHDRAWAL_DETAIL_PATTERNS = [
+    (
+        '🔴\\ Пополнил\\ (?P<v0>-?\\d+(?:\\.\\d+)?)₽,\\ но\\ ничего\\ не\\ покупал!',
+        'ADMIN_WITHDRAWAL_DETAIL_NO_PURCHASES',
+        '🔴 Пополнил {v0}₽, но ничего не покупал!',
+    ),
+    (
+        '🟠\\ Пополнил\\ (?P<v0>-?\\d+(?:\\.\\d+)?)₽,\\ потратил\\ только\\ (?P<v1>-?\\d+(?:\\.\\d+)?)₽',
+        'ADMIN_WITHDRAWAL_DETAIL_LOW_SPENDING',
+        '🟠 Пополнил {v0}₽, потратил только {v1}₽',
+    ),
+    ('(?P<v0>-?\\d+(?:\\.\\d+)?)\\ пополнений/мес', 'ADMIN_WITHDRAWAL_DETAIL_TOPUP_COUNT', '{v0} пополнений/мес'),
+    ('сумма\\ (?P<v0>-?\\d+(?:\\.\\d+)?)₽', 'ADMIN_WITHDRAWAL_DETAIL_TOPUP_AMOUNT', 'сумма {v0}₽'),
+    (
+        '⚠️\\ Подозрительная\\ активность\\ у\\ (?P<v0>-?\\d+(?:\\.\\d+)?)\\ реферала\\(ов\\)',
+        'ADMIN_WITHDRAWAL_DETAIL_SUSPICIOUS',
+        '⚠️ Подозрительная активность у {v0} реферала(ов)',
+    ),
+    (
+        '⚠️\\ (?P<v0>-?\\d+(?:\\.\\d+)?)\\ начислений\\ за\\ неделю\\ \\((?P<v1>-?\\d+(?:\\.\\d+)?)₽\\)',
+        'ADMIN_WITHDRAWAL_DETAIL_RECENT',
+        '⚠️ {v0} начислений за неделю ({v1}₽)',
+    ),
+    (
+        'Недостаточно\\ средств\\ на\\ балансе\\.\\ Баланс:\\ (?P<v0>-?\\d+(?:\\.\\d+)?)₽',
+        'ADMIN_WITHDRAWAL_DETAIL_INSUFFICIENT',
+        'Недостаточно средств на балансе. Баланс: {v0}₽',
+    ),
+]
+
+
+def localize_withdrawal_detail(value: str, language: str = 'ru') -> str:
+    """Translate only the service's closed vocabulary, preserving unknown details."""
+    texts = get_texts(language)
+    if key := _WITHDRAWAL_DETAIL_KEYS.get(value):
+        return texts.t(key, value)
+    for pattern, key, default in _WITHDRAWAL_DETAIL_PATTERNS:
+        if match := re.fullmatch(pattern, value):
+            return texts.t(key, default).format(**match.groupdict())
+    return value
 
 
 def _to_int(value) -> int:
@@ -48,6 +106,7 @@ def _json_default(value):
     if isinstance(value, Decimal):
         return int(value)
     return str(value)
+
 
 
 class ReferralWithdrawalService:
@@ -547,27 +606,25 @@ class ReferralWithdrawalService:
         Одобряет заявку на вывод и списывает средства с баланса.
         Возвращает (success, error_message).
         """
-        texts = get_texts()
-
         result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request:
-            return False, texts.t('REFERRAL_WITHDRAWAL_REQUEST_NOT_FOUND', 'Заявка не найдена')
+            return False, 'Заявка не найдена'
 
         if request.status != WithdrawalRequestStatus.PENDING.value:
-            return False, texts.t('REFERRAL_WITHDRAWAL_ALREADY_PROCESSED', 'Заявка уже обработана')
+            return False, 'Заявка уже обработана'
 
         # Получаем пользователя для списания с баланса (с блокировкой строки)
         user_result = await db.execute(select(User).where(User.id == request.user_id).with_for_update())
         user = user_result.scalar_one_or_none()
 
         if not user:
-            return False, texts.t('REFERRAL_WITHDRAWAL_USER_NOT_FOUND', 'Пользователь не найден')
+            return False, 'Пользователь не найден'
 
         # Списываем с баланса
         if user.balance_kopeks < request.amount_kopeks:
-            return False, texts.t('REFERRAL_WITHDRAWAL_INSUFFICIENT_BALANCE', 'Недостаточно средств на балансе. Баланс: {amount} تومان').format(amount=f'{user.balance_kopeks / 100:.0f}')
+            return False, f'Недостаточно средств на балансе. Баланс: {user.balance_kopeks / 100:.0f}₽'
 
         user.balance_kopeks -= request.amount_kopeks
 
@@ -576,7 +633,7 @@ class ReferralWithdrawalService:
             user_id=request.user_id,
             type=TransactionType.WITHDRAWAL.value,
             amount_kopeks=-request.amount_kopeks,
-            description=texts.t('REFERRAL_WITHDRAWAL_TX_DESCRIPTION', 'Вывод реферального баланса (заявка #{id})').format(id=request.id),
+            description=f'Вывод реферального баланса (заявка #{request.id})',
             is_completed=True,
             completed_at=datetime.now(UTC),
         )
@@ -595,16 +652,14 @@ class ReferralWithdrawalService:
         self, db: AsyncSession, request_id: int, admin_id: int, comment: str | None = None
     ) -> tuple[bool, str]:
         """Отклоняет заявку на вывод."""
-        texts = get_texts()
-
         result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request:
-            return False, texts.t('REFERRAL_WITHDRAWAL_REQUEST_NOT_FOUND', 'Заявка не найдена')
+            return False, 'Заявка не найдена'
 
         if request.status != WithdrawalRequestStatus.PENDING.value:
-            return False, texts.t('REFERRAL_WITHDRAWAL_ALREADY_PROCESSED', 'Заявка уже обработана')
+            return False, 'Заявка уже обработана'
 
         request.status = WithdrawalRequestStatus.REJECTED.value
         request.processed_by = admin_id
@@ -618,16 +673,14 @@ class ReferralWithdrawalService:
         self, db: AsyncSession, request_id: int, admin_id: int, comment: str | None = None
     ) -> tuple[bool, str]:
         """Отмечает заявку как выполненную (деньги переведены)."""
-        texts = get_texts()
-
         result = await db.execute(select(WithdrawalRequest).where(WithdrawalRequest.id == request_id).with_for_update())
         request = result.scalar_one_or_none()
 
         if not request:
-            return False, texts.t('REFERRAL_WITHDRAWAL_REQUEST_NOT_FOUND', 'Заявка не найдена')
+            return False, 'Заявка не найдена'
 
         if request.status != WithdrawalRequestStatus.APPROVED.value:
-            return False, texts.t('REFERRAL_WITHDRAWAL_NOT_APPROVED_STATUS', 'Заявка не в статусе "одобрена"')
+            return False, 'Заявка не в статусе "одобрена"'
 
         request.status = WithdrawalRequestStatus.COMPLETED.value
         request.processed_by = admin_id
@@ -687,35 +740,31 @@ class ReferralWithdrawalService:
 
         return text
 
-    def format_analysis_for_admin(self, analysis: dict | None) -> str:
+    def format_analysis_for_admin(self, analysis: dict, language: str = 'ru') -> str:
         """Форматирует анализ для отображения админу."""
-        texts = get_texts()
         if not isinstance(analysis, dict):
             analysis = {}
 
         risk_emoji = {'low': '🟢', 'medium': '🟡', 'high': '🟠', 'critical': '🔴'}
 
-        risk_level = str(analysis.get('risk_level') or 'low').lower()
-        risk_score = _to_int(analysis.get('risk_score'))
-
-        text = texts.t(
-            'REFERRAL_WITHDRAWAL_ANALYSIS_HEADER',
-            '🔍 <b>Анализ на подозрительную активность</b>\n\n'
-            '{risk_emoji} Уровень риска: <b>{risk_level}</b>\n'
-            '📊 Оценка риска: <b>{risk_score}/100</b>\n'
-            '{recommendation}\n',
-        ).format(
-            risk_emoji=risk_emoji.get(risk_level, '⚪'),
-            risk_level=risk_level.upper(),
-            risk_score=risk_score,
-            recommendation=analysis.get('recommendation_text', ''),
+        text = (
+            get_texts(language)
+            .t(
+                'ADMIN_WITHDRAWAL_UI_000',
+                '\n🔍 <b>Анализ на подозрительную активность</b>\n\n{v0} Уровень риска: <b>{v1}</b>\n📊 Оценка риска: <b>{v2}/100</b>\n{v3}\n',
+            )
+            .format(
+                v0=risk_emoji.get(str(analysis.get('risk_level') or 'low'), '⚪'),
+                v1=localize_withdrawal_detail(str(analysis.get('risk_level') or 'low').upper(), language),
+                v2=_to_int(analysis.get('risk_score')),
+                v3=localize_withdrawal_detail(analysis.get('recommendation_text', ''), language),
+            )
         )
 
-        flags = analysis.get('flags') or []
-        if isinstance(flags, list) and flags:
-            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_WARNINGS_HEADER', '\n⚠️ <b>Предупреждения:</b>\n')
-            for flag in flags:
-                text += f'  {flag}\n'
+        if analysis.get('flags'):
+            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_001', '\n⚠️ <b>Предупреждения:</b>\n')
+            for flag in analysis['flags']:
+                text += f'  {localize_withdrawal_detail(flag, language)}\n'
 
         details = analysis.get('details') or {}
         if not isinstance(details, dict):
@@ -726,82 +775,78 @@ class ReferralWithdrawalService:
             bs = details.get('balance_stats') or {}
             if not isinstance(bs, dict):
                 bs = {}
-            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_HEADER', '\n💰 <b>Баланс:</b>\n')
-            text += texts.t(
-                'REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_EARNED', '• Заработано с рефералов: {amount} تومان\n'
-            ).format(amount=f'{_to_int(bs.get("total_earned")) / 100:.0f}')
-            text += texts.t(
-                'REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_OWN', '• Собственные пополнения: {amount} تومان\n'
-            ).format(amount=f'{_to_int(bs.get("own_deposits")) / 100:.0f}')
-            text += texts.t(
-                'REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_SPENT', '• Потрачено: {amount} تومان\n'
-            ).format(amount=f'{_to_int(bs.get("spending")) / 100:.0f}')
-            text += texts.t(
-                'REFERRAL_WITHDRAWAL_ANALYSIS_BALANCE_WITHDRAWN', '• Уже выведено: {amount} تومان\n'
-            ).format(amount=f'{_to_int(bs.get("withdrawn")) / 100:.0f}')
+            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_002', '\n💰 <b>Баланс:</b>\n')
+            text += (
+                get_texts(language)
+                .t('ADMIN_WITHDRAWAL_UI_003', '• Заработано с рефералов: {v0:.0f}₽\n')
+                .format(v0=_to_int(bs.get('total_earned')) / 100)
+            )
+            text += (
+                get_texts(language)
+                .t('ADMIN_WITHDRAWAL_UI_004', '• Собственные пополнения: {v0:.0f}₽\n')
+                .format(v0=_to_int(bs.get('own_deposits')) / 100)
+            )
+            text += (
+                get_texts(language)
+                .t('ADMIN_WITHDRAWAL_UI_005', '• Потрачено: {v0:.0f}₽\n')
+                .format(v0=_to_int(bs.get('spending')) / 100)
+            )
+            text += (
+                get_texts(language)
+                .t('ADMIN_WITHDRAWAL_UI_006', '• Уже выведено: {v0:.0f}₽\n')
+                .format(v0=_to_int(bs.get('withdrawn')) / 100)
+            )
 
         # Статистика по рефералам
         if 'referral_deposits' in details:
             rd = details.get('referral_deposits') or {}
             if not isinstance(rd, dict):
                 rd = {}
-            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_REFERRALS_HEADER', '\n👥 <b>Рефералы:</b>\n')
-            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_REFERRALS_TOTAL', '• Всего: {count}\n').format(
-                count=_to_int(details.get('referral_count'))
+            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_007', '\n👥 <b>Рефералы:</b>\n')
+            text += (
+                get_texts(language)
+                .t('ADMIN_WITHDRAWAL_UI_008', '• Всего: {v0}\n')
+                .format(v0=details.get('referral_count', 0))
             )
-            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_REFERRALS_PAYING', '• Платящих: {count}\n').format(
-                count=_to_int(rd.get('paying_referrals'))
+            text += (
+                get_texts(language).t('ADMIN_WITHDRAWAL_UI_009', '• Платящих: {v0}\n').format(v0=rd['paying_referrals'])
             )
-            text += texts.t(
-                'REFERRAL_WITHDRAWAL_ANALYSIS_REFERRALS_DEPOSITS',
-                '• Всего пополнений: {count} ({amount} تومان)\n',
-            ).format(count=_to_int(rd.get('total_deposits')), amount=f'{_to_int(rd.get("total_amount")) / 100:.0f}')
+            text += (
+                get_texts(language)
+                .t('ADMIN_WITHDRAWAL_UI_010', '• Всего пополнений: {v0} ({v1:.0f}₽)\n')
+                .format(v0=rd['total_deposits'], v1=_to_int(rd.get('total_amount')) / 100)
+            )
 
         # Подозрительные рефералы
-        suspicious_referrals = details.get('suspicious_referrals') or []
-        if isinstance(suspicious_referrals, list):
-            valid_suspicious = [sr for sr in suspicious_referrals[:5] if isinstance(sr, dict)]
-            if valid_suspicious:
-                text += texts.t(
-                    'REFERRAL_WITHDRAWAL_ANALYSIS_SUSPICIOUS_HEADER', '\n🚨 <b>Подозрительные рефералы:</b>\n'
+        if details.get('suspicious_referrals'):
+            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_011', '\n🚨 <b>Подозрительные рефералы:</b>\n')
+            for sr in details['suspicious_referrals'][:5]:
+                text += (
+                    get_texts(language)
+                    .t('ADMIN_WITHDRAWAL_UI_013', '• {v0}: {v1} поп., {v2:.0f}₽\n')
+                    .format(v0=html.escape(sr['name']), v1=sr['deposits_count'], v2=_to_int(sr.get('deposits_total')) / 100)
                 )
-            for sr in valid_suspicious:
-                text += texts.t(
-                    'REFERRAL_WITHDRAWAL_ANALYSIS_SUSPICIOUS_ITEM',
-                    '• {name}: {count} поп., {amount} تومان\n',
-                ).format(
-                    name=html.escape(str(sr.get('name') or '')),
-                    count=_to_int(sr.get('deposits_count')),
-                    amount=f'{_to_int(sr.get("deposits_total")) / 100:.0f}',
+                text += (
+                    get_texts(language)
+                    .t('ADMIN_WITHDRAWAL_UI_014', '  Флаги: {v0}\n')
+                    .format(v0=', '.join(localize_withdrawal_detail(flag, language) for flag in sr['flags']))
                 )
-                flags = sr.get('flags') or []
-                if isinstance(flags, list):
-                    text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_SUSPICIOUS_FLAGS', '  Флаги: {flags}\n').format(
-                        flags=', '.join(str(flag) for flag in flags)
-                    )
 
         # Источники дохода
         if 'earnings_by_reason' in details:
-            text += texts.t('REFERRAL_WITHDRAWAL_ANALYSIS_EARNINGS_HEADER', '\n📊 <b>Источники дохода:</b>\n')
+            text += get_texts(language).t('ADMIN_WITHDRAWAL_UI_012', '\n📊 <b>Источники дохода:</b>\n')
             reason_names = {
-                'referral_first_topup': texts.t('REFERRAL_WITHDRAWAL_REASON_FIRST_TOPUP', 'Бонус за 1-е пополнение'),
-                'referral_commission_topup': texts.t('REFERRAL_WITHDRAWAL_REASON_COMMISSION_TOPUP', 'Комиссия с пополнений'),
-                'referral_commission': texts.t('REFERRAL_WITHDRAWAL_REASON_COMMISSION', 'Комиссия с покупок'),
+                'referral_first_topup': get_texts(language).t('ADMIN_WITHDRAWAL_UI_015', 'Бонус за 1-е пополнение'),
+                'referral_commission_topup': get_texts(language).t('ADMIN_WITHDRAWAL_UI_016', 'Комиссия с пополнений'),
+                'referral_commission': get_texts(language).t('ADMIN_WITHDRAWAL_UI_017', 'Комиссия с покупок'),
             }
-            earnings_by_reason = details.get('earnings_by_reason') or {}
-            if isinstance(earnings_by_reason, dict):
-                for reason, data in earnings_by_reason.items():
-                    if not isinstance(data, dict):
-                        continue
-                    name = reason_names.get(reason, reason)
-                    text += texts.t(
-                        'REFERRAL_WITHDRAWAL_ANALYSIS_EARNINGS_ITEM',
-                        '• {name}: {count} шт. ({amount} تومان)\n',
-                    ).format(
-                        name=name,
-                        count=_to_int(data.get('count')),
-                        amount=f'{_to_int(data.get("total")) / 100:.0f}',
-                    )
+            for reason, data in details['earnings_by_reason'].items():
+                name = reason_names.get(reason, reason)
+                text += (
+                    get_texts(language)
+                    .t('ADMIN_WITHDRAWAL_UI_018', '• {v0}: {v1} шт. ({v2:.0f}₽)\n')
+                    .format(v0=name, v1=data['count'], v2=_to_int(data.get('total')) / 100)
+                )
 
         return text
 

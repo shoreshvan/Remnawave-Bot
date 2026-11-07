@@ -11,7 +11,6 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query as QueryParam, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -19,8 +18,7 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import PaymentMethod, Subscription, TransactionType, User
-from app.localization.texts import get_texts
-from app.services.pricing_engine import pricing_engine
+from app.services.pricing_engine import TariffSwitchPricingUnavailableError, pricing_engine
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 from app.services.tariff_switch_policy import remaining_days_for_switch, should_reset_used_traffic
@@ -35,30 +33,48 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
+async def _resolve_switch_subscription(
+    db: AsyncSession, user: User, subscription_id: int | None
+) -> Subscription | None:
+    """Never guess which subscription a multi-subscription switch will charge."""
+    if subscription_id is not None and subscription_id <= 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
+    if settings.is_multi_tariff_enabled() and subscription_id is None:
+        from app.database.crud.subscription import get_active_subscriptions_by_user_id
+
+        subscriptions = await get_active_subscriptions_by_user_id(db, user.id)
+        if len(subscriptions) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    'code': 'subscription_selection_required',
+                    'message': 'Select the subscription to switch',
+                },
+            )
+        return subscriptions[0] if subscriptions else None
+    return await resolve_subscription(db, user, subscription_id)
+
+
 @router.post('/tariff/switch/preview')
 async def preview_tariff_switch(
     request: TariffPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(
-        None,
-        description=get_texts().t('CABINET_TARIFF_SWITCH_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff'),
-    ),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Preview tariff switch - shows cost calculation."""
-    texts = get_texts(user.language)
     if not settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_TARIFF_SWITCH_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'),
+            detail='Tariffs mode is not enabled',
         )
 
-    subscription = await resolve_subscription(db, user, subscription_id)
+    subscription = await _resolve_switch_subscription(db, user, subscription_id)
 
     if not subscription or not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_TARIFF_SWITCH_NO_ACTIVE_SUBSCRIPTION', 'No active subscription with tariff'),
+            detail='No active subscription with tariff',
         )
 
     # Use actual_status for correct status check (handles time-based expiration)
@@ -69,10 +85,7 @@ async def preview_tariff_switch(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'subscription_expired',
-                'message': texts.t(
-                    'CABINET_TARIFF_SWITCH_SUBSCRIPTION_EXPIRED',
-                    'Subscription is expired. Please purchase a new tariff instead of switching.',
-                ),
+                'message': 'Subscription is expired. Please purchase a new tariff instead of switching.',
                 'use_purchase_flow': True,
             },
         )
@@ -85,10 +98,7 @@ async def preview_tariff_switch(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'trial_cannot_switch',
-                'message': texts.t(
-                    'CABINET_TARIFF_SWITCH_TRIAL_CANNOT_SWITCH',
-                    'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
-                ),
+                'message': 'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
                 'use_purchase_flow': True,
             },
         )
@@ -98,10 +108,7 @@ async def preview_tariff_switch(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'subscription_not_active',
-                'message': texts.t(
-                    'CABINET_TARIFF_SWITCH_NOT_ACTIVE_STATUS',
-                    'Subscription is not active (status: {status}). Cannot switch tariff.',
-                ).format(status=actual_status),
+                'message': f'Subscription is not active (status: {actual_status}). Cannot switch tariff.',
             },
         )
 
@@ -111,13 +118,13 @@ async def preview_tariff_switch(
     if not new_tariff or not new_tariff.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_TARIFF_SWITCH_TARIFF_NOT_FOUND', 'Tariff not found or inactive'),
+            detail='Tariff not found or inactive',
         )
 
     if subscription.tariff_id == request.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_TARIFF_SWITCH_ALREADY_ON_TARIFF', 'Already on this tariff'),
+            detail='Already on this tariff',
         )
 
     if settings.TARIFF_SWITCH_RESET_FREE_DAYS and current_tariff is not None and current_tariff.is_free:
@@ -130,10 +137,7 @@ async def preview_tariff_switch(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'free_tariff_cannot_switch',
-                'message': texts.t(
-                    'CABINET_TARIFF_SWITCH_FREE_CANNOT_SWITCH',
-                    'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
-                ),
+                'message': 'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
                 'use_purchase_flow': True,
             },
         )
@@ -147,21 +151,21 @@ async def preview_tariff_switch(
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=texts.t(
-                'CABINET_TARIFF_SWITCH_NOT_AVAILABLE_PROMO_GROUP',
-                'Tariff not available for your promo group',
-            ),
+            detail='Tariff not available for your promo group',
         )
 
     remaining_days = remaining_days_for_switch(subscription.end_date)
 
     # Calculate switch cost (PricingEngine handles all cases: periodic<->periodic, daily->periodic, periodic->daily)
-    switch_result = pricing_engine.calculate_tariff_switch_cost(
-        current_tariff,
-        new_tariff,
-        remaining_days,
-        user=user,
-    )
+    try:
+        switch_result = pricing_engine.calculate_tariff_switch_cost(
+            current_tariff,
+            new_tariff,
+            remaining_days,
+            user=user,
+        )
+    except TariffSwitchPricingUnavailableError as error:
+        raise HTTPException(status_code=400, detail='Tariff pricing is unavailable') from error
     upgrade_cost = switch_result.upgrade_cost
     is_upgrade = switch_result.is_upgrade
 
@@ -169,12 +173,12 @@ async def preview_tariff_switch(
     if is_upgrade and not settings.TARIFF_SWITCH_UPGRADE_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=texts.t('CABINET_TARIFF_SWITCH_UPGRADE_DISABLED', 'Повышение тарифа недоступно'),
+            detail='Повышение тарифа недоступно',
         )
     if not is_upgrade and not settings.TARIFF_SWITCH_DOWNGRADE_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=texts.t('CABINET_TARIFF_SWITCH_DOWNGRADE_DISABLED', 'Понижение тарифа недоступно'),
+            detail='Понижение тарифа недоступно',
         )
     base_upgrade_cost = switch_result.raw_cost
     discount_value = switch_result.discount_value
@@ -192,11 +196,7 @@ async def preview_tariff_switch(
         'new_tariff_name': new_tariff.name,
         'remaining_days': remaining_days,
         'upgrade_cost_kopeks': upgrade_cost,
-        'upgrade_cost_label': (
-            settings.format_price(upgrade_cost)
-            if upgrade_cost > 0
-            else texts.t('CABINET_TARIFF_SWITCH_FREE_LABEL', 'Бесплатно')
-        ),
+        'upgrade_cost_label': settings.format_price(upgrade_cost) if upgrade_cost > 0 else 'Бесплатно',
         'balance_kopeks': balance,
         # Когда есть нехватка <1₽ (FX-rounding), показ копеек обязателен — без него
         # юзер видит "Баланс 150 ₽, не хватает 0 ₽" и думает что баг.
@@ -221,25 +221,21 @@ async def switch_tariff(
     request: TariffPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(
-        None,
-        description=get_texts().t('CABINET_TARIFF_SWITCH_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff'),
-    ),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Switch to a different tariff without changing end date."""
-    texts = get_texts(user.language)
     if not settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_TARIFF_SWITCH_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'),
+            detail='Tariffs mode is not enabled',
         )
 
-    resolved = await resolve_subscription(db, user, subscription_id)
+    resolved = await _resolve_switch_subscription(db, user, subscription_id)
 
     if not resolved or not resolved.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_TARIFF_SWITCH_NO_ACTIVE_SUBSCRIPTION', 'No active subscription with tariff'),
+            detail='No active subscription with tariff',
         )
 
     # Guard: prevent switching to a tariff the user already owns (multi-tariff)
@@ -250,20 +246,25 @@ async def switch_tariff(
         if existing_target and existing_target.id != resolved.id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=texts.t(
-                'CABINET_TARIFF_SWITCH_ALREADY_HAVE_TARGET',
-                'You already have an active subscription for the target tariff',
-            ),
+                detail='You already have an active subscription for the target tariff',
             )
 
-    # Lock subscription row to prevent concurrent tariff switches
-    locked_result = await db.execute(
-        select(Subscription)
-        .where(Subscription.id == resolved.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    subscription = locked_result.scalar_one()
+    from app.database.crud.user import lock_user_for_pricing
+    from app.services.traffic_purchase_service import prepare_user_tariff_switch
+
+    try:
+        subscription, accounting_panel = await prepare_user_tariff_switch(db, resolved)
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    user = await lock_user_for_pricing(db, user.id)
+    if subscription.user_id != user.id:
+        raise HTTPException(status_code=404, detail='Subscription not found')
+    if settings.is_multi_tariff_enabled():
+        from app.database.crud.subscription import get_subscription_by_user_and_tariff
+
+        existing_target = await get_subscription_by_user_and_tariff(db, user.id, request.tariff_id)
+        if existing_target and existing_target.id != subscription.id:
+            raise HTTPException(status_code=409, detail='You already have an active subscription for the target tariff')
 
     # Use actual_status for correct status check (handles time-based expiration)
     actual_status = subscription.actual_status
@@ -273,10 +274,7 @@ async def switch_tariff(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'subscription_expired',
-                'message': texts.t(
-                    'CABINET_TARIFF_SWITCH_SUBSCRIPTION_EXPIRED',
-                    'Subscription is expired. Please purchase a new tariff instead of switching.',
-                ),
+                'message': 'Subscription is expired. Please purchase a new tariff instead of switching.',
                 'use_purchase_flow': True,
             },
         )
@@ -289,10 +287,7 @@ async def switch_tariff(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'trial_cannot_switch',
-                'message': texts.t(
-                    'CABINET_TARIFF_SWITCH_TRIAL_CANNOT_SWITCH',
-                    'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
-                ),
+                'message': 'Trial subscriptions cannot switch tariffs. Please purchase a tariff instead.',
                 'use_purchase_flow': True,
             },
         )
@@ -302,10 +297,7 @@ async def switch_tariff(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'subscription_not_active',
-                'message': texts.t(
-                    'CABINET_TARIFF_SWITCH_NOT_ACTIVE_STATUS',
-                    'Subscription is not active (status: {status}). Cannot switch tariff.',
-                ).format(status=actual_status),
+                'message': f'Subscription is not active (status: {actual_status}). Cannot switch tariff.',
             },
         )
 
@@ -315,13 +307,13 @@ async def switch_tariff(
     if not new_tariff or not new_tariff.is_active:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_TARIFF_SWITCH_TARIFF_NOT_FOUND', 'Tariff not found or inactive'),
+            detail='Tariff not found or inactive',
         )
 
     if subscription.tariff_id == request.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_TARIFF_SWITCH_ALREADY_ON_TARIFF', 'Already on this tariff'),
+            detail='Already on this tariff',
         )
 
     if settings.TARIFF_SWITCH_RESET_FREE_DAYS and current_tariff is not None and current_tariff.is_free:
@@ -332,10 +324,7 @@ async def switch_tariff(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'free_tariff_cannot_switch',
-                'message': texts.t(
-                    'CABINET_TARIFF_SWITCH_FREE_CANNOT_SWITCH',
-                    'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
-                ),
+                'message': 'Free-tariff subscriptions cannot switch tariffs. Please purchase a tariff instead.',
                 'use_purchase_flow': True,
             },
         )
@@ -349,13 +338,15 @@ async def switch_tariff(
     if not new_tariff.is_available_for_promo_group(promo_group_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=texts.t('CABINET_TARIFF_SWITCH_TARIFF_NOT_AVAILABLE', 'Tariff not available'),
+            detail='Tariff not available',
         )
 
-    # Lock user BEFORE price computation to prevent TOCTOU on promo offer
-    from app.database.crud.user import lock_user_for_pricing
+    from app.services.checkout_squad_validation import CheckoutSquadsUnavailableError, validate_checkout_squads
 
-    user = await lock_user_for_pricing(db, user.id)
+    try:
+        await validate_checkout_squads(new_tariff.allowed_squads)
+    except CheckoutSquadsUnavailableError as error:
+        raise HTTPException(status_code=409, detail={'code': error.code, 'message': error.message}) from error
 
     # Оверлей грейса, осевший в подписке (v4.10–4.11), — не её срок: вернуть до расчёта.
     from app.services.grace_access_echo import undo_grace_overlay_echo
@@ -364,12 +355,15 @@ async def switch_tariff(
     remaining_days = remaining_days_for_switch(subscription.end_date)
 
     # Calculate cost (PricingEngine handles all cases: periodic<->periodic, daily->periodic, periodic->daily)
-    switch_result = pricing_engine.calculate_tariff_switch_cost(
-        current_tariff,
-        new_tariff,
-        remaining_days,
-        user=user,
-    )
+    try:
+        switch_result = pricing_engine.calculate_tariff_switch_cost(
+            current_tariff,
+            new_tariff,
+            remaining_days,
+            user=user,
+        )
+    except TariffSwitchPricingUnavailableError as error:
+        raise HTTPException(status_code=400, detail='Tariff pricing is unavailable') from error
     upgrade_cost = switch_result.upgrade_cost
     is_upgrade = switch_result.is_upgrade
     base_upgrade_cost = switch_result.raw_cost
@@ -381,12 +375,12 @@ async def switch_tariff(
     if is_upgrade and not settings.TARIFF_SWITCH_UPGRADE_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=texts.t('CABINET_TARIFF_SWITCH_UPGRADE_DISABLED', 'Повышение тарифа недоступно'),
+            detail='Повышение тарифа недоступно',
         )
     if not is_upgrade and not settings.TARIFF_SWITCH_DOWNGRADE_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=texts.t('CABINET_TARIFF_SWITCH_DOWNGRADE_DISABLED', 'Понижение тарифа недоступно'),
+            detail='Понижение тарифа недоступно',
         )
 
     # Validate daily price for switching TO daily
@@ -398,7 +392,7 @@ async def switch_tariff(
     if switching_to_daily and (getattr(new_tariff, 'daily_price_kopeks', 0) or 0) <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_TARIFF_SWITCH_DAILY_INVALID_PRICE', 'Daily tariff has invalid price'),
+            detail='Daily tariff has invalid price',
         )
 
     # Charge if upgrade
@@ -410,36 +404,21 @@ async def switch_tariff(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_funds',
-                    'message': texts.t(
-                        'CABINET_TARIFF_SWITCH_INSUFFICIENT_FUNDS',
-                        'Insufficient funds. Missing {amount}',
-                    ).format(amount=settings.format_price(missing, round_kopeks=False)),
+                    'message': f'Insufficient funds. Missing {settings.format_price(missing, round_kopeks=False)}',
                     'missing_amount': missing,
                 },
             )
 
         if switching_to_daily:
-            description = texts.t(
-                'CABINET_TARIFF_SWITCH_DESC_TO_DAILY',
-                "Переход на суточный тариф '{name}'",
-            ).format(name=new_tariff.name)
+            description = f"Переход на суточный тариф '{new_tariff.name}'"
         elif switching_from_daily:
-            description = texts.t(
-                'CABINET_TARIFF_SWITCH_DESC_FROM_DAILY',
-                "Переход с суточного на тариф '{name}' ({days} дней)",
-            ).format(name=new_tariff.name, days=new_period_days)
+            description = f"Переход с суточного на тариф '{new_tariff.name}' ({new_period_days} дней)"
         else:
-            description = texts.t(
-                'CABINET_TARIFF_SWITCH_DESC_UPGRADE',
-                "Переход на тариф '{name}' (доплата за {days} дней)",
-            ).format(name=new_tariff.name, days=remaining_days)
+            description = f"Переход на тариф '{new_tariff.name}' (доплата за {remaining_days} дней)"
 
         # Add discount info to description if applicable
         if period_discount_percent > 0 and discount_value > 0:
-            description += texts.t(
-                'CABINET_TARIFF_SWITCH_DESC_DISCOUNT_SUFFIX',
-                ' (скидка {percent}%)',
-            ).format(percent=period_discount_percent)
+            description += f' (скидка {period_discount_percent}%)'
 
         success = await subtract_user_balance(
             db,
@@ -453,7 +432,7 @@ async def switch_tariff(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=texts.t('CABINET_TARIFF_SWITCH_CHARGE_FAILED', 'Failed to charge balance'),
+                detail='Failed to charge balance',
             )
 
         # Persist the request-body CID BEFORE create_transaction. The
@@ -488,11 +467,8 @@ async def switch_tariff(
         )
     else:
         # Free switch (downgrade) — record in history
-        description = texts.t(
-            'CABINET_TARIFF_SWITCH_DESC_FREE',
-            "Переход на тариф '{name}'",
-        ).format(name=new_tariff.name)
-        await create_transaction(
+        description = f"Переход на тариф '{new_tariff.name}'"
+        switch_transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
@@ -502,32 +478,24 @@ async def switch_tariff(
         )
 
     # Update subscription
-    old_tariff_name = (
-        current_tariff.name
-        if current_tariff
-        else texts.t('CABINET_TARIFF_SWITCH_UNKNOWN_TARIFF', 'Unknown')
-    )
+    old_tariff_name = current_tariff.name if current_tariff else 'Unknown'
 
     # Reset device limit to new tariff base (extra purchased devices are not carried over)
     from app.database.crud.subscription import calc_device_limit_on_tariff_switch
     from app.services.cashera_recurring_cancel import cancel_cashera_recurring_for_subscription_safe
     from app.services.payment.lava import cancel_lava_recurring_for_subscription_safe
 
-    # Смена тарифа делает СБП-привязку Platega несогласованной: она продолжила бы
-    # списывать сумму СТАРОГО тарифа со старым каденсом. Отменяем привязку до
-    # мутаций — юзер переподключит СБП-автопродление под новый тариф (нужна
-    # новая банковская авторизация, молча пересоздать нельзя).
+    # Cancel recurring bindings only after the complete switch has committed.
     from app.services.payment.platega import cancel_platega_recurring_for_subscription_safe
 
-    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
-
-    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
-    await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     # Re-load subscription to avoid MissingGreenlet from expired lazy relationship
     # (subtract_user_balance re-selects User with populate_existing=True which expires relationships)
     await db.refresh(subscription)
 
+    subscription.daily_devices_billing_version = 0
     subscription.tariff_id = new_tariff.id
+    if accounting_panel is not None:
+        subscription.tariff = new_tariff
     subscription.traffic_limit_gb = new_tariff.traffic_limit_gb
     subscription.device_limit = calc_device_limit_on_tariff_switch(
         current_device_limit=subscription.device_limit,
@@ -549,20 +517,37 @@ async def switch_tariff(
     # Счётчик трафика обнуляет только ОПЛАЧЕННОЕ переключение — иначе прыжок
     # туда-обратно по бесплатному направлению давал новую квоту каждый раз.
     reset_used_traffic = should_reset_used_traffic(upgrade_cost)
-    if reset_used_traffic:
+    if reset_used_traffic and accounting_panel is None:
         subscription.traffic_used_gb = 0.0
 
     if switching_to_daily:
         # Switching TO daily - reset end_date to 1 day, set last_daily_charge_at
         subscription.end_date = datetime.now(UTC) + timedelta(days=1)
+        subscription.pending_panel_expire_at = subscription.end_date
         subscription.last_daily_charge_at = datetime.now(UTC)
         subscription.is_daily_paused = False
     elif switching_from_daily:
         subscription.end_date = datetime.now(UTC) + timedelta(days=new_period_days)
+        subscription.pending_panel_expire_at = subscription.end_date
         subscription.is_daily_paused = False
 
     subscription.updated_at = datetime.now(UTC)
+    if accounting_panel is not None:
+        from app.services.traffic_accounting_service import change_managed_tariff_locked
+
+        await change_managed_tariff_locked(
+            db,
+            subscription,
+            accounting_panel,
+            operation_key=f'user-switch:{switch_transaction.id}',
+            reset_base=reset_used_traffic,
+        )
     await db.commit()
+
+    await cancel_platega_recurring_for_subscription_safe(db, subscription.id)
+
+    await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
+    await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
 
     # Emit deferred side-effects after atomic commit
     if upgrade_cost > 0 and switch_transaction:
@@ -578,7 +563,7 @@ async def switch_tariff(
         )
 
     # Sync with RemnaWave (optionally reset traffic based on admin setting)
-    should_reset_traffic = reset_used_traffic
+    should_reset_traffic = reset_used_traffic and accounting_panel is None
     # Refresh subscription after commit (all objects are expired)
     await db.refresh(subscription)
 
@@ -672,14 +657,14 @@ async def switch_tariff(
     # so the central purchase event fired by the SUBSCRIPTION_PAYMENT sees the
     # CID and does not race it (#558449). Nothing to do here.
 
+    from app.services.traffic_accounting_service import traffic_accounting_summary
+
+    accounting = await traffic_accounting_summary(db, subscription.id)
     response: dict[str, Any] = {
         'success': True,
-        'message': texts.t(
-            'CABINET_TARIFF_SWITCH_SUCCESS',
-            "Switched from '{old_name}' to '{new_name}'",
-        ).format(old_name=old_tariff_name, new_name=new_tariff.name)
-        + (texts.t('CABINET_TARIFF_SWITCH_DEVICES_RESET_SUFFIX', ' (devices reset)') if devices_reset else ''),
-        'subscription': _subscription_to_response(subscription, user=user),
+        'message': f"Switched from '{old_tariff_name}' to '{new_tariff.name}'"
+        + (' (devices reset)' if devices_reset else ''),
+        'subscription': _subscription_to_response(subscription, user=user, traffic_accounting=accounting),
         'old_tariff_name': old_tariff_name,
         'new_tariff_id': new_tariff.id,
         'new_tariff_name': new_tariff.name,

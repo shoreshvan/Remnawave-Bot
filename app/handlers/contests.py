@@ -113,12 +113,7 @@ async def _build_contests_menu_view(db: AsyncSession, db_user) -> tuple[str, typ
 
     buttons = []
     for tpl_slug, rnd in unique_templates.items():
-        slug_key = ((rnd.template.slug if rnd.template else tpl_slug) or '').upper()
-        title = (
-            texts.t(f'CONTEST_TEMPLATE_{slug_key}_NAME', rnd.template.name)
-            if rnd.template and slug_key
-            else (rnd.template.name if rnd.template else tpl_slug)
-        )
+        title = rnd.template.name if rnd.template else tpl_slug
         buttons.append(
             [
                 types.InlineKeyboardButton(
@@ -220,14 +215,14 @@ async def play_contest(callback: types.CallbackQuery, state: FSMContext, db_user
     # Validate callback data
     parts = _validate_callback_data(callback.data)
     if not parts or len(parts) < 4 or parts[1] != 'play':
-        await callback.answer(texts.t('CONTEST_INVALID_DATA', 'Некорректные данные'), show_alert=True)
+        await callback.answer(texts.t('CALLBACK_INVALID_DATA'), show_alert=True)
         return
 
     round_id_str = parts[-1]
     try:
         round_id = int(round_id_str)
     except ValueError:
-        await callback.answer(texts.t('CONTEST_INVALID_DATA', 'Некорректные данные'), show_alert=True)
+        await callback.answer(texts.t('CALLBACK_INVALID_DATA'), show_alert=True)
         return
 
     # Get round with template
@@ -305,7 +300,7 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
     # Validate callback data
     parts = _validate_callback_data(callback.data)
     if not parts or len(parts) < 4 or parts[1] != 'pick':
-        await callback.answer(texts.t('CONTEST_INVALID_DATA', 'Некорректные данные'), show_alert=True)
+        await callback.answer(texts.t('CALLBACK_INVALID_DATA'), show_alert=True)
         return
 
     round_id_str = parts[2]
@@ -314,7 +309,7 @@ async def handle_pick(callback: types.CallbackQuery, db_user, db: AsyncSession):
     try:
         round_id = int(round_id_str)
     except ValueError:
-        await callback.answer(texts.t('CONTEST_INVALID_DATA', 'Некорректные данные'), show_alert=True)
+        await callback.answer(texts.t('CALLBACK_INVALID_DATA'), show_alert=True)
         return
 
     # Re-check subscription

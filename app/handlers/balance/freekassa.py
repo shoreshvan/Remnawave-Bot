@@ -16,6 +16,7 @@ from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
+from app.utils.topup_retry import format_topup_amount_retry
 
 
 logger = structlog.get_logger(__name__)
@@ -107,7 +108,7 @@ async def _create_freekassa_payment_and_respond(
                 InlineKeyboardButton(
                     text=texts.t(
                         'PAY_BUTTON',
-                        '💳 Оплатить {amount} تومان',
+                        '💳 Оплатить {amount}₽',
                     ).format(amount=f'{amount_rub:.0f}'),
                     url=payment_url,
                 )
@@ -124,7 +125,7 @@ async def _create_freekassa_payment_and_respond(
     response_text = texts.t(
         'FREEKASSA_PAYMENT_CREATED',
         '💳 <b>Оплата через {name}</b>\n\n'
-        'Сумма: <b>{amount} تومان</b>\n\n'
+        'Сумма: <b>{amount}₽</b>\n\n'
         'Нажмите кнопку ниже для оплаты.\n'
         'После успешной оплаты баланс будет пополнен автоматически.',
     ).format(name=html.escape(display_name), amount=f'{amount_rub:.2f}')
@@ -162,15 +163,22 @@ async def process_freekassa_payment_amount(
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append(
+                [InlineKeyboardButton(text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+            )
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await message.answer(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -183,23 +191,15 @@ async def process_freekassa_payment_amount(
 
     if amount_kopeks < min_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_LOW',
-                'Минимальная сумма пополнения: {min_amount} تومان',
-            ).format(min_amount=min_amount // 100),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            format_topup_amount_retry(db_user.language, min_amount, max_amount, too_low=True),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
     if amount_kopeks > max_amount:
         await message.answer(
-            texts.t(
-                'PAYMENT_AMOUNT_TOO_HIGH',
-                'Максимальная сумма пополнения: {max_amount} تومان',
-            ).format(max_amount=max_amount // 100),
-            reply_markup=get_back_keyboard(db_user.language),
-            parse_mode='HTML',
+            format_topup_amount_retry(db_user.language, min_amount, max_amount, too_low=False),
+            reply_markup=get_back_keyboard(db_user.language, callback_data='balance_topup'),
         )
         return
 
@@ -251,15 +251,22 @@ async def _start_freekassa_topup_impl(
 
     # Проверка ограничения на пополнение
     if getattr(db_user, 'restriction_topup', False):
-        reason = html.escape(getattr(db_user, 'restriction_reason', None) or 'Действие ограничено администратором')
+        reason = html.escape(
+            getattr(db_user, 'restriction_reason', None)
+            or texts.t('USER_RESTRICTION_DEFAULT_REASON', 'Действие ограничено администратором')
+        )
         support_url = settings.get_support_contact_url()
         keyboard = []
         if support_url:
-            keyboard.append([InlineKeyboardButton(text='🆘 Обжаловать', url=support_url)])
+            keyboard.append(
+                [InlineKeyboardButton(text=texts.t('USER_RESTRICTION_APPEAL_BUTTON', '🆘 Обжаловать'), url=support_url)]
+            )
         keyboard.append([InlineKeyboardButton(text=texts.BACK, callback_data='menu_balance')])
 
         await callback.message.edit_text(
-            f'🚫 <b>Пополнение ограничено</b>\n\n{reason}',
+            texts.t('USER_RESTRICTION_TOPUP_BLOCKED_SHORT', '🚫 <b>Пополнение ограничено</b>\n\n{reason}').format(
+                reason=reason
+            ),
             parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
         )
@@ -278,9 +285,9 @@ async def _start_freekassa_topup_impl(
         texts.t(
             'FREEKASSA_ENTER_AMOUNT',
             '💳 <b>Пополнение через {name}</b>\n\n'
-            'Введите сумму пополнения в تومان.\n\n'
-            'Минимум: {min_amount} تومان\n'
-            'Максимум: {max_amount} تومان',
+            'Введите сумму пополнения в рублях.\n\n'
+            'Минимум: {min_amount}₽\n'
+            'Максимум: {max_amount}₽',
         ).format(
             name=display_name,
             min_amount=min_amount,

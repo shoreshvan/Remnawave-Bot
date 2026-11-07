@@ -93,14 +93,8 @@ class UserService:
 
         if has_active_subscription:
             # У пользователя есть активная подписка - обычное сообщение
-            message = texts.t(
-                'BALANCE_TOPUP_SUCCESS',
-                '✅ <b>Баланс пополнен на {amount}!</b>\n\n'
-                '💳 Текущий баланс: {balance}\n\n'
-                'Спасибо за использование нашего сервиса! 🎉',
-            ).format(
-                amount=settings.format_price(amount_kopeks),
-                balance=settings.format_price(user.balance_kopeks),
+            message = texts.t('USER_TOPUP_ACTIVE', '').format(
+                amount=settings.format_price(amount_kopeks), balance=settings.format_price(user.balance_kopeks)
             )
             extend_callback = 'menu_subscription' if settings.is_multi_tariff_enabled() else 'subscription_extend'
             keyboard = types.InlineKeyboardMarkup(
@@ -115,16 +109,7 @@ class UserService:
             )
         else:
             # НЕТ активной подписки - БОЛЬШОЕ ПРЕДУПРЕЖДЕНИЕ
-            message = texts.t(
-                'BALANCE_TOPUP_SUCCESS_NO_SUBSCRIPTION',
-                '✅ <b>Баланс пополнен на {amount}!</b>\n\n'
-                '💳 Текущий баланс: {balance}\n\n'
-                '{separator}\n\n'
-                '⚠️ <b>ВАЖНО!</b> ⚠️\n\n'
-                '🔴 <b>ПОДПИСКА НЕ АКТИВНА!</b>\n\n'
-                'Пополнение баланса НЕ активирует подписку автоматически!\n\n'
-                '👇 <b>Выберите действие:</b>',
-            ).format(
+            message = texts.t('USER_TOPUP_INACTIVE', '').format(
                 amount=settings.format_price(amount_kopeks),
                 balance=settings.format_price(user.balance_kopeks),
                 separator='─' * 25,
@@ -134,20 +119,17 @@ class UserService:
                 inline_keyboard=[
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('BALANCE_BTN_ACTIVATE_SUBSCRIPTION', '🚀 АКТИВИРОВАТЬ ПОДПИСКУ'),
-                            callback_data='subscription_buy',
+                            text=texts.t('USER_TOPUP_ACTIVATE', ''), callback_data='subscription_buy'
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('BALANCE_BTN_EXTEND_SUBSCRIPTION', '💎 ПРОДЛИТЬ ПОДПИСКУ'),
-                            callback_data=extend_callback,
+                            text=texts.t('SUBSCRIPTION_EXTEND', ''), callback_data=extend_callback
                         )
                     ],
                     [
                         types.InlineKeyboardButton(
-                            text=texts.t('BALANCE_BTN_ADD_DEVICES', '📱 ДОБАВИТЬ УСТРОЙСТВА'),
-                            callback_data='subscription_add_devices',
+                            text=texts.t('USER_TOPUP_ADD_DEVICES', ''), callback_data='subscription_add_devices'
                         )
                     ],
                 ]
@@ -168,28 +150,21 @@ class UserService:
         Отправляет уведомление пользователю о пополнении/списании баланса.
         Поддерживает как Telegram, так и email-only пользователей.
         """
+        texts = get_texts(user.language)
         if amount_kopeks > 0:
             # Пополнение
             emoji = '💰'
             amount_text = f'+{settings.format_price(amount_kopeks)}'
-            message = get_texts(user.language).t(
-                'BALANCE_TOPUP_SIMPLE',
-                '{emoji} <b>Баланс пополнен!</b>\n\n'
-                '💵 <b>Сумма:</b> {amount_text}\n'
-                '💳 <b>Текущий баланс:</b> {balance}\n\n'
-                'Спасибо за использование нашего сервиса! 🎉',
-            ).format(emoji=emoji, amount_text=amount_text, balance=settings.format_price(user.balance_kopeks))
+            message = texts.t('USER_BALANCE_CREDIT', '').format(
+                emoji=emoji, amount=amount_text, balance=settings.format_price(user.balance_kopeks)
+            )
         else:
             # Списание
             emoji = '💸'
             amount_text = f'-{settings.format_price(abs(amount_kopeks))}'
-            message = get_texts(user.language).t(
-                'BALANCE_CHARGE_SIMPLE',
-                '{emoji} <b>Средства списаны с баланса</b>\n\n'
-                '💵 <b>Сумма:</b> {amount_text}\n'
-                '💳 <b>Текущий баланс:</b> {balance}\n\n'
-                'Если у вас есть вопросы, обратитесь в поддержку.',
-            ).format(emoji=emoji, amount_text=amount_text, balance=settings.format_price(user.balance_kopeks))
+            message = texts.t('USER_BALANCE_DEBIT', '').format(
+                emoji=emoji, amount=amount_text, balance=settings.format_price(user.balance_kopeks)
+            )
 
         keyboard_rows = []
         subs = getattr(user, 'subscriptions', None) or []
@@ -199,7 +174,7 @@ class UserService:
             keyboard_rows.append(
                 [
                     types.InlineKeyboardButton(
-                        text=get_texts(user.language).t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
+                        text=texts.t('SUBSCRIPTION_EXTEND', '💎 Продлить подписку'),
                         callback_data=extend_callback,
                     )
                 ]
@@ -565,7 +540,7 @@ class UserService:
                     db, user, amount_kopeks, description=description, payment_method=PaymentMethod.MANUAL
                 )
                 logger.info(
-                    'Админ пополнил баланс пользователя на تومان',
+                    'Админ пополнил баланс пользователя на ₽',
                     admin_id=admin_id,
                     user_id=user_id,
                     amount_kopeks=amount_kopeks / 100,
@@ -582,7 +557,7 @@ class UserService:
                 )
                 if success:
                     logger.info(
-                        'Админ списал с баланса пользователя تومان',
+                        'Админ списал с баланса пользователя ₽',
                         admin_id=admin_id,
                         user_id=user_id,
                         value=abs(amount_kopeks) / 100,
@@ -1249,6 +1224,7 @@ class UserService:
             # но раньше не очищались в этом блоке. Без них DELETE FROM transactions падал с
             # ForeignKeyViolationError (например, rollypay_payments_transaction_id_fkey).
             from app.database.models import (
+                AnorePayment,
                 AntilopayPayment,
                 AppleTransaction,
                 AuraPayPayment,
@@ -1264,7 +1240,6 @@ class UserService:
                 LavaPayment,
                 OverpayPayment,
                 ParityPayPayment,
-                PayPearPayment,
                 RioPayPayment,
                 RollyPayPayment,
                 SeverPayPayment,
@@ -1275,7 +1250,6 @@ class UserService:
                 RioPayPayment,
                 RollyPayPayment,
                 SeverPayPayment,
-                PayPearPayment,
                 OverpayPayment,
                 AuraPayPayment,
                 EtoplatezhiPayment,
@@ -1284,6 +1258,7 @@ class UserService:
                 DonutPayment,
                 LavaPayment,
                 CisPayPayment,
+                AnorePayment,
                 TabPayPayment,
                 ParityPayPayment,
                 HooshPayPayment,

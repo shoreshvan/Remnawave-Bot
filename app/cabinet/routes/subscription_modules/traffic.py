@@ -56,12 +56,7 @@ router = APIRouter()
 async def get_traffic_packages(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(
-        None,
-        description=get_texts().t(
-            'CABINET_TRAFFIC_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
     """Get available traffic packages."""
     from app.database.crud.tariff import get_tariff_by_id
@@ -162,25 +157,17 @@ async def purchase_traffic(
     request: TrafficPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(
-        None,
-        description=get_texts().t(
-            'CABINET_TRAFFIC_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
     """Purchase additional traffic."""
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts(user.language).t(
-                'CABINET_TRAFFIC_PURCHASES_RESTRICTED',
-                'Subscription purchases are restricted for this account',
-            ),
+            detail='Subscription purchases are restricted for this account',
         )
 
-    from app.database.crud.subscription import add_subscription_traffic
     from app.database.crud.tariff import get_tariff_by_id
+    from app.services.traffic_purchase_service import add_subscription_traffic
     from app.utils.pricing_utils import calculate_prorated_price
 
     subscription = await resolve_subscription(db, user, subscription_id)
@@ -190,7 +177,7 @@ async def purchase_traffic(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_NO_SUBSCRIPTION', 'No subscription found'),
+            detail='No subscription found',
         )
     tariff = None
     base_price_kopeks = 0
@@ -202,25 +189,21 @@ async def purchase_traffic(
         if not tariff:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_texts(user.language).t('CABINET_TRAFFIC_TARIFF_NOT_FOUND', 'Tariff not found'),
+                detail='Tariff not found',
             )
 
         # Проверяем, разрешена ли докупка
         if not getattr(tariff, 'traffic_topup_enabled', False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t(
-                    'CABINET_TRAFFIC_TOPUP_DISABLED_TARIFF', 'Traffic top-up is disabled for this tariff'
-                ),
+                detail='Traffic top-up is disabled for this tariff',
             )
 
         # Проверяем безлимит
         if tariff.traffic_limit_gb == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t(
-                    'CABINET_TRAFFIC_CANNOT_ADD_UNLIMITED', 'Cannot add traffic to unlimited subscription'
-                ),
+                detail='Cannot add traffic to unlimited subscription',
             )
 
         # Проверяем лимит докупки
@@ -232,10 +215,7 @@ async def purchase_traffic(
                 available_gb = max(0, max_topup_limit - current_traffic)
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=get_texts(user.language).t(
-                        'CABINET_TRAFFIC_LIMIT_EXCEEDED',
-                        'Traffic limit exceeded. Max: {max} GB, available: {available} GB',
-                    ).format(max=max_topup_limit, available=available_gb),
+                    detail=f'Traffic limit exceeded. Max: {max_topup_limit} GB, available: {available_gb} GB',
                 )
 
         # Получаем цену из тарифа
@@ -243,17 +223,13 @@ async def purchase_traffic(
         if request.gb not in packages:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t(
-                    'CABINET_TRAFFIC_PACKAGE_NOT_AVAILABLE', 'Traffic package {gb}GB is not available'
-                ).format(gb=request.gb),
+                detail=f'Traffic package {request.gb}GB is not available',
             )
         base_price_kopeks = packages[request.gb]
         if base_price_kopeks <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t(
-                    'CABINET_TRAFFIC_PACKAGE_NO_PRICE', 'Traffic package {gb}GB has no price configured'
-                ).format(gb=request.gb),
+                detail=f'Traffic package {request.gb}GB has no price configured',
             )
 
     else:
@@ -261,7 +237,7 @@ async def purchase_traffic(
         if not settings.is_traffic_topup_enabled():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t('CABINET_TRAFFIC_TOPUP_FEATURE_DISABLED', 'Traffic top-up feature is disabled'),
+                detail='Traffic top-up feature is disabled',
             )
 
         # Проверяем настройку тарифа (allow_traffic_topup)
@@ -270,10 +246,7 @@ async def purchase_traffic(
             if tariff and not tariff.allow_traffic_topup:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=get_texts(user.language).t(
-                        'CABINET_TRAFFIC_TOPUP_NOT_AVAILABLE_TARIFF',
-                        'Traffic top-up is not available for your tariff',
-                    ),
+                    detail='Traffic top-up is not available for your tariff',
                 )
 
         # Получаем цену из глобальных настроек
@@ -282,15 +255,13 @@ async def purchase_traffic(
         if not matching_pkg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t('CABINET_TRAFFIC_INVALID_PACKAGE', 'Invalid traffic package'),
+                detail='Invalid traffic package',
             )
         base_price_kopeks = matching_pkg['price']
         if base_price_kopeks <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t(
-                    'CABINET_TRAFFIC_PACKAGE_NO_PRICE_CONFIGURED', 'Traffic package has no price configured'
-                ),
+                detail='Traffic package has no price configured',
             )
 
     # На тарифах пакеты трафика покупаются на 1 месяц (30 дней),
@@ -307,6 +278,13 @@ async def purchase_traffic(
 
     # Lock user row to prevent TOCTOU on promo-offer state
     from app.database.crud.user import lock_user_for_pricing
+    from app.services.traffic_purchase_service import prepare_traffic_purchase
+
+    try:
+        subscription, accounting_panel = await prepare_traffic_purchase(db, subscription, requested_gb=request.gb)
+    except Exception as error:
+        await db.rollback()
+        raise HTTPException(status_code=503, detail='Traffic accounting is temporarily unavailable') from error
 
     user = await lock_user_for_pricing(db, user.id)
 
@@ -337,9 +315,7 @@ async def purchase_traffic(
             'base_price_kopeks': prorated_price,
             'discount_percent': traffic_discount_percent,
             'source': 'cabinet',
-            'description': get_texts(user.language)
-            .t('CABINET_TRAFFIC_PURCHASE_DESCRIPTION', 'Докупка {gb} ГБ трафика')
-            .format(gb=request.gb),
+            'description': f'Докупка {request.gb} ГБ трафика',
         }
 
         try:
@@ -357,9 +333,7 @@ async def purchase_traffic(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': get_texts(user.language)
-                .t('CABINET_TRAFFIC_INSUFFICIENT_FUNDS_MESSAGE', 'Недостаточно средств. Не хватает {amount}')
-                .format(amount=settings.format_price(missing, round_kopeks=False)),
+                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
                 'missing_amount': missing,
                 'cart_saved': True,
                 'cart_mode': 'add_traffic',
@@ -368,30 +342,37 @@ async def purchase_traffic(
 
     # Формируем описание
     if traffic_discount_percent > 0:
-        traffic_description = get_texts(user.language).t(
-            'CABINET_TRAFFIC_PURCHASE_DESCRIPTION_DISCOUNT',
-            'Докупка {gb} ГБ трафика (скидка {percent}%)',
-        ).format(gb=request.gb, percent=traffic_discount_percent)
+        traffic_description = f'Докупка {request.gb} ГБ трафика (скидка {traffic_discount_percent}%)'
     else:
-        traffic_description = get_texts(user.language).t(
-            'CABINET_TRAFFIC_PURCHASE_DESCRIPTION', 'Докупка {gb} ГБ трафика'
-        ).format(gb=request.gb)
+        traffic_description = f'Докупка {request.gb} ГБ трафика'
 
     # Списываем баланс
-    success = await subtract_user_balance(db, user, final_price, traffic_description)
+    success = await subtract_user_balance(db, user, final_price, traffic_description, commit=False)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_CHARGE_FAILED', 'Failed to charge balance'),
+            detail='Failed to charge balance',
         )
 
-    # Добавляем трафик (add_subscription_traffic обновляет purchased_traffic_gb, traffic_reset_at и коммитит)
-    await add_subscription_traffic(db, subscription, request.gb)
+    # Выдача пакета и его остатка фиксируется вместе со списанием.
+    await add_subscription_traffic(db, subscription, request.gb, panel=accounting_panel, commit=False)
 
     # Реактивируем подписку если она была DISABLED/EXPIRED (например, после LIMITED/EXPIRED в RemnaWave)
     from app.database.crud.subscription import reactivate_subscription
 
-    await reactivate_subscription(db, subscription)
+    await reactivate_subscription(db, subscription, commit=False)
+    payment_transaction = await create_transaction(
+        db=db,
+        user_id=user.id,
+        type=TransactionType.SUBSCRIPTION_PAYMENT,
+        amount_kopeks=final_price,
+        description=traffic_description,
+        commit=False,
+    )
+    await db.commit()
+    from app.services.traffic_purchase_service import finish_traffic_purchase
+
+    await finish_traffic_purchase(db, subscription, payment_transaction)
 
     # Синхронизируем с RemnaWave с ограничением по времени: товар (трафик) уже
     # зафиксирован в БД выше, и медленная/недоступная панель не должна держать
@@ -424,15 +405,6 @@ async def purchase_traffic(
             user_id=user.id,
             action='create' if _should_create else 'update',
         )
-
-    # Создаём транзакцию
-    await create_transaction(
-        db=db,
-        user_id=user.id,
-        type=TransactionType.SUBSCRIPTION_PAYMENT,
-        amount_kopeks=final_price,
-        description=traffic_description,
-    )
 
     await db.refresh(user)
     await db.refresh(subscription)
@@ -476,7 +448,7 @@ async def purchase_traffic(
 
     response: dict[str, Any] = {
         'success': True,
-        'message': get_texts(user.language).t('CABINET_TRAFFIC_PURCHASED_SUCCESS', 'Traffic purchased successfully'),
+        'message': 'Traffic purchased successfully',
         'gb_added': request.gb,
         'new_traffic_limit_gb': subscription.traffic_limit_gb,
         'amount_paid_kopeks': final_price,
@@ -496,12 +468,7 @@ async def save_traffic_cart(
     request: TrafficPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(
-        None,
-        description=get_texts().t(
-            'CABINET_TRAFFIC_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, bool]:
     """Save cart for traffic purchase (for insufficient balance flow)."""
 
@@ -512,28 +479,25 @@ async def save_traffic_cart(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_NO_ACTIVE_SUBSCRIPTION', 'У вас нет активной подписки'),
+            detail='У вас нет активной подписки',
         )
 
     if subscription.status not in ['active', 'trial']:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_SUBSCRIPTION_INACTIVE', 'Ваша подписка неактивна'),
+            detail='Ваша подписка неактивна',
         )
 
     if subscription.is_trial:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts(user.language).t(
-                'CABINET_TRAFFIC_SAVECART_TRIAL_NOT_ALLOWED',
-                'Докупка трафика недоступна на пробном периоде',
-            ),
+            detail='Докупка трафика недоступна на пробном периоде',
         )
 
     if subscription.traffic_limit_gb == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_ALREADY_UNLIMITED', 'У вас уже безлимитный трафик'),
+            detail='У вас уже безлимитный трафик',
         )
 
     # Get traffic price from tariff or settings
@@ -546,32 +510,27 @@ async def save_traffic_cart(
         if not tariff:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_TARIFF_NOT_FOUND', 'Тариф не найден'),
+                detail='Тариф не найден',
             )
 
         if not getattr(tariff, 'traffic_topup_enabled', False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t(
-                    'CABINET_TRAFFIC_SAVECART_TOPUP_NOT_AVAILABLE_TARIFF',
-                    'Докупка трафика недоступна на вашем тарифе',
-                ),
+                detail='Докупка трафика недоступна на вашем тарифе',
             )
 
         packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
         if request.gb not in packages:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language)
-                .t('CABINET_TRAFFIC_SAVECART_PACKAGE_NOT_AVAILABLE', 'Пакет трафика {gb} ГБ недоступен')
-                .format(gb=request.gb),
+                detail=f'Пакет трафика {request.gb} ГБ недоступен',
             )
         base_price_kopeks = packages[request.gb]
     else:
         if not settings.is_traffic_topup_enabled():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_TOPUP_DISABLED', 'Докупка трафика отключена'),
+                detail='Докупка трафика отключена',
             )
 
         packages = settings.get_traffic_topup_packages()
@@ -579,7 +538,7 @@ async def save_traffic_cart(
         if not matching_pkg:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts(user.language).t('CABINET_TRAFFIC_SAVECART_INVALID_PACKAGE', 'Недоступный пакет трафика'),
+                detail='Недоступный пакет трафика',
             )
         base_price_kopeks = matching_pkg['price']
 
@@ -608,9 +567,7 @@ async def save_traffic_cart(
         'base_price_kopeks': base_price_kopeks,
         'discount_percent': traffic_discount_percent,
         'source': 'cabinet',
-        'description': get_texts(user.language)
-        .t('CABINET_TRAFFIC_PURCHASE_DESCRIPTION', 'Докупка {gb} ГБ трафика')
-        .format(gb=request.gb),
+        'description': f'Докупка {request.gb} ГБ трафика',
     }
     await user_cart_service.save_user_cart(user.id, cart_data)
     logger.info('Cart saved for traffic purchase (cabinet save-cart) user +', user_id=user.id, gb=request.gb)
@@ -626,12 +583,7 @@ async def switch_traffic_package(
     request: TrafficPurchaseRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(
-        None,
-        description=get_texts().t(
-            'CABINET_TRAFFIC_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ) -> dict[str, Any]:
     """Switch to a different traffic package (change limit)."""
     from app.utils.pricing_utils import calculate_prorated_price
@@ -643,25 +595,28 @@ async def switch_traffic_package(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_NO_SUBSCRIPTION', 'No subscription found'),
+            detail='No subscription found',
         )
 
     if subscription.is_trial:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts(user.language).t(
-                'CABINET_TRAFFIC_MANAGEMENT_PAID_ONLY',
-                'Traffic management is only available for paid subscriptions',
-            ),
+            detail='Traffic management is only available for paid subscriptions',
         )
 
+    from app.services.traffic_purchase_service import prepare_user_tariff_switch
+
+    subscription, accounting_panel = await prepare_user_tariff_switch(db, subscription)
+    if subscription.user_id != user.id or subscription.is_trial:
+        raise HTTPException(status_code=403, detail='Traffic management is unavailable for this subscription')
+    ensure_subscription_has_tariff(subscription)
     current_traffic = subscription.traffic_limit_gb or 0
     new_traffic = request.gb
 
     if current_traffic == new_traffic:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_ALREADY_ON_PACKAGE', 'Already on this traffic package'),
+            detail='Already on this traffic package',
         )
 
     # Get available packages
@@ -679,6 +634,7 @@ async def switch_traffic_package(
     current_price = current_pkg['price'] if current_pkg else 0
     new_price = new_pkg['price']
 
+    payment_transaction = None
     if new_price > current_price:
         # Upgrade - charge difference
         price_diff = new_price - current_price
@@ -700,29 +656,26 @@ async def switch_traffic_package(
         if final_price > 0 and user.balance_kopeks < final_price:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=get_texts(user.language)
-                .t('CABINET_TRAFFIC_INSUFFICIENT_BALANCE_SWITCH', 'Insufficient balance. Need {amount:.2f} تومان')
-                .format(amount=final_price / 100),
+                detail=f'Insufficient balance. Need {final_price / 100:.2f} RUB',
             )
 
         # Charge balance
-        description = get_texts(user.language).t(
-            'CABINET_TRAFFIC_UPGRADE_DESCRIPTION', 'Traffic upgrade from {current}GB to {new}GB'
-        ).format(current=current_traffic, new=new_traffic)
-        success = await subtract_user_balance(db, user, final_price, description)
+        description = f'Traffic upgrade from {current_traffic}GB to {new_traffic}GB'
+        success = await subtract_user_balance(db, user, final_price, description, commit=False)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=get_texts(user.language).t('CABINET_TRAFFIC_CHARGE_FAILED', 'Failed to charge balance'),
+                detail='Failed to charge balance',
             )
 
         # Create transaction
-        await create_transaction(
+        payment_transaction = await create_transaction(
             db=db,
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
             description=description,
+            commit=False,
         )
 
         charged = final_price
@@ -740,10 +693,23 @@ async def switch_traffic_package(
     subscription.purchased_traffic_gb = 0  # Reset purchased traffic on switch
     subscription.traffic_reset_at = None  # Reset traffic reset date
     subscription.updated_at = datetime.now(UTC)
+    if accounting_panel is not None:
+        from uuid import uuid4
+
+        from app.services.traffic_accounting_service import change_managed_tariff_locked
+
+        operation = str(payment_transaction.id) if payment_transaction is not None else uuid4().hex
+        await change_managed_tariff_locked(
+            db, subscription, accounting_panel, operation_key=f'classic-traffic:{operation}', reset_base=False
+        )
     await db.commit()
+    from app.services.traffic_purchase_service import finish_traffic_purchase
+
+    await finish_traffic_purchase(db, subscription, payment_transaction)
 
     # Sync with RemnaWave (time-bounded — see REMNAWAVE_SYNC_TIMEOUT; product is
     # already committed, defer slow syncs to remnawave_retry_queue).
+    _should_create = False
     try:
         subscription_service = SubscriptionService()
         _should_create = await should_create_panel_account(db, subscription, user)
@@ -789,9 +755,7 @@ async def switch_traffic_package(
 
     return {
         'success': True,
-        'message': get_texts(user.language)
-        .t('CABINET_TRAFFIC_CHANGED_MESSAGE', 'Traffic changed from {current}GB to {new}GB')
-        .format(current=current_traffic, new=new_traffic),
+        'message': f'Traffic changed from {current_traffic}GB to {new_traffic}GB',
         'old_traffic_gb': current_traffic,
         'new_traffic_gb': new_traffic,
         'charged_kopeks': charged,
@@ -812,22 +776,19 @@ TRAFFIC_CACHE_TTL = 60  # Cache traffic data for 60 seconds
 async def refresh_traffic(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(
-        None,
-        description=get_texts().t(
-            'CABINET_TRAFFIC_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
 ):
     """
     Refresh traffic usage from RemnaWave panel.
     Rate limited to 1 request per 60 seconds.
     """
+    from .helpers import _load_traffic_accounting_fields
+
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_NO_ACTIVE_SUBSCRIPTION', 'No active subscription'),
+            detail='No active subscription',
         )
 
     # Use per-subscription key when subscription_id is available so that refreshing
@@ -854,18 +815,33 @@ async def refresh_traffic(
                 'rate_limited': True,
                 'retry_after_seconds': TRAFFIC_REFRESH_RATE_WINDOW,
                 **cached_data,
+                **await _load_traffic_accounting_fields(db, subscription),
             }
 
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=get_texts(user.language)
-            .t('CABINET_TRAFFIC_RATE_LIMITED', 'Rate limited. Try again in {seconds} seconds.')
-            .format(seconds=TRAFFIC_REFRESH_RATE_WINDOW),
+            detail=f'Rate limited. Try again in {TRAFFIC_REFRESH_RATE_WINDOW} seconds.',
             headers={'Retry-After': str(TRAFFIC_REFRESH_RATE_WINDOW)},
         )
 
     # Fetch traffic from RemnaWave
     try:
+        service = SubscriptionService()
+        if await service._persisted_traffic_mode(db, subscription) in {'managed', 'migrating'}:
+            refreshed = await service.sync_subscription_usage(db, subscription)
+            if not refreshed:
+                # A failed observation must not leave partial pending grants in this request.
+                await db.rollback()
+                subscription = await resolve_subscription(db, user, subscription_id)
+            traffic_data = await _load_traffic_accounting_fields(db, subscription)
+            traffic_cache_key = cache_key('traffic', cache_suffix)
+            await cache.set(traffic_cache_key, traffic_data, TRAFFIC_CACHE_TTL)
+            return {
+                'success': True,
+                'cached': False,
+                'source': 'remnawave' if refreshed else 'database',
+                **traffic_data,
+            }
         remnawave_service = RemnaWaveService()
 
         # Resolve panel user id for traffic lookup
@@ -901,6 +877,7 @@ async def refresh_traffic(
                 'cached': False,
                 'source': 'database',
                 **traffic_data,
+                **await _load_traffic_accounting_fields(db, subscription),
             }
 
         # Update subscription with fresh data
@@ -928,6 +905,8 @@ async def refresh_traffic(
             'lifetime_used_gb': round(traffic_stats.get('lifetime_used_traffic_gb', 0), 2),
         }
 
+        traffic_data.update(await _load_traffic_accounting_fields(db, subscription))
+
         # Cache the result
         traffic_cache_key = cache_key('traffic', cache_suffix)
         await cache.set(traffic_cache_key, traffic_data, TRAFFIC_CACHE_TTL)
@@ -943,5 +922,5 @@ async def refresh_traffic(
         logger.error('Error refreshing traffic for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts(user.language).t('CABINET_TRAFFIC_REFRESH_FAILED', 'Failed to refresh traffic data'),
+            detail='Failed to refresh traffic data',
         )

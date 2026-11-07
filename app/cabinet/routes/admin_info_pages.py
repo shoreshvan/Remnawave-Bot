@@ -2,9 +2,11 @@
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.crud.faq import get_faq_page_by_id
 from app.database.crud.info_pages import (
     clear_replaces_tab,
     create_info_page,
@@ -14,8 +16,8 @@ from app.database.crud.info_pages import (
     reorder_info_pages,
     update_info_page,
 )
-from app.database.models import User
-from app.localization.texts import get_texts
+from app.database.models import FaqPage, FaqSetting, User
+from app.services.faq_service import FaqService
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.info_pages import (
@@ -23,6 +25,8 @@ from ..schemas.info_pages import (
     InfoPageListItem,
     InfoPageResponse,
     InfoPageUpdateRequest,
+    LegacyFaqResponse,
+    LegacyFaqUpdateRequest,
     ReorderRequest,
 )
 
@@ -39,7 +43,6 @@ async def list_all_info_pages(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> list[InfoPageListItem]:
     """Get all info pages (admin view, includes inactive)."""
-    texts = get_texts(admin.language)
     try:
         pages = await get_all_info_pages(db, include_inactive=True, page_type=page_type)
         return [InfoPageListItem.model_validate(p) for p in pages]
@@ -49,8 +52,43 @@ async def list_all_info_pages(
         logger.exception('Failed to list info pages')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=texts.t('CABINET_INFO_PAGES_LOAD_FAILED', 'Failed to load info pages'),
+            detail='Failed to load info pages',
         )
+
+
+@router.get('/legacy-faq', response_model=list[LegacyFaqResponse])
+async def list_legacy_faq(
+    admin: User = Depends(require_permission('info_pages:read')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> list[LegacyFaqResponse]:
+    """Include existing bot FAQ in the cabinet editor without copying its data."""
+    pages = (
+        (await db.execute(select(FaqPage).order_by(FaqPage.language, FaqPage.display_order, FaqPage.id)))
+        .scalars()
+        .all()
+    )
+    settings = {item.language: item.is_enabled for item in (await db.execute(select(FaqSetting))).scalars()}
+    return [
+        LegacyFaqResponse.model_validate(page).model_copy(update={'is_enabled': settings.get(page.language, True)})
+        for page in pages
+    ]
+
+
+@router.put('/legacy-faq/{page_id}', response_model=LegacyFaqResponse)
+async def update_legacy_faq(
+    page_id: int,
+    request: LegacyFaqUpdateRequest,
+    admin: User = Depends(require_permission('info_pages:edit')),
+    db: AsyncSession = Depends(get_cabinet_db),
+) -> LegacyFaqResponse:
+    page = await get_faq_page_by_id(db, page_id)
+    if page is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='FAQ page not found')
+    page = await FaqService.update_page(db, page, **request.model_dump())
+    setting = await FaqService.get_setting(db, page.language, fallback=False)
+    return LegacyFaqResponse.model_validate(page).model_copy(
+        update={'is_enabled': setting.is_enabled if setting else True}
+    )
 
 
 @router.get('/{page_id}', response_model=InfoPageResponse)
@@ -60,12 +98,11 @@ async def get_info_page_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Get a single info page by ID (admin view)."""
-    texts = get_texts(admin.language)
     page = await get_info_page_by_id(db, page_id)
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
+            detail='Info page not found',
         )
     return InfoPageResponse.model_validate(page)
 
@@ -77,7 +114,6 @@ async def create_page(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Create a new info page."""
-    texts = get_texts(admin.language)
     try:
         if request.replaces_tab:
             await clear_replaces_tab(db, request.replaces_tab)
@@ -97,13 +133,13 @@ async def create_page(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=texts.t('CABINET_INFO_PAGES_SLUG_EXISTS', 'An info page with this slug already exists'),
+            detail='An info page with this slug already exists',
         )
     except Exception:
         logger.exception('Failed to create info page')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=texts.t('CABINET_INFO_PAGES_CREATE_FAILED', 'Failed to create info page'),
+            detail='Failed to create info page',
         )
 
     return InfoPageResponse.model_validate(page)
@@ -117,12 +153,11 @@ async def update_page(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Update an existing info page."""
-    texts = get_texts(admin.language)
     existing = await get_info_page_by_id(db, page_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
+            detail='Info page not found',
         )
 
     try:
@@ -136,19 +171,19 @@ async def update_page(
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=texts.t('CABINET_INFO_PAGES_SLUG_EXISTS', 'An info page with this slug already exists'),
+            detail='An info page with this slug already exists',
         )
     except Exception:
         logger.exception('Failed to update info page', page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=texts.t('CABINET_INFO_PAGES_UPDATE_FAILED', 'Failed to update info page'),
+            detail='Failed to update info page',
         )
 
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND_AFTER_UPDATE', 'Info page not found after update'),
+            detail='Info page not found after update',
         )
     return InfoPageResponse.model_validate(page)
 
@@ -160,12 +195,11 @@ async def remove_page(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Delete an info page."""
-    texts = get_texts(admin.language)
     existing = await get_info_page_by_id(db, page_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
+            detail='Info page not found',
         )
 
     try:
@@ -174,7 +208,7 @@ async def remove_page(
         logger.exception('Failed to delete info page', page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=texts.t('CABINET_INFO_PAGES_DELETE_FAILED', 'Failed to delete info page'),
+            detail='Failed to delete info page',
         )
 
 
@@ -185,14 +219,13 @@ async def reorder_pages(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
     """Bulk update sort_order for info pages."""
-    texts = get_texts(admin.language)
     try:
         await reorder_info_pages(db, request.items)
     except Exception:
         logger.exception('Failed to reorder info pages')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=texts.t('CABINET_INFO_PAGES_REORDER_FAILED', 'Failed to reorder info pages'),
+            detail='Failed to reorder info pages',
         )
 
 
@@ -203,12 +236,11 @@ async def toggle_active(
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> InfoPageResponse:
     """Toggle the active status of an info page."""
-    texts = get_texts(admin.language)
     existing = await get_info_page_by_id(db, page_id)
     if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
+            detail='Info page not found',
         )
 
     try:
@@ -217,12 +249,12 @@ async def toggle_active(
         logger.exception('Failed to toggle info page active status', page_id=page_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=texts.t('CABINET_INFO_PAGES_TOGGLE_FAILED', 'Failed to toggle active status'),
+            detail='Failed to toggle active status',
         )
 
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_INFO_PAGES_NOT_FOUND_AFTER_TOGGLE', 'Info page not found after toggle'),
+            detail='Info page not found after toggle',
         )
     return InfoPageResponse.model_validate(page)

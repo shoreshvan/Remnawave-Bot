@@ -32,6 +32,7 @@ from app.database.models import (
     AdminRole,
     AdvertisingCampaign,
     AdvertisingCampaignRegistration,
+    AnorePayment,
     AntilopayPayment,
     AppleIAPAbuseEvent,
     AppleIAPAccount,
@@ -78,7 +79,6 @@ from app.database.models import (
     ParityPayPayment,
     PartnerApplication,
     PaymentMethodConfig,
-    PayPearPayment,
     PinnedMessage,
     PlategaPayment,
     Poll,
@@ -265,7 +265,6 @@ class BackupService:
             KassaAiPayment,
             RioPayPayment,
             SeverPayPayment,
-            PayPearPayment,
             RollyPayPayment,
             OverpayPayment,
             AuraPayPayment,
@@ -276,6 +275,7 @@ class BackupService:
             LavaPayment,
             CisPayPayment,
             CasheraPayment,
+            AnorePayment,
             TabPayPayment,
             ParityPayPayment,
             HooshPayPayment,
@@ -590,18 +590,12 @@ class BackupService:
             await self._cleanup_old_backups()
 
             size_mb = file_size / 1024 / 1024
-            message = get_texts(settings.DEFAULT_LANGUAGE).t(
-                'BACKUP_CREATED_MESSAGE',
-                '✅ Бекап успешно создан!\n'
-                '📁 Файл: {filename}\n'
-                '📊 Таблиц: {tables_count}\n'
-                '📈 Записей: {total_records:,}\n'
-                '💾 Размер: {size_mb:.2f} MB',
-            ).format(
-                filename=filename,
-                tables_count=overview.get('tables_count', 0),
-                total_records=overview.get('total_records', 0),
-                size_mb=size_mb,
+            message = (
+                f'✅ Бекап успешно создан!\n'
+                f'📁 Файл: {filename}\n'
+                f'📊 Таблиц: {overview.get("tables_count", 0)}\n'
+                f'📈 Записей: {overview.get("total_records", 0):,}\n'
+                f'💾 Размер: {size_mb:.2f} MB'
             )
 
             logger.info(message)
@@ -614,9 +608,7 @@ class BackupService:
             return True, message, str(backup_path)
 
         except Exception as e:
-            error_msg = get_texts(settings.DEFAULT_LANGUAGE).t(
-                'BACKUP_CREATE_ERROR', '❌ Ошибка создания бекапа: {error!s}'
-            ).format(error=e)
+            error_msg = f'❌ Ошибка создания бекапа: {e!s}'
             logger.error(error_msg, exc_info=True)
 
             if self.bot:
@@ -643,9 +635,7 @@ class BackupService:
 
             backup_path = Path(backup_file_path)
             if not await asyncio.to_thread(backup_path.exists):
-                return False, get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_SERVICE_FILE_NOT_FOUND', '❌ Файл бекапа не найден: {filename}'
-                ).format(filename=backup_file_path)
+                return False, f'❌ Файл бекапа не найден: {backup_file_path}'
 
             if self._is_archive_backup(backup_path):
                 success, message = await self._restore_from_archive(backup_path, clear_existing)
@@ -660,9 +650,7 @@ class BackupService:
             return success, message
 
         except Exception as e:
-            error_msg = get_texts(settings.DEFAULT_LANGUAGE).t(
-                'BACKUP_RESTORE_ERROR', '❌ Ошибка восстановления: {error!s}'
-            ).format(error=e)
+            error_msg = f'❌ Ошибка восстановления: {e!s}'
             logger.error(error_msg, exc_info=True)
 
             if self.bot:
@@ -763,11 +751,8 @@ class BackupService:
             _, stderr = await process.communicate()
 
         if process.returncode != 0:
-            texts = get_texts(settings.DEFAULT_LANGUAGE)
-            error_text = stderr.decode() if stderr else texts.t('BACKUP_PG_DUMP_ERROR_DEFAULT', 'pg_dump error')
-            raise RuntimeError(
-                texts.t('BACKUP_PG_DUMP_ERROR', 'pg_dump завершился с ошибкой: {error}').format(error=error_text)
-            )
+            error_text = stderr.decode() if stderr else 'pg_dump error'
+            raise RuntimeError(f'pg_dump завершился с ошибкой: {error_text}')
 
         logger.info('✅ PostgreSQL dump создан', dump_path=dump_path)
 
@@ -814,11 +799,7 @@ class BackupService:
     async def _dump_sqlite(self, dump_path: Path):
         sqlite_path = Path(settings.SQLITE_PATH)
         if not await asyncio.to_thread(sqlite_path.exists):
-            raise FileNotFoundError(
-                get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_SQLITE_DATABASE_NOT_FOUND', 'SQLite база данных не найдена по пути {path}'
-                ).format(path=sqlite_path)
-            )
+            raise FileNotFoundError(f'SQLite база данных не найдена по пути {sqlite_path}')
 
         await asyncio.to_thread(lambda: dump_path.parent.mkdir(parents=True, exist_ok=True))
         await asyncio.to_thread(shutil.copy2, sqlite_path, dump_path)
@@ -982,9 +963,7 @@ class BackupService:
 
             metadata_path = temp_path / 'metadata.json'
             if not await asyncio.to_thread(metadata_path.exists):
-                return False, get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_METADATA_MISSING', '❌ Метаданные бекапа отсутствуют'
-                )
+                return False, '❌ Метаданные бекапа отсутствуют'
 
             async with aiofiles.open(metadata_path, encoding='utf-8') as meta_file:
                 metadata = json_lib.loads(await meta_file.read())
@@ -1017,17 +996,11 @@ class BackupService:
 
             self._invalidate_restored_caches()
 
-            texts = get_texts(settings.DEFAULT_LANGUAGE)
-            message = texts.t(
-                'BACKUP_RESTORED_MESSAGE',
-                '✅ Восстановление завершено!\n'
-                '📊 Таблиц: {tables_count}\n'
-                '📈 Записей: {total_records:,}\n'
-                '📅 Дата бекапа: {timestamp}',
-            ).format(
-                tables_count=metadata.get('tables_count', 0),
-                total_records=metadata.get('total_records', 0),
-                timestamp=metadata.get('timestamp', texts.t('BACKUP_TIMESTAMP_UNKNOWN', 'неизвестно')),
+            message = (
+                f'✅ Восстановление завершено!\n'
+                f'📊 Таблиц: {metadata.get("tables_count", 0)}\n'
+                f'📈 Записей: {metadata.get("total_records", 0):,}\n'
+                f'📅 Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
             )
 
             logger.info(message)
@@ -1035,19 +1008,12 @@ class BackupService:
 
     async def _restore_postgres(self, dump_path: Path, clear_existing: bool):
         if not await asyncio.to_thread(dump_path.exists):
-            raise FileNotFoundError(
-                get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_POSTGRES_DUMP_NOT_FOUND', 'Dump PostgreSQL не найден: {path}'
-                ).format(path=dump_path)
-            )
+            raise FileNotFoundError(f'Dump PostgreSQL не найден: {dump_path}')
 
         psql_path = self._resolve_command_path('psql', 'PSQL_PATH')
         if not psql_path:
             raise FileNotFoundError(
-                get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_PSQL_NOT_FOUND',
-                    'psql не найден в PATH. Установите клиент PostgreSQL или выполните восстановление из JSON дампа',
-                )
+                'psql не найден в PATH. Установите клиент PostgreSQL или выполните восстановление из JSON дампа'
             )
 
         env = os.environ.copy()
@@ -1076,11 +1042,7 @@ class BackupService:
             )
             _, stderr = await proc.communicate()
             if proc.returncode != 0:
-                raise RuntimeError(
-                    get_texts(settings.DEFAULT_LANGUAGE).t(
-                        'BACKUP_SCHEMA_CLEAR_ERROR', 'Не удалось очистить схему: {error}'
-                    ).format(error=stderr.decode())
-                )
+                raise RuntimeError(f'Не удалось очистить схему: {stderr.decode()}')
 
         logger.info('📥 Восстановление PostgreSQL через psql ...', psql_path=psql_path)
         restore_command = [
@@ -1098,21 +1060,13 @@ class BackupService:
         stdout, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            raise RuntimeError(
-                get_texts(settings.DEFAULT_LANGUAGE).t('BACKUP_PSQL_ERROR', 'Ошибка psql: {error}').format(
-                    error=stderr.decode()
-                )
-            )
+            raise RuntimeError(f'Ошибка psql: {stderr.decode()}')
 
         logger.info('✅ PostgreSQL восстановлен', dump_path=dump_path)
 
     async def _restore_postgres_json(self, dump_path: Path, clear_existing: bool):
         if not await asyncio.to_thread(dump_path.exists):
-            raise FileNotFoundError(
-                get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_POSTGRES_JSON_NOT_FOUND', 'JSON дамп PostgreSQL не найден: {path}'
-                ).format(path=dump_path)
-            )
+            raise FileNotFoundError(f'JSON дамп PostgreSQL не найден: {dump_path}')
 
         async with aiofiles.open(dump_path, encoding='utf-8') as dump_file:
             dump_data = json_lib.loads(await dump_file.read())
@@ -1132,11 +1086,7 @@ class BackupService:
 
     async def _restore_sqlite(self, dump_path: Path, clear_existing: bool):
         if not await asyncio.to_thread(dump_path.exists):
-            raise FileNotFoundError(
-                get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_SQLITE_FILE_NOT_FOUND', 'SQLite файл не найден: {path}'
-                ).format(path=dump_path)
-            )
+            raise FileNotFoundError(f'SQLite файл не найден: {dump_path}')
 
         target_path = Path(settings.SQLITE_PATH)
         await asyncio.to_thread(lambda: target_path.parent.mkdir(parents=True, exist_ok=True))
@@ -1208,9 +1158,7 @@ class BackupService:
         clear_existing: bool,
     ) -> tuple[int, int]:
         if not backup_data:
-            raise ValueError(
-                get_texts(settings.DEFAULT_LANGUAGE).t('BACKUP_DATA_MISSING', '❌ Файл бекапа не содержит данных')
-            )
+            raise ValueError('❌ Файл бекапа не содержит данных')
 
         logger.info('📊 Загружен дамп', metadata=metadata.get('timestamp', 'неизвестная дата'))
 
@@ -1358,17 +1306,11 @@ class BackupService:
 
         self._invalidate_restored_caches()
 
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
-        message = texts.t(
-            'BACKUP_RESTORED_MESSAGE',
-            '✅ Восстановление завершено!\n'
-            '📊 Таблиц: {tables_count}\n'
-            '📈 Записей: {total_records:,}\n'
-            '📅 Дата бекапа: {timestamp}',
-        ).format(
-            tables_count=restored_tables,
-            total_records=restored_records,
-            timestamp=metadata.get('timestamp', texts.t('BACKUP_TIMESTAMP_UNKNOWN', 'неизвестно')),
+        message = (
+            f'✅ Восстановление завершено!\n'
+            f'📊 Таблиц: {restored_tables}\n'
+            f'📈 Записей: {restored_records:,}\n'
+            f'📅 Дата бекапа: {metadata.get("timestamp", "неизвестно")}'
         )
 
         logger.info(message)
@@ -1766,12 +1708,12 @@ class BackupService:
             'kassa_ai_payments',
             'riopay_payments',
             'severpay_payments',
-            'paypear_payments',
             'rollypay_payments',
             'overpay_payments',
             'aurapay_payments',
             'etoplatezhi_payments',
             'antilopay_payments',
+            'anore_payments',
             'tabpay_payments',
             'paritypay_payments',
             'hooshpay_payments',
@@ -1969,11 +1911,7 @@ class BackupService:
                 if file_stats.st_size == 0:
                     logger.warning('Skipping empty backup file', backup_file=str(backup_file))
                     backups.append(
-                        self._build_corrupted_backup_entry(
-                            backup_file,
-                            file_stats,
-                            reason=get_texts(settings.DEFAULT_LANGUAGE).t('BACKUP_FILE_EMPTY', 'Файл пуст (0 байт)'),
-                        )
+                        self._build_corrupted_backup_entry(backup_file, file_stats, reason='Файл пуст (0 байт)')
                     )
                     continue
 
@@ -2050,13 +1988,7 @@ class BackupService:
                     # Реально неожиданное — оставляем error для расследования.
                     logger.error('Ошибка чтения метаданных', backup_file=str(backup_file), error=e)
                     backups.append(
-                        self._build_corrupted_backup_entry(
-                            backup_file,
-                            file_stats,
-                            reason=get_texts(settings.DEFAULT_LANGUAGE).t(
-                                'BACKUP_READ_ERROR', 'Ошибка чтения: {error!s}'
-                            ).format(error=e),
-                        )
+                        self._build_corrupted_backup_entry(backup_file, file_stats, reason=f'Ошибка чтения: {e!s}')
                     )
 
         except Exception as e:
@@ -2069,27 +2001,19 @@ class BackupService:
             backup_path = await asyncio.to_thread((self.backup_dir / backup_filename).resolve)
             backup_dir_resolved = await asyncio.to_thread(self.backup_dir.resolve)
             if not str(backup_path).startswith(str(backup_dir_resolved) + os.sep):
-                return False, get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_SERVICE_INVALID_FILENAME', '❌ Недопустимое имя файла бекапа'
-                )
+                return False, '❌ Недопустимое имя файла бекапа'
 
             if not await asyncio.to_thread(backup_path.is_file):
-                return False, get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'BACKUP_SERVICE_FILE_NOT_FOUND', '❌ Файл бекапа не найден: {filename}'
-                ).format(filename=backup_filename)
+                return False, f'❌ Файл бекапа не найден: {backup_filename}'
 
             await asyncio.to_thread(backup_path.unlink)
-            message = get_texts(settings.DEFAULT_LANGUAGE).t(
-                'BACKUP_DELETED_MESSAGE', '✅ Бекап {filename} удален'
-            ).format(filename=backup_filename)
+            message = f'✅ Бекап {backup_filename} удален'
             logger.info(message)
 
             return True, message
 
         except Exception as e:
-            error_msg = get_texts(settings.DEFAULT_LANGUAGE).t(
-                'BACKUP_DELETE_ERROR', '❌ Ошибка удаления бекапа: {error!s}'
-            ).format(error=e)
+            error_msg = f'❌ Ошибка удаления бекапа: {e!s}'
             logger.error(error_msg)
             return False, error_msg
 
@@ -2227,9 +2151,7 @@ class BackupService:
 
             icon = icons.get(event_type, 'ℹ️')
             safe_message = html_lib.escape(message) if 'error' in event_type else message
-            notification_text = get_texts(settings.DEFAULT_LANGUAGE).t(
-                'BACKUP_NOTIFICATION_MESSAGE', '{icon} <b>СИСТЕМА БЕКАПОВ</b>\n\n{message}'
-            ).format(icon=icon, message=safe_message)
+            notification_text = f'{icon} <b>СИСТЕМА БЕКАПОВ</b>\n\n{safe_message}'
 
             if file_path:
                 notification_text += f'\n📁 <code>{Path(file_path).name}</code>'
@@ -2267,10 +2189,9 @@ class BackupService:
                 if temp_zip_path:
                     file_to_send = temp_zip_path
 
-            texts = get_texts(settings.DEFAULT_LANGUAGE)
-            caption = texts.t('BACKUP_FILE_CAPTION', '📦 <b>Резервная копия</b>\n\n')
+            caption = '📦 <b>Резервная копия</b>\n\n'
             if temp_zip_path:
-                caption += texts.t('BACKUP_PASSWORD_CAPTION', '🔐 <b>Архив защищён паролем</b>\n\n')
+                caption += '🔐 <b>Архив защищён паролем</b>\n\n'
             caption += f'⏰ <i>{format_local_datetime(datetime.now(UTC), "%d.%m.%Y %H:%M:%S")}</i>'
 
             send_kwargs = {

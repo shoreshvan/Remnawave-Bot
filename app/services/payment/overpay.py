@@ -488,12 +488,7 @@ class OverpayPaymentMixin:
             external_id=transaction_external_id,
         )
 
-        status_texts = get_texts()
-        topup_status = (
-            status_texts.t('OVERPAY_TOPUP_STATUS_FIRST', '\U0001f195 Первое пополнение')
-            if was_first_topup
-            else status_texts.t('OVERPAY_TOPUP_STATUS_REPEAT', '\U0001f504 Пополнение')
-        )
+        topup_status = '\U0001f195 Первое пополнение' if was_first_topup else '\U0001f504 Пополнение'
 
         try:
             from app.services.referral_service import process_referral_topup
@@ -533,20 +528,15 @@ class OverpayPaymentMixin:
         if getattr(self, 'bot', None) and user.telegram_id and settings.is_notifications_enabled():
             try:
                 keyboard = await self.build_topup_success_keyboard(user)
-                user_texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
                 await self.bot.send_message(
                     user.telegram_id,
-                    user_texts.t(
-                        'OVERPAY_TOPUP_SUCCESS',
-                        '\u2705 <b>Пополнение успешно!</b>\n\n'
-                        '\U0001f4b0 Сумма: {amount}\n'
-                        '\U0001f4b3 Способ: {method}\n'
-                        '\U0001f194 Транзакция: {transaction_id}\n\n'
-                        'Баланс пополнен автоматически!',
-                    ).format(
-                        amount=settings.format_price(payment.amount_kopeks),
-                        method=display_name,
-                        transaction_id=transaction.id,
+                    (
+                        get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                        .t(
+                            'PAYMENT_NOTICE_000',
+                            '✅ <b>Пополнение успешно!</b>\n\n💰 Сумма: {v0}\n💳 Способ: {v1}\n🆔 Транзакция: {v2}\n\nБаланс пополнен автоматически!',
+                        )
+                        .format(v0=settings.format_price(payment.amount_kopeks), v1=display_name, v2=transaction.id)
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,

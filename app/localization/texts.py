@@ -204,24 +204,22 @@ class Texts:
     def format_price(kopeks: int, round_kopeks: bool | None = None) -> str:
         return settings.format_price(kopeks, round_kopeks=round_kopeks)
 
-    @staticmethod
-    def format_traffic(gb: float, is_limit: bool = True, language: str = 'ru') -> str:
+    def format_traffic(self, gb: float, is_limit: bool = True) -> str:
         """Format traffic value.
 
         Args:
             gb: Traffic in gigabytes
             is_limit: If True, 0 means unlimited. If False, 0 means zero used.
-            language: Display language; 'fa' renders Persian units, anything
-                else keeps the legacy English/Russian rendering unchanged.
         """
-        is_fa = (language or 'ru').split('-')[0].lower() == 'fa'
         if gb == 0:
-            if is_limit:
-                return '∞ (نامحدود)' if is_fa else '∞ (безлимит)'
-            return '۰ گیگ' if is_fa else '0 ГБ'
+            return (
+                self.t('FORMAT_TRAFFIC_UNLIMITED_WITH_SYMBOL')
+                if is_limit
+                else self.t('FORMAT_TRAFFIC_GB').format(value=0)
+            )
         if gb >= 1024:
-            return f'{gb / 1024:.1f} ترابایت' if is_fa else f'{gb / 1024:.1f} ТБ'
-        return f'{gb:.0f} گیگ' if is_fa else f'{gb:.0f} ГБ'
+            return self.t('FORMAT_TRAFFIC_TB').format(value=f'{gb / 1024:.1f}')
+        return self.t('FORMAT_TRAFFIC_GB').format(value=f'{gb:.0f}')
 
     @staticmethod
     def format_device_limit(limit: int | None) -> str:

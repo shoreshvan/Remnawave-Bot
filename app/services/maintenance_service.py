@@ -1,4 +1,7 @@
 import asyncio
+import html
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -7,12 +10,26 @@ import structlog
 
 from app.config import settings
 from app.external.remnawave_api import RemnaWaveAPI, test_api_connection
-from app.localization.texts import get_texts
+from app.localization.texts import Texts, get_texts
 from app.utils.cache import cache
 from app.utils.timezone import format_local_datetime
 
 
 logger = structlog.get_logger(__name__)
+
+
+def _display_maintenance_reason(texts: Texts, reason: str | None) -> str:
+    known = {
+        'Автоматическое включение': 'MAINT_REASON_AUTO',
+        'Включено администратором': 'MAINT_REASON_ADMIN',
+        'Включено из системных настроек': 'MAINT_REASON_SETTINGS',
+    }
+    match = re.fullmatch(r'Автоматическое включение после (\d+) неудачных проверок API', reason or '')
+    if match:
+        return texts.t('MAINT_REASON_FAILURES', 'Автоматическое включение после {count} неудачных проверок API').format(
+            count=match.group(1)
+        )
+    return html.escape(texts.t(known[reason], reason) if reason in known else (reason or ''))
 
 
 @dataclass
@@ -38,14 +55,7 @@ class MaintenanceService:
     def set_bot(self, bot):
         self._bot = bot
         if settings.is_maintenance_mode() and not self._status.is_active:
-            asyncio.create_task(
-                self.enable_maintenance(
-                    reason=get_texts(settings.DEFAULT_LANGUAGE).t(
-                        'MAINTENANCE_REASON_SYSTEM_SETTINGS', 'Включено из системных настроек'
-                    ),
-                    auto=False,
-                )
-            )
+            asyncio.create_task(self.enable_maintenance(reason='Включено из системных настроек', auto=False))
         logger.info('Бот установлен для maintenance_service')
 
     @property
@@ -55,21 +65,23 @@ class MaintenanceService:
     def is_maintenance_active(self) -> bool:
         return self._status.is_active
 
-    def get_maintenance_message(self) -> str:
+    def get_maintenance_message(self, language: str | None = None) -> str:
+        texts = get_texts(language or settings.DEFAULT_LANGUAGE)
         if self._status.auto_enabled:
-            texts = get_texts(settings.DEFAULT_LANGUAGE)
             last_check_display = format_local_datetime(
-                self._status.last_check, '%H:%M:%S', texts.t('MAINTENANCE_UNKNOWN', 'неизвестно')
+                self._status.last_check, '%H:%M:%S', texts.t('MAINT_UNKNOWN_TIME', 'неизвестно')
             )
             return texts.t(
-                'MAINTENANCE_MODE_API_ERROR',
-                '\n🔧 Технические работы!\n\nСервис временно недоступен из-за проблем с подключением к серверам.'
-                '\n\n⏰ Мы работаем над восстановлением. Попробуйте через несколько минут.'
-                '\n\n🔄 Последняя проверка: {last_check}\n',
-            ).format(last_check=last_check_display)
-        return settings.get_maintenance_message()
+                'MAINT_AUTO_MESSAGE',
+                '\n🔧 Технические работы!\n\nСервис временно недоступен из-за проблем с подключением к серверам.\n\n⏰ Мы работаем над восстановлением. Попробуйте через несколько минут.\n\n🔄 Последняя проверка: {time}\n',
+            ).format(time=last_check_display)
+        message = settings.get_maintenance_message()
+        default_message = type(settings).model_fields['MAINTENANCE_MESSAGE'].default
+        if message == default_message:
+            return texts.t('MAINT_DEFAULT_MESSAGE', default_message)
+        return message
 
-    async def _send_admin_notification(self, message: str, alert_type: str = 'info'):
+    async def _send_admin_notification(self, message: str | Callable[[Texts], str], alert_type: str = 'info'):
         if not self._bot:
             logger.warning('Бот не установлен, уведомления не могут быть отправлены')
             return False
@@ -87,9 +99,11 @@ class MaintenanceService:
             emoji = emoji_map.get(alert_type, 'ℹ️')
 
             timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S %Z')
-            formatted_message = get_texts(settings.DEFAULT_LANGUAGE).t(
-                'MAINTENANCE_ADMIN_HEADER', '{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n⏰ <i>{timestamp}</i>'
-            ).format(emoji=emoji, message=message, timestamp=timestamp)
+            texts = await notification_service._notification_texts()
+            body = message(texts) if callable(message) else message
+            formatted_message = texts.t(
+                'MAINT_ADMIN_WRAPPER', '{emoji} <b>ТЕХНИЧЕСКИЕ РАБОТЫ</b>\n\n{message}\n\n⏰ <i>{time}</i>'
+            ).format(emoji=emoji, message=body, time=timestamp)
 
             return await notification_service.send_admin_notification(
                 formatted_message, category=NotificationCategory.INFRASTRUCTURE
@@ -99,7 +113,7 @@ class MaintenanceService:
             logger.error('Ошибка отправки уведомления через AdminNotificationService', error=e)
             return False
 
-    async def _notify_admins(self, message: str, alert_type: str = 'info'):
+    async def _notify_admins(self, message: str | Callable[[Texts], str], alert_type: str = 'info'):
         if not self._bot:
             logger.warning('Бот не установлен, уведомления не могут быть отправлены')
             return
@@ -124,13 +138,23 @@ class MaintenanceService:
         emoji_map = {'error': '🚨', 'warning': '⚠️', 'success': '✅', 'info': 'ℹ️'}
         emoji = emoji_map.get(alert_type, 'ℹ️')
 
-        formatted_message = get_texts(settings.DEFAULT_LANGUAGE).t(
-            'MAINTENANCE_ADMIN_DIRECT_HEADER', '{emoji} <b>Maintenance Service</b>\n\n{message}'
-        ).format(emoji=emoji, message=message)
-
         success_count = 0
         for admin_id in admin_ids:
             try:
+                texts = get_texts(settings.DEFAULT_LANGUAGE)
+                try:
+                    from app.database.crud.user import get_user_by_telegram_id
+                    from app.database.database import AsyncSessionLocal
+
+                    async with AsyncSessionLocal() as db:
+                        admin = await get_user_by_telegram_id(db, admin_id)
+                        texts = get_texts(getattr(admin, 'language', None) or settings.DEFAULT_LANGUAGE)
+                except Exception:
+                    logger.debug('Не удалось определить язык администратора техработ')
+                body = message(texts) if callable(message) else message
+                formatted_message = texts.t(
+                    'MAINT_ADMIN_DIRECT_WRAPPER', '{emoji} <b>Служба технических работ</b>\n\n{message}'
+                ).format(emoji=emoji, message=body)
                 await self._bot.send_message(chat_id=admin_id, text=formatted_message, parse_mode='HTML')
                 success_count += 1
                 await asyncio.sleep(0.1)
@@ -150,28 +174,25 @@ class MaintenanceService:
                 logger.warning('Режим техработ уже включен')
                 return True
 
-            texts = get_texts(settings.DEFAULT_LANGUAGE)
             self._status.is_active = True
             self._status.enabled_at = datetime.now(UTC)
-            self._status.reason = reason or (
-                texts.t('MAINTENANCE_REASON_AUTO', 'Автоматическое включение')
-                if auto
-                else texts.t('MAINTENANCE_REASON_ADMIN', 'Включено администратором')
-            )
+            self._status.reason = reason or ('Автоматическое включение' if auto else 'Включено администратором')
             self._status.auto_enabled = auto
 
             await self._save_status_to_cache()
 
+            notification_reason = self._status.reason
             enabled_time = format_local_datetime(self._status.enabled_at, '%d.%m.%Y %H:%M:%S %Z')
-            notification_msg = texts.t(
-                'MAINTENANCE_ENABLED_MSG',
-                'Режим технических работ ВКЛЮЧЕН\n\n📋 <b>Причина:</b> {reason}\n🤖 <b>Автоматически:</b> {auto}'
-                '\n🕐 <b>Время:</b> {time}\n\nОбычные пользователи временно не смогут использовать бота.',
-            ).format(
-                reason=self._status.reason,
-                auto=texts.t('ADMIN_NOTIFY_YES', 'Да') if auto else texts.t('ADMIN_NOTIFY_NO', 'Нет'),
-                time=enabled_time,
-            )
+
+            def notification_msg(texts: Texts) -> str:
+                return texts.t(
+                    'MAINT_NOTICE_149',
+                    'Режим технических работ ВКЛЮЧЕН\n\n📋 <b>Причина:</b> {value1}\n🤖 <b>Автоматически:</b> {value2}\n🕐 <b>Время:</b> {value3}\n\nОбычные пользователи временно не смогут использовать бота.',
+                ).format(
+                    value1=_display_maintenance_reason(texts, notification_reason),
+                    value2=texts.t('YES' if auto else 'NO', ''),
+                    value3=html.escape(str(enabled_time)),
+                )
 
             await self._notify_admins(notification_msg, 'warning' if auto else 'info')
 
@@ -201,31 +222,34 @@ class MaintenanceService:
 
             await self._save_status_to_cache()
 
-            texts = get_texts(settings.DEFAULT_LANGUAGE)
             duration_str = ''
             if duration:
                 hours = int(duration.total_seconds() // 3600)
                 minutes = int((duration.total_seconds() % 3600) // 60)
                 if hours > 0:
-                    duration_str = texts.t(
-                        'MAINTENANCE_DURATION_HOURS', '\n⏱️ <b>Длительность:</b> {hours}ч {minutes}мин'
-                    ).format(hours=hours, minutes=minutes)
+
+                    def duration_str(texts: Texts) -> str:
+                        return texts.t('MAINT_DURATION_190', '\n⏱️ <b>Длительность:</b> {value1}ч {value2}мин').format(
+                            value1=html.escape(str(hours)), value2=html.escape(str(minutes))
+                        )
                 else:
-                    duration_str = texts.t(
-                        'MAINTENANCE_DURATION_MINUTES', '\n⏱️ <b>Длительность:</b> {minutes}мин'
-                    ).format(minutes=minutes)
+
+                    def duration_str(texts: Texts) -> str:
+                        return texts.t('MAINT_DURATION_192', '\n⏱️ <b>Длительность:</b> {value1}мин').format(
+                            value1=html.escape(str(minutes))
+                        )
 
             notification_time = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S %Z')
-            notification_msg = texts.t(
-                'MAINTENANCE_DISABLED_MSG',
-                'Режим технических работ ВЫКЛЮЧЕН\n\n🤖 <b>Автоматически:</b> {auto}'
-                '\n🕐 <b>Время:</b> {time}\n{duration}'
-                '\n\nСервис снова доступен для пользователей.',
-            ).format(
-                auto=texts.t('ADMIN_NOTIFY_YES', 'Да') if was_auto else texts.t('ADMIN_NOTIFY_NO', 'Нет'),
-                time=notification_time,
-                duration=duration_str,
-            )
+
+            def notification_msg(texts: Texts) -> str:
+                return texts.t(
+                    'MAINT_NOTICE_195',
+                    'Режим технических работ ВЫКЛЮЧЕН\n\n🤖 <b>Автоматически:</b> {value1}\n🕐 <b>Время:</b> {value2}\n{value3}\n\nСервис снова доступен для пользователей.',
+                ).format(
+                    value1=texts.t('YES' if was_auto else 'NO', ''),
+                    value2=html.escape(str(notification_time)),
+                    value3=duration_str(texts) if callable(duration_str) else duration_str,
+                )
 
             await self._notify_admins(notification_msg, 'success')
 
@@ -238,12 +262,7 @@ class MaintenanceService:
 
     async def sync_with_settings(self) -> bool:
         if settings.is_maintenance_mode():
-            return await self.enable_maintenance(
-                reason=get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'MAINTENANCE_REASON_SYSTEM_SETTINGS', 'Включено из системных настроек'
-                ),
-                auto=False,
-            )
+            return await self.enable_maintenance(reason='Включено из системных настроек', auto=False)
         return await self.disable_maintenance()
 
     async def start_monitoring(self) -> bool:
@@ -280,10 +299,7 @@ class MaintenanceService:
                     pass
 
             await self._notify_admins(
-                get_texts(settings.DEFAULT_LANGUAGE).t(
-                    'MAINTENANCE_MONITORING_STOPPED', 'Мониторинг технических работ остановлен'
-                ),
-                'info',
+                lambda texts: texts.t('MAINT_NOTICE_250', 'Мониторинг технических работ остановлен'), 'info'
             )
             logger.info('ℹ️ Мониторинг API остановлен')
             return True
@@ -297,7 +313,6 @@ class MaintenanceService:
             if self._is_checking:
                 return self._status.api_status
 
-            texts = get_texts(settings.DEFAULT_LANGUAGE)
             self._is_checking = True
             self._status.last_check = datetime.now(UTC)
 
@@ -345,13 +360,13 @@ class MaintenanceService:
                         if not self._status.api_status:
                             recovery_time = format_local_datetime(self._status.last_check, '%H:%M:%S %Z')
                             await self._notify_admins(
-                                texts.t(
-                                    'MAINTENANCE_API_RESTORED_MSG',
-                                    'API Remnawave восстановлено!\n\n✅ <b>Статус:</b> Доступно'
-                                    '\n🕐 <b>Время восстановления:</b> {time}'
-                                    '\n🔄 <b>Неудачных попыток было:</b> {failures}'
-                                    '\n\nAPI снова отвечает на запросы.',
-                                ).format(time=recovery_time, failures=self._status.consecutive_failures),
+                                lambda texts: texts.t(
+                                    'MAINT_NOTICE_309',
+                                    'API Remnawave восстановлено!\n\n✅ <b>Статус:</b> Доступно\n🕐 <b>Время восстановления:</b> {value1}\n🔄 <b>Неудачных попыток было:</b> {value2}\n\nAPI снова отвечает на запросы.',
+                                ).format(
+                                    value1=html.escape(str(recovery_time)),
+                                    value2=html.escape(str(self._status.consecutive_failures)),
+                                ),
                                 'success',
                             )
 
@@ -375,12 +390,13 @@ class MaintenanceService:
                 if was_available:
                     detection_time = format_local_datetime(self._status.last_check, '%H:%M:%S %Z')
                     await self._notify_admins(
-                        texts.t(
-                            'MAINTENANCE_API_DOWN_MSG',
-                            'API Remnawave недоступно!\n\n❌ <b>Статус:</b> Недоступно'
-                            '\n🕐 <b>Время обнаружения:</b> {time}\n🔄 <b>Попытка:</b> {attempt}'
-                            '\n\nНачалась серия неудачных проверок API.',
-                        ).format(time=detection_time, attempt=self._status.consecutive_failures),
+                        lambda texts: texts.t(
+                            'MAINT_NOTICE_339',
+                            'API Remnawave недоступно!\n\n❌ <b>Статус:</b> Недоступно\n🕐 <b>Время обнаружения:</b> {value1}\n🔄 <b>Попытка:</b> {value2}\n\nНачалась серия неудачных проверок API.',
+                        ).format(
+                            value1=html.escape(str(detection_time)),
+                            value2=html.escape(str(self._status.consecutive_failures)),
+                        ),
                         'error',
                     )
 
@@ -390,10 +406,9 @@ class MaintenanceService:
                     and settings.is_maintenance_auto_enable()
                 ):
                     await self.enable_maintenance(
-                        reason=texts.t(
-                            'MAINTENANCE_REASON_AUTO_AFTER_FAILURES',
-                            'Автоматическое включение после {count} неудачных проверок API',
-                        ).format(count=self._status.consecutive_failures),
+                        reason=(
+                            f'Автоматическое включение после {self._status.consecutive_failures} неудачных проверок API'
+                        ),
                         auto=True,
                     )
 
@@ -404,12 +419,12 @@ class MaintenanceService:
 
             if self._status.api_status:
                 error_time = format_local_datetime(datetime.now(UTC), '%H:%M:%S %Z')
+                escaped_error = html.escape(str(e))
                 await self._notify_admins(
-                    get_texts(settings.DEFAULT_LANGUAGE).t(
-                        'MAINTENANCE_API_CHECK_ERROR_MSG',
-                        'Ошибка при проверке API Remnawave\n\n❌ <b>Ошибка:</b> {error}\n🕐 <b>Время:</b> {time}'
-                        '\n\nНе удалось выполнить проверку доступности API.',
-                    ).format(error=str(e), time=error_time),
+                    lambda texts: texts.t(
+                        'MAINT_NOTICE_369',
+                        'Ошибка при проверке API Remnawave\n\n❌ <b>Ошибка:</b> {value1}\n🕐 <b>Время:</b> {value2}\n\nНе удалось выполнить проверку доступности API.',
+                    ).format(value1=escaped_error, value2=html.escape(str(error_time))),
                     'error',
                 )
 
@@ -539,10 +554,16 @@ class MaintenanceService:
 
             emoji = status_emojis.get(status, 'ℹ️')
 
-            message = get_texts(settings.DEFAULT_LANGUAGE).t(
-                'MAINTENANCE_PANEL_STATUS_MSG',
-                'Статус панели Remnawave изменился\n\n{emoji} <b>Статус:</b> {status}\n🔗 <b>URL:</b> {url}\n{details}',
-            ).format(emoji=emoji, status=status.upper(), url=settings.REMNAWAVE_API_URL, details=details)
+            def message(texts: Texts) -> str:
+                return texts.t(
+                    'MAINT_PANEL_STATUS',
+                    'Статус панели Remnawave изменился\n\n{value1} <b>Статус:</b> {value2}\n🔗 <b>URL:</b> {value3}\n{value4}',
+                ).format(
+                    value1=html.escape(str(emoji)),
+                    value2=html.escape(texts.t('MAINT_STATUS_' + status.upper(), status.upper())),
+                    value3=html.escape(str(settings.REMNAWAVE_API_URL)),
+                    value4=html.escape(str(details)),
+                )
 
             alert_type = 'error' if status in ['offline', 'error'] else 'info'
             await self._notify_admins(message, alert_type)

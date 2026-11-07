@@ -68,19 +68,17 @@ def _parse_period_prices(text: str) -> dict[str, int]:
     return prices
 
 
-def _format_period_prices_display(prices: dict[str, int], highlight: int | None = None, texts=None) -> str:
+def _format_period_prices_display(prices: dict[str, int], highlight: int | None = None, language: str = 'ru') -> str:
     """Форматирует цены периодов для отображения; выделенный период отмечен звездой."""
-    if texts is None:
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
     if not prices:
-        return texts.t('ADMIN_TARIFF_PERIOD_PRICES_NOT_SET', 'Не заданы')
+        return get_texts(language).t('ADMIN_TARIFF_PRICES_NOT_SET', 'Не заданы')
 
     lines = []
     for period_str in sorted(prices.keys(), key=int):
         period = int(period_str)
         price = prices[period_str]
         mark = ' ⭐' if highlight is not None and int(highlight) == period else ''
-        lines.append(f'  • {format_period(period)}: {format_price_kopeks(price)}{mark}')
+        lines.append(f'  • {format_period(period, language=language)}: {format_price_kopeks(price)}{mark}')
 
     return '\n'.join(lines)
 
@@ -125,8 +123,7 @@ def get_tariffs_list_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_CREATE_BUTTON', '➕ Создать тариф'),
-                callback_data='admin_tariff_create',
+                text=texts.t('ADMIN_TARIFF_BUTTON_CREATE', '➕ Создать тариф'), callback_data='admin_tariff_create'
             )
         ]
     )
@@ -149,11 +146,11 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_NAME_BUTTON', '✏️ Название'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_NAME', '✏️ Название'),
                 callback_data=f'admin_tariff_edit_name:{tariff.id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_DESC_BUTTON', '📝 Описание'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_DESCRIPTION', '📝 Описание'),
                 callback_data=f'admin_tariff_edit_desc:{tariff.id}',
             ),
         ]
@@ -161,11 +158,11 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_TRAFFIC_BUTTON', '📊 Трафик'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_TRAFFIC', '📊 Трафик'),
                 callback_data=f'admin_tariff_edit_traffic:{tariff.id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_DEVICES_BUTTON', '📱 Устройства'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_DEVICES', '📱 Устройства'),
                 callback_data=f'admin_tariff_edit_devices:{tariff.id}',
             ),
         ]
@@ -176,11 +173,11 @@ def get_tariff_view_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_EDIT_PRICES_BUTTON', '💰 Цены'),
+                    text=texts.t('ADMIN_TARIFF_BUTTON_PRICES', '💰 Цены'),
                     callback_data=f'admin_tariff_edit_prices:{tariff.id}',
                 ),
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_EDIT_TIER_BUTTON', '🎚️ Уровень'),
+                    text=texts.t('ADMIN_TARIFF_BUTTON_TIER', '🎚️ Уровень'),
                     callback_data=f'admin_tariff_edit_tier:{tariff.id}',
                 ),
             ]
@@ -190,7 +187,7 @@ def get_tariff_view_keyboard(
             buttons.append(
                 [
                     InlineKeyboardButton(
-                        text=texts.t('ADMIN_TARIFF_EDIT_HIGHLIGHT_BUTTON', '⭐ Выгодный период'),
+                        text=texts.t('ADMIN_TARIFF_BUTTON_FEATURED_PERIOD', '⭐ Выгодный период'),
                         callback_data=f'admin_tariff_edit_highlight:{tariff.id}',
                     ),
                 ]
@@ -199,7 +196,7 @@ def get_tariff_view_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_EDIT_TIER_BUTTON', '🎚️ Уровень'),
+                    text=texts.t('ADMIN_TARIFF_BUTTON_TIER', '🎚️ Уровень'),
                     callback_data=f'admin_tariff_edit_tier:{tariff.id}',
                 ),
             ]
@@ -207,11 +204,11 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_DEVICE_PRICE_BUTTON', '📱💰 Цена за устройство'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_DEVICE_PRICE', '📱💰 Цена за устройство'),
                 callback_data=f'admin_tariff_edit_device_price:{tariff.id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_MAX_DEVICES_BUTTON', '📱🔒 Макс. устройств'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_MAX_DEVICES', '📱🔒 Макс. устройств'),
                 callback_data=f'admin_tariff_edit_max_devices:{tariff.id}',
             ),
         ]
@@ -219,7 +216,7 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_TRIAL_DAYS_BUTTON', '⏰ Дни триала'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_TRIAL_DAYS', '⏰ Дни триала'),
                 callback_data=f'admin_tariff_edit_trial_days:{tariff.id}',
             ),
         ]
@@ -227,11 +224,11 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_CUSTOM_TRAFFIC_BUTTON', '⚙️ Произвольный трафик'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_CUSTOM_TRAFFIC', '⚙️ Произвольный трафик'),
                 callback_data=f'admin_tariff_edit_custom_traffic:{tariff.id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_CUSTOM_DAYS_BUTTON', '📅 Произвольные дни'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_CUSTOM_DAYS', '📅 Произвольные дни'),
                 callback_data=f'admin_tariff_edit_custom_days:{tariff.id}',
             ),
         ]
@@ -239,7 +236,7 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_TRAFFIC_TOPUP_BUTTON', '📈 Докупка трафика'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_TRAFFIC_TOPUP', '📈 Докупка трафика'),
                 callback_data=f'admin_tariff_edit_traffic_topup:{tariff.id}',
             ),
         ]
@@ -247,7 +244,7 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_RESET_MODE_BUTTON', '🔄 Сброс трафика'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_TRAFFIC_RESET', '🔄 Сброс трафика'),
                 callback_data=f'admin_tariff_edit_reset_mode:{tariff.id}',
             ),
         ]
@@ -255,11 +252,11 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_SQUADS_BUTTON', '🌐 Серверы'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_SERVERS', '🌐 Серверы'),
                 callback_data=f'admin_tariff_edit_squads:{tariff.id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_PROMO_BUTTON', '👥 Промогруппы'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_PROMO_GROUPS', '👥 Промогруппы'),
                 callback_data=f'admin_tariff_edit_promo:{tariff.id}',
             ),
         ]
@@ -267,11 +264,11 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_SERVER_LIMITS_BUTTON', '🗄️ Лимиты по серверам'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_SERVER_LIMITS', '🗄️ Лимиты по серверам'),
                 callback_data=f'admin_tariff_edit_server_limits:{tariff.id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_EDIT_MORE_BUTTON', '⚙️ Ещё настройки'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_MORE', '⚙️ Ещё настройки'),
                 callback_data=f'admin_tariff_edit_more:{tariff.id}',
             ),
         ]
@@ -283,7 +280,7 @@ def get_tariff_view_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_EDIT_DAILY_PRICE_BUTTON', '💰 Суточная цена'),
+                    text=texts.t('ADMIN_TARIFF_BUTTON_DAILY_PRICE', '💰 Суточная цена'),
                     callback_data=f'admin_tariff_edit_daily_price:{tariff.id}',
                 ),
             ]
@@ -295,7 +292,7 @@ def get_tariff_view_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TRIAL_REMOVE_BUTTON', '🎁 ❌ Убрать триал'),
+                    text=texts.t('ADMIN_TARIFF_BUTTON_REMOVE_TRIAL', '🎁 ❌ Убрать триал'),
                     callback_data=f'admin_tariff_toggle_trial:{tariff.id}',
                 )
             ]
@@ -304,7 +301,7 @@ def get_tariff_view_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TRIAL_SET_BUTTON', '🎁 Сделать триальным'),
+                    text=texts.t('ADMIN_TARIFF_BUTTON_SET_TRIAL', '🎁 Сделать триальным'),
                     callback_data=f'admin_tariff_toggle_trial:{tariff.id}',
                 )
             ]
@@ -312,9 +309,9 @@ def get_tariff_view_keyboard(
 
     # Переключение активности
     highlight_label = (
-        texts.t('ADMIN_TARIFF_UNHIGHLIGHT_BUTTON', '⭐ ❌ Снять выделение тарифа')
+        texts.t('ADMIN_TARIFF_BUTTON_UNHIGHLIGHT', '⭐ ❌ Снять выделение тарифа')
         if getattr(tariff, 'is_highlighted', False)
-        else texts.t('ADMIN_TARIFF_HIGHLIGHT_BUTTON', '⭐ Выделить тариф')
+        else texts.t('ADMIN_TARIFF_BUTTON_HIGHLIGHT', '⭐ Выделить тариф')
     )
     buttons.append(
         [InlineKeyboardButton(text=highlight_label, callback_data=f'admin_tariff_toggle_highlight:{tariff.id}')]
@@ -324,7 +321,7 @@ def get_tariff_view_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_DEACTIVATE_BUTTON', '❌ Деактивировать'),
+                    text=texts.t('ADMIN_TARIFF_BUTTON_DEACTIVATE', '❌ Деактивировать'),
                     callback_data=f'admin_tariff_toggle:{tariff.id}',
                 )
             ]
@@ -333,7 +330,7 @@ def get_tariff_view_keyboard(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_ACTIVATE_BUTTON', '✅ Активировать'),
+                    text=texts.t('ADMIN_TARIFF_BUTTON_ACTIVATE', '✅ Активировать'),
                     callback_data=f'admin_tariff_toggle:{tariff.id}',
                 )
             ]
@@ -343,7 +340,7 @@ def get_tariff_view_keyboard(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_DELETE_BUTTON', '🗑️ Удалить'),
+                text=texts.t('ADMIN_TARIFF_BUTTON_DELETE', '🗑️ Удалить'),
                 callback_data=f'admin_tariff_delete:{tariff.id}',
             )
         ]
@@ -355,44 +352,42 @@ def get_tariff_view_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def _format_traffic_reset_mode(mode: str | None, texts=None) -> str:
+def _format_traffic_reset_mode(mode: str | None, language: str = 'ru') -> str:
     """Форматирует режим сброса трафика для отображения."""
-    if texts is None:
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
     mode_labels = {
-        'DAY': '📅 Ежедневно',
-        'WEEK': '📆 Еженедельно',
-        'MONTH': '🗓️ Ежемесячно',
-        'MONTH_ROLLING': '🔄 Скользящий месяц',
-        'NO_RESET': '🚫 Никогда',
+        'DAY': get_texts(language).t('ADMIN_TARIFF_RESET_DAY', '📅 Ежедневно'),
+        'WEEK': get_texts(language).t('ADMIN_TARIFF_RESET_WEEK', '📆 Еженедельно'),
+        'MONTH': get_texts(language).t('ADMIN_TARIFF_RESET_MONTH', '🗓️ Ежемесячно'),
+        'MONTH_ROLLING': get_texts(language).t('ADMIN_TARIFF_RESET_ROLLING', '🔄 Скользящий месяц'),
+        'NO_RESET': get_texts(language).t('ADMIN_TARIFF_RESET_NEVER', '🚫 Никогда'),
     }
     if mode is None:
-        return texts.t(
-            'ADMIN_TARIFF_RESET_MODE_GLOBAL_BUTTON', '🌐 Глобальная настройка ({strategy})'
-        ).format(strategy=settings.DEFAULT_TRAFFIC_RESET_STRATEGY)
-    if mode in mode_labels:
-        return texts.t(f'ADMIN_TARIFF_RESET_MODE_{mode}', mode_labels[mode])
-    return texts.t('ADMIN_TARIFF_RESET_MODE_UNKNOWN', '⚠️ Неизвестно ({mode})').format(mode=mode)
+        return (
+            get_texts(language)
+            .t('ADMIN_TARIFF_GLOBAL_MODE', '🌐 Глобальная настройка ({v0})')
+            .format(v0=settings.DEFAULT_TRAFFIC_RESET_STRATEGY)
+        )
+    return mode_labels.get(
+        mode, get_texts(language).t('ADMIN_TARIFF_UNKNOWN_MODE', '⚠️ Неизвестно ({v0})').format(v0=mode)
+    )
 
 
-def _format_traffic_topup_packages(tariff: Tariff, texts=None) -> str:
+def _format_traffic_topup_packages(tariff: Tariff, language: str = 'ru') -> str:
     """Форматирует пакеты докупки трафика для отображения."""
-    if texts is None:
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
     if not getattr(tariff, 'traffic_topup_enabled', False):
-        return texts.t('ADMIN_TARIFF_TOPUP_STATUS_DISABLED', '❌ Отключено')
+        return get_texts(language).t('ADMIN_TARIFF_DISABLED_STATE', '❌ Отключено')
 
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
     if not packages:
-        return texts.t('ADMIN_TARIFF_TOPUP_ENABLED_NO_PACKAGES', '✅ Включено, но пакеты не настроены')
+        return get_texts(language).t('ADMIN_TARIFF_ENABLED_NO_PACKAGES', '✅ Включено, но пакеты не настроены')
 
-    lines = [texts.t('ADMIN_TARIFF_TOPUP_STATUS_ENABLED', '✅ Включено')]
+    lines = [get_texts(language).t('ADMIN_TARIFF_ENABLED_STATE', '✅ Включено')]
     for gb in sorted(packages.keys()):
         price = packages[gb]
         lines.append(
-            texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
-                gb=gb, price=format_price_kopeks(price)
-            )
+            get_texts(language)
+            .t('ADMIN_TARIFF_PACKAGE_LINE', '  • {v0} ГБ: {v1}')
+            .format(v0=gb, v1=format_price_kopeks(price))
         )
 
     return '\n'.join(lines)
@@ -400,24 +395,26 @@ def _format_traffic_topup_packages(tariff: Tariff, texts=None) -> str:
 
 def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> str:
     """Форматирует информацию о тарифе."""
-    texts = get_texts(language)
+    get_texts(language)
 
     status = (
-        texts.t('ADMIN_TARIFF_STATUS_ACTIVE', '✅ Активен')
+        get_texts(language).t('ADMIN_TARIFF_ACTIVE_STATE', '✅ Активен')
         if tariff.is_active
-        else texts.t('ADMIN_TARIFF_STATUS_INACTIVE', '❌ Неактивен')
+        else get_texts(language).t('ADMIN_TARIFF_INACTIVE_STATE', '❌ Неактивен')
     )
     if getattr(tariff, 'is_highlighted', False):
-        status += texts.t('ADMIN_TARIFF_STATUS_HIGHLIGHTED', ' · ⭐ выделен')
-    traffic = format_traffic(tariff.traffic_limit_gb, language)
-    prices_display = _format_period_prices_display(tariff.period_prices or {}, tariff.highlight_period_days, texts)
+        status += get_texts(language).t('ADMIN_TARIFF_HIGHLIGHT_MARK', ' · ⭐ выделен')
+    traffic = format_traffic(tariff.traffic_limit_gb, language=language)
+    prices_display = _format_period_prices_display(
+        tariff.period_prices or {}, tariff.highlight_period_days, language=language
+    )
 
     # Форматируем список серверов
     squads_list = tariff.allowed_squads or []
     squads_display = (
-        texts.t('ADMIN_TARIFF_SQUADS_COUNT', '{count} серверов').format(count=len(squads_list))
+        get_texts(language).t('ADMIN_TARIFF_SERVER_COUNT', '{v0} серверов').format(v0=len(squads_list))
         if squads_list
-        else texts.t('ADMIN_TARIFF_SQUADS_ALL', 'Все серверы')
+        else get_texts(language).t('ADMIN_TARIFF_ALL_SERVERS', 'Все серверы')
     )
 
     # Форматируем промогруппы
@@ -425,47 +422,51 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
     if promo_groups:
         promo_display = ', '.join(pg.name for pg in promo_groups)
     else:
-        promo_display = texts.t('ADMIN_TARIFF_PROMO_ALL', 'Доступен всем')
+        promo_display = get_texts(language).t('ADMIN_TARIFF_AVAILABLE_ALL', 'Доступен всем')
 
     trial_status = (
-        texts.t('ADMIN_TARIFF_YES', '✅ Да')
+        get_texts(language).t('ADMIN_TARIFF_YES', '✅ Да')
         if tariff.is_trial_available
-        else texts.t('ADMIN_TARIFF_NO', '❌ Нет')
+        else get_texts(language).t('ADMIN_TARIFF_NO', '❌ Нет')
     )
 
     # Форматируем дни триала
     trial_days = getattr(tariff, 'trial_duration_days', None)
     if trial_days:
-        trial_days_display = texts.t('ADMIN_TARIFF_TRIAL_DAYS_VALUE', '{days} дней').format(days=trial_days)
+        trial_days_display = get_texts(language).t('ADMIN_TARIFF_DAY_COUNT', '{v0} дней').format(v0=trial_days)
     else:
-        trial_days_display = texts.t(
-            'ADMIN_TARIFF_TRIAL_DAYS_DEFAULT', 'По умолчанию ({days} дней)'
-        ).format(days=settings.TRIAL_DURATION_DAYS)
+        trial_days_display = (
+            get_texts(language)
+            .t('ADMIN_TARIFF_DEFAULT_TRIAL_DAYS', 'По умолчанию ({v0} дней)')
+            .format(v0=settings.TRIAL_DURATION_DAYS)
+        )
 
     # Форматируем цену за устройство
     device_price = getattr(tariff, 'device_price_kopeks', None)
     if device_price is not None and device_price > 0:
-        device_price_display = format_price_kopeks(device_price) + texts.t('ADMIN_TARIFF_PER_MONTH_SUFFIX', '/мес')
+        device_price_display = format_price_kopeks(device_price) + get_texts(language).t(
+            'ADMIN_TARIFF_PER_MONTH', '/мес'
+        )
     else:
-        device_price_display = texts.t('ADMIN_TARIFF_DEVICE_PRICE_UNAVAILABLE', 'Недоступно')
+        device_price_display = get_texts(language).t('ADMIN_TARIFF_UNAVAILABLE', 'Недоступно')
 
     # Форматируем макс. устройств
     max_devices = getattr(tariff, 'max_device_limit', None)
     if max_devices is not None and max_devices > 0:
         max_devices_display = str(max_devices)
     else:
-        max_devices_display = texts.t('ADMIN_TARIFF_MAX_DEVICES_UNLIMITED', '∞ (без лимита)')
+        max_devices_display = get_texts(language).t('ADMIN_TARIFF_UNLIMITED', '∞ (без лимита)')
 
     # Форматируем произвольный трафик и докупку трафика
-    custom_traffic_display = format_custom_traffic_settings(tariff)
-    custom_days_display = format_custom_days_settings(tariff)
-    traffic_topup_display = _format_traffic_topup_packages(tariff, texts)
-    server_limits_display = format_server_limits_summary(tariff)
-    panel_settings_display = format_panel_settings(tariff)
+    custom_traffic_display = format_custom_traffic_settings(tariff, language=language)
+    custom_days_display = format_custom_days_settings(tariff, language=language)
+    traffic_topup_display = _format_traffic_topup_packages(tariff, language=language)
+    server_limits_display = format_server_limits_summary(tariff, language=language)
+    panel_settings_display = format_panel_settings(tariff, language=language)
 
     # Форматируем режим сброса трафика
     traffic_reset_mode = getattr(tariff, 'traffic_reset_mode', None)
-    traffic_reset_display = _format_traffic_reset_mode(traffic_reset_mode, texts)
+    traffic_reset_display = _format_traffic_reset_mode(traffic_reset_mode, language=language)
 
     # Форматируем суточный тариф
     is_daily = getattr(tariff, 'is_daily', False)
@@ -473,84 +474,48 @@ def format_tariff_info(tariff: Tariff, language: str, subs_count: int = 0) -> st
 
     # Формируем блок цен в зависимости от типа тарифа
     if is_daily:
-        price_block = texts.t('ADMIN_TARIFF_PRICE_BLOCK_DAILY', '<b>💰 Суточная цена:</b> {price}/день').format(
-            price=format_price_kopeks(daily_price_kopeks)
+        price_block = (
+            get_texts(language)
+            .t('ADMIN_TARIFF_DAILY_PRICE_BLOCK', '<b>💰 Суточная цена:</b> {v0}/день')
+            .format(v0=format_price_kopeks(daily_price_kopeks))
         )
-        tariff_type = texts.t('ADMIN_TARIFF_TYPE_DAILY', '🔄 Суточный')
+        tariff_type = get_texts(language).t('ADMIN_TARIFF_DAILY_TYPE', '🔄 Суточный')
     else:
-        price_block = texts.t('ADMIN_TARIFF_PRICE_BLOCK_PERIODIC', '<b>Цены:</b>\n{prices}').format(
-            prices=prices_display
+        price_block = (
+            get_texts(language).t('ADMIN_TARIFF_PERIOD_PRICE_BLOCK', '<b>Цены:</b>\n{v0}').format(v0=prices_display)
         )
-        tariff_type = texts.t('ADMIN_TARIFF_TYPE_PERIODIC', '📅 Периодный')
+        tariff_type = get_texts(language).t('ADMIN_TARIFF_PERIOD_TYPE', '📅 Периодный')
 
-    return texts.t(
-        'ADMIN_TARIFF_INFO',
-        '📦 <b>Тариф: {name}</b>\n'
-        '\n'
-        '{status} | {tariff_type}\n'
-        '🎚️ Уровень: {tier_level}\n'
-        '📊 Порядок: {display_order}\n'
-        '\n'
-        '<b>Параметры:</b>\n'
-        '• Трафик: {traffic}\n'
-        '• Устройств: {device_limit}\n'
-        '• Макс. устройств: {max_devices_display}\n'
-        '• Цена за доп. устройство: {device_price_display}\n'
-        '• Триал: {trial_status}\n'
-        '• Дней триала: {trial_days_display}\n'
-        '\n'
-        '<b>Произвольный трафик:</b>\n'
-        '{custom_traffic_display}\n'
-        '\n'
-        '<b>Произвольные дни:</b>\n'
-        '{custom_days_display}\n'
-        '\n'
-        '<b>Докупка трафика:</b>\n'
-        '{traffic_topup_display}\n'
-        '\n'
-        '<b>Сброс трафика:</b> {traffic_reset_display}\n'
-        '\n'
-        '{price_block}\n'
-        '\n'
-        '<b>Серверы:</b> {squads_display}\n'
-        '<b>Лимиты по серверам:</b> {server_limits_display}\n'
-        '<b>Промогруппы:</b> {promo_display}\n'
-        '\n'
-        '<b>Панель и прочее:</b>\n'
-        '{panel_settings_display}\n'
-        '\n'
-        '📊 Подписок на тарифе: {subs_count}\n'
-        '\n'
-        '{description_block}',
-    ).format(
-        name=html.escape(tariff.name),
-        status=status,
-        tariff_type=tariff_type,
-        tier_level=tariff.tier_level,
-        display_order=tariff.display_order,
-        traffic=traffic,
-        device_limit=Texts.format_device_limit(tariff.device_limit),
-        max_devices_display=max_devices_display,
-        device_price_display=device_price_display,
-        trial_status=trial_status,
-        trial_days_display=trial_days_display,
-        custom_traffic_display=custom_traffic_display,
-        custom_days_display=custom_days_display,
-        traffic_topup_display=traffic_topup_display,
-        server_limits_display=server_limits_display,
-        panel_settings_display=panel_settings_display,
-        traffic_reset_display=traffic_reset_display,
-        price_block=price_block,
-        squads_display=squads_display,
-        promo_display=promo_display,
-        subs_count=subs_count,
-        description_block=(
-            texts.t('ADMIN_TARIFF_INFO_DESCRIPTION', '📝 {description}').format(
-                description=html.escape(tariff.description)
-            )
-            if tariff.description
-            else ''
-        ),
+    return (
+        get_texts(language)
+        .t(
+            'ADMIN_TARIFF_DETAIL',
+            '📦 <b>Тариф: {v0}</b>\n\n{v1} | {v2}\n🎚️ Уровень: {v3}\n📊 Порядок: {v4}\n\n<b>Параметры:</b>\n• Трафик: {v5}\n• Устройств: {v6}\n• Макс. устройств: {v7}\n• Цена за доп. устройство: {v8}\n• Триал: {v9}\n• Дней триала: {v10}\n\n<b>Произвольный трафик:</b>\n{v11}\n\n<b>Произвольные дни:</b>\n{v12}\n\n<b>Докупка трафика:</b>\n{v13}\n\n<b>Сброс трафика:</b> {v14}\n\n{v15}\n\n<b>Серверы:</b> {v16}\n<b>Лимиты по серверам:</b> {v17}\n<b>Промогруппы:</b> {v18}\n\n<b>Панель и прочее:</b>\n{v19}\n\n📊 Подписок на тарифе: {v20}\n\n{v21}',
+        )
+        .format(
+            v0=html.escape(tariff.name),
+            v1=status,
+            v2=tariff_type,
+            v3=tariff.tier_level,
+            v4=tariff.display_order,
+            v5=traffic,
+            v6=Texts.format_device_limit(tariff.device_limit),
+            v7=max_devices_display,
+            v8=device_price_display,
+            v9=trial_status,
+            v10=trial_days_display,
+            v11=custom_traffic_display,
+            v12=custom_days_display,
+            v13=traffic_topup_display,
+            v14=traffic_reset_display,
+            v15=price_block,
+            v16=squads_display,
+            v17=server_limits_display,
+            v18=promo_display,
+            v19=panel_settings_display,
+            v20=subs_count,
+            v21=f'📝 {html.escape(tariff.description)}' if tariff.description else '',
+        )
     )
 
 
@@ -569,12 +534,9 @@ async def show_tariffs_list(
     # Проверяем режим продаж
     if not settings.is_tariffs_mode():
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_TARIFFS_MODE_DISABLED',
-                '⚠️ <b>Режим тарифов отключен</b>\n\n'
-                'Для использования тарифов установите:\n'
-                '<code>SALES_MODE=tariffs</code>\n\n'
-                'Текущий режим: <code>classic</code>',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_MODE_DISABLED',
+                '⚠️ <b>Режим тарифов отключен</b>\n\nДля использования тарифов установите:\n<code>SALES_MODE=tariffs</code>\n\nТекущий режим: <code>classic</code>',
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[[InlineKeyboardButton(text=texts.BACK, callback_data='admin_panel')]]
@@ -588,15 +550,15 @@ async def show_tariffs_list(
 
     if not tariffs_data:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_TARIFFS_EMPTY',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_EMPTY_LIST',
                 '📦 <b>Тарифы</b>\n\nТарифы ещё не созданы.\nСоздайте первый тариф для начала работы.',
             ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('ADMIN_TARIFF_CREATE_BUTTON', '➕ Создать тариф'),
+                            text=get_texts(db_user.language).t('ADMIN_TARIFF_BUTTON_CREATE', '➕ Создать тариф'),
                             callback_data='admin_tariff_create',
                         )
                     ],
@@ -615,13 +577,12 @@ async def show_tariffs_list(
     active_count = sum(1 for t, _ in tariffs_data if t.is_active)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFFS_LIST',
-            '📦 <b>Тарифы</b>\n\n'
-            'Всего: {total} (активных: {active})\n'
-            'Подписок на тарифах: {subs}\n\n'
-            'Выберите тариф для просмотра и редактирования:',
-        ).format(total=len(tariffs_data), active=active_count, subs=total_subs),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_LIST',
+            '📦 <b>Тарифы</b>\n\nВсего: {v0} (активных: {v1})\nПодписок на тарифах: {v2}\n\nВыберите тариф для просмотра и редактирования:',
+        )
+        .format(v0=len(tariffs_data), v1=active_count, v2=total_subs),
         reply_markup=get_tariffs_list_keyboard(page_data, db_user.language, 0, total_pages),
         parse_mode='HTML',
     )
@@ -636,7 +597,7 @@ async def show_tariffs_page(
     db: AsyncSession,
 ):
     """Показывает страницу списка тарифов."""
-    texts = get_texts(db_user.language)
+    get_texts(db_user.language)
     page = int(callback.data.split(':')[1])
 
     tariffs_data = await get_tariffs_with_subscriptions_count(db, include_inactive=True)
@@ -650,19 +611,12 @@ async def show_tariffs_page(
     active_count = sum(1 for t, _ in tariffs_data if t.is_active)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFFS_LIST_PAGED',
-            '📦 <b>Тарифы</b> (стр. {page}/{total_pages})\n\n'
-            'Всего: {total} (активных: {active})\n'
-            'Подписок на тарифах: {subs}\n\n'
-            'Выберите тариф для просмотра и редактирования:',
-        ).format(
-            page=page + 1,
-            total_pages=total_pages,
-            total=len(tariffs_data),
-            active=active_count,
-            subs=total_subs,
-        ),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_LIST_PAGE',
+            '📦 <b>Тарифы</b> (стр. {v0}/{v1})\n\nВсего: {v2} (активных: {v3})\nПодписок на тарифах: {v4}\n\nВыберите тариф для просмотра и редактирования:',
+        )
+        .format(v0=page + 1, v1=total_pages, v2=len(tariffs_data), v3=active_count, v4=total_subs),
         reply_markup=get_tariffs_list_keyboard(page_data, db_user.language, page, total_pages),
         parse_mode='HTML',
     )
@@ -677,12 +631,13 @@ async def view_tariff(
     db: AsyncSession,
 ):
     """Просмотр тарифа."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
@@ -703,21 +658,22 @@ async def toggle_tariff_highlight(
     db: AsyncSession,
 ):
     """Отмечает тариф как выгодный — в списке тарифов он показывается с подписью."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     tariff = await update_tariff(db, tariff, is_highlighted=not getattr(tariff, 'is_highlighted', False))
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await callback.answer(
-        texts.t('ADMIN_TARIFF_HIGHLIGHT_ENABLED', 'Тариф выделен')
+        get_texts(db_user.language).t('ADMIN_TARIFF_HIGHLIGHTED', 'Тариф выделен')
         if tariff.is_highlighted
-        else texts.t('ADMIN_TARIFF_HIGHLIGHT_DISABLED', 'Выделение снято'),
+        else get_texts(db_user.language).t('ADMIN_TARIFF_UNHIGHLIGHTED', 'Выделение снято'),
         show_alert=True,
     )
     await callback.message.edit_text(
@@ -735,24 +691,25 @@ async def toggle_tariff(
     db: AsyncSession,
 ):
     """Переключает активность тарифа."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     tariff = await update_tariff(db, tariff, is_active=not tariff.is_active)
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     status = (
-        texts.t('ADMIN_TARIFF_TOGGLE_ACTIVATED', 'активирован')
+        get_texts(db_user.language).t('ADMIN_TARIFF_ACTIVATED', 'активирован')
         if tariff.is_active
-        else texts.t('ADMIN_TARIFF_TOGGLE_DEACTIVATED', 'деактивирован')
+        else get_texts(db_user.language).t('ADMIN_TARIFF_DEACTIVATED', 'деактивирован')
     )
     await callback.answer(
-        texts.t('ADMIN_TARIFF_TOGGLE_RESULT', 'Тариф {status}').format(status=status), show_alert=True
+        get_texts(db_user.language).t('ADMIN_TARIFF_STATUS_CHANGED', 'Тариф {v0}').format(v0=status), show_alert=True
     )
 
     await callback.message.edit_text(
@@ -772,25 +729,28 @@ async def toggle_trial_tariff(
     """Переключает тариф как триальный."""
     from app.database.crud.tariff import clear_trial_tariff, set_trial_tariff
 
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     if tariff.is_trial_available:
         # Снимаем флаг триала
         await clear_trial_tariff(db)
-        await callback.answer(texts.t('ADMIN_TARIFF_TRIAL_CLEARED', 'Триал снят с тарифа'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_TRIAL_REMOVED', 'Триал снят с тарифа'), show_alert=True
+        )
     else:
         # Устанавливаем этот тариф как триальный (снимает флаг с других)
         await set_trial_tariff(db, tariff_id)
         await callback.answer(
-            texts.t('ADMIN_TARIFF_TRIAL_SET_RESULT', 'Тариф «{name}» установлен как триальный').format(
-                name=tariff.name
-            ),
+            get_texts(db_user.language)
+            .t('ADMIN_TARIFF_TRIAL_ASSIGNED', 'Тариф «{v0}» установлен как триальный')
+            .format(v0=tariff.name),
             show_alert=True,
         )
 
@@ -813,12 +773,13 @@ async def toggle_daily_tariff(
     db: AsyncSession,
 ):
     """Переключает суточный режим тарифа."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     is_daily = getattr(tariff, 'is_daily', False)
@@ -826,14 +787,16 @@ async def toggle_daily_tariff(
     if is_daily:
         # Отключаем суточный режим
         tariff = await update_tariff(db, tariff, is_daily=False, daily_price_kopeks=0)
-        await callback.answer(texts.t('ADMIN_TARIFF_DAILY_MODE_OFF', 'Суточный режим отключен'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_DAILY_DISABLED', 'Суточный режим отключен'), show_alert=True
+        )
     else:
         # Включаем суточный режим (с ценой по умолчанию)
-        tariff = await update_tariff(db, tariff, is_daily=True, daily_price_kopeks=5000)  # 50 تومان по умолчанию
+        tariff = await update_tariff(db, tariff, is_daily=True, daily_price_kopeks=5000)  # 50 руб по умолчанию
         await callback.answer(
-            texts.t(
-                'ADMIN_TARIFF_DAILY_MODE_ON',
-                'Суточный режим включен. Цена: 50 تومان/день\nНастройте цену через кнопку «💰 Суточная цена»',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_DAILY_ENABLED_DEFAULT',
+                'Суточный режим включен. Цена: 50 ₽/день\nНастройте цену через кнопку «💰 Суточная цена»',
             ),
             show_alert=True,
         )
@@ -862,7 +825,9 @@ async def start_edit_daily_price(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     current_price = getattr(tariff, 'daily_price_kopeks', 0)
@@ -872,14 +837,12 @@ async def start_edit_daily_price(
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_DAILY_PRICE_PROMPT',
-            '💰 <b>Редактирование суточной цены</b>\n\n'
-            'Тариф: {name}\n'
-            'Текущая цена: {price}/день\n\n'
-            'Введите новую цену за день в تومان.\n'
-            'Пример: <code>50</code> или <code>99.90</code>',
-        ).format(name=html.escape(tariff.name), price=format_price_kopeks(current_price)),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_DAILY_PRICE',
+            '💰 <b>Редактирование суточной цены</b>\n\nТариф: {v0}\nТекущая цена: {v1}/день\n\nВведите новую цену за день в рублях.\nПример: <code>50</code> или <code>99.90</code>',
+        )
+        .format(v0=html.escape(tariff.name), v1=format_price_kopeks(current_price)),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -897,7 +860,7 @@ async def process_daily_price_input(
     state: FSMContext,
 ):
     """Обрабатывает ввод суточной цены (создание и редактирование)."""
-    texts = get_texts(db_user.language)
+    get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
@@ -905,13 +868,15 @@ async def process_daily_price_input(
     try:
         price_rubles = float(message.text.strip().replace(',', '.'))
         if price_rubles <= 0:
-            raise ValueError('Цена должна быть положительной')
+            raise ValueError(
+                get_texts(db_user.language).t('ADMIN_TARIFF_POSITIVE_PRICE', 'Цена должна быть положительной')
+            )
 
         price_kopeks = int(price_rubles * 100)
     except ValueError:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_DAILY_PRICE_INVALID',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_INVALID_DAILY_PRICE',
                 '❌ Некорректная цена. Введите положительное число.\nПример: <code>50</code> или <code>99.90</code>',
             ),
             parse_mode='HTML',
@@ -937,7 +902,7 @@ async def process_daily_price_input(
         await state.clear()
 
         await message.answer(
-            texts.t('ADMIN_TARIFF_DAILY_CREATED', '✅ <b>Суточный тариф создан!</b>\n\n')
+            get_texts(db_user.language).t('ADMIN_TARIFF_DAILY_CREATED', '✅ <b>Суточный тариф создан!</b>\n\n')
             + format_tariff_info(tariff, db_user.language, 0),
             reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
             parse_mode='HTML',
@@ -950,7 +915,7 @@ async def process_daily_price_input(
 
         tariff = await get_tariff_by_id(db, tariff_id)
         if not tariff:
-            await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+            await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
             await state.clear()
             return
 
@@ -960,9 +925,9 @@ async def process_daily_price_input(
         subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
         await message.answer(
-            texts.t('ADMIN_TARIFF_DAILY_PRICE_SET', '✅ Суточная цена установлена: {price}/день\n\n').format(
-                price=format_price_kopeks(price_kopeks)
-            )
+            get_texts(db_user.language)
+            .t('ADMIN_TARIFF_DAILY_PRICE_UPDATED', '✅ Суточная цена установлена: {v0}/день\n\n')
+            .format(v0=format_price_kopeks(price_kopeks))
             + format_tariff_info(tariff, db_user.language, subs_count),
             reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
             parse_mode='HTML',
@@ -987,11 +952,9 @@ async def start_create_tariff(
     await state.update_data(language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_CREATE_STEP_NAME',
-            '📦 <b>Создание тарифа</b>\n\n'
-            'Шаг 1/6: Введите название тарифа\n\n'
-            'Пример: <i>Базовый</i>, <i>Премиум</i>, <i>Бизнес</i>',
+        get_texts(db_user.language).t(
+            'ADMIN_TARIFF_CREATE_START',
+            '📦 <b>Создание тарифа</b>\n\nШаг 1/6: Введите название тарифа\n\nПример: <i>Базовый</i>, <i>Премиум</i>, <i>Бизнес</i>',
         ),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data='admin_tariffs')]]
@@ -1014,25 +977,27 @@ async def process_tariff_name(
     name = message.text.strip()
 
     if len(name) < 2:
-        await message.answer(texts.t('ADMIN_TARIFF_NAME_TOO_SHORT', 'Название должно быть не короче 2 символов'))
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NAME_TOO_SHORT', 'Название должно быть не короче 2 символов')
+        )
         return
 
     if len(name) > 50:
-        await message.answer(texts.t('ADMIN_TARIFF_NAME_TOO_LONG', 'Название должно быть не длиннее 50 символов'))
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NAME_TOO_LONG', 'Название должно быть не длиннее 50 символов')
+        )
         return
 
     await state.update_data(tariff_name=name)
     await state.set_state(AdminStates.creating_tariff_traffic)
 
     await message.answer(
-        texts.t(
-            'ADMIN_TARIFF_CREATE_STEP_TRAFFIC',
-            '📦 <b>Создание тарифа</b>\n\n'
-            'Название: <b>{name}</b>\n\n'
-            'Шаг 2/6: Введите лимит трафика в ГБ\n\n'
-            'Введите <code>0</code> для безлимитного трафика\n'
-            'Пример: <i>100</i>, <i>500</i>, <i>0</i>',
-        ).format(name=name),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_CREATE_TRAFFIC',
+            '📦 <b>Создание тарифа</b>\n\nНазвание: <b>{v0}</b>\n\nШаг 2/6: Введите лимит трафика в ГБ\n\nВведите <code>0</code> для безлимитного трафика\nПример: <i>100</i>, <i>500</i>, <i>0</i>',
+        )
+        .format(v0=name),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data='admin_tariffs')]]
         ),
@@ -1056,24 +1021,24 @@ async def process_tariff_traffic(
         if traffic < 0:
             raise ValueError
     except ValueError:
-        await message.answer(texts.t('ADMIN_TARIFF_TRAFFIC_INVALID', 'Введите корректное число (0 или больше)'))
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NONNEGATIVE_NUMBER', 'Введите корректное число (0 или больше)')
+        )
         return
 
     data = await state.get_data()
     await state.update_data(tariff_traffic=traffic)
     await state.set_state(AdminStates.creating_tariff_devices)
 
-    traffic_display = format_traffic(traffic, db_user.language)
+    traffic_display = format_traffic(traffic, language=db_user.language)
 
     await message.answer(
-        texts.t(
-            'ADMIN_TARIFF_CREATE_STEP_DEVICES',
-            '📦 <b>Создание тарифа</b>\n\n'
-            'Название: <b>{name}</b>\n'
-            'Трафик: <b>{traffic}</b>\n\n'
-            'Шаг 3/6: Введите лимит устройств\n\n'
-            'Пример: <i>1</i>, <i>3</i>, <i>5</i>',
-        ).format(name=data['tariff_name'], traffic=traffic_display),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_CREATE_DEVICES',
+            '📦 <b>Создание тарифа</b>\n\nНазвание: <b>{v0}</b>\nТрафик: <b>{v1}</b>\n\nШаг 3/6: Введите лимит устройств\n\nПример: <i>1</i>, <i>3</i>, <i>5</i>',
+        )
+        .format(v0=data['tariff_name'], v1=traffic_display),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data='admin_tariffs')]]
         ),
@@ -1097,27 +1062,24 @@ async def process_tariff_devices(
         if devices < 1:
             raise ValueError
     except ValueError:
-        await message.answer(texts.t('ADMIN_TARIFF_DEVICES_INVALID', 'Введите корректное число (1 или больше)'))
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_POSITIVE_NUMBER', 'Введите корректное число (1 или больше)')
+        )
         return
 
     data = await state.get_data()
     await state.update_data(tariff_devices=devices)
     await state.set_state(AdminStates.creating_tariff_tier)
 
-    traffic_display = format_traffic(data['tariff_traffic'], db_user.language)
+    traffic_display = format_traffic(data['tariff_traffic'], language=db_user.language)
 
     await message.answer(
-        texts.t(
-            'ADMIN_TARIFF_CREATE_STEP_TIER',
-            '📦 <b>Создание тарифа</b>\n\n'
-            'Название: <b>{name}</b>\n'
-            'Трафик: <b>{traffic}</b>\n'
-            'Устройств: <b>{devices}</b>\n\n'
-            'Шаг 4/6: Введите уровень тарифа (1-10)\n\n'
-            'Уровень используется для визуального отображения\n'
-            '1 - базовый, 10 - максимальный\n'
-            'Пример: <i>1</i>, <i>2</i>, <i>3</i>',
-        ).format(name=data['tariff_name'], traffic=traffic_display, devices=devices),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_CREATE_TIER',
+            '📦 <b>Создание тарифа</b>\n\nНазвание: <b>{v0}</b>\nТрафик: <b>{v1}</b>\nУстройств: <b>{v2}</b>\n\nШаг 4/6: Введите уровень тарифа (1-10)\n\nУровень используется для визуального отображения\n1 - базовый, 10 - максимальный\nПример: <i>1</i>, <i>2</i>, <i>3</i>',
+        )
+        .format(v0=data['tariff_name'], v1=traffic_display, v2=devices),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data='admin_tariffs')]]
         ),
@@ -1141,36 +1103,35 @@ async def process_tariff_tier(
         if tier < 1 or tier > 10:
             raise ValueError
     except ValueError:
-        await message.answer(texts.t('ADMIN_TARIFF_TIER_INVALID', 'Введите число от 1 до 10'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_TIER_RANGE', 'Введите число от 1 до 10'))
         return
 
     data = await state.get_data()
     await state.update_data(tariff_tier=tier)
 
-    traffic_display = format_traffic(data['tariff_traffic'], db_user.language)
+    traffic_display = format_traffic(data['tariff_traffic'], language=db_user.language)
 
     # Шаг 5/6: Выбор типа тарифа
     await message.answer(
-        texts.t(
-            'ADMIN_TARIFF_CREATE_STEP_TYPE',
-            '📦 <b>Создание тарифа</b>\n\n'
-            'Название: <b>{name}</b>\n'
-            'Трафик: <b>{traffic}</b>\n'
-            'Устройств: <b>{devices}</b>\n'
-            'Уровень: <b>{tier}</b>\n\n'
-            'Шаг 5/6: Выберите тип тарифа',
-        ).format(name=data['tariff_name'], traffic=traffic_display, devices=data['tariff_devices'], tier=tier),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_CREATE_TYPE',
+            '📦 <b>Создание тарифа</b>\n\nНазвание: <b>{v0}</b>\nТрафик: <b>{v1}</b>\nУстройств: <b>{v2}</b>\nУровень: <b>{v3}</b>\n\nШаг 5/6: Выберите тип тарифа',
+        )
+        .format(v0=data['tariff_name'], v1=traffic_display, v2=data['tariff_devices'], v3=tier),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('ADMIN_TARIFF_TYPE_PERIODIC_BUTTON', '📅 Периодный (месяцы)'),
+                        text=get_texts(db_user.language).t('ADMIN_TARIFF_PERIOD_TYPE_CHOICE', '📅 Периодный (месяцы)'),
                         callback_data='tariff_type_periodic',
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        text=texts.t('ADMIN_TARIFF_TYPE_DAILY_BUTTON', '🔄 Суточный (оплата за день)'),
+                        text=get_texts(db_user.language).t(
+                            'ADMIN_TARIFF_DAILY_TYPE_CHOICE', '🔄 Суточный (оплата за день)'
+                        ),
                         callback_data='tariff_type_daily',
                     )
                 ],
@@ -1196,27 +1157,15 @@ async def select_tariff_type_periodic(
     await state.update_data(tariff_is_daily=False)
     await state.set_state(AdminStates.creating_tariff_prices)
 
-    traffic_display = format_traffic(data['tariff_traffic'], db_user.language)
+    traffic_display = format_traffic(data['tariff_traffic'], language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_CREATE_STEP_PRICES',
-            '📦 <b>Создание тарифа</b>\n\n'
-            'Название: <b>{name}</b>\n'
-            'Трафик: <b>{traffic}</b>\n'
-            'Устройств: <b>{devices}</b>\n'
-            'Уровень: <b>{tier}</b>\n'
-            'Тип: <b>📅 Периодный</b>\n\n'
-            'Шаг 6/6: Введите цены на периоды\n\n'
-            'Формат: <code>дней:цена_в_копейках</code>\n'
-            'Несколько периодов через запятую\n\n'
-            'Пример:\n<code>30:9900, 90:24900, 180:44900, 360:79900</code>',
-        ).format(
-            name=data['tariff_name'],
-            traffic=traffic_display,
-            devices=data['tariff_devices'],
-            tier=data['tariff_tier'],
-        ),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_CREATE_PERIOD_PRICES',
+            '📦 <b>Создание тарифа</b>\n\nНазвание: <b>{v0}</b>\nТрафик: <b>{v1}</b>\nУстройств: <b>{v2}</b>\nУровень: <b>{v3}</b>\nТип: <b>📅 Периодный</b>\n\nШаг 6/6: Введите цены на периоды\n\nФормат: <code>дней:цена_в_копейках</code>\nНесколько периодов через запятую\n\nПример:\n<code>30:9900, 90:24900, 180:44900, 360:79900</code>',
+        )
+        .format(v0=data['tariff_name'], v1=traffic_display, v2=data['tariff_devices'], v3=data['tariff_tier']),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data='admin_tariffs')]]
         ),
@@ -1242,25 +1191,15 @@ async def select_tariff_type_daily(
     await state.update_data(tariff_is_daily=True)
     await state.set_state(AdminStates.editing_tariff_daily_price)
 
-    traffic_display = format_traffic(data['tariff_traffic'], db_user.language)
+    traffic_display = format_traffic(data['tariff_traffic'], language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_CREATE_DAILY_STEP_PRICE',
-            '📦 <b>Создание суточного тарифа</b>\n\n'
-            'Название: <b>{name}</b>\n'
-            'Трафик: <b>{traffic}</b>\n'
-            'Устройств: <b>{devices}</b>\n'
-            'Уровень: <b>{tier}</b>\n'
-            'Тип: <b>🔄 Суточный</b>\n\n'
-            'Шаг 6/6: Введите суточную цену в تومان\n\n'
-            'Пример: <i>50</i> (50 تومان/день), <i>99.90</i> (99.90 تومان/день)',
-        ).format(
-            name=data['tariff_name'],
-            traffic=traffic_display,
-            devices=data['tariff_devices'],
-            tier=data['tariff_tier'],
-        ),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_CREATE_DAILY_PRICE',
+            '📦 <b>Создание суточного тарифа</b>\n\nНазвание: <b>{v0}</b>\nТрафик: <b>{v1}</b>\nУстройств: <b>{v2}</b>\nУровень: <b>{v3}</b>\nТип: <b>🔄 Суточный</b>\n\nШаг 6/6: Введите суточную цену в рублях\n\nПример: <i>50</i> (50 ₽/день), <i>99.90</i> (99.90 ₽/день)',
+        )
+        .format(v0=data['tariff_name'], v1=traffic_display, v2=data['tariff_devices'], v3=data['tariff_tier']),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data='admin_tariffs')]]
         ),
@@ -1278,17 +1217,15 @@ async def process_tariff_prices(
     state: FSMContext,
 ):
     """Обрабатывает цены тарифа."""
-    texts = get_texts(db_user.language)
+    get_texts(db_user.language)
 
     prices = _parse_period_prices(message.text.strip())
 
     if not prices:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_PRICES_PARSE_FAILED',
-                'Не удалось распознать цены.\n\n'
-                'Формат: <code>дней:цена_в_копейках</code>\n'
-                'Пример: <code>30:9900, 90:24900</code>',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_INVALID_CREATE_PRICES',
+                'Не удалось распознать цены.\n\nФормат: <code>дней:цена_в_копейках</code>\nПример: <code>30:9900, 90:24900</code>',
             ),
             parse_mode='HTML',
         )
@@ -1297,8 +1234,8 @@ async def process_tariff_prices(
     data = await state.get_data()
     await state.update_data(tariff_prices=prices)
 
-    format_traffic(data['tariff_traffic'], db_user.language)
-    _format_period_prices_display(prices, texts=texts)
+    format_traffic(data['tariff_traffic'], language=db_user.language)
+    _format_period_prices_display(prices, language=db_user.language)
 
     # Создаем тариф
     tariff = await create_tariff(
@@ -1316,7 +1253,7 @@ async def process_tariff_prices(
     subs_count = 0
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_CREATED', '✅ <b>Тариф создан!</b>\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_CREATED', '✅ <b>Тариф создан!</b>\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -1340,19 +1277,21 @@ async def start_edit_tariff_name(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_name)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_NAME_PROMPT',
-            '✏️ <b>Редактирование названия</b>\n\n'
-            'Текущее название: <b>{name}</b>\n\n'
-            'Введите новое название:',
-        ).format(name=html.escape(tariff.name)),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_NAME',
+            '✏️ <b>Редактирование названия</b>\n\nТекущее название: <b>{v0}</b>\n\nВведите новое название:',
+        )
+        .format(v0=html.escape(tariff.name)),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1370,19 +1309,20 @@ async def process_edit_tariff_name(
     state: FSMContext,
 ):
     """Обрабатывает новое название тарифа."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
     name = message.text.strip()
     if len(name) < 2 or len(name) > 50:
-        await message.answer(texts.t('ADMIN_TARIFF_NAME_LENGTH', 'Название должно быть от 2 до 50 символов'))
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NAME_LENGTH', 'Название должно быть от 2 до 50 символов')
+        )
         return
 
     tariff = await update_tariff(db, tariff, name=name)
@@ -1391,7 +1331,7 @@ async def process_edit_tariff_name(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_NAME_UPDATED', '✅ Название изменено!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_NAME_UPDATED', '✅ Название изменено!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -1412,21 +1352,23 @@ async def start_edit_tariff_description(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_description)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
-    current_desc = tariff.description or texts.t('ADMIN_TARIFF_DESC_NOT_SET', 'Не задано')
+    current_desc = tariff.description or get_texts(db_user.language).t('ADMIN_TARIFF_DESCRIPTION_NOT_SET', 'Не задано')
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_DESC_PROMPT',
-            '📝 <b>Редактирование описания</b>\n\n'
-            'Текущее описание:\n{description}\n\n'
-            'Введите новое описание (или <code>-</code> для удаления):',
-        ).format(description=current_desc),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_DESCRIPTION',
+            '📝 <b>Редактирование описания</b>\n\nТекущее описание:\n{v0}\n\nВведите новое описание (или <code>-</code> для удаления):',
+        )
+        .format(v0=current_desc),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1444,13 +1386,12 @@ async def process_edit_tariff_description(
     state: FSMContext,
 ):
     """Обрабатывает новое описание тарифа."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -1464,7 +1405,7 @@ async def process_edit_tariff_description(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_DESC_UPDATED', '✅ Описание изменено!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_DESCRIPTION_UPDATED', '✅ Описание изменено!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -1485,21 +1426,23 @@ async def start_edit_tariff_traffic(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_traffic)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
-    current_traffic = format_traffic(tariff.traffic_limit_gb, db_user.language)
+    current_traffic = format_traffic(tariff.traffic_limit_gb, language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_TRAFFIC_PROMPT',
-            '📊 <b>Редактирование трафика</b>\n\n'
-            'Текущий лимит: <b>{traffic}</b>\n\n'
-            'Введите новый лимит в ГБ (0 = безлимит):',
-        ).format(traffic=current_traffic),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_TRAFFIC',
+            '📊 <b>Редактирование трафика</b>\n\nТекущий лимит: <b>{v0}</b>\n\nВведите новый лимит в ГБ (0 = безлимит):',
+        )
+        .format(v0=current_traffic),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1517,13 +1460,12 @@ async def process_edit_tariff_traffic(
     state: FSMContext,
 ):
     """Обрабатывает новый лимит трафика."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -1532,7 +1474,9 @@ async def process_edit_tariff_traffic(
         if traffic < 0:
             raise ValueError
     except ValueError:
-        await message.answer(texts.t('ADMIN_TARIFF_TRAFFIC_INVALID', 'Введите корректное число (0 или больше)'))
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NONNEGATIVE_NUMBER', 'Введите корректное число (0 или больше)')
+        )
         return
 
     tariff = await update_tariff(db, tariff, traffic_limit_gb=traffic)
@@ -1541,7 +1485,7 @@ async def process_edit_tariff_traffic(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_TRAFFIC_UPDATED', '✅ Трафик изменен!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_TRAFFIC_UPDATED', '✅ Трафик изменен!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -1562,19 +1506,21 @@ async def start_edit_tariff_devices(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_devices)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_DEVICES_PROMPT',
-            '📱 <b>Редактирование устройств</b>\n\n'
-            'Текущий лимит: <b>{devices}</b>\n\n'
-            'Введите новый лимит устройств:',
-        ).format(devices=tariff.device_limit),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_DEVICES',
+            '📱 <b>Редактирование устройств</b>\n\nТекущий лимит: <b>{v0}</b>\n\nВведите новый лимит устройств:',
+        )
+        .format(v0=tariff.device_limit),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1592,13 +1538,12 @@ async def process_edit_tariff_devices(
     state: FSMContext,
 ):
     """Обрабатывает новый лимит устройств."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -1607,7 +1552,9 @@ async def process_edit_tariff_devices(
         if devices < 1:
             raise ValueError
     except ValueError:
-        await message.answer(texts.t('ADMIN_TARIFF_DEVICES_INVALID', 'Введите корректное число (1 или больше)'))
+        await message.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_POSITIVE_NUMBER', 'Введите корректное число (1 или больше)')
+        )
         return
 
     tariff = await update_tariff(db, tariff, device_limit=devices)
@@ -1616,7 +1563,7 @@ async def process_edit_tariff_devices(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_DEVICES_UPDATED', '✅ Лимит устройств изменен!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_DEVICES_UPDATED', '✅ Лимит устройств изменен!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -1637,19 +1584,21 @@ async def start_edit_tariff_tier(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_tier)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_TIER_PROMPT',
-            '🎚️ <b>Редактирование уровня</b>\n\n'
-            'Текущий уровень: <b>{tier}</b>\n\n'
-            'Введите новый уровень (1-10):',
-        ).format(tier=tariff.tier_level),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_TIER',
+            '🎚️ <b>Редактирование уровня</b>\n\nТекущий уровень: <b>{v0}</b>\n\nВведите новый уровень (1-10):',
+        )
+        .format(v0=tariff.tier_level),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1667,13 +1616,12 @@ async def process_edit_tariff_tier(
     state: FSMContext,
 ):
     """Обрабатывает новый уровень тарифа."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -1682,7 +1630,7 @@ async def process_edit_tariff_tier(
         if tier < 1 or tier > 10:
             raise ValueError
     except ValueError:
-        await message.answer(texts.t('ADMIN_TARIFF_TIER_INVALID', 'Введите число от 1 до 10'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_TIER_RANGE', 'Введите число от 1 до 10'))
         return
 
     tariff = await update_tariff(db, tariff, tier_level=tier)
@@ -1691,7 +1639,7 @@ async def process_edit_tariff_tier(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_TIER_UPDATED', '✅ Уровень изменен!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_TIER_UPDATED', '✅ Уровень изменен!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -1712,24 +1660,24 @@ async def start_edit_tariff_prices(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_prices)
     await state.update_data(tariff_id=tariff_id, language=db_user.language)
 
     current_prices = _format_period_prices_for_edit(tariff.period_prices or {})
-    prices_display = _format_period_prices_display(tariff.period_prices or {}, texts=texts)
+    prices_display = _format_period_prices_display(tariff.period_prices or {}, language=db_user.language)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_PRICES_PROMPT',
-            '💰 <b>Редактирование цен</b>\n\n'
-            'Текущие цены:\n{prices_display}\n\n'
-            'Введите новые цены в формате:\n'
-            '<code>{current_prices}</code>\n\n'
-            '(дней:цена_в_копейках, через запятую)',
-        ).format(prices_display=prices_display, current_prices=current_prices),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_PRICES',
+            '💰 <b>Редактирование цен</b>\n\nТекущие цены:\n{v0}\n\nВведите новые цены в формате:\n<code>{v1}</code>\n\n(дней:цена_в_копейках, через запятую)',
+        )
+        .format(v0=prices_display, v1=current_prices),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1747,21 +1695,20 @@ async def process_edit_tariff_prices(
     state: FSMContext,
 ):
     """Обрабатывает новые цены тарифа."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
     prices = _parse_period_prices(message.text.strip())
     if not prices:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_PRICES_PARSE_FAILED',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_INVALID_EDIT_PRICES',
                 'Не удалось распознать цены.\nФормат: <code>дней:цена</code>\nПример: <code>30:9900, 90:24900</code>',
             ),
             parse_mode='HTML',
@@ -1774,7 +1721,7 @@ async def process_edit_tariff_prices(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_PRICES_UPDATED', '✅ Цены изменены!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_PRICES_UPDATED', '✅ Цены изменены!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -1797,7 +1744,7 @@ def _highlight_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMarkup:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=f'{mark}{format_period(period)} — {format_price_kopeks(prices[period_str])}',
+                    text=f'{mark}{format_period(period, language=language)} — {format_price_kopeks(prices[period_str])}',
                     callback_data=f'admin_tariff_highlight_set:{tariff.id}:{period}',
                 )
             ]
@@ -1807,7 +1754,7 @@ def _highlight_keyboard(tariff: Tariff, language: str) -> InlineKeyboardMarkup:
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_HIGHLIGHT_CLEAR_BUTTON', '🚫 Убрать выделение'),
+                    text=get_texts(language).t('ADMIN_TARIFF_REMOVE_HIGHLIGHT_PROMPT', '🚫 Убрать выделение'),
                     callback_data=f'admin_tariff_highlight_set:{tariff.id}:0',
                 )
             ]
@@ -1825,29 +1772,29 @@ async def start_edit_tariff_highlight(
     db: AsyncSession,
 ):
     """Показывает выбор периода, который будет отмечен как самый выгодный."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     current = tariff.highlight_period_days
     current_display = (
-        format_period(int(current))
+        format_period(int(current), language=db_user.language)
         if current is not None
-        else texts.t('ADMIN_TARIFF_HIGHLIGHT_NOT_SELECTED', 'не выбран')
+        else get_texts(db_user.language).t('ADMIN_TARIFF_PERIOD_NOT_SELECTED', 'не выбран')
     )
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_HIGHLIGHT_TITLE',
-            '⭐ <b>Выгодный период</b>\n\n'
-            'Сейчас выделен: <b>{current}</b>\n\n'
-            'Выделенный период показывается клиенту с отметкой при покупке, '
-            'продлении и смене тарифа. Выделить можно только один период.',
-        ).format(current=current_display),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_HIGHLIGHT',
+            '⭐ <b>Выгодный период</b>\n\nСейчас выделен: <b>{v0}</b>\n\nВыделенный период показывается клиенту с отметкой при покупке, продлении и смене тарифа. Выделить можно только один период.',
+        )
+        .format(v0=current_display),
         reply_markup=_highlight_keyboard(tariff, db_user.language),
         parse_mode='HTML',
     )
@@ -1862,12 +1809,13 @@ async def set_tariff_highlight(
     db: AsyncSession,
 ):
     """Сохраняет выделенный период. 0 — снять выделение."""
-    texts = get_texts(db_user.language)
     _, tariff_id_raw, period_raw = callback.data.split(':')
     tariff = await get_tariff_by_id(db, int(tariff_id_raw))
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     period = int(period_raw)
@@ -1883,11 +1831,11 @@ async def set_tariff_highlight(
 
     await callback.message.edit_text(
         (
-            texts.t('ADMIN_TARIFF_HIGHLIGHT_CLEARED', '✅ Выделение снято!')
+            get_texts(db_user.language).t('ADMIN_TARIFF_HIGHLIGHT_REMOVED', '✅ Выделение снято!')
             if new_value is None
-            else texts.t('ADMIN_TARIFF_HIGHLIGHT_SET', '✅ Выделен период: {period}').format(
-                period=format_period(new_value)
-            )
+            else get_texts(db_user.language)
+            .t('ADMIN_TARIFF_PERIOD_HIGHLIGHTED', '✅ Выделен период: {v0}')
+            .format(v0=format_period(new_value, language=db_user.language))
         )
         + '\n\n'
         + format_tariff_info(tariff, db_user.language, subs_count),
@@ -1914,7 +1862,9 @@ async def start_edit_tariff_device_price(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_device_price)
@@ -1922,19 +1872,21 @@ async def start_edit_tariff_device_price(
 
     device_price = getattr(tariff, 'device_price_kopeks', None)
     if device_price is not None and device_price > 0:
-        current_price = format_price_kopeks(device_price) + texts.t('ADMIN_TARIFF_PER_MONTH_SUFFIX', '/мес')
+        current_price = format_price_kopeks(device_price) + get_texts(db_user.language).t(
+            'ADMIN_TARIFF_PER_MONTH', '/мес'
+        )
     else:
-        current_price = texts.t('ADMIN_TARIFF_DEVICE_PRICE_UNAVAILABLE', 'Недоступно (докупка устройств запрещена)')
+        current_price = get_texts(db_user.language).t(
+            'ADMIN_TARIFF_DEVICES_UNAVAILABLE', 'Недоступно (докупка устройств запрещена)'
+        )
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_DEVICE_PRICE_PROMPT',
-            '📱💰 <b>Редактирование цены за устройство</b>\n\n'
-            'Текущая цена: <b>{current_price}</b>\n\n'
-            'Введите цену в копейках за одно устройство в месяц.\n\n'
-            '• <code>0</code> или <code>-</code> — докупка устройств недоступна\n'
-            '• Например: <code>5000</code> = 50 تومان/мес за устройство',
-        ).format(current_price=current_price),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_DEVICE_PRICE',
+            '📱💰 <b>Редактирование цены за устройство</b>\n\nТекущая цена: <b>{v0}</b>\n\nВведите цену в копейках за одно устройство в месяц.\n\n• <code>0</code> или <code>-</code> — докупка устройств недоступна\n• Например: <code>5000</code> = 50₽/мес за устройство',
+        )
+        .format(v0=current_price),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -1952,13 +1904,12 @@ async def process_edit_tariff_device_price(
     state: FSMContext,
 ):
     """Обрабатывает новую цену за устройство."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -1973,10 +1924,9 @@ async def process_edit_tariff_device_price(
                 raise ValueError
         except ValueError:
             await message.answer(
-                texts.t(
-                    'ADMIN_TARIFF_DEVICE_PRICE_INVALID',
-                    'Введите корректное число (0 или больше).\n'
-                    'Для отключения докупки введите <code>0</code> или <code>-</code>',
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_INVALID_DEVICE_PRICE',
+                    'Введите корректное число (0 или больше).\nДля отключения докупки введите <code>0</code> или <code>-</code>',
                 ),
                 parse_mode='HTML',
             )
@@ -1988,7 +1938,7 @@ async def process_edit_tariff_device_price(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_DEVICE_PRICE_UPDATED', '✅ Цена за устройство изменена!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_DEVICE_PRICE_UPDATED', '✅ Цена за устройство изменена!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -2012,7 +1962,9 @@ async def start_edit_tariff_max_devices(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_max_devices)
@@ -2022,18 +1974,15 @@ async def start_edit_tariff_max_devices(
     if max_devices is not None and max_devices > 0:
         current_max = str(max_devices)
     else:
-        current_max = texts.t('ADMIN_TARIFF_MAX_DEVICES_UNLIMITED', '∞ (без лимита)')
+        current_max = get_texts(db_user.language).t('ADMIN_TARIFF_UNLIMITED', '∞ (без лимита)')
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_MAX_DEVICES_PROMPT',
-            '📱🔒 <b>Редактирование макс. устройств</b>\n\n'
-            'Текущее значение: <b>{current_max}</b>\n'
-            'Базовое кол-во устройств: <b>{device_limit}</b>\n\n'
-            'Введите максимальное количество устройств, которое пользователь может докупить.\n\n'
-            '• <code>0</code> или <code>-</code> — без ограничений\n'
-            '• Например: <code>5</code> = максимум 5 устройств на тарифе',
-        ).format(current_max=current_max, device_limit=tariff.device_limit),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_MAX_DEVICES',
+            '📱🔒 <b>Редактирование макс. устройств</b>\n\nТекущее значение: <b>{v0}</b>\nБазовое кол-во устройств: <b>{v1}</b>\n\nВведите максимальное количество устройств, которое пользователь может докупить.\n\n• <code>0</code> или <code>-</code> — без ограничений\n• Например: <code>5</code> = максимум 5 устройств на тарифе',
+        )
+        .format(v0=current_max, v1=tariff.device_limit),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -2051,13 +2000,12 @@ async def process_edit_tariff_max_devices(
     state: FSMContext,
 ):
     """Обрабатывает новое макс. кол-во устройств."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -2072,10 +2020,9 @@ async def process_edit_tariff_max_devices(
                 raise ValueError
         except ValueError:
             await message.answer(
-                texts.t(
-                    'ADMIN_TARIFF_MAX_DEVICES_INVALID',
-                    'Введите корректное число (1 или больше).\n'
-                    'Для снятия ограничения введите <code>0</code> или <code>-</code>',
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_INVALID_MAX_DEVICES',
+                    'Введите корректное число (1 или больше).\nДля снятия ограничения введите <code>0</code> или <code>-</code>',
                 ),
                 parse_mode='HTML',
             )
@@ -2087,7 +2034,7 @@ async def process_edit_tariff_max_devices(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_MAX_DEVICES_UPDATED', '✅ Макс. устройств изменено!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_MAX_DEVICES_UPDATED', '✅ Макс. устройств изменено!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -2111,7 +2058,9 @@ async def start_edit_tariff_trial_days(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_trial_days)
@@ -2119,21 +2068,21 @@ async def start_edit_tariff_trial_days(
 
     trial_days = getattr(tariff, 'trial_duration_days', None)
     if trial_days:
-        current_days = texts.t('ADMIN_TARIFF_TRIAL_DAYS_VALUE', '{trial_days} дней').format(trial_days=trial_days)
+        current_days = get_texts(db_user.language).t('ADMIN_TARIFF_DAY_COUNT', '{v0} дней').format(v0=trial_days)
     else:
-        current_days = texts.t(
-            'ADMIN_TARIFF_TRIAL_DAYS_DEFAULT', 'По умолчанию ({days} дней)'
-        ).format(days=settings.TRIAL_DURATION_DAYS)
+        current_days = (
+            get_texts(db_user.language)
+            .t('ADMIN_TARIFF_DEFAULT_TRIAL_DAYS', 'По умолчанию ({v0} дней)')
+            .format(v0=settings.TRIAL_DURATION_DAYS)
+        )
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_EDIT_TRIAL_DAYS_PROMPT',
-            '⏰ <b>Редактирование дней триала</b>\n\n'
-            'Текущее значение: <b>{current_days}</b>\n\n'
-            'Введите количество дней триала.\n\n'
-            '• <code>0</code> или <code>-</code> — использовать настройку по умолчанию ({default_days} дней)\n'
-            '• Например: <code>7</code> = 7 дней триала',
-        ).format(current_days=current_days, default_days=settings.TRIAL_DURATION_DAYS),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_TRIAL_DAYS',
+            '⏰ <b>Редактирование дней триала</b>\n\nТекущее значение: <b>{v0}</b>\n\nВведите количество дней триала.\n\n• <code>0</code> или <code>-</code> — использовать настройку по умолчанию ({v1} дней)\n• Например: <code>7</code> = 7 дней триала',
+        )
+        .format(v0=current_days, v1=settings.TRIAL_DURATION_DAYS),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_view:{tariff_id}')]]
         ),
@@ -2151,13 +2100,12 @@ async def process_edit_tariff_trial_days(
     state: FSMContext,
 ):
     """Обрабатывает новое количество дней триала."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -2172,10 +2120,9 @@ async def process_edit_tariff_trial_days(
                 raise ValueError
         except ValueError:
             await message.answer(
-                texts.t(
-                    'ADMIN_TARIFF_TRIAL_DAYS_INVALID',
-                    'Введите корректное число дней (1 или больше).\n'
-                    'Для использования настройки по умолчанию введите <code>0</code> или <code>-</code>',
+                get_texts(db_user.language).t(
+                    'ADMIN_TARIFF_INVALID_TRIAL_DAYS',
+                    'Введите корректное число дней (1 или больше).\nДля использования настройки по умолчанию введите <code>0</code> или <code>-</code>',
                 ),
                 parse_mode='HTML',
             )
@@ -2187,7 +2134,7 @@ async def process_edit_tariff_trial_days(
     subs_count = await get_tariff_subscriptions_count(db, tariff_id)
 
     await message.answer(
-        texts.t('ADMIN_TARIFF_TRIAL_DAYS_UPDATED', '✅ Дни триала изменены!\n\n')
+        get_texts(db_user.language).t('ADMIN_TARIFF_TRIAL_DAYS_UPDATED', '✅ Дни триала изменены!\n\n')
         + format_tariff_info(tariff, db_user.language, subs_count),
         reply_markup=get_tariff_view_keyboard(tariff, db_user.language),
         parse_mode='HTML',
@@ -2251,13 +2198,17 @@ async def start_edit_tariff_traffic_topup(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     # Проверяем, безлимитный ли тариф
     if tariff.is_unlimited_traffic:
         await callback.answer(
-            texts.t('ADMIN_TARIFF_TOPUP_UNLIMITED_UNAVAILABLE', 'Докупка недоступна для безлимитного тарифа'),
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_TOPUP_UNLIMITED_UNAVAILABLE', 'Докупка недоступна для безлимитного тарифа'
+            ),
             show_alert=True,
         )
         return
@@ -2268,25 +2219,29 @@ async def start_edit_tariff_traffic_topup(
 
     # Форматируем текущие настройки
     if is_enabled:
-        status = texts.t('ADMIN_TARIFF_TOPUP_STATUS_ENABLED', '✅ Включено')
+        status = get_texts(db_user.language).t('ADMIN_TARIFF_ENABLED_STATE', '✅ Включено')
         if packages:
             packages_display = '\n'.join(
-                texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
-                    gb=gb, price=format_price_kopeks(price)
-                )
+                get_texts(db_user.language)
+                .t('ADMIN_TARIFF_PACKAGE_LINE', '  • {v0} ГБ: {v1}')
+                .format(v0=gb, v1=format_price_kopeks(price))
                 for gb, price in sorted(packages.items())
             )
         else:
-            packages_display = texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_NONE', '  Пакеты не настроены')
+            packages_display = get_texts(db_user.language).t(
+                'ADMIN_TARIFF_PACKAGES_NOT_CONFIGURED', '  Пакеты не настроены'
+            )
     else:
-        status = texts.t('ADMIN_TARIFF_TOPUP_STATUS_DISABLED', '❌ Отключено')
+        status = get_texts(db_user.language).t('ADMIN_TARIFF_DISABLED_STATE', '❌ Отключено')
         packages_display = '  -'
 
     # Форматируем лимит
     if max_topup_traffic > 0:
-        max_limit_display = texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=max_topup_traffic)
+        max_limit_display = (
+            get_texts(db_user.language).t('ADMIN_TARIFF_TRAFFIC_VALUE', '{v0} ГБ').format(v0=max_topup_traffic)
+        )
     else:
-        max_limit_display = texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
+        max_limit_display = get_texts(db_user.language).t('ADMIN_TARIFF_NO_LIMIT', 'Без ограничений')
 
     buttons = []
 
@@ -2295,7 +2250,7 @@ async def start_edit_tariff_traffic_topup(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TOPUP_DISABLE_BUTTON', '❌ Отключить'),
+                    text=get_texts(db_user.language).t('ADMIN_TARIFF_DISABLE', '❌ Отключить'),
                     callback_data=f'admin_tariff_toggle_traffic_topup:{tariff_id}',
                 )
             ]
@@ -2304,7 +2259,7 @@ async def start_edit_tariff_traffic_topup(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TOPUP_ENABLE_BUTTON', '✅ Включить'),
+                    text=get_texts(db_user.language).t('ADMIN_TARIFF_ENABLE', '✅ Включить'),
                     callback_data=f'admin_tariff_toggle_traffic_topup:{tariff_id}',
                 )
             ]
@@ -2315,7 +2270,7 @@ async def start_edit_tariff_traffic_topup(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_BUTTON', '📦 Настроить пакеты'),
+                    text=get_texts(db_user.language).t('ADMIN_TARIFF_CONFIGURE_PACKAGES', '📦 Настроить пакеты'),
                     callback_data=f'admin_tariff_edit_topup_packages:{tariff_id}',
                 )
             ]
@@ -2323,7 +2278,7 @@ async def start_edit_tariff_traffic_topup(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TOPUP_MAX_BUTTON', '📊 Макс. лимит трафика'),
+                    text=get_texts(db_user.language).t('ADMIN_TARIFF_MAX_TRAFFIC', '📊 Макс. лимит трафика'),
                     callback_data=f'admin_tariff_edit_max_topup:{tariff_id}',
                 )
             ]
@@ -2332,19 +2287,12 @@ async def start_edit_tariff_traffic_topup(
     buttons.append([InlineKeyboardButton(text=texts.BACK, callback_data=f'admin_tariff_view:{tariff_id}')])
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_TOPUP_MENU',
-            '📈 <b>Докупка трафика для «{name}»</b>\n\n'
-            'Статус: {status}\n\n'
-            '<b>Пакеты:</b>\n{packages_display}\n\n'
-            '<b>Макс. лимит:</b> {max_limit_display}\n\n'
-            'Пользователи смогут докупать трафик по заданным ценам.',
-        ).format(
-            name=html.escape(tariff.name),
-            status=status,
-            packages_display=packages_display,
-            max_limit_display=max_limit_display,
-        ),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_TOPUP_DETAIL',
+            '📈 <b>Докупка трафика для «{v0}»</b>\n\nСтатус: {v1}\n\n<b>Пакеты:</b>\n{v2}\n\n<b>Макс. лимит:</b> {v3}\n\nПользователи смогут докупать трафик по заданным ценам.',
+        )
+        .format(v0=html.escape(tariff.name), v1=status, v2=packages_display, v3=max_limit_display),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )
@@ -2359,12 +2307,13 @@ async def toggle_tariff_traffic_topup(
     db: AsyncSession,
 ):
     """Переключает включение/выключение докупки трафика."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     is_enabled = getattr(tariff, 'traffic_topup_enabled', False)
@@ -2373,12 +2322,14 @@ async def toggle_tariff_traffic_topup(
     tariff = await update_tariff(db, tariff, traffic_topup_enabled=new_value)
 
     status_text = (
-        texts.t('ADMIN_TARIFF_TOPUP_TOGGLED_ON', 'включена')
+        get_texts(db_user.language).t('ADMIN_TARIFF_TOPUP_ENABLED', 'включена')
         if new_value
-        else texts.t('ADMIN_TARIFF_TOPUP_TOGGLED_OFF', 'отключена')
+        else get_texts(db_user.language).t('ADMIN_TARIFF_TOPUP_DISABLED', 'отключена')
     )
     await callback.answer(
-        texts.t('ADMIN_TARIFF_TOPUP_TOGGLED', 'Докупка трафика {status}').format(status=status_text)
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_TOPUP_STATUS_CHANGED', 'Докупка трафика {v0}')
+        .format(v0=status_text)
     )
 
     # Перерисовываем меню
@@ -2387,25 +2338,29 @@ async def toggle_tariff_traffic_topup(
     max_topup_traffic = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
 
     if new_value:
-        status = texts.t('ADMIN_TARIFF_TOPUP_STATUS_ENABLED', '✅ Включено')
+        status = get_texts(db_user.language).t('ADMIN_TARIFF_ENABLED_STATE', '✅ Включено')
         if packages:
             packages_display = '\n'.join(
-                texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
-                    gb=gb, price=format_price_kopeks(price)
-                )
+                get_texts(db_user.language)
+                .t('ADMIN_TARIFF_PACKAGE_LINE', '  • {v0} ГБ: {v1}')
+                .format(v0=gb, v1=format_price_kopeks(price))
                 for gb, price in sorted(packages.items())
             )
         else:
-            packages_display = texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_NONE', '  Пакеты не настроены')
+            packages_display = get_texts(db_user.language).t(
+                'ADMIN_TARIFF_PACKAGES_NOT_CONFIGURED', '  Пакеты не настроены'
+            )
     else:
-        status = texts.t('ADMIN_TARIFF_TOPUP_STATUS_DISABLED', '❌ Отключено')
+        status = get_texts(db_user.language).t('ADMIN_TARIFF_DISABLED_STATE', '❌ Отключено')
         packages_display = '  -'
 
     # Форматируем лимит
     if max_topup_traffic > 0:
-        max_limit_display = texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=max_topup_traffic)
+        max_limit_display = (
+            get_texts(db_user.language).t('ADMIN_TARIFF_TRAFFIC_VALUE', '{v0} ГБ').format(v0=max_topup_traffic)
+        )
     else:
-        max_limit_display = texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
+        max_limit_display = get_texts(db_user.language).t('ADMIN_TARIFF_NO_LIMIT', 'Без ограничений')
 
     buttons = []
 
@@ -2413,7 +2368,7 @@ async def toggle_tariff_traffic_topup(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TOPUP_DISABLE_BUTTON', '❌ Отключить'),
+                    text=get_texts(db_user.language).t('ADMIN_TARIFF_DISABLE', '❌ Отключить'),
                     callback_data=f'admin_tariff_toggle_traffic_topup:{tariff_id}',
                 )
             ]
@@ -2421,7 +2376,7 @@ async def toggle_tariff_traffic_topup(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_BUTTON', '📦 Настроить пакеты'),
+                    text=get_texts(db_user.language).t('ADMIN_TARIFF_CONFIGURE_PACKAGES', '📦 Настроить пакеты'),
                     callback_data=f'admin_tariff_edit_topup_packages:{tariff_id}',
                 )
             ]
@@ -2429,7 +2384,7 @@ async def toggle_tariff_traffic_topup(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TOPUP_MAX_BUTTON', '📊 Макс. лимит трафика'),
+                    text=get_texts(db_user.language).t('ADMIN_TARIFF_MAX_TRAFFIC', '📊 Макс. лимит трафика'),
                     callback_data=f'admin_tariff_edit_max_topup:{tariff_id}',
                 )
             ]
@@ -2438,7 +2393,7 @@ async def toggle_tariff_traffic_topup(
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=texts.t('ADMIN_TARIFF_TOPUP_ENABLE_BUTTON', '✅ Включить'),
+                    text=get_texts(db_user.language).t('ADMIN_TARIFF_ENABLE', '✅ Включить'),
                     callback_data=f'admin_tariff_toggle_traffic_topup:{tariff_id}',
                 )
             ]
@@ -2448,19 +2403,12 @@ async def toggle_tariff_traffic_topup(
 
     try:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_TARIFF_TOPUP_MENU',
-                '📈 <b>Докупка трафика для «{name}»</b>\n\n'
-                'Статус: {status}\n\n'
-                '<b>Пакеты:</b>\n{packages_display}\n\n'
-                '<b>Макс. лимит:</b> {max_limit_display}\n\n'
-                'Пользователи смогут докупать трафик по заданным ценам.',
-            ).format(
-                name=html.escape(tariff.name),
-                status=status,
-                packages_display=packages_display,
-                max_limit_display=max_limit_display,
-            ),
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_TOPUP_DETAIL',
+                '📈 <b>Докупка трафика для «{v0}»</b>\n\nСтатус: {v1}\n\n<b>Пакеты:</b>\n{v2}\n\n<b>Макс. лимит:</b> {v3}\n\nПользователи смогут докупать трафик по заданным ценам.',
+            )
+            .format(v0=html.escape(tariff.name), v1=status, v2=packages_display, v3=max_limit_display),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode='HTML',
         )
@@ -2482,7 +2430,9 @@ async def start_edit_traffic_topup_packages(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_traffic_topup_packages)
@@ -2493,29 +2443,21 @@ async def start_edit_traffic_topup_packages(
 
     if packages:
         packages_display = '\n'.join(
-            texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
-                gb=gb, price=format_price_kopeks(price)
-            )
+            get_texts(db_user.language)
+            .t('ADMIN_TARIFF_PACKAGE_LINE', '  • {v0} ГБ: {v1}')
+            .format(v0=gb, v1=format_price_kopeks(price))
             for gb, price in sorted(packages.items())
         )
     else:
-        packages_display = texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_NOT_SET', '  Не настроены')
+        packages_display = get_texts(db_user.language).t('ADMIN_TARIFF_NOT_CONFIGURED', '  Не настроены')
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_TOPUP_PACKAGES_PROMPT',
-            '📦 <b>Настройка пакетов докупки трафика</b>\n\n'
-            'Тариф: <b>{name}</b>\n\n'
-            '<b>Текущие пакеты:</b>\n{packages_display}\n\n'
-            'Введите пакеты в формате:\n'
-            '<code>{current_packages}</code>\n\n'
-            '(ГБ:цена_в_копейках, через запятую)\n'
-            'Например: <code>5:5000, 10:9000</code> = 5ГБ за 50 تومان, 10ГБ за 90 تومان',
-        ).format(
-            name=html.escape(tariff.name),
-            packages_display=packages_display,
-            current_packages=current_packages,
-        ),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_PACKAGES',
+            '📦 <b>Настройка пакетов докупки трафика</b>\n\nТариф: <b>{v0}</b>\n\n<b>Текущие пакеты:</b>\n{v1}\n\nВведите пакеты в формате:\n<code>{v2}</code>\n\n(ГБ:цена_в_копейках, через запятую)\nНапример: <code>5:5000, 10:9000</code> = 5ГБ за 50₽, 10ГБ за 90₽',
+        )
+        .format(v0=html.escape(tariff.name), v1=packages_display, v2=current_packages),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_edit_traffic_topup:{tariff_id}')]
@@ -2535,23 +2477,20 @@ async def process_edit_traffic_topup_packages(
     state: FSMContext,
 ):
     """Обрабатывает новые пакеты докупки трафика."""
-    texts = get_texts(db_user.language)
     data = await state.get_data()
     tariff_id = data.get('tariff_id')
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
     if not message.text:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_TOPUP_PACKAGES_NEED_TEXT',
-                'Пожалуйста, отправьте текстовое сообщение.\n\n'
-                'Формат: <code>ГБ:цена_в_копейках</code>\n'
-                'Пример: <code>5:5000, 10:9000, 20:15000</code>',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_PACKAGES_TEXT_REQUIRED',
+                'Пожалуйста, отправьте текстовое сообщение.\n\nФормат: <code>ГБ:цена_в_копейках</code>\nПример: <code>5:5000, 10:9000, 20:15000</code>',
             ),
             parse_mode='HTML',
         )
@@ -2561,11 +2500,9 @@ async def process_edit_traffic_topup_packages(
 
     if not packages:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_TOPUP_PACKAGES_PARSE_FAILED',
-                'Не удалось распознать пакеты.\n\n'
-                'Формат: <code>ГБ:цена_в_копейках</code>\n'
-                'Пример: <code>5:5000, 10:9000, 20:15000</code>',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_INVALID_PACKAGES',
+                'Не удалось распознать пакеты.\n\nФормат: <code>ГБ:цена_в_копейках</code>\nПример: <code>5:5000, 10:9000, 20:15000</code>',
             ),
             parse_mode='HTML',
         )
@@ -2580,34 +2517,34 @@ async def process_edit_traffic_topup_packages(
     # Показываем обновленное меню
     texts = get_texts(db_user.language)
     packages_display = '\n'.join(
-        texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
-            gb=gb, price=format_price_kopeks(price)
-        )
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_PACKAGE_LINE', '  • {v0} ГБ: {v1}')
+        .format(v0=gb, v1=format_price_kopeks(price))
         for gb, price in sorted(packages.items())
     )
     max_topup_traffic = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
     max_limit_display = (
-        texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=max_topup_traffic)
+        get_texts(db_user.language).t('ADMIN_TARIFF_TRAFFIC_VALUE', '{v0} ГБ').format(v0=max_topup_traffic)
         if max_topup_traffic > 0
-        else texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
+        else get_texts(db_user.language).t('ADMIN_TARIFF_NO_LIMIT', 'Без ограничений')
     )
 
     buttons = [
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_TOPUP_DISABLE_BUTTON', '❌ Отключить'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_DISABLE', '❌ Отключить'),
                 callback_data=f'admin_tariff_toggle_traffic_topup:{tariff_id}',
             )
         ],
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_BUTTON', '📦 Настроить пакеты'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CONFIGURE_PACKAGES', '📦 Настроить пакеты'),
                 callback_data=f'admin_tariff_edit_topup_packages:{tariff_id}',
             )
         ],
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_TOPUP_MAX_BUTTON', '📊 Макс. лимит трафика'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_MAX_TRAFFIC', '📊 Макс. лимит трафика'),
                 callback_data=f'admin_tariff_edit_max_topup:{tariff_id}',
             )
         ],
@@ -2615,19 +2552,12 @@ async def process_edit_traffic_topup_packages(
     ]
 
     await message.answer(
-        texts.t(
-            'ADMIN_TARIFF_TOPUP_PACKAGES_UPDATED',
-            '✅ <b>Пакеты обновлены!</b>\n\n'
-            '📈 <b>Докупка трафика для «{name}»</b>\n\n'
-            'Статус: ✅ Включено\n\n'
-            '<b>Пакеты:</b>\n{packages_display}\n\n'
-            '<b>Макс. лимит:</b> {max_limit_display}\n\n'
-            'Пользователи смогут докупать трафик по заданным ценам.',
-        ).format(
-            name=html.escape(tariff.name),
-            packages_display=packages_display,
-            max_limit_display=max_limit_display,
-        ),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_PACKAGES_UPDATED',
+            '✅ <b>Пакеты обновлены!</b>\n\n📈 <b>Докупка трафика для «{v0}»</b>\n\nСтатус: ✅ Включено\n\n<b>Пакеты:</b>\n{v1}\n\n<b>Макс. лимит:</b> {v2}\n\nПользователи смогут докупать трафик по заданным ценам.',
+        )
+        .format(v0=html.escape(tariff.name), v1=packages_display, v2=max_limit_display),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )
@@ -2650,7 +2580,9 @@ async def start_edit_max_topup_traffic(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await state.set_state(AdminStates.editing_tariff_max_topup_traffic)
@@ -2658,20 +2590,19 @@ async def start_edit_max_topup_traffic(
 
     current_limit = getattr(tariff, 'max_topup_traffic_gb', 0) or 0
     if current_limit > 0:
-        current_display = texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=current_limit)
+        current_display = (
+            get_texts(db_user.language).t('ADMIN_TARIFF_TRAFFIC_VALUE', '{v0} ГБ').format(v0=current_limit)
+        )
     else:
-        current_display = texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
+        current_display = get_texts(db_user.language).t('ADMIN_TARIFF_NO_LIMIT', 'Без ограничений')
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_MAX_TOPUP_PROMPT',
-            '📊 <b>Максимальный лимит трафика</b>\n\n'
-            'Тариф: <b>{name}</b>\n'
-            'Текущий лимит: <b>{current_display}</b>\n\n'
-            'Введите максимальный общий объем трафика (в ГБ), который может быть на подписке после всех докупок.\n\n'
-            '• Например, если тариф дает 100 ГБ и лимит 200 ГБ — пользователь сможет докупить еще 100 ГБ\n'
-            '• Введите <code>0</code> для снятия ограничения',
-        ).format(name=html.escape(tariff.name), current_display=current_display),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_MAX_TRAFFIC',
+            '📊 <b>Максимальный лимит трафика</b>\n\nТариф: <b>{v0}</b>\nТекущий лимит: <b>{v1}</b>\n\nВведите максимальный общий объем трафика (в ГБ), который может быть на подписке после всех докупок.\n\n• Например, если тариф дает 100 ГБ и лимит 200 ГБ — пользователь сможет докупить еще 100 ГБ\n• Введите <code>0</code> для снятия ограничения',
+        )
+        .format(v0=html.escape(tariff.name), v1=current_display),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text=texts.CANCEL, callback_data=f'admin_tariff_edit_traffic_topup:{tariff_id}')]
@@ -2697,7 +2628,7 @@ async def process_edit_max_topup_traffic(
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await message.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
+        await message.answer(get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'))
         await state.clear()
         return
 
@@ -2709,11 +2640,9 @@ async def process_edit_max_topup_traffic(
             raise ValueError('Negative value')
     except ValueError:
         await message.answer(
-            texts.t(
-                'ADMIN_TARIFF_MAX_TOPUP_INVALID',
-                'Введите целое число (0 или больше).\n\n'
-                '• <code>0</code> — без ограничений\n'
-                '• <code>200</code> — максимум 200 ГБ на подписке',
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_INVALID_MAX_TRAFFIC',
+                'Введите целое число (0 или больше).\n\n• <code>0</code> — без ограничений\n• <code>200</code> — максимум 200 ГБ на подписке',
             ),
             parse_mode='HTML',
         )
@@ -2726,36 +2655,38 @@ async def process_edit_max_topup_traffic(
     packages = tariff.get_traffic_topup_packages() if hasattr(tariff, 'get_traffic_topup_packages') else {}
     if packages:
         packages_display = '\n'.join(
-            texts.t('ADMIN_TARIFF_TOPUP_PACKAGE_LINE', '  • {gb} ГБ: {price}').format(
-                gb=gb, price=format_price_kopeks(price)
-            )
+            get_texts(db_user.language)
+            .t('ADMIN_TARIFF_PACKAGE_LINE', '  • {v0} ГБ: {v1}')
+            .format(v0=gb, v1=format_price_kopeks(price))
             for gb, price in sorted(packages.items())
         )
     else:
-        packages_display = texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_NONE', '  Пакеты не настроены')
+        packages_display = get_texts(db_user.language).t(
+            'ADMIN_TARIFF_PACKAGES_NOT_CONFIGURED', '  Пакеты не настроены'
+        )
 
     max_limit_display = (
-        texts.t('ADMIN_TARIFF_GB_VALUE', '{gb} ГБ').format(gb=new_limit)
+        get_texts(db_user.language).t('ADMIN_TARIFF_TRAFFIC_VALUE', '{v0} ГБ').format(v0=new_limit)
         if new_limit > 0
-        else texts.t('ADMIN_TARIFF_TOPUP_MAX_UNLIMITED', 'Без ограничений')
+        else get_texts(db_user.language).t('ADMIN_TARIFF_NO_LIMIT', 'Без ограничений')
     )
 
     buttons = [
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_TOPUP_DISABLE_BUTTON', '❌ Отключить'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_DISABLE', '❌ Отключить'),
                 callback_data=f'admin_tariff_toggle_traffic_topup:{tariff_id}',
             )
         ],
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_TOPUP_PACKAGES_BUTTON', '📦 Настроить пакеты'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CONFIGURE_PACKAGES', '📦 Настроить пакеты'),
                 callback_data=f'admin_tariff_edit_topup_packages:{tariff_id}',
             )
         ],
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_TOPUP_MAX_BUTTON', '📊 Макс. лимит трафика'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_MAX_TRAFFIC', '📊 Макс. лимит трафика'),
                 callback_data=f'admin_tariff_edit_max_topup:{tariff_id}',
             )
         ],
@@ -2763,19 +2694,12 @@ async def process_edit_max_topup_traffic(
     ]
 
     await message.answer(
-        texts.t(
-            'ADMIN_TARIFF_MAX_TOPUP_UPDATED',
-            '✅ <b>Лимит обновлен!</b>\n\n'
-            '📈 <b>Докупка трафика для «{name}»</b>\n\n'
-            'Статус: ✅ Включено\n\n'
-            '<b>Пакеты:</b>\n{packages_display}\n\n'
-            '<b>Макс. лимит:</b> {max_limit_display}\n\n'
-            'Пользователи смогут докупать трафик по заданным ценам.',
-        ).format(
-            name=html.escape(tariff.name),
-            packages_display=packages_display,
-            max_limit_display=max_limit_display,
-        ),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_MAX_TRAFFIC_UPDATED',
+            '✅ <b>Лимит обновлен!</b>\n\n📈 <b>Докупка трафика для «{v0}»</b>\n\nСтатус: ✅ Включено\n\n<b>Пакеты:</b>\n{v1}\n\n<b>Макс. лимит:</b> {v2}\n\nПользователи смогут докупать трафик по заданным ценам.',
+        )
+        .format(v0=html.escape(tariff.name), v1=packages_display, v2=max_limit_display),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )
@@ -2792,12 +2716,14 @@ async def confirm_delete_tariff(
     db: AsyncSession,
 ):
     """Запрашивает подтверждение удаления тарифа."""
-    texts = get_texts(db_user.language)
+    get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     active_count = await get_active_subscriptions_count_by_tariff_id(db, tariff_id)
@@ -2805,19 +2731,17 @@ async def confirm_delete_tariff(
     if active_count > 0:
         total_count = await get_tariff_subscriptions_count(db, tariff_id)
         await callback.message.edit_text(
-            texts.t(
+            get_texts(db_user.language)
+            .t(
                 'ADMIN_TARIFF_DELETE_ACTIVE_BLOCKED',
-                '🗑️ <b>Удаление тарифа</b>\n\n'
-                'Невозможно удалить тариф <b>{name}</b>.\n\n'
-                '⚠️ <b>Активных подписок:</b> {active_count} (всего: {total_count})\n'
-                'Сначала деактивируйте тариф и дождитесь окончания всех активных подписок, '
-                'либо переведите подписки на другой тариф.',
-            ).format(name=html.escape(tariff.name), active_count=active_count, total_count=total_count),
+                '🗑️ <b>Удаление тарифа</b>\n\nНевозможно удалить тариф <b>{v0}</b>.\n\n⚠️ <b>Активных подписок:</b> {v1} (всего: {v2})\nСначала деактивируйте тариф и дождитесь окончания всех активных подписок, либо переведите подписки на другой тариф.',
+            )
+            .format(v0=html.escape(tariff.name), v1=active_count, v2=total_count),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('ADMIN_TARIFF_BACK_TO_TARIFF_BUTTON', '◀️ Назад к тарифу'),
+                            text=get_texts(db_user.language).t('ADMIN_TARIFF_BACK_TO_TARIFF', '◀️ Назад к тарифу'),
                             callback_data=f'admin_tariff_view:{tariff_id}',
                         )
                     ],
@@ -2832,25 +2756,31 @@ async def confirm_delete_tariff(
 
     warning = ''
     if subs_count > 0:
-        warning = texts.t(
-            'ADMIN_TARIFF_DELETE_INACTIVE_WARNING',
-            '\n\n⚠️ <b>Внимание!</b> На этом тарифе {subs_count} неактивных подписок.\nОни потеряют привязку к тарифу.',
-        ).format(subs_count=subs_count)
+        warning = (
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_DELETE_INACTIVE_WARNING',
+                '\n\n⚠️ <b>Внимание!</b> На этом тарифе {v0} неактивных подписок.\nОни потеряют привязку к тарифу.',
+            )
+            .format(v0=subs_count)
+        )
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_DELETE_CONFIRM',
-            '🗑️ <b>Удаление тарифа</b>\n\nВы действительно хотите удалить тариф <b>{name}</b>?{warning}',
-        ).format(name=html.escape(tariff.name), warning=warning),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_DELETE_CONFIRM_PROMPT',
+            '🗑️ <b>Удаление тарифа</b>\n\nВы действительно хотите удалить тариф <b>{v0}</b>?{v1}',
+        )
+        .format(v0=html.escape(tariff.name), v1=warning),
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text=texts.t('ADMIN_TARIFF_DELETE_YES_BUTTON', '✅ Да, удалить'),
+                        text=get_texts(db_user.language).t('ADMIN_TARIFF_DELETE_CONFIRM', '✅ Да, удалить'),
                         callback_data=f'admin_tariff_delete_confirm:{tariff_id}',
                     ),
                     InlineKeyboardButton(
-                        text=texts.t('ADMIN_TARIFF_CANCEL_BUTTON', '❌ Отмена'),
+                        text=get_texts(db_user.language).t('ADMIN_TARIFF_CANCEL', '❌ Отмена'),
                         callback_data=f'admin_tariff_view:{tariff_id}',
                     ),
                 ]
@@ -2874,17 +2804,21 @@ async def delete_tariff_confirmed(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     # Защита от удаления тарифа с активными подписками (FK RESTRICT)
     active_count = await get_active_subscriptions_count_by_tariff_id(db, tariff.id)
     if active_count > 0:
         await callback.answer(
-            texts.t(
+            get_texts(db_user.language)
+            .t(
                 'ADMIN_TARIFF_DELETE_ACTIVE_ALERT',
-                'Невозможно удалить тариф: {active_count} активных подписок. Сначала деактивируйте тариф.',
-            ).format(active_count=active_count),
+                'Невозможно удалить тариф: {v0} активных подписок. Сначала деактивируйте тариф.',
+            )
+            .format(v0=active_count),
             show_alert=True,
         )
         return
@@ -2893,7 +2827,7 @@ async def delete_tariff_confirmed(
     await delete_tariff(db, tariff)
 
     await callback.answer(
-        texts.t('ADMIN_TARIFF_DELETED_ALERT', 'Тариф «{name}» удален').format(name=tariff_name),
+        get_texts(db_user.language).t('ADMIN_TARIFF_DELETED', 'Тариф «{v0}» удален').format(v0=tariff_name),
         show_alert=True,
     )
 
@@ -2902,12 +2836,14 @@ async def delete_tariff_confirmed(
 
     if not tariffs_data:
         await callback.message.edit_text(
-            texts.t('ADMIN_TARIFF_DELETE_LIST_EMPTY', '📦 <b>Тарифы</b>\n\nТарифы ещё не созданы.'),
+            get_texts(db_user.language).t(
+                'ADMIN_TARIFF_EMPTY_LIST_SHORT', '📦 <b>Тарифы</b>\n\nТарифы ещё не созданы.'
+            ),
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text=texts.t('ADMIN_TARIFF_CREATE_BUTTON', '➕ Создать тариф'),
+                            text=get_texts(db_user.language).t('ADMIN_TARIFF_BUTTON_CREATE', '➕ Создать тариф'),
                             callback_data='admin_tariff_create',
                         )
                     ],
@@ -2922,10 +2858,9 @@ async def delete_tariff_confirmed(
     page_data = tariffs_data[:ITEMS_PER_PAGE]
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_LIST_AFTER_DELETE',
-            '📦 <b>Тарифы</b>\n\n✅ Тариф «{name}» удален\n\nВсего: {total}',
-        ).format(name=tariff_name, total=len(tariffs_data)),
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_DELETED_LIST', '📦 <b>Тарифы</b>\n\n✅ Тариф «{v0}» удален\n\nВсего: {v1}')
+        .format(v0=tariff_name, v1=len(tariffs_data)),
         reply_markup=get_tariffs_list_keyboard(page_data, db_user.language, 0, total_pages),
         parse_mode='HTML',
     )
@@ -2948,13 +2883,17 @@ async def start_edit_tariff_squads(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     squads, _ = await get_all_server_squads(db, limit=10000)
 
     if not squads:
-        await callback.answer(texts.t('ADMIN_TARIFF_SQUADS_NONE_AVAILABLE', 'Нет доступных серверов'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NO_SERVERS', 'Нет доступных серверов'), show_alert=True
+        )
         return
 
     current_squads = set(tariff.allowed_squads or [])
@@ -2975,11 +2914,11 @@ async def start_edit_tariff_squads(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_SQUADS_CLEAR_ALL_BUTTON', '🔄 Очистить все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CLEAR_ALL', '🔄 Очистить все'),
                 callback_data=f'admin_tariff_clear_squads:{tariff_id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_SQUADS_SELECT_ALL_BUTTON', '✅ Выбрать все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_SELECT_ALL', '✅ Выбрать все'),
                 callback_data=f'admin_tariff_select_all_squads:{tariff_id}',
             ),
         ]
@@ -2989,13 +2928,12 @@ async def start_edit_tariff_squads(
     selected_count = len(current_squads)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_SQUADS_MENU',
-            '🌐 <b>Серверы для тарифа «{name}»</b>\n\n'
-            'Выбрано: {selected} из {total}\n\n'
-            'Если не выбран ни один сервер - доступны все.\n'
-            'Нажмите на сервер для выбора/отмены:',
-        ).format(name=html.escape(tariff.name), selected=selected_count, total=len(squads)),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_SELECT_SERVERS',
+            '🌐 <b>Серверы для тарифа «{v0}»</b>\n\nВыбрано: {v1} из {v2}\n\nЕсли не выбран ни один сервер - доступны все.\nНажмите на сервер для выбора/отмены:',
+        )
+        .format(v0=html.escape(tariff.name), v1=selected_count, v2=len(squads)),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )
@@ -3014,11 +2952,11 @@ async def toggle_tariff_squad(
     tariff_id = int(parts[1])
     squad_uuid = parts[2]
 
-    texts = get_texts(db_user.language)
-
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     current_squads = set(tariff.allowed_squads or [])
@@ -3050,11 +2988,11 @@ async def toggle_tariff_squad(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_SQUADS_CLEAR_ALL_BUTTON', '🔄 Очистить все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CLEAR_ALL', '🔄 Очистить все'),
                 callback_data=f'admin_tariff_clear_squads:{tariff_id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_SQUADS_SELECT_ALL_BUTTON', '✅ Выбрать все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_SELECT_ALL', '✅ Выбрать все'),
                 callback_data=f'admin_tariff_select_all_squads:{tariff_id}',
             ),
         ]
@@ -3063,13 +3001,12 @@ async def toggle_tariff_squad(
 
     try:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_TARIFF_SQUADS_MENU',
-                '🌐 <b>Серверы для тарифа «{name}»</b>\n\n'
-                'Выбрано: {selected} из {total}\n\n'
-                'Если не выбран ни один сервер - доступны все.\n'
-                'Нажмите на сервер для выбора/отмены:',
-            ).format(name=html.escape(tariff.name), selected=len(current_squads), total=len(squads)),
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_SELECT_SERVERS',
+                '🌐 <b>Серверы для тарифа «{v0}»</b>\n\nВыбрано: {v1} из {v2}\n\nЕсли не выбран ни один сервер - доступны все.\nНажмите на сервер для выбора/отмены:',
+            )
+            .format(v0=html.escape(tariff.name), v1=len(current_squads), v2=len(squads)),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode='HTML',
         )
@@ -3084,10 +3021,9 @@ async def toggle_tariff_squad(
     propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, list(current_squads))
     if propagate_result.failed_ids:
         await callback.message.answer(
-            texts.t(
-                'ADMIN_TARIFF_SQUADS_PROPAGATE_FAILED',
-                '⚠️ {failed} из {total} подписок не синхронизированы с RemnaWave',
-            ).format(failed=len(propagate_result.failed_ids), total=propagate_result.total),
+            get_texts(db_user.language)
+            .t('ADMIN_TARIFF_SYNC_FAILED', '⚠️ {v0} из {v1} подписок не синхронизированы с RemnaWave')
+            .format(v0=len(propagate_result.failed_ids), v1=propagate_result.total),
         )
 
 
@@ -3100,15 +3036,16 @@ async def clear_tariff_squads(
 ):
     """Очищает список серверов тарифа."""
     tariff_id = int(callback.data.split(':')[1])
-    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     tariff = await update_tariff(db, tariff, allowed_squads=[])
-    await callback.answer(texts.t('ADMIN_TARIFF_SQUADS_CLEARED_ALERT', 'Все серверы очищены'))
+    await callback.answer(get_texts(db_user.language).t('ADMIN_TARIFF_SERVERS_CLEARED', 'Все серверы очищены'))
 
     # Перерисовываем меню
     squads, _ = await get_all_server_squads(db, limit=10000)
@@ -3128,11 +3065,11 @@ async def clear_tariff_squads(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_SQUADS_CLEAR_ALL_BUTTON', '🔄 Очистить все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CLEAR_ALL', '🔄 Очистить все'),
                 callback_data=f'admin_tariff_clear_squads:{tariff_id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_SQUADS_SELECT_ALL_BUTTON', '✅ Выбрать все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_SELECT_ALL', '✅ Выбрать все'),
                 callback_data=f'admin_tariff_select_all_squads:{tariff_id}',
             ),
         ]
@@ -3141,13 +3078,12 @@ async def clear_tariff_squads(
 
     try:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_TARIFF_SQUADS_MENU',
-                '🌐 <b>Серверы для тарифа «{name}»</b>\n\n'
-                'Выбрано: {selected} из {total}\n\n'
-                'Если не выбран ни один сервер - доступны все.\n'
-                'Нажмите на сервер для выбора/отмены:',
-            ).format(name=html.escape(tariff.name), selected=0, total=len(squads)),
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_SELECT_SERVERS_EMPTY',
+                '🌐 <b>Серверы для тарифа «{v0}»</b>\n\nВыбрано: 0 из {v1}\n\nЕсли не выбран ни один сервер - доступны все.\nНажмите на сервер для выбора/отмены:',
+            )
+            .format(v0=html.escape(tariff.name), v1=len(squads)),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode='HTML',
         )
@@ -3160,10 +3096,9 @@ async def clear_tariff_squads(
     propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, [])
     if propagate_result.failed_ids:
         await callback.message.answer(
-            texts.t(
-                'ADMIN_TARIFF_SQUADS_PROPAGATE_FAILED',
-                '⚠️ {failed} из {total} подписок не синхронизированы с RemnaWave',
-            ).format(failed=len(propagate_result.failed_ids), total=propagate_result.total),
+            get_texts(db_user.language)
+            .t('ADMIN_TARIFF_SYNC_FAILED', '⚠️ {v0} из {v1} подписок не синхронизированы с RemnaWave')
+            .format(v0=len(propagate_result.failed_ids), v1=propagate_result.total),
         )
 
 
@@ -3176,18 +3111,19 @@ async def select_all_tariff_squads(
 ):
     """Выбирает все серверы для тарифа."""
     tariff_id = int(callback.data.split(':')[1])
-    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     squads, _ = await get_all_server_squads(db, limit=10000)
     all_uuids = [s.squad_uuid for s in squads if s.squad_uuid]
 
     tariff = await update_tariff(db, tariff, allowed_squads=all_uuids)
-    await callback.answer(texts.t('ADMIN_TARIFF_SQUADS_SELECTED_ALL_ALERT', 'Все серверы выбраны'))
+    await callback.answer(get_texts(db_user.language).t('ADMIN_TARIFF_SERVERS_SELECTED', 'Все серверы выбраны'))
 
     texts = get_texts(db_user.language)
 
@@ -3205,11 +3141,11 @@ async def select_all_tariff_squads(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_SQUADS_CLEAR_ALL_BUTTON', '🔄 Очистить все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CLEAR_ALL', '🔄 Очистить все'),
                 callback_data=f'admin_tariff_clear_squads:{tariff_id}',
             ),
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_SQUADS_SELECT_ALL_BUTTON', '✅ Выбрать все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_SELECT_ALL', '✅ Выбрать все'),
                 callback_data=f'admin_tariff_select_all_squads:{tariff_id}',
             ),
         ]
@@ -3218,13 +3154,12 @@ async def select_all_tariff_squads(
 
     try:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_TARIFF_SQUADS_MENU',
-                '🌐 <b>Серверы для тарифа «{name}»</b>\n\n'
-                'Выбрано: {selected} из {total}\n\n'
-                'Если не выбран ни один сервер - доступны все.\n'
-                'Нажмите на сервер для выбора/отмены:',
-            ).format(name=html.escape(tariff.name), selected=len(squads), total=len(squads)),
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_SELECT_SERVERS',
+                '🌐 <b>Серверы для тарифа «{v0}»</b>\n\nВыбрано: {v1} из {v2}\n\nЕсли не выбран ни один сервер - доступны все.\nНажмите на сервер для выбора/отмены:',
+            )
+            .format(v0=html.escape(tariff.name), v1=len(squads), v2=len(squads)),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode='HTML',
         )
@@ -3237,10 +3172,9 @@ async def select_all_tariff_squads(
     propagate_result = await SubscriptionService().propagate_tariff_squads(db, tariff.id, all_uuids)
     if propagate_result.failed_ids:
         await callback.message.answer(
-            texts.t(
-                'ADMIN_TARIFF_SQUADS_PROPAGATE_FAILED',
-                '⚠️ {failed} из {total} подписок не синхронизированы с RemnaWave',
-            ).format(failed=len(propagate_result.failed_ids), total=propagate_result.total),
+            get_texts(db_user.language)
+            .t('ADMIN_TARIFF_SYNC_FAILED', '⚠️ {v0} из {v1} подписок не синхронизированы с RemnaWave')
+            .format(v0=len(propagate_result.failed_ids), v1=propagate_result.total),
         )
 
 
@@ -3260,13 +3194,17 @@ async def start_edit_tariff_promo_groups(
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     promo_groups_data = await get_promo_groups_with_counts(db)
 
     if not promo_groups_data:
-        await callback.answer(texts.t('ADMIN_TARIFF_PROMO_GROUPS_NONE', 'Нет промогрупп'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NO_PROMO_GROUPS', 'Нет промогрупп'), show_alert=True
+        )
         return
 
     current_groups = {pg.id for pg in (tariff.allowed_promo_groups or [])}
@@ -3287,7 +3225,7 @@ async def start_edit_tariff_promo_groups(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_PROMO_CLEAR_ALL_BUTTON', '🔄 Очистить все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CLEAR_ALL', '🔄 Очистить все'),
                 callback_data=f'admin_tariff_clear_promo:{tariff_id}',
             ),
         ]
@@ -3297,13 +3235,12 @@ async def start_edit_tariff_promo_groups(
     selected_count = len(current_groups)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_PROMO_GROUPS_MENU',
-            '👥 <b>Промогруппы для тарифа «{name}»</b>\n\n'
-            'Выбрано: {selected}\n\n'
-            'Если не выбрана ни одна группа - тариф доступен всем.\n'
-            'Выберите группы, которым доступен этот тариф:',
-        ).format(name=html.escape(tariff.name), selected=selected_count),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_SELECT_PROMO_GROUPS',
+            '👥 <b>Промогруппы для тарифа «{v0}»</b>\n\nВыбрано: {v1}\n\nЕсли не выбрана ни одна группа - тариф доступен всем.\nВыберите группы, которым доступен этот тариф:',
+        )
+        .format(v0=html.escape(tariff.name), v1=selected_count),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode='HTML',
     )
@@ -3324,11 +3261,11 @@ async def toggle_tariff_promo_group(
     tariff_id = int(parts[1])
     promo_group_id = int(parts[2])
 
-    texts = get_texts(db_user.language)
-
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     current_groups = {pg.id for pg in (tariff.allowed_promo_groups or [])}
@@ -3364,7 +3301,7 @@ async def toggle_tariff_promo_group(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_PROMO_CLEAR_ALL_BUTTON', '🔄 Очистить все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CLEAR_ALL', '🔄 Очистить все'),
                 callback_data=f'admin_tariff_clear_promo:{tariff_id}',
             ),
         ]
@@ -3373,13 +3310,12 @@ async def toggle_tariff_promo_group(
 
     try:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_TARIFF_PROMO_GROUPS_MENU',
-                '👥 <b>Промогруппы для тарифа «{name}»</b>\n\n'
-                'Выбрано: {selected}\n\n'
-                'Если не выбрана ни одна группа - тариф доступен всем.\n'
-                'Выберите группы, которым доступен этот тариф:',
-            ).format(name=html.escape(tariff.name), selected=len(current_groups)),
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_SELECT_PROMO_GROUPS',
+                '👥 <b>Промогруппы для тарифа «{v0}»</b>\n\nВыбрано: {v1}\n\nЕсли не выбрана ни одна группа - тариф доступен всем.\nВыберите группы, которым доступен этот тариф:',
+            )
+            .format(v0=html.escape(tariff.name), v1=len(current_groups)),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode='HTML',
         )
@@ -3400,15 +3336,16 @@ async def clear_tariff_promo_groups(
     from app.database.crud.tariff import set_tariff_promo_groups
 
     tariff_id = int(callback.data.split(':')[1])
-    texts = get_texts(db_user.language)
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     await set_tariff_promo_groups(db, tariff, [])
-    await callback.answer(texts.t('ADMIN_TARIFF_PROMO_GROUPS_CLEARED_ALERT', 'Все промогруппы очищены'))
+    await callback.answer(get_texts(db_user.language).t('ADMIN_TARIFF_PROMO_GROUPS_CLEARED', 'Все промогруппы очищены'))
 
     # Перерисовываем меню
     promo_groups_data = await get_promo_groups_with_counts(db)
@@ -3428,7 +3365,7 @@ async def clear_tariff_promo_groups(
     buttons.append(
         [
             InlineKeyboardButton(
-                text=texts.t('ADMIN_TARIFF_PROMO_CLEAR_ALL_BUTTON', '🔄 Очистить все'),
+                text=get_texts(db_user.language).t('ADMIN_TARIFF_CLEAR_ALL', '🔄 Очистить все'),
                 callback_data=f'admin_tariff_clear_promo:{tariff_id}',
             ),
         ]
@@ -3437,13 +3374,12 @@ async def clear_tariff_promo_groups(
 
     try:
         await callback.message.edit_text(
-            texts.t(
-                'ADMIN_TARIFF_PROMO_GROUPS_MENU',
-                '👥 <b>Промогруппы для тарифа «{name}»</b>\n\n'
-                'Выбрано: {selected}\n\n'
-                'Если не выбрана ни одна группа - тариф доступен всем.\n'
-                'Выберите группы, которым доступен этот тариф:',
-            ).format(name=html.escape(tariff.name), selected=0),
+            get_texts(db_user.language)
+            .t(
+                'ADMIN_TARIFF_SELECT_PROMO_GROUPS_EMPTY',
+                '👥 <b>Промогруппы для тарифа «{v0}»</b>\n\nВыбрано: 0\n\nЕсли не выбрана ни одна группа - тариф доступен всем.\nВыберите группы, которым доступен этот тариф:',
+            )
+            .format(v0=html.escape(tariff.name)),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
             parse_mode='HTML',
         )
@@ -3454,11 +3390,11 @@ async def clear_tariff_promo_groups(
 # ==================== Режим сброса трафика ====================
 
 TRAFFIC_RESET_MODES = [
-    ('DAY', '📅 Ежедневно', 'Трафик сбрасывается каждый день'),
-    ('WEEK', '📆 Еженедельно', 'Трафик сбрасывается каждую неделю'),
-    ('MONTH', '🗓️ Ежемесячно', 'Трафик сбрасывается каждый месяц'),
-    ('MONTH_ROLLING', '🔄 Скользящий месяц', 'Трафик сбрасывается через 30 дней от первого подключения'),
-    ('NO_RESET', '🚫 Никогда', 'Трафик не сбрасывается автоматически'),
+    ('DAY', 'ADMIN_TARIFF_RESET_DAY', 'ADMIN_TARIFF_RESET_DAY_DESC'),
+    ('WEEK', 'ADMIN_TARIFF_RESET_WEEK', 'ADMIN_TARIFF_RESET_WEEK_DESC'),
+    ('MONTH', 'ADMIN_TARIFF_RESET_MONTH', 'ADMIN_TARIFF_RESET_MONTH_DESC'),
+    ('MONTH_ROLLING', 'ADMIN_TARIFF_RESET_ROLLING', 'ADMIN_TARIFF_RESET_ROLLING_DESC'),
+    ('NO_RESET', 'ADMIN_TARIFF_RESET_NEVER', 'ADMIN_TARIFF_RESET_NEVER_DESC'),
 ]
 
 
@@ -3468,18 +3404,19 @@ def get_traffic_reset_mode_keyboard(tariff_id: int, current_mode: str | None, la
     buttons = []
 
     # Кнопка "Глобальная настройка"
-    global_label = f'{"✅ " if current_mode is None else ""}' + texts.t(
-        'ADMIN_TARIFF_RESET_MODE_GLOBAL_BUTTON',
-        '🌐 Глобальная настройка ({strategy})',
-    ).format(strategy=settings.DEFAULT_TRAFFIC_RESET_STRATEGY)
+    global_label = (
+        get_texts(language)
+        .t('ADMIN_TARIFF_GLOBAL_MODE_CHOICE', '{v0}🌐 Глобальная настройка ({v1})')
+        .format(v0='✅ ' if current_mode is None else '', v1=settings.DEFAULT_TRAFFIC_RESET_STRATEGY)
+    )
     buttons.append(
         [InlineKeyboardButton(text=global_label, callback_data=f'admin_tariff_set_reset_mode:{tariff_id}:GLOBAL')]
     )
 
     # Кнопки для каждого режима
-    for mode_value, mode_label, mode_desc in TRAFFIC_RESET_MODES:
+    for mode_value, mode_label_key, mode_desc_key in TRAFFIC_RESET_MODES:
+        mode_label = texts.t(mode_label_key)
         is_selected = current_mode == mode_value
-        mode_label = texts.t(f'ADMIN_TARIFF_RESET_MODE_{mode_value}', mode_label)
         label = f'{"✅ " if is_selected else ""}{mode_label}'
         buttons.append(
             [InlineKeyboardButton(text=label, callback_data=f'admin_tariff_set_reset_mode:{tariff_id}:{mode_value}')]
@@ -3499,28 +3436,24 @@ async def start_edit_traffic_reset_mode(
     db: AsyncSession,
 ):
     """Начинает редактирование режима сброса трафика."""
-    texts = get_texts(db_user.language)
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     current_mode = getattr(tariff, 'traffic_reset_mode', None)
 
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_RESET_MODE_EDIT_PROMPT',
-            '🔄 <b>Режим сброса трафика для тарифа «{name}»</b>\n\n'
-            'Текущий режим: {current_mode}\n\n'
-            'Выберите, когда сбрасывать использованный трафик у подписчиков этого тарифа:\n\n'
-            '• <b>Глобальная настройка</b> — использовать значение из конфига бота\n'
-            '• <b>Ежедневно</b> — сброс каждый день\n'
-            '• <b>Еженедельно</b> — сброс каждую неделю\n'
-            '• <b>Ежемесячно</b> — сброс каждый месяц\n'
-            '• <b>Никогда</b> — трафик накапливается за весь период подписки',
-        ).format(name=html.escape(tariff.name), current_mode=_format_traffic_reset_mode(current_mode, texts)),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_RESET_MODE',
+            '🔄 <b>Режим сброса трафика для тарифа «{v0}»</b>\n\nТекущий режим: {v1}\n\nВыберите, когда сбрасывать использованный трафик у подписчиков этого тарифа:\n\n• <b>Глобальная настройка</b> — использовать значение из конфига бота\n• <b>Ежедневно</b> — сброс каждый день\n• <b>Еженедельно</b> — сброс каждую неделю\n• <b>Ежемесячно</b> — сброс каждый месяц\n• <b>Никогда</b> — трафик накапливается за весь период подписки',
+        )
+        .format(v0=html.escape(tariff.name), v1=_format_traffic_reset_mode(current_mode, language=db_user.language)),
         reply_markup=get_traffic_reset_mode_keyboard(tariff_id, current_mode, db_user.language),
         parse_mode='HTML',
     )
@@ -3539,12 +3472,12 @@ async def set_traffic_reset_mode(
     tariff_id = int(parts[1])
     new_mode = parts[2]
 
-    texts = get_texts(db_user.language)
-
     tariff = await get_tariff_by_id(db, tariff_id)
 
     if not tariff:
-        await callback.answer(texts.t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True)
+        await callback.answer(
+            get_texts(db_user.language).t('ADMIN_TARIFF_NOT_FOUND', 'Тариф не найден'), show_alert=True
+        )
         return
 
     # Преобразуем GLOBAL в None
@@ -3554,25 +3487,22 @@ async def set_traffic_reset_mode(
     # Обновляем тариф
     tariff = await update_tariff(db, tariff, traffic_reset_mode=new_mode)
 
-    mode_display = _format_traffic_reset_mode(new_mode, texts)
+    mode_display = _format_traffic_reset_mode(new_mode, language=db_user.language)
     await callback.answer(
-        texts.t('ADMIN_TARIFF_RESET_MODE_CHANGED_ALERT', 'Режим сброса изменён: {mode}').format(mode=mode_display),
+        get_texts(db_user.language)
+        .t('ADMIN_TARIFF_RESET_MODE_UPDATED', 'Режим сброса изменён: {v0}')
+        .format(v0=mode_display),
         show_alert=True,
     )
 
     # Обновляем клавиатуру
     await callback.message.edit_text(
-        texts.t(
-            'ADMIN_TARIFF_RESET_MODE_EDIT_PROMPT',
-            '🔄 <b>Режим сброса трафика для тарифа «{name}»</b>\n\n'
-            'Текущий режим: {current_mode}\n\n'
-            'Выберите, когда сбрасывать использованный трафик у подписчиков этого тарифа:\n\n'
-            '• <b>Глобальная настройка</b> — использовать значение из конфига бота\n'
-            '• <b>Ежедневно</b> — сброс каждый день\n'
-            '• <b>Еженедельно</b> — сброс каждую неделю\n'
-            '• <b>Ежемесячно</b> — сброс каждый месяц\n'
-            '• <b>Никогда</b> — трафик накапливается за весь период подписки',
-        ).format(name=html.escape(tariff.name), current_mode=mode_display),
+        get_texts(db_user.language)
+        .t(
+            'ADMIN_TARIFF_EDIT_RESET_MODE',
+            '🔄 <b>Режим сброса трафика для тарифа «{v0}»</b>\n\nТекущий режим: {v1}\n\nВыберите, когда сбрасывать использованный трафик у подписчиков этого тарифа:\n\n• <b>Глобальная настройка</b> — использовать значение из конфига бота\n• <b>Ежедневно</b> — сброс каждый день\n• <b>Еженедельно</b> — сброс каждую неделю\n• <b>Ежемесячно</b> — сброс каждый месяц\n• <b>Никогда</b> — трафик накапливается за весь период подписки',
+        )
+        .format(v0=html.escape(tariff.name), v1=mode_display),
         reply_markup=get_traffic_reset_mode_keyboard(tariff_id, new_mode, db_user.language),
         parse_mode='HTML',
     )

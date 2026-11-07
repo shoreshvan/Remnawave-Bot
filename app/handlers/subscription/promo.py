@@ -338,7 +338,7 @@ async def claim_discount_offer(
     success_message = _format_text_with_placeholders(success_template, format_values)
 
     await callback.answer(
-        texts.get('DISCOUNT_CLAIM_ACTIVATED_POPUP', '✅ Скидка активирована!'),
+        texts.t('SUBSCRIPTION_UI_DISCOUNT_ACTIVATED', '✅ Скидка активирована!'),
         show_alert=True,
     )
 

@@ -14,6 +14,11 @@ from app.config import settings
 from app.database.models import PaymentMethod, User
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
+from app.services.payment.manual_credit import (
+    IRANIAN_FORCE_CREDIT_METHODS,
+    can_force_credit,
+    force_credit_iranian_payment,
+)
 from app.services.payment_verification_service import (
     SUPPORTED_MANUAL_CHECK_METHODS,
     PendingPayment,
@@ -30,7 +35,7 @@ logger = structlog.get_logger(__name__)
 PAGE_SIZE = 6
 
 
-def _method_display(method: PaymentMethod) -> str:
+def _method_display(method: PaymentMethod, language: str = 'ru') -> str:
     if method == PaymentMethod.MULENPAY:
         return settings.get_mulenpay_display_name()
     if method == PaymentMethod.PAL24:
@@ -44,7 +49,7 @@ def _method_display(method: PaymentMethod) -> str:
     if method == PaymentMethod.PLATEGA:
         return settings.get_platega_display_name()
     if method == PaymentMethod.PLATEGA_RECURRENT:
-        return f'{settings.get_platega_display_name()} СБП'
+        return get_texts(language).t('ADMIN_PAYMENT_PROVIDER_SBP').format(provider=settings.get_platega_display_name())
     if method == PaymentMethod.CRYPTOBOT:
         return 'CryptoBot'
     if method == PaymentMethod.TELEGRAM_STARS:
@@ -59,6 +64,8 @@ def _method_display(method: PaymentMethod) -> str:
         return settings.get_cispay_display_name()
     if method == PaymentMethod.CASHERA:
         return settings.get_cashera_display_name()
+    if method == PaymentMethod.ANORE:
+        return settings.get_anore_display_name()
     if method == PaymentMethod.TABPAY:
         return settings.get_tabpay_display_name()
     if method == PaymentMethod.PARITYPAY:
@@ -80,6 +87,12 @@ def _status_info(
     texts,
 ) -> tuple[str, str]:
     status = (record.status or '').lower()
+
+    if record.method == PaymentMethod.ANORE and bool(getattr(record.payment, 'is_test', False)):
+        return '🧪', texts.t('ADMIN_ANORE_SANDBOX', 'Тестовый платёж — баланс не пополнен')
+
+    if record.method == PaymentMethod.CISPAY and bool(getattr(record.payment, 'is_sandbox', False)):
+        return '🧪', texts.t('ADMIN_ANORE_SANDBOX')
 
     if record.is_paid:
         return '✅', texts.t('ADMIN_PAYMENT_STATUS_PAID', '✅ Paid')
@@ -243,7 +256,10 @@ def _build_list_keyboard(
             [
                 InlineKeyboardButton(
                     text=button_text,
-                    callback_data=f'admin_payment_{record.method.value}_{record.local_id}',
+                    callback_data=(
+                        f'admin_payment_{"landing_" if record.source == "landing" else ""}'
+                        f'{record.method.value}_{record.local_id}'
+                    ),
                 )
             ]
         )
@@ -313,14 +329,17 @@ def _build_detail_keyboard(
     payment = record.payment
     payment_url = getattr(payment, 'payment_url', None)
     if record.method == PaymentMethod.PAL24:
-        payment_url = payment.link_url or payment.link_page_url or payment_url
+        payment_url = getattr(payment, 'link_url', None) or getattr(payment, 'link_page_url', None) or payment_url
     elif record.method == PaymentMethod.WATA:
-        payment_url = payment.url or payment_url
+        payment_url = getattr(payment, 'url', None) or payment_url
     elif record.method == PaymentMethod.YOOKASSA:
         payment_url = getattr(payment, 'confirmation_url', None) or payment_url
     elif record.method == PaymentMethod.CRYPTOBOT:
         payment_url = (
-            payment.bot_invoice_url or payment.mini_app_invoice_url or payment.web_app_invoice_url or payment_url
+            getattr(payment, 'bot_invoice_url', None)
+            or getattr(payment, 'mini_app_invoice_url', None)
+            or getattr(payment, 'web_app_invoice_url', None)
+            or payment_url
         )
 
     if payment_url:
@@ -343,7 +362,9 @@ def _build_detail_keyboard(
             ]
         )
 
-    if record.method == PaymentMethod.NOWPAYMENTS and not record.is_paid:
+    if (record.method == PaymentMethod.NOWPAYMENTS and not record.is_paid) or can_force_credit(
+        record.method, record.payment
+    ):
         rows.append(
             [
                 InlineKeyboardButton(
@@ -357,7 +378,9 @@ def _build_detail_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _format_user_line(user: User) -> str:
+def _format_user_line(user: User | None, language: str = 'ru') -> str:
+    if user is None:
+        return get_texts(language).t('ADMIN_PAYMENT_GUEST_BUYER')
     username = format_username(user.username, user.telegram_id, user.full_name)
     user_id_display = user.telegram_id or user.email or f'#{user.id}'
     return f'👤 {html.escape(username)} (<code>{user_id_display}</code>)'
@@ -376,7 +399,9 @@ def _build_record_lines(
         crypto_asset = getattr(record.payment, 'asset', None)
         if crypto_amount and crypto_asset:
             amount = f'{crypto_amount} {crypto_asset}'
-    method_name = _method_display(record.method)
+    method_name = _method_display(record.method, language) + (
+        texts.t('ADMIN_PAYMENT_LANDING_SUFFIX') if record.source == 'landing' else ''
+    )
     emoji, status_text = _status_info(record, texts=texts)
     created = format_datetime(record.created_at)
     age = format_time_ago(record.created_at, language)
@@ -387,7 +412,7 @@ def _build_record_lines(
         f'{index}. <b>{html.escape(method_name)}</b> — {amount}',
         f'   {emoji} {status_text}',
         f'   🕒 {created} ({age})',
-        _format_user_line(record.user),
+        _format_user_line(record.user, language),
     ]
 
     if identifier:
@@ -399,7 +424,9 @@ def _build_record_lines(
 
 
 def _build_payment_details_text(record: PendingPayment, *, texts, language: str) -> str:
-    method_name = _method_display(record.method)
+    method_name = _method_display(record.method, language) + (
+        texts.t('ADMIN_PAYMENT_LANDING_SUFFIX') if record.source == 'landing' else ''
+    )
     emoji, status_text = _status_info(record, texts=texts)
     amount = settings.format_price(record.amount_kopeks)
     if record.method == PaymentMethod.CRYPTOBOT:
@@ -420,7 +447,7 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
         f'💰 {texts.t("ADMIN_PAYMENT_AMOUNT", "Amount")}: {amount}',
         f'🕒 {texts.t("ADMIN_PAYMENT_CREATED", "Created")}: {created} ({age})',
         f'🆔 ID: <code>{identifier}</code>',
-        _format_user_line(record.user),
+        _format_user_line(record.user, language),
     ]
 
     if record.expires_at:
@@ -462,9 +489,7 @@ def _build_payment_details_text(record: PendingPayment, *, texts, language: str)
                 f'🧾 {texts.t("ADMIN_PAYMENT_GATEWAY_ID", "Gateway ID")}: {html.escape(str(payment.order_id))}'
             )
         if getattr(payment, 'terminal_public_id', None):
-            lines.append(
-                f'🏦 {texts.t("ADMIN_PAYMENT_TERMINAL", "Terminal")}: {html.escape(str(payment.terminal_public_id))}'
-            )
+            lines.append(f'🏦 Terminal: {html.escape(str(payment.terminal_public_id))}')
 
     if record.method == PaymentMethod.HELEKET:
         if getattr(payment, 'order_id', None):
@@ -542,7 +567,7 @@ async def show_payments_overview(
         except ValueError:
             page = 1
 
-    records = await list_recent_pending_payments(db)
+    records = await list_recent_pending_payments(db, include_manual_review=True)
     total = len(records)
     total_pages = max(1, math.ceil(total / PAGE_SIZE))
     page = max(page, 1)
@@ -618,22 +643,16 @@ async def show_payment_details(
     db_user: User,
     db: AsyncSession,
 ) -> None:
-    texts = get_texts(db_user.language)
-    parsed = _parse_method_and_id(callback.data, prefix='admin_payment_')
+    source = 'landing' if callback.data.startswith('admin_payment_landing_') else 'provider'
+    parsed = _parse_method_and_id(callback.data, prefix=f'admin_payment_{"landing_" if source == "landing" else ""}')
     if not parsed:
-        await callback.answer(
-            texts.t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'),
-            show_alert=True,
-        )
+        await callback.answer(get_texts(db_user.language).t('ADMIN_PAYMENT_INVALID_REFERENCE'), show_alert=True)
         return
 
     method, payment_id = parsed
-    record = await get_payment_record(db, method, payment_id)
+    record = await get_payment_record(db, method, payment_id, source=source)
     if not record:
-        await callback.answer(
-            texts.t('ADMIN_PAYMENT_NOT_FOUND_ALERT', '❌ Платеж не найден'),
-            show_alert=True,
-        )
+        await callback.answer(get_texts(db_user.language).t('ADMIN_PAYMENT_NOT_FOUND'), show_alert=True)
         return
 
     await _render_payment_details(callback, db_user, record)
@@ -652,10 +671,7 @@ async def manual_check_payment(
     parsed = _parse_method_and_id(callback.data, prefix='admin_payment_check_')
     if not parsed:
         logger.warning('Failed to parse', callback_data=callback.data)
-        await callback.answer(
-            get_texts(db_user.language).t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'),
-            show_alert=True,
-        )
+        await callback.answer(get_texts(db_user.language).t('ADMIN_PAYMENT_INVALID_REFERENCE'), show_alert=True)
         return
 
     method, payment_id = parsed
@@ -721,7 +737,7 @@ async def force_credit_payment_prompt(
         await callback.answer(texts.t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'), show_alert=True)
         return
     method, payment_id = parsed
-    if method != PaymentMethod.NOWPAYMENTS:
+    if method not in IRANIAN_FORCE_CREDIT_METHODS | {PaymentMethod.NOWPAYMENTS}:
         await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_NOT_SUPPORTED', '❌ Force credit is only available for NOWPayments.'), show_alert=True)
         return
     record = await get_payment_record(db, method, payment_id)
@@ -730,6 +746,9 @@ async def force_credit_payment_prompt(
         return
     if record.is_paid:
         await callback.answer(texts.t('ADMIN_PAYMENT_ALREADY_PAID', '✅ Already paid.'), show_alert=True)
+        return
+    if method in IRANIAN_FORCE_CREDIT_METHODS and not can_force_credit(method, record.payment):
+        await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_REFUSED', '❌ Refused for this status.'), show_alert=True)
         return
 
     keyboard = InlineKeyboardMarkup(
@@ -748,8 +767,9 @@ async def force_credit_payment_prompt(
     )
     await callback.message.edit_text(
         texts.t(
-            'ADMIN_PAYMENT_FORCE_CONFIRM_TEXT',
-            '⚠️ Force-credit this NOWPayments invoice without provider verification?',
+            'ADMIN_IRANIAN_FORCE_CONFIRM' if method in IRANIAN_FORCE_CREDIT_METHODS else 'ADMIN_PAYMENT_FORCE_CONFIRM_TEXT',
+            '⚠️ Credit the FULL invoice amount without provider verification? Confirm only after checking receipt of funds. '
+            'Underpayments will also receive the FULL invoice amount.',
         )
         + chr(10)
         + chr(10)
@@ -773,7 +793,7 @@ async def force_credit_payment_yes(
         await callback.answer(texts.t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'), show_alert=True)
         return
     method, payment_id = parsed
-    if method != PaymentMethod.NOWPAYMENTS:
+    if method not in IRANIAN_FORCE_CREDIT_METHODS | {PaymentMethod.NOWPAYMENTS}:
         await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_NOT_SUPPORTED', '❌ Not supported.'), show_alert=True)
         return
     record = await get_payment_record(db, method, payment_id)
@@ -790,7 +810,12 @@ async def force_credit_payment_yes(
         await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_NO_ORDER', '❌ No order id.'), show_alert=True)
         return
 
-    updated = await payment_service.force_credit_nowpayments_payment(db, order_id, trigger='admin_force')
+    if method == PaymentMethod.NOWPAYMENTS:
+        updated = await payment_service.force_credit_nowpayments_payment(db, order_id, trigger='admin_force')
+    else:
+        updated = await force_credit_iranian_payment(
+            db, payment_service, method, payment_id, admin_id=callback.from_user.id
+        )
     if not updated:
         await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_FAILED', '❌ Force credit failed.'), show_alert=True)
         return
@@ -948,8 +973,9 @@ async def export_payments(
 
         payment_data = {
             'id': record.local_id,
+            'source': record.source,
             'method': record.method.value,
-            'method_display': _method_display(record.method),
+            'method_display': _method_display(record.method, db_user.language),
             'identifier': record.identifier,
             'amount_kopeks': record.amount_kopeks,
             'amount_rubles': record.amount_kopeks / 100,
@@ -962,7 +988,9 @@ async def export_payments(
                 'telegram_id': user.telegram_id,
                 'username': user.username,
                 'full_name': user.full_name,
-            },
+            }
+            if user
+            else None,
         }
 
         # Добавляем специфичные поля в зависимости от метода
@@ -1057,18 +1085,16 @@ async def force_credit_command(
 
 
 def register_handlers(dp: Dispatcher) -> None:
+    dp.callback_query.register(force_credit_payment_prompt, F.data.startswith('admin_payment_force_'))
+    dp.callback_query.register(force_credit_payment_yes, F.data.startswith('admin_payment_forceyes_'))
+    dp.callback_query.register(force_credit_payment_cancel, F.data.startswith('admin_payment_forcecancel_'))
     dp.message.register(force_credit_command, Command('np_force_credit'))
     dp.callback_query.register(check_all_payments, F.data == 'admin_payments_check_all')
     dp.callback_query.register(export_payments, F.data == 'admin_payments_export')
     dp.callback_query.register(manual_check_payment, F.data.startswith('admin_payment_check_'))
-    dp.callback_query.register(force_credit_payment_yes, F.data.startswith('admin_payment_forceyes_'))
-    dp.callback_query.register(force_credit_payment_cancel, F.data.startswith('admin_payment_forcecancel_'))
-    dp.callback_query.register(force_credit_payment_prompt, F.data.startswith('admin_payment_force_'))
     dp.callback_query.register(
         show_payment_details,
-        F.data.startswith('admin_payment_') & ~F.data.startswith('admin_payment_check_')
-        & ~F.data.startswith('admin_payment_force_') & ~F.data.startswith('admin_payment_forceyes_')
-        & ~F.data.startswith('admin_payment_forcecancel_'),
+        F.data.startswith('admin_payment_') & ~F.data.startswith('admin_payment_check_'),
     )
     dp.callback_query.register(show_payments_overview, F.data.startswith('admin_payments_page_'))
     dp.callback_query.register(show_payments_overview, F.data == 'admin_payments')

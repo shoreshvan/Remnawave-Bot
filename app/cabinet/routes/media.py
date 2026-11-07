@@ -153,7 +153,7 @@ def _resolve_target_chat_id() -> int:
 
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail=get_texts().t('CABINET_MEDIA_NO_CHAT_CONFIGURED', 'No chat configured for file uploads'),
+        detail='No chat configured for file uploads',
     )
 
 
@@ -169,23 +169,17 @@ async def upload_media(
     request: Request,
     user: User = Depends(get_current_cabinet_user),
     file: UploadFile = File(...),
-    media_type: str = Form(
-        'photo',
-        description=get_texts().t('CABINET_MEDIA_PARAM_MEDIA_TYPE', 'File type: photo, video, or document'),
-    ),
+    media_type: str = Form('photo', description='File type: photo, video, or document'),
 ):
     """
     Upload media file for use in ticket messages.
     Returns file_id that can be used when creating ticket or adding message.
     """
-    texts = get_texts(user.language)
     media_type_normalized = (media_type or '').strip().lower()
     if media_type_normalized not in ALLOWED_MEDIA_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_MEDIA_UNSUPPORTED_TYPE', 'Unsupported media type. Allowed: {allowed}').format(
-                allowed=', '.join(ALLOWED_MEDIA_TYPES),
-            ),
+            detail=f'Unsupported media type. Allowed: {", ".join(ALLOWED_MEDIA_TYPES)}',
         )
 
     # Read and validate file
@@ -193,15 +187,13 @@ async def upload_media(
     if not file_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_MEDIA_FILE_EMPTY', 'File is empty'),
+            detail='File is empty',
         )
 
     if len(file_bytes) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_MEDIA_FILE_TOO_LARGE', 'File too large. Maximum size: {size}MB').format(
-                size=MAX_FILE_SIZE // 1024 // 1024,
-            ),
+            detail=f'File too large. Maximum size: {MAX_FILE_SIZE // 1024 // 1024}MB',
         )
 
     # Validate content type for photos
@@ -210,10 +202,7 @@ async def upload_media(
         if file.content_type and file.content_type not in allowed_image_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=texts.t(
-                    'CABINET_MEDIA_INVALID_IMAGE_TYPE',
-                    'Invalid image type. Allowed: JPEG, PNG, GIF, WebP',
-                ),
+                detail='Invalid image type. Allowed: JPEG, PNG, GIF, WebP',
             )
 
     # Reject active/scriptable content for ALL upload types (defense in depth).
@@ -224,10 +213,17 @@ async def upload_media(
     if declared_type in _BLOCKED_UPLOAD_CONTENT_TYPES or filename_lower.endswith(_BLOCKED_UPLOAD_EXTENSIONS):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_MEDIA_FILE_TYPE_NOT_ALLOWED', 'This file type is not allowed'),
+            detail='This file type is not allowed',
         )
 
     target_chat_id = _resolve_target_chat_id()
+    # Staging uses the notification destination too: General may be closed.
+    # Never carry a group's topic over to the private-admin fallback.
+    target_topic_id = (
+        settings.ADMIN_NOTIFICATIONS_TOPIC_ID
+        if target_chat_id < 0 and target_chat_id == settings.get_admin_notifications_chat_id()
+        else None
+    )
     upload = BufferedInputFile(file_bytes, filename=file.filename or 'upload')
 
     bot = create_bot()
@@ -237,6 +233,7 @@ async def upload_media(
         if media_type_normalized == 'photo':
             message = await bot.send_photo(
                 chat_id=target_chat_id,
+                message_thread_id=target_topic_id,
                 photo=upload,
                 disable_notification=True,
             )
@@ -244,6 +241,7 @@ async def upload_media(
         elif media_type_normalized == 'video':
             message = await bot.send_video(
                 chat_id=target_chat_id,
+                message_thread_id=target_topic_id,
                 video=upload,
                 disable_notification=True,
             )
@@ -251,6 +249,7 @@ async def upload_media(
         else:
             message = await bot.send_document(
                 chat_id=target_chat_id,
+                message_thread_id=target_topic_id,
                 document=upload,
                 disable_notification=True,
             )
@@ -283,7 +282,7 @@ async def upload_media(
         logger.error('Failed to upload media for user', telegram_id=user.telegram_id, error=error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=texts.t('CABINET_MEDIA_UPLOAD_FAILED', 'Failed to upload media'),
+            detail='Failed to upload media',
         ) from error
     finally:
         await bot.session.close()
@@ -292,10 +291,7 @@ async def upload_media(
 @router.get('/{file_id}', name='cabinet_download_media')
 async def download_media(
     file_id: str,
-    token: str = Query(
-        '',
-        description=get_texts().t('CABINET_MEDIA_PARAM_TOKEN', 'Signed access token from the ticket response'),
-    ),
+    token: str = Query('', description='Signed access token from the ticket response'),
 ) -> Response:
     """
     Download media file by file_id.
@@ -307,7 +303,7 @@ async def download_media(
     if not _FILE_ID_RE.match(file_id) or not _verify_media_token(file_id, token):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_MEDIA_NOT_FOUND', 'Media file not found'),
+            detail='Media file not found',
         )
 
     bot = create_bot()
@@ -317,7 +313,7 @@ async def download_media(
         if not file.file_path:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_texts().t('CABINET_MEDIA_NOT_FOUND', 'Media file not found'),
+                detail='Media file not found',
             )
 
         buffer = await bot.download_file(file.file_path)
@@ -337,7 +333,7 @@ async def download_media(
         logger.error('Failed to download media', file_id=file_id, error=error)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_texts().t('CABINET_MEDIA_DOWNLOAD_FAILED', 'Failed to download media'),
+            detail='Failed to download media',
         ) from error
     finally:
         await bot.session.close()

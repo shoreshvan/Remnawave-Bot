@@ -191,6 +191,10 @@ class PurchaseRequest(BaseModel):
     @model_validator(mode='after')
     def validate_contacts(self) -> 'PurchaseRequest':
         _validate_contact(self.contact_type, self.contact_value)
+        if (
+            self.payment_method == 'platega' or self.payment_method.startswith('platega_')
+        ) and self.contact_type != 'email':
+            raise ValueError('Для оплаты через Platega укажите вашу почту вместо Telegram-имени.')
         if self.is_gift:
             if not self.gift_recipient_type or not self.gift_recipient_value:
                 raise ValueError('Gift recipient type and value are required for gift purchases')
@@ -715,30 +719,22 @@ async def claim_gift(
 async def get_landing_config(
     raw_request: Request,
     slug: str = Path(max_length=100),
-    lang: str = Query(
-        DEFAULT_LOCALE,
-        max_length=5,
-        description=get_texts().t('CABINET_LANDING_PARAM_LANG', 'Locale: ru, en, zh, fa'),
-    ),
+    lang: str = Query(DEFAULT_LOCALE, max_length=5, description='Locale: ru, en, zh, fa'),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get public landing page configuration with tariffs and payment methods.
 
     No authentication required. Pass ``?lang=en`` to get localized text.
     """
-    texts = get_texts(lang)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'landing_config', limit=60, window=60, fail_closed=True):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=texts.t('CABINET_LANDING_TOO_MANY_REQUESTS', 'Too many requests'),
-        )
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
 
     landing = await get_active_landing_by_slug(db, slug)
     if landing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=texts.t('CABINET_LANDING_NOT_FOUND', 'Landing page not found'),
+            detail='Landing page not found',
         )
 
     discount = _get_active_discount(landing, lang)

@@ -26,12 +26,7 @@ async def update_autopay(
     request: AutopayUpdateRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(
-        None,
-        description=get_texts().t(
-            'CABINET_AUTOPAY_SUBSCRIPTION_ID_QUERY_DESCRIPTION', 'Subscription ID for multi-tariff'
-        ),
-    ),
+    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
 ):
     """Update autopay settings."""
     from .helpers import resolve_subscription
@@ -41,20 +36,24 @@ async def update_autopay(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts().t('CABINET_AUTOPAY_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
+            detail='No subscription found',
         )
 
     if request.enabled:
+        from app.services.cispay_recurrent_guard import require_no_cispay
+
+        try:
+            await require_no_cispay(db, user_id=user.id, subscription_id=subscription.id)
+        except ValueError as error:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail=str(error)) from None
         # Classic subscriptions cannot use autopay when tariff mode is enabled
         from app.config import settings
 
         if settings.is_tariffs_mode() and not subscription.tariff_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'CABINET_AUTOPAY_NOT_AVAILABLE_CLASSIC',
-                    'Autopay is not available for classic subscriptions. Please purchase a tariff.',
-                ),
+                detail='Autopay is not available for classic subscriptions. Please purchase a tariff.',
             )
 
         # Триальные подписки — пробник, автопродление не имеет смысла
@@ -62,9 +61,7 @@ async def update_autopay(
         if subscription.is_trial is not False:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'CABINET_AUTOPAY_NOT_AVAILABLE_TRIAL', 'Autopay is not available for trial subscriptions'
-                ),
+                detail='Autopay is not available for trial subscriptions',
             )
 
         # Суточные подписки имеют свой механизм продления (DailySubscriptionService),
@@ -73,9 +70,7 @@ async def update_autopay(
         if subscription.tariff and getattr(subscription.tariff, 'is_daily', False):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_texts().t(
-                    'CABINET_AUTOPAY_NOT_AVAILABLE_DAILY', 'Autopay is not available for daily subscriptions'
-                ),
+                detail='Autopay is not available for daily subscriptions',
             )
 
     subscription.autopay_enabled = request.enabled
@@ -100,7 +95,7 @@ async def update_autopay(
         await cancel_lava_recurring_for_subscription_safe(db, subscription.id)
         await cancel_cashera_recurring_for_subscription_safe(db, subscription.id)
     return {
-        'message': get_texts().t('CABINET_AUTOPAY_SETTINGS_UPDATED', 'Autopay settings updated'),
+        'message': 'Autopay settings updated',
         'autopay_enabled': subscription.autopay_enabled,
         'autopay_days_before': subscription.autopay_days_before,
     }

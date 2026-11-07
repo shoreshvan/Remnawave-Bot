@@ -67,6 +67,7 @@ class UserSubscriptionInfo(BaseModel):
     """User subscription information."""
 
     id: int
+    remnawave_id: int | None = None
     status: str
     is_trial: bool
     start_date: datetime | None = None
@@ -395,13 +396,9 @@ class UpdateSubscriptionRequest(BaseModel):
     )
 
     # For set_traffic action
-    traffic_limit_gb: int | None = Field(
-        None, ge=0,
-        description=get_texts().t('CABINET_USER_SUBSCRIPTION_TRAFFIC_LIMIT_DESCRIPTION', 'New traffic limit in GB'),
-    )
+    traffic_limit_gb: int | None = Field(None, ge=0, description='New traffic limit in GB')
     traffic_used_gb: float | None = Field(
-        None, ge=0,
-        description=get_texts().t('CABINET_USER_SUBSCRIPTION_TRAFFIC_USED_DESCRIPTION', 'Set traffic used in GB'),
+        None, ge=0, description='Set cached traffic used in GB for legacy subscriptions; managed usage is read-only'
     )
 
     # For toggle_autopay

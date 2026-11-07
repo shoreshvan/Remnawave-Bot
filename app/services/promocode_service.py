@@ -15,8 +15,7 @@ from app.database.crud.promocode import (
 from app.database.crud.subscription import extend_subscription, get_subscription_by_user_id
 from app.database.crud.user import add_user_balance, get_user_by_id
 from app.database.crud.user_promo_group import add_user_to_promo_group, has_user_promo_group
-from app.database.models import PromoCode, PromoCodeType, Subscription, SubscriptionStatus, User
-from app.localization.texts import get_texts
+from app.database.models import PromoCode, PromoCodeType, PromoCodeUse, Subscription, SubscriptionStatus, User
 from app.services.remnawave_service import RemnaWaveService
 from app.services.subscription_service import SubscriptionService
 
@@ -65,6 +64,30 @@ class PromoCodeService:
             # Best-effort: недоступная БД не должна маскировать исходную ошибку активации
             logger.warning('Не удалось перечитать пользователя после rollback', error=refresh_error)
 
+    @staticmethod
+    async def _refresh_after_panel_call(
+        db: AsyncSession,
+        user: User,
+        promocode: PromoCode,
+        subscription: Subscription,
+        panel_result: Any,
+        *,
+        retry_update: bool = True,
+    ) -> None:
+        # Panel services can roll back the shared session and return None.
+        # Promo effects have already committed: reload before reading columns
+        # or continuing a combined grant, including the tariff label.
+        if panel_result is None:
+            await db.rollback()
+        await db.refresh(user)
+        await db.refresh(promocode)
+        await db.refresh(subscription)
+        await db.refresh(subscription, attribute_names=['tariff'])
+        if panel_result is None and retry_update:
+            from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+            remnawave_retry_queue.enqueue(subscription_id=subscription.id, user_id=user.id, action='update')
+
     async def activate_promocode(
         self, db: AsyncSession, user_id: int, code: str, *, subscription_id: int | None = None
     ) -> dict[str, Any]:
@@ -112,12 +135,88 @@ class PromoCodeService:
                 if getattr(user, 'has_had_paid_subscription', False):
                     return {'success': False, 'error': 'not_first_purchase'}
 
+            promo_terms = tuple(
+                getattr(promocode, key, None)
+                for key in (
+                    'code',
+                    'type',
+                    'subscription_days',
+                    'traffic_gb',
+                    'balance_bonus_kopeks',
+                    'tariff_id',
+                    'promo_group_id',
+                    'first_purchase_only',
+                )
+            )
+            traffic_context = None
+            if promocode.type == PromoCodeType.BALANCE_AND_DAYS.value and (promocode.traffic_gb or 0) > 0:
+                # Migration uses its own durable transactions: run before claiming
+                # the promo slot or changing days/balance in this transaction.
+                try:
+                    target = await self._pick_target_subscription(db, user, promocode, subscription_id)
+                except _SelectSubscriptionRequired as exc:
+                    return {
+                        'success': False,
+                        'error': 'select_subscription',
+                        'eligible_subscriptions': exc.eligible_subscriptions,
+                        'code': exc.code,
+                    }
+                except ValueError as exc:
+                    if str(exc) in ('no_subscription_for_days', 'subscription_not_found'):
+                        return {'success': False, 'error': str(exc)}
+                    raise
+                if target.traffic_limit_gb > 0:
+                    from app.services.traffic_purchase_service import prepare_traffic_purchase
+
+                    traffic_context = await prepare_traffic_purchase(db, target)
+
+            # Consistent User → PromoCode lock order, including non-traffic
+            # codes, prevents a concurrent balance code from inverting the
+            # accounting preflight's User lock while claiming the same promo.
+            from sqlalchemy import select
+
+            await db.execute(select(User.id).where(User.id == user_id).with_for_update())
+            await db.refresh(user, attribute_names=['has_had_paid_subscription', 'balance_kopeks'])
+            await db.refresh(promocode, with_for_update=True)
+            # Preflight can wait on the panel and other purchases. Re-read the
+            # offer and eligibility under the same locks as its reservation.
+            fresh_terms = tuple(
+                getattr(promocode, key, None)
+                for key in (
+                    'code',
+                    'type',
+                    'subscription_days',
+                    'traffic_gb',
+                    'balance_bonus_kopeks',
+                    'tariff_id',
+                    'promo_group_id',
+                    'first_purchase_only',
+                )
+            )
+            if fresh_terms != promo_terms:
+                return {'success': False, 'error': 'server_error'}
+            if not promocode.is_valid:
+                if promocode.current_uses >= promocode.max_uses:
+                    return {'success': False, 'error': 'used'}
+                if not promocode.is_active:
+                    return {'success': False, 'error': 'inactive'}
+                from app.database.models import _aware
+
+                valid_from = _aware(promocode.valid_from)
+                error = 'not_yet_valid' if valid_from and valid_from > datetime.now(UTC) else 'expired'
+                return {'success': False, 'error': error}
+            if getattr(promocode, 'first_purchase_only', False) and user.has_had_paid_subscription:
+                return {'success': False, 'error': 'not_first_purchase'}
+            if await count_user_recent_activations(db, user_id, hours=24) >= 5:
+                return {'success': False, 'error': 'daily_limit'}
             balance_before_kopeks = user.balance_kopeks
 
             # Резервируем запись использования ДО применения эффектов (защита от race condition)
             promo_use = await create_promocode_use(db, promocode.id, user_id)
             if promo_use is None:
                 return {'success': False, 'error': 'already_used_by_user'}
+            promo_use_id = promo_use.id
+            promocode_id = promocode.id
 
             # Atomically CLAIM a usage slot before applying any effect. The conditional
             # UPDATE (current_uses < max_uses) takes a row lock, so concurrent activations
@@ -138,9 +237,15 @@ class PromoCodeService:
                 await self._rollback_keeping_user_usable(db, user)
                 return {'success': False, 'error': 'used'}
 
+            deferred_transactions = []
             try:
                 result_description = await self._apply_promocode_effects(
-                    db, user, promocode, subscription_id=subscription_id
+                    db,
+                    user,
+                    promocode,
+                    subscription_id=subscription_id,
+                    traffic_context=traffic_context,
+                    deferred_transactions=deferred_transactions,
                 )
             except _SelectSubscriptionRequired as e:
                 # Мульти-тариф: нужен выбор подписки — откатываем резерв И claim инкремента.
@@ -152,11 +257,30 @@ class PromoCodeService:
                     'code': e.code,
                 }
             except ValueError as e:
-                # Эффект не применён — откатываем резерв использования И claim инкремента.
-                # (trial_provisioning_failed уже сделал свою компенсацию + commit до raise,
-                # поэтому здесь rollback для него — no-op, что и требуется.)
-                await self._rollback_keeping_user_usable(db, user)
                 error_key = str(e)
+                if error_key == 'trial_provisioning_failed':
+                    from sqlalchemy import delete as sql_delete
+
+                    # Trial creation committed the reservation and counter before
+                    # provisioning. Commit its staged deletion together with an
+                    # exact compensation, preserving other users' claimed slots.
+                    released = await db.execute(
+                        sql_delete(PromoCodeUse).where(
+                            PromoCodeUse.id == promo_use_id,
+                            PromoCodeUse.promocode_id == promocode_id,
+                            PromoCodeUse.user_id == user_id,
+                        )
+                    )
+                    if released.rowcount:
+                        await db.execute(
+                            sql_update(PromoCode)
+                            .where(PromoCode.id == promocode_id, PromoCode.current_uses > 0)
+                            .values(current_uses=PromoCode.current_uses - 1)
+                        )
+                    await db.commit()
+                    await db.refresh(user)
+                else:
+                    await self._rollback_keeping_user_usable(db, user)
                 if error_key in (
                     'active_discount_exists',
                     'no_subscription_for_days',
@@ -208,9 +332,7 @@ class PromoCodeService:
                             )
 
                             # Add to result description
-                            result_description += get_texts(user.language).t(
-                                'PROMOCODE_EFFECT_PROMO_GROUP_ASSIGNED', '\n🎁 Назначена промогруппа: {name}'
-                            ).format(name=promo_group.name)
+                            result_description += f'\n🎁 Назначена промогруппа: {promo_group.name}'
                         else:
                             logger.warning(
                                 '⚠️ Промогруппа ID не найдена для промокода',
@@ -238,15 +360,58 @@ class PromoCodeService:
             # committed, in which case this is a harmless no-op.
             await db.commit()
 
+            if traffic_context is not None:
+                # The grant, usage slot, days and balance are now durable. Delivery
+                # failure must only schedule a fresh projection, never re-grant.
+                from app.database.crud.transaction import emit_transaction_side_effects
+                from app.database.models import TransactionType
+
+                for transaction in deferred_transactions:
+                    await emit_transaction_side_effects(
+                        db,
+                        transaction,
+                        amount_kopeks=transaction.amount_kopeks,
+                        user_id=user_id,
+                        type=TransactionType.DEPOSIT,
+                        description=transaction.description,
+                    )
+                target = traffic_context[0]
+                target_id = target.id
+                days = promocode.subscription_days
+                try:
+                    from app.services.traffic_purchase_service import finish_traffic_purchase
+
+                    await finish_traffic_purchase(db, target)
+                except Exception as recurring_error:
+                    logger.warning('Traffic promo committed; recurring sync failed', error=recurring_error)
+                try:
+                    panel_result = await self.subscription_service.update_remnawave_user(db, target)
+                    await self._refresh_after_panel_call(db, user, promocode, target, panel_result)
+                except Exception as panel_error:
+                    from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+                    remnawave_retry_queue.enqueue(subscription_id=target_id, user_id=user_id, action='update')
+                    await self._rollback_keeping_user_usable(db, user)
+                    await db.refresh(promocode)
+                    logger.warning('Traffic promo committed; panel delivery queued', error=panel_error)
+                if days > 0:
+                    try:
+                        from app.services.payment.lava import shift_lava_next_charge_after_manual_extension
+
+                        await shift_lava_next_charge_after_manual_extension(db, target_id, days)
+                    except Exception as lava_error:
+                        logger.warning('Failed to shift Lava next charge after promo', error=lava_error)
+
             logger.info('✅ Пользователь активировал промокод', _format_user_log=self._format_user_log(user), code=code)
 
+            await db.refresh(promocode)
             promocode_data = {
                 'code': promocode.code,
                 'type': promocode.type,
                 'balance_bonus_kopeks': promocode.balance_bonus_kopeks,
                 'subscription_days': promocode.subscription_days,
                 'max_uses': promocode.max_uses,
-                'current_uses': promocode.current_uses + 1,  # +1 because we just incremented atomically
+                'current_uses': promocode.current_uses,
                 'valid_until': promocode.valid_until,
                 'promo_group_id': promocode.promo_group_id,
             }
@@ -335,7 +500,14 @@ class PromoCodeService:
         return target_sub
 
     async def _apply_promocode_effects(
-        self, db: AsyncSession, user: User, promocode: PromoCode, *, subscription_id: int | None = None
+        self,
+        db: AsyncSession,
+        user: User,
+        promocode: PromoCode,
+        *,
+        subscription_id: int | None = None,
+        traffic_context: tuple[Subscription, Any] | None = None,
+        deferred_transactions: list | None = None,
     ) -> str:
         """
         Применяет эффекты промокода к пользователю.
@@ -352,7 +524,6 @@ class PromoCodeService:
             ValueError: Если у пользователя уже есть активная скидка (для DISCOUNT типа)
         """
         effects = []
-        texts = get_texts(user.language)
 
         # Обработка DISCOUNT типа (одноразовая скидка)
         if promocode.type == PromoCodeType.DISCOUNT.value:
@@ -384,20 +555,11 @@ class PromoCodeService:
             # Устанавливаем срок действия скидки
             if discount_hours > 0:
                 user.promo_offer_discount_expires_at = datetime.now(UTC) + timedelta(hours=discount_hours)
-                effects.append(
-                    texts.t(
-                        'PROMOCODE_EFFECT_DISCOUNT_TIMED', '💸 Получена скидка {percent}% (действует {hours} ч.)'
-                    ).format(percent=discount_percent, hours=discount_hours)
-                )
+                effects.append(f'💸 Получена скидка {discount_percent}% (действует {discount_hours} ч.)')
             else:
                 # 0 часов = бессрочно до первой покупки
                 user.promo_offer_discount_expires_at = None
-                effects.append(
-                    texts.t(
-                        'PROMOCODE_EFFECT_DISCOUNT_UNTIL_PURCHASE',
-                        '💸 Получена скидка {percent}% до первой покупки',
-                    ).format(percent=discount_percent)
-                )
+                effects.append(f'💸 Получена скидка {discount_percent}% до первой покупки')
 
             await db.flush()
 
@@ -416,13 +578,14 @@ class PromoCodeService:
         # использования — повторная активация задваивала бы бонус. Для одиночных
         # типов порядок безразличен (типы взаимоисключающие).
         # Подписку выбираем один раз на активацию: её делят дни и трафик.
-        target_sub: Subscription | None = None
+        target_sub: Subscription | None = traffic_context[0] if traffic_context is not None else None
 
         if (
             promocode.type in (PromoCodeType.SUBSCRIPTION_DAYS.value, PromoCodeType.BALANCE_AND_DAYS.value)
             and promocode.subscription_days > 0
         ):
-            target_sub = await self._pick_target_subscription(db, user, promocode, subscription_id)
+            if target_sub is None:
+                target_sub = await self._pick_target_subscription(db, user, promocode, subscription_id)
             # NB: a days-promocode is a FREE grant, not a purchase — do NOT flip
             # is_trial here (bug #629889 class). Converting a trial to is_trial=False
             # without a charge un-gated it from try_auto_extend_expired_after_topup,
@@ -431,19 +594,17 @@ class PromoCodeService:
             # status on its own (and never touches is_trial when called without a
             # tariff_id), so the promo days still apply while the subscription
             # correctly stays a trial and remains gated out of auto-renewal.
-            await extend_subscription(db, target_sub, promocode.subscription_days)
-            await self.subscription_service.update_remnawave_user(db, target_sub)
+            if traffic_context is not None:
+                await extend_subscription(db, target_sub, promocode.subscription_days, commit=False)
+            else:
+                await extend_subscription(db, target_sub, promocode.subscription_days)
+                panel_result = await self.subscription_service.update_remnawave_user(db, target_sub)
+                await self._refresh_after_panel_call(db, user, promocode, target_sub, panel_result)
 
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and getattr(target_sub, 'tariff', None):
-                tariff_label = texts.t('PROMOCODE_EFFECT_TARIFF_LABEL', ' «{name}»').format(
-                    name=target_sub.tariff.name
-                )
-            effects.append(
-                texts.t(
-                    'PROMOCODE_EFFECT_SUBSCRIPTION_EXTENDED', '⏰ Подписка{tariff_label} продлена на {days} дней'
-                ).format(tariff_label=tariff_label, days=promocode.subscription_days)
-            )
+                tariff_label = f' «{target_sub.tariff.name}»'
+            effects.append(f'⏰ Подписка{tariff_label} продлена на {promocode.subscription_days} дней')
             logger.info(
                 '✅ Подписка пользователя продлена на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
@@ -459,7 +620,8 @@ class PromoCodeService:
         traffic_gb = getattr(promocode, 'traffic_gb', 0) or 0
         traffic_skipped_unlimited = False
         if promocode.type == PromoCodeType.BALANCE_AND_DAYS.value and traffic_gb > 0:
-            from app.database.crud.subscription import add_subscription_traffic, reactivate_subscription
+            from app.database.crud.subscription import reactivate_subscription
+            from app.services.traffic_purchase_service import add_subscription_traffic
 
             if target_sub is None:
                 target_sub = await self._pick_target_subscription(db, user, promocode, subscription_id)
@@ -476,31 +638,32 @@ class PromoCodeService:
                     subscription_id=target_sub.id,
                 )
             else:
-                await add_subscription_traffic(db, target_sub, traffic_gb)
+                if traffic_context is not None:
+                    await add_subscription_traffic(db, target_sub, traffic_gb, panel=traffic_context[1], commit=False)
+                    await reactivate_subscription(db, target_sub, commit=False)
+                else:
+                    await add_subscription_traffic(db, target_sub, traffic_gb)
 
-                # Трафик чаще всего дарят как раз тому, у кого он кончился, —
-                # такая подписка стоит в LIMITED. Без реактивации гигабайты
-                # лягут в базу, а update_remnawave_user отправит в панель тот же
-                # LIMITED, и доступ не вернётся. Тот же порядок, что во всех
-                # остальных начислениях трафика (handlers/subscription/traffic.py,
-                # handlers/admin/users.py, cabinet/routes/admin_users.py).
-                await reactivate_subscription(db, target_sub)
-                await self.subscription_service.update_remnawave_user(db, target_sub)
+                    # Трафик чаще всего дарят как раз тому, у кого он кончился, —
+                    # такая подписка стоит в LIMITED. Без реактивации гигабайты
+                    # лягут в базу, а update_remnawave_user отправит в панель тот же
+                    # LIMITED, и доступ не вернётся. Тот же порядок, что во всех
+                    # остальных начислениях трафика (handlers/subscription/traffic.py,
+                    # handlers/admin/users.py, cabinet/routes/admin_users.py).
+                    await reactivate_subscription(db, target_sub)
+                    panel_result = await self.subscription_service.update_remnawave_user(db, target_sub)
+                    await self._refresh_after_panel_call(db, user, promocode, target_sub, panel_result)
 
-                # PATCH не всегда снимает LIMITED — включаем явно.
-                panel_user_id = (
-                    target_sub.remnawave_id
-                    if settings.is_multi_tariff_enabled() and target_sub.remnawave_id
-                    else getattr(user, 'remnawave_id', None)
-                )
-                if panel_user_id and target_sub.status == SubscriptionStatus.ACTIVE.value:
-                    await self.subscription_service.enable_remnawave_user(panel_user_id)
-
-                effects.append(
-                    texts.t('PROMOCODE_EFFECT_TRAFFIC_ADDED', '📦 Трафик пополнен на {traffic_gb} ГБ').format(
-                        traffic_gb=traffic_gb
+                    # PATCH не всегда снимает LIMITED — включаем явно.
+                    panel_user_id = (
+                        target_sub.remnawave_id
+                        if settings.is_multi_tariff_enabled() and target_sub.remnawave_id
+                        else getattr(user, 'remnawave_id', None)
                     )
-                )
+                    if panel_user_id and target_sub.status == SubscriptionStatus.ACTIVE.value:
+                        await self.subscription_service.enable_remnawave_user(panel_user_id)
+
+                effects.append(f'📦 Трафик пополнен на {traffic_gb} ГБ')
                 logger.info(
                     '✅ Пользователю начислен трафик по промокоду',
                     _format_user_log=self._format_user_log(user),
@@ -512,14 +675,35 @@ class PromoCodeService:
             promocode.type in (PromoCodeType.BALANCE.value, PromoCodeType.BALANCE_AND_DAYS.value)
             and promocode.balance_bonus_kopeks > 0
         ):
-            await add_user_balance(db, user, promocode.balance_bonus_kopeks, f'Бонус по промокоду {promocode.code}')
+            if traffic_context is not None:
+                credited = await add_user_balance(
+                    db,
+                    user,
+                    promocode.balance_bonus_kopeks,
+                    f'Бонус по промокоду {promocode.code}',
+                    create_transaction=False,
+                    commit=False,
+                )
+                if not credited:
+                    raise ValueError('balance_grant_failed')
+                from app.database.crud.transaction import create_transaction
+                from app.database.models import TransactionType
+
+                transaction = await create_transaction(
+                    db,
+                    user_id=user.id,
+                    type=TransactionType.DEPOSIT,
+                    amount_kopeks=promocode.balance_bonus_kopeks,
+                    description=f'Бонус по промокоду {promocode.code}',
+                    commit=False,
+                )
+                if deferred_transactions is not None:
+                    deferred_transactions.append(transaction)
+            else:
+                await add_user_balance(db, user, promocode.balance_bonus_kopeks, f'Бонус по промокоду {promocode.code}')
 
             balance_bonus_rubles = promocode.balance_bonus_kopeks / 100
-            effects.append(
-                texts.t('PROMOCODE_EFFECT_BALANCE_ADDED', '💰 Баланс пополнен на {amount} تومان').format(
-                    amount=balance_bonus_rubles
-                )
-            )
+            effects.append(f'💰 Баланс пополнен на {balance_bonus_rubles}₽')
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.database.crud.subscription import create_trial_subscription
@@ -605,12 +789,11 @@ class PromoCodeService:
             if existing_same_tariff_sub:
                 # User already has this tariff — extend it
                 await extend_subscription(db, existing_same_tariff_sub, trial_days)
-                await self.subscription_service.update_remnawave_user(db, existing_same_tariff_sub)
+                panel_result = await self.subscription_service.update_remnawave_user(db, existing_same_tariff_sub)
+                await self._refresh_after_panel_call(db, user, promocode, existing_same_tariff_sub, panel_result)
 
                 effects.append(
-                    texts.t(
-                        'PROMOCODE_EFFECT_TRIAL_EXTENDED', '⏰ Подписка «{name}» продлена на {days} дней'
-                    ).format(name=trial_tariff.name if trial_tariff else '', days=trial_days)
+                    f'⏰ Подписка «{trial_tariff.name if trial_tariff else ""}» продлена на {trial_days} дней'
                 )
                 logger.info(
                     '✅ Триал промокод: продлена существующая подписка',
@@ -633,26 +816,36 @@ class PromoCodeService:
                 )
 
                 remnawave_user = await self.subscription_service.create_remnawave_user(db, trial_subscription)
-                if remnawave_user is None:
-                    # Provisioning failed (create_remnawave_user swallows errors and
-                    # returns None). Don't report a fake success that grants a subscription
-                    # with no working config — delete the just-created orphan row and raise
-                    # so the user gets an honest, mapped error instead.
-                    logger.error(
-                        '❌ Триал промокод: не удалось создать пользователя в RemnaWave — откатываем подписку',
-                        _format_user_log=self._format_user_log(user),
-                        subscription_id=trial_subscription.id,
-                        code=promocode.code,
-                    )
-                    await db.delete(trial_subscription)
-                    await db.commit()
-                    raise ValueError('trial_provisioning_failed')
-
-                effects.append(
-                    texts.t(
-                        'PROMOCODE_EFFECT_TRIAL_ACTIVATED', '🎁 Активирована тестовая подписка на {days} дней'
-                    ).format(days=trial_days)
+                await self._refresh_after_panel_call(
+                    db, user, promocode, trial_subscription, remnawave_user, retry_update=False
                 )
+                if remnawave_user is None:
+                    from app.database.crud.user import lock_user_for_pricing
+
+                    # The trial row was committed before the panel call. Another
+                    # purchase may already have converted it: cleanup must not
+                    # delete paid access or a successfully bound panel account.
+                    user = await lock_user_for_pricing(db, user.id)
+                    await db.refresh(trial_subscription, with_for_update=True)
+                    if not trial_subscription.is_trial:
+                        raise ValueError('trial_provisioning_failed')
+                    if trial_subscription.remnawave_id is None:
+                        logger.error(
+                            '❌ Триал промокод: не удалось создать пользователя в RemnaWave — откатываем подписку',
+                            _format_user_log=self._format_user_log(user),
+                            subscription_id=trial_subscription.id,
+                            code=promocode.code,
+                        )
+                        await db.delete(trial_subscription)
+                        raise ValueError('trial_provisioning_failed')
+
+                    from app.services.remnawave_retry_queue import remnawave_retry_queue
+
+                    remnawave_retry_queue.enqueue(
+                        subscription_id=trial_subscription.id, user_id=user.id, action='update'
+                    )
+
+                effects.append(f'🎁 Активирована тестовая подписка на {trial_days} дней')
                 logger.info(
                     '✅ Создана триал подписка для пользователя на дней',
                     _format_user_log=self._format_user_log(user),
@@ -674,11 +867,7 @@ class PromoCodeService:
             # trial_subscription_exists выше).
             raise ValueError('traffic_not_applicable')
 
-        return (
-            '\n'.join(effects)
-            if effects
-            else texts.t('PROMOCODE_EFFECT_DEFAULT_SUCCESS', '✅ Промокод активирован')
-        )
+        return '\n'.join(effects) if effects else '✅ Промокод активирован'
 
     async def deactivate_discount_promocode(
         self,

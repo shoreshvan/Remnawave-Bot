@@ -228,19 +228,18 @@ async def create_stars_invoice(
     Создать Telegram Stars invoice для оплаты спина колеса.
     Используется в Telegram Mini App для прямой оплаты Stars.
     """
-    texts = get_texts(user.language)
     config = await get_or_create_wheel_config(db)
 
     if not config.is_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_WHEEL_UNAVAILABLE', 'Колесо удачи недоступно'),
+            detail='Колесо удачи недоступно',
         )
 
     if not config.spin_cost_stars_enabled or not config.spin_cost_stars:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_WHEEL_STARS_PAYMENT_DISABLED', 'Оплата Stars не включена'),
+            detail='Оплата Stars не включена',
         )
 
     # Проверяем наличие активной подписки (multi-tariff aware)
@@ -262,10 +261,7 @@ async def create_stars_invoice(
     if not subscription or not subscription.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t(
-                'CABINET_WHEEL_SUBSCRIPTION_REQUIRED',
-                'Для использования колеса необходима активная подписка',
-            ),
+            detail='Для использования колеса необходима активная подписка',
         )
 
     # Проверяем лимит спинов
@@ -273,7 +269,7 @@ async def create_stars_invoice(
     if config.daily_spin_limit > 0 and spins_today >= config.daily_spin_limit:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_WHEEL_DAILY_LIMIT_REACHED', 'Достигнут дневной лимит спинов'),
+            detail='Достигнут дневной лимит спинов',
         )
 
     # Проверяем наличие призов
@@ -281,7 +277,7 @@ async def create_stars_invoice(
     if not prizes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=texts.t('CABINET_WHEEL_NO_PRIZES', 'Призы не настроены'),
+            detail='Призы не настроены',
         )
 
     stars_amount = config.spin_cost_stars
@@ -295,16 +291,16 @@ async def create_stars_invoice(
         from app.bot_factory import create_bot
 
         async with create_bot() as bot:
+            texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
             invoice_url = await bot.create_invoice_link(
-                title=texts.t('CABINET_WHEEL_INVOICE_TITLE', 'Колесо удачи'),
-                description=texts.t(
-                    'CABINET_WHEEL_INVOICE_DESCRIPTION',
-                    'Спин колеса удачи ({stars_amount} ⭐)',
-                ).format(stars_amount=stars_amount),
+                title=texts.t('STARS_WHEEL_TITLE', 'Колесо удачи'),
+                description=texts.t('STARS_WHEEL_DESCRIPTION', 'Спин колеса удачи ({stars} ⭐)').format(
+                    stars=stars_amount
+                ),
                 payload=payload,
                 provider_token='',
                 currency='XTR',
-                prices=[LabeledPrice(label=texts.t('CABINET_WHEEL_INVOICE_LABEL', 'Спин колеса'), amount=stars_amount)],
+                prices=[LabeledPrice(label=texts.t('STARS_WHEEL_LABEL', 'Спин колеса'), amount=stars_amount)],
             )
 
         logger.info('Created Stars invoice for wheel spin: user=, stars', user_id=user.id, stars_amount=stars_amount)
@@ -318,5 +314,5 @@ async def create_stars_invoice(
         logger.error('Error creating invoice', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=texts.t('CABINET_WHEEL_INVOICE_ERROR', 'Ошибка создания инвойса'),
+            detail='Ошибка создания инвойса',
         )

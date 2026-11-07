@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
-from app.localization.texts import get_texts
+from app.localization.texts import Texts, get_texts
 from app.services.system_settings_service import bot_configuration_service
 from app.states import PricingStates
 from app.utils.decorators import admin_required, error_handler
@@ -40,18 +40,49 @@ TRAFFIC_PACKAGE_ORDER: tuple[int, ...] = tuple(gb for gb, _ in TRAFFIC_PACKAGE_F
 TRAFFIC_PACKAGE_ORDER_INDEX: dict[int, int] = {gb: index for index, gb in enumerate(TRAFFIC_PACKAGE_ORDER)}
 
 
+_PRICING_LABEL_KEYS = {
+    '⏳ Длительность (дни)': 'ADMIN_PRICE_UI_004',
+    '📦 Лимит трафика (ГБ)': 'ADMIN_PRICE_UI_005',
+    '📱 Лимит устройств': 'ADMIN_PRICE_UI_006',
+    '💳 Платная активация': 'ADMIN_PRICE_UI_007',
+    'Если включено — за активацию триала будет списываться указанная сумма.': 'ADMIN_PRICE_UI_008',
+    '💰 Стоимость активации': 'ADMIN_PRICE_UI_009',
+    'Указывается в копейках. 0 — бесплатная активация.': 'ADMIN_PRICE_UI_010',
+    '➕ Добавлять оставшиеся дни к платной подписке': 'ADMIN_PRICE_UI_011',
+    'Если включено — при покупке платной подписки оставшиеся дни триала будут добавлены к сроку.': 'ADMIN_PRICE_UI_012',
+    '💳 Базовая стоимость подписки': 'ADMIN_PRICE_UI_013',
+    '🎟️ Базовые скидки для групп': 'ADMIN_PRICE_UI_014',
+    'Включает применение базовых скидок для групповых промо-периодов.': 'ADMIN_PRICE_UI_015',
+    '🔖 Скидки по периодам': 'ADMIN_PRICE_UI_016',
+    'Формат: список пар дней и скидки через запятую (например 30:10,60:20).': 'ADMIN_PRICE_UI_017',
+    '📱 Устройств по умолчанию': 'ADMIN_PRICE_UI_018',
+    '📦 Трафик по умолчанию (ГБ)': 'ADMIN_PRICE_UI_019',
+    '📈 Максимум устройств': 'ADMIN_PRICE_UI_020',
+    '🔄 Сбрасывать трафик при оплате': 'ADMIN_PRICE_UI_021',
+    '🔄 Сбрасывать трафик при смене тарифа': 'ADMIN_PRICE_UI_022',
+    '🗓 Стратегия сброса трафика': 'ADMIN_PRICE_UI_023',
+    'Доступные значения: DAY, WEEK, MONTH, NEVER.': 'ADMIN_PRICE_UI_024',
+    '⚙️ Режим выбора трафика': 'ADMIN_PRICE_UI_025',
+    'Определяет, выбирают ли пользователи пакеты или получают фиксированный лимит.': 'ADMIN_PRICE_UI_026',
+    '📏 Фиксированный лимит трафика (ГБ)': 'ADMIN_PRICE_UI_027',
+    'Используется только в режиме фиксированного трафика. 0 = безлимит.': 'ADMIN_PRICE_UI_028',
+    'Выбор пакетов': 'ADMIN_PRICE_UI_032',
+    'Фиксированный лимит': 'ADMIN_PRICE_UI_033',
+    'Фикс. лимит + докупка': 'ADMIN_PRICE_UI_034',
+}
+
+
 @dataclass(slots=True)
 class ChoiceOption:
     value: Any
     label_ru: str
     label_en: str | None = None
 
-    def label(self, lang_code: str) -> str:
-        if lang_code == 'ru':
-            return self.label_ru
-        return get_texts(lang_code).t(
-            f'ADMIN_PRICING_CHOICE_{str(self.value).upper()}', self.label_en or self.label_ru
-        )
+    def label(self, lang_code: str, texts: Texts | None = None) -> str:
+        texts = texts or get_texts(lang_code)
+        key = _PRICING_LABEL_KEYS.get(self.label_ru)
+        fallback = self.label_ru if lang_code == 'ru' else (self.label_en or self.label_ru)
+        return texts.t(key, fallback) if key else fallback
 
 
 @dataclass(slots=True)
@@ -65,18 +96,17 @@ class SettingEntry:
     description_en: str | None = None
     choices: tuple[ChoiceOption, ...] | None = None
 
-    def label(self, lang_code: str) -> str:
-        if lang_code == 'ru':
-            return self.label_ru
-        return get_texts(lang_code).t(f'ADMIN_PRICING_LABEL_{self.key}', self.label_en or self.label_ru)
+    def label(self, lang_code: str, texts: Texts | None = None) -> str:
+        texts = texts or get_texts(lang_code)
+        key = _PRICING_LABEL_KEYS.get(self.label_ru)
+        fallback = self.label_ru if lang_code == 'ru' else (self.label_en or self.label_ru)
+        return texts.t(key, fallback) if key else fallback
 
-    def description(self, lang_code: str) -> str | None:
-        if lang_code == 'ru':
-            return self.description_ru
-        default = self.description_en or self.description_ru
-        if default is None:
-            return None
-        return get_texts(lang_code).t(f'ADMIN_PRICING_DESC_{self.key}', default)
+    def description(self, lang_code: str, texts: Texts | None = None) -> str | None:
+        texts = texts or get_texts(lang_code)
+        key = _PRICING_LABEL_KEYS.get(self.description_ru)
+        fallback = self.description_ru if lang_code == 'ru' else (self.description_en or self.description_ru)
+        return texts.t(key, fallback) if key else fallback
 
 
 TRIAL_ENTRIES: tuple[SettingEntry, ...] = (
@@ -322,32 +352,25 @@ def _language_code(language: str | None) -> str:
     return (language or 'ru').split('-')[0].lower()
 
 
-def _format_period_label(days: int, lang_code: str, short: bool = False) -> str:
+def _format_period_label(days: int, lang_code: str, short: bool = False, texts: Texts | None = None) -> str:
+    texts = texts or get_texts(lang_code)
     if short:
-        suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
-        return f'{days}{suffix}'
-    texts = get_texts(lang_code)
-    if lang_code == 'ru':
-        return texts.t('ADMIN_PRICING_PERIOD_LABEL_RU', '{days} дней').format(days=days)
-    if days == 1:
-        return texts.t('ADMIN_PRICING_PERIOD_LABEL_SINGLE_DAY', '1 day')
-    return texts.t('ADMIN_PRICING_PERIOD_LABEL_PLAN', '{days}-day plan').format(days=days)
+        return f'{days}{texts.t("ADMIN_PRICE_UI_002", "д")}'
+    if lang_code == 'en' and days == 1:
+        return '1 day'
+    return texts.t('ADMIN_PRICE_UI_000', '{value1} дней').format(value1=days)
 
 
-def _format_traffic_label(gb: int, lang_code: str, short: bool = False) -> str:
+def _format_traffic_label(gb: int, lang_code: str, short: bool = False, texts: Texts | None = None) -> str:
+    texts = texts or get_texts(lang_code)
     if gb == 0:
-        texts = get_texts(lang_code)
-        return '∞' if short else texts.t(
-            'ADMIN_PRICING_TRAFFIC_UNLIMITED',
-            'Безлимит' if lang_code == 'ru' else 'Unlimited',
-        )
-    unit = get_texts(lang_code).t('ADMIN_PRICING_GB_UNIT', 'ГБ' if lang_code == 'ru' else 'GB')
-    if short:
-        return f'{gb}{unit}' if lang_code == 'ru' else f'{gb}{unit}'
-    return f'{gb} {unit}'
+        return '∞' if short else texts.t('ADMIN_PRICE_UI_030', 'Безлимит')
+    unit = texts.t('ADMIN_PRICE_UI_001', 'ГБ')
+    return f'{gb}{unit}' if short else f'{gb} {unit}'
 
 
-def _format_trial_summary(lang_code: str) -> str:
+def _format_trial_summary(lang_code: str, texts: Texts | None = None) -> str:
+    texts = texts or get_texts(lang_code)
     duration = settings.TRIAL_DURATION_DAYS
     traffic = settings.TRIAL_TRAFFIC_LIMIT_GB
     devices = settings.TRIAL_DEVICE_LIMIT
@@ -355,39 +378,42 @@ def _format_trial_summary(lang_code: str) -> str:
     if settings.is_trial_paid_activation_enabled():
         price_note = f', 💳 {settings.format_price(settings.get_trial_activation_price())}'
 
-    traffic_label = _format_traffic_label(traffic, lang_code, short=True)
+    traffic_label = _format_traffic_label(traffic, lang_code, short=True, texts=texts)
     devices_label = f'{devices}📱' if lang_code == 'ru' else f'{devices}📱'
-    days_suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
+    days_suffix = texts.t('ADMIN_PRICE_UI_002', 'д')
     return f'{duration}{days_suffix}, {traffic_label}, {devices_label}{price_note}'
 
 
-def _format_core_summary(lang_code: str) -> str:
+def _format_core_summary(lang_code: str, texts: Texts | None = None) -> str:
+    texts = texts or get_texts(lang_code)
     base_price = settings.format_price(settings.BASE_SUBSCRIPTION_PRICE)
     device_limit = settings.DEFAULT_DEVICE_LIMIT
     traffic_limit = settings.DEFAULT_TRAFFIC_LIMIT_GB
     mode = settings.TRAFFIC_SELECTION_MODE.lower()
     if mode == 'fixed':
-        traffic_mode = '⚙️ fixed'
+        traffic_mode = texts.t('ADMIN_PRICE_MODE_FIXED', '⚙️ фиксированный')
     elif mode == 'fixed_with_topup':
-        traffic_mode = '⚙️ fixed+topup'
+        traffic_mode = texts.t('ADMIN_PRICE_MODE_TOPUP', '⚙️ фиксированный + докупка')
     else:
-        traffic_mode = '⚙️ selectable'
-    traffic_label = _format_traffic_label(traffic_limit, lang_code, short=True)
+        traffic_mode = texts.t('ADMIN_PRICE_MODE_SELECTABLE', '⚙️ выбор пакетов')
+    traffic_label = _format_traffic_label(traffic_limit, lang_code, short=True, texts=texts)
     return f'{base_price}, {device_limit} 📱, {traffic_label}, {traffic_mode}'
 
 
-def _get_period_items(lang_code: str) -> list[PriceItem]:
+def _get_period_items(lang_code: str, texts: Texts | None = None) -> list[PriceItem]:
+    texts = texts or get_texts(lang_code)
     from app.config import PERIOD_PRICES
 
     items: list[PriceItem] = []
     for days in settings.get_available_subscription_periods():
         key = f'PRICE_{days}_DAYS'
         price = PERIOD_PRICES.get(days, 0)
-        items.append((key, _format_period_label(days, lang_code), price))
+        items.append((key, _format_period_label(days, lang_code, texts=texts), price))
     return items
 
 
-def _get_traffic_items(lang_code: str) -> list[PriceItem]:
+def _get_traffic_items(lang_code: str, texts: Texts | None = None) -> list[PriceItem]:
+    texts = texts or get_texts(lang_code)
     packages = _collect_traffic_packages()
 
     items: list[PriceItem] = []
@@ -396,27 +422,25 @@ def _get_traffic_items(lang_code: str) -> list[PriceItem]:
         if not field:
             continue
 
-        label = _format_traffic_label(package['gb'], lang_code)
+        label = _format_traffic_label(package['gb'], lang_code, texts=texts)
         icon = '✅' if package['enabled'] else '⚪️'
         items.append((field, f'{icon} {label}', int(package['price'])))
     return items
 
 
-def _get_extra_items(lang_code: str) -> list[PriceItem]:
+def _get_extra_items(lang_code: str, texts: Texts | None = None) -> list[PriceItem]:
+    texts = texts or get_texts(lang_code)
     items: list[PriceItem] = []
 
     if hasattr(settings, 'PRICE_PER_DEVICE'):
-        texts = get_texts(lang_code)
-        label = texts.t(
-            'ADMIN_PRICING_EXTRA_DEVICE',
-            'Дополнительное устройство' if lang_code == 'ru' else 'Extra device',
-        )
+        label = texts.t('ADMIN_PRICE_UI_029', 'Дополнительное устройство')
         items.append(('PRICE_PER_DEVICE', label, settings.PRICE_PER_DEVICE))
 
     return items
 
 
-def _build_period_summary(items: Iterable[PriceItem], lang_code: str, fallback: str) -> str:
+def _build_period_summary(items: Iterable[PriceItem], lang_code: str, fallback: str, texts: Texts | None = None) -> str:
+    texts = texts or get_texts(lang_code)
     parts: list[str] = []
     for key, label, price in items:
         try:
@@ -425,7 +449,7 @@ def _build_period_summary(items: Iterable[PriceItem], lang_code: str, fallback: 
             days = None
 
         if days is not None:
-            suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
+            suffix = texts.t('ADMIN_PRICE_UI_002', 'д')
             short_label = f'{days}{suffix}'
         else:
             short_label = label
@@ -435,7 +459,8 @@ def _build_period_summary(items: Iterable[PriceItem], lang_code: str, fallback: 
     return ', '.join(parts) if parts else fallback
 
 
-def _build_traffic_summary(lang_code: str, fallback: str) -> str:
+def _build_traffic_summary(lang_code: str, fallback: str, texts: Texts | None = None) -> str:
+    texts = texts or get_texts(lang_code)
     packages = _collect_traffic_packages()
     enabled_packages = [package for package in packages if package['enabled']]
 
@@ -444,26 +469,21 @@ def _build_traffic_summary(lang_code: str, fallback: str) -> str:
 
     parts: list[str] = []
     for package in enabled_packages:
-        short_label = _format_traffic_label(package['gb'], lang_code, short=True)
+        short_label = _format_traffic_label(package['gb'], lang_code, short=True, texts=texts)
         parts.append(f'{short_label}: {settings.format_price(int(package["price"]))}')
 
     return ', '.join(parts) if parts else fallback
 
 
-def _build_period_options_summary(lang_code: str) -> str:
-    texts = get_texts(lang_code)
-    suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
+def _build_period_options_summary(lang_code: str, texts: Texts | None = None) -> str:
+    texts = texts or get_texts(lang_code)
+    suffix = texts.t('ADMIN_PRICE_UI_002', 'д')
     available = ', '.join(f'{days}{suffix}' for days in settings.get_available_subscription_periods())
     renewal = ', '.join(f'{days}{suffix}' for days in settings.get_available_renewal_periods())
-    if lang_code == 'ru':
-        return texts.t(
-            'ADMIN_PRICING_PERIOD_OPTIONS_SUMMARY',
-            'Подписки: {available} | Продления: {renewal}',
-        ).format(available=available or '—', renewal=renewal or '—')
-    return texts.t(
-        'ADMIN_PRICING_PERIOD_OPTIONS_SUMMARY',
-        'Subscriptions: {available} | Renewals: {renewal}',
-    ).format(available=available or '-', renewal=renewal or '-')
+    empty = '—' if lang_code == 'ru' else '-'
+    return texts.t('ADMIN_PRICE_UI_003', 'Подписки: {value1} | Продления: {value2}').format(
+        value1=available or empty, value2=renewal or empty
+    )
 
 
 def _build_extra_summary(items: Iterable[PriceItem], fallback: str) -> str:
@@ -499,9 +519,9 @@ def _build_settings_section(
         lines.append('')
 
     for entry in entries:
-        label = entry.label(lang_code)
+        label = entry.label(lang_code, texts=texts)
         value = bot_configuration_service.get_current_value(entry.key)
-        formatted = bot_configuration_service.format_value_human(entry.key, value)
+        formatted = bot_configuration_service.format_value_human(entry.key, value, language=texts.language)
 
         if entry.action == 'toggle':
             state_icon = '✅' if bool(value) else '⚪️'
@@ -526,7 +546,7 @@ def _build_settings_section(
                 icon = '✅' if is_active else '⚪️'
                 buttons.append(
                     types.InlineKeyboardButton(
-                        text=f'{icon} {option.label(lang_code)}',
+                        text=f'{icon} {option.label(lang_code, texts=texts)}',
                         callback_data=(
                             f'admin_pricing_choice:{section}:{_encode_setting_callback_key(entry.key)}:{option.value}'
                         ),
@@ -549,7 +569,7 @@ def _build_settings_section(
                 ]
             )
 
-        description = entry.description(lang_code)
+        description = entry.description(lang_code, texts=texts)
         if description:
             lines.append(f'<i>{description}</i>')
         lines.append('')
@@ -577,7 +597,9 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
     lines: list[str] = [title, '']
 
     enabled_labels = [
-        _format_traffic_label(package['gb'], lang_code, short=True) for package in packages if package['enabled']
+        _format_traffic_label(package['gb'], lang_code, short=True, texts=texts)
+        for package in packages
+        if package['enabled']
     ]
 
     if enabled_labels:
@@ -608,7 +630,7 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
 
     for package in packages:
         icon = '✅' if package['enabled'] else '⚪️'
-        label = _format_traffic_label(package['gb'], lang_code, short=True)
+        label = _format_traffic_label(package['gb'], lang_code, short=True, texts=texts)
         buttons.append(
             types.InlineKeyboardButton(
                 text=f'{icon} {label}',
@@ -626,8 +648,7 @@ def _build_traffic_options_section(language: str) -> tuple[str, types.InlineKeyb
 
 def _build_period_options_section(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
     texts = get_texts(language)
-    lang_code = _language_code(language)
-    suffix = get_texts(lang_code).t('ADMIN_PRICING_DAY_SUFFIX', 'д' if lang_code == 'ru' else 'd')
+    suffix = texts.t('ADMIN_PRICE_UI_002', 'д')
 
     # Используем методы без фильтрации по ценам для админки
     available_subscription = set(settings.get_configured_subscription_periods())
@@ -697,17 +718,17 @@ def _build_overview(language: str) -> tuple[str, types.InlineKeyboardMarkup]:
     texts = get_texts(language)
     lang_code = _language_code(language)
 
-    period_items = _get_period_items(lang_code)
-    _get_traffic_items(lang_code)
-    extra_items = _get_extra_items(lang_code)
+    period_items = _get_period_items(lang_code, texts=texts)
+    _get_traffic_items(lang_code, texts=texts)
+    extra_items = _get_extra_items(lang_code, texts=texts)
 
     fallback = texts.t('ADMIN_PRICING_SUMMARY_EMPTY', '—')
-    summary_periods = _build_period_summary(period_items, lang_code, fallback)
-    summary_traffic = _build_traffic_summary(lang_code, fallback)
+    summary_periods = _build_period_summary(period_items, lang_code, fallback, texts=texts)
+    summary_traffic = _build_traffic_summary(lang_code, fallback, texts=texts)
     summary_extra = _build_extra_summary(extra_items, fallback)
-    summary_trial = _format_trial_summary(lang_code)
-    summary_core = _format_core_summary(lang_code)
-    summary_period_options = _build_period_options_summary(lang_code)
+    summary_trial = _format_trial_summary(lang_code, texts=texts)
+    summary_core = _format_core_summary(lang_code, texts=texts)
+    summary_period_options = _build_period_options_summary(lang_code, texts=texts)
 
     lines = [
         f'💰 <b>{texts.t("ADMIN_PRICING_MENU_TITLE", "Управление ценами")}</b>',
@@ -781,13 +802,13 @@ def _build_section(
     lang_code = _language_code(language)
 
     if section == 'periods':
-        items = _get_period_items(lang_code)
+        items = _get_period_items(lang_code, texts=texts)
         title = texts.t('ADMIN_PRICING_SECTION_PERIODS_TITLE', '🗓 Периоды подписки')
     elif section == 'traffic':
-        items = _get_traffic_items(lang_code)
+        items = _get_traffic_items(lang_code, texts=texts)
         title = texts.t('ADMIN_PRICING_SECTION_TRAFFIC_TITLE', '📦 Пакеты трафика')
     elif section == 'extra':
-        items = _get_extra_items(lang_code)
+        items = _get_extra_items(lang_code, texts=texts)
         title = texts.t('ADMIN_PRICING_SECTION_EXTRA_TITLE', '➕ Дополнительные опции')
     elif section == 'traffic_options':
         return _build_traffic_options_section(language)
@@ -796,7 +817,7 @@ def _build_section(
     elif section == 'period_options':
         return _build_period_options_section(language)
     else:
-        items = _get_extra_items(lang_code)
+        items = _get_extra_items(lang_code, texts=texts)
         title = texts.t('ADMIN_PRICING_SECTION_EXTRA_TITLE', '➕ Дополнительные опции')
 
     lines = [title, '']
@@ -835,7 +856,7 @@ def _build_price_prompt(texts: Any, label: str, current_price: str) -> str:
         '',
         texts.t(
             'ADMIN_PRICING_EDIT_PROMPT',
-            'Введите новую стоимость в تومان (например 990 или 990.50). Для бесплатного тарифа укажите 0.',
+            'Введите новую стоимость в рублях (например 990 или 990.50). Для бесплатного тарифа укажите 0.',
         ),
         texts.t(
             'ADMIN_PRICING_EDIT_CANCEL_HINT',
@@ -878,7 +899,7 @@ async def _render_message_by_id(
 
 
 def _parse_price_input(text: str) -> int:
-    normalized = text.replace('تومان', '').replace('₽', '').replace('р', '').replace('RUB', '')
+    normalized = text.replace('₽', '').replace('р', '').replace('RUB', '')
     normalized = normalized.replace(' ', '').replace(',', '.').strip()
     if not normalized:
         raise ValueError('empty')
@@ -896,11 +917,12 @@ def _parse_price_input(text: str) -> int:
 
 
 def _resolve_label(section: str, key: str, language: str) -> str:
+    texts = get_texts(language)
     lang_code = _language_code(language)
 
     entry = SETTING_ENTRY_BY_KEY.get(key)
     if entry is not None:
-        return entry.label(lang_code)
+        return entry.label(lang_code, texts=texts)
 
     if section == 'periods' and key.startswith('PRICE_') and key.endswith('_DAYS'):
         try:
@@ -908,25 +930,21 @@ def _resolve_label(section: str, key: str, language: str) -> str:
         except ValueError:
             days = None
         if days is not None:
-            return _format_period_label(days, lang_code)
+            return _format_period_label(days, lang_code, texts=texts)
 
     if section == 'traffic' and key.startswith('PRICE_TRAFFIC_'):
         if key.endswith('UNLIMITED'):
-            return _format_traffic_label(0, lang_code)
+            return _format_traffic_label(0, lang_code, texts=texts)
         digits = ''.join(ch for ch in key if ch.isdigit())
         try:
             gb = int(digits)
         except ValueError:
             gb = None
         if gb is not None:
-            return _format_traffic_label(gb, lang_code)
+            return _format_traffic_label(gb, lang_code, texts=texts)
 
     if key == 'PRICE_PER_DEVICE':
-        texts = get_texts(lang_code)
-        return texts.t(
-            'ADMIN_PRICING_EXTRA_DEVICE',
-            'Дополнительное устройство' if lang_code == 'ru' else 'Extra device',
-        )
+        return texts.t('ADMIN_PRICE_UI_029', 'Дополнительное устройство')
 
     return key
 
@@ -972,23 +990,6 @@ async def start_price_edit(
     texts = get_texts(db_user.language)
     label = _resolve_label(section, key, db_user.language)
 
-    # Периода может не быть в настройках (например, 15д из AVAILABLE_SUBSCRIPTION_PERIODS
-    # в .env, а поля PRICE_15_DAYS не существует) — дальше спрашивать значение бессмысленно,
-    # сохранение упадёт с KeyError. Отказываем сразу с объяснением.
-    if section == 'periods' and key.startswith('PRICE_') and key.endswith('_DAYS') and not hasattr(settings, key):
-        try:
-            days = int(key.replace('PRICE_', '').replace('_DAYS', ''))
-        except ValueError:
-            days = None
-        await callback.answer(
-            texts.t(
-                'ADMIN_PRICING_PERIOD_UNSUPPORTED',
-                'Период {days} не поддерживается: нет поля {key}. Уберите его из AVAILABLE_SUBSCRIPTION_PERIODS в .env.',
-            ).format(days=days if days is not None else key, key=key),
-            show_alert=True,
-        )
-        return
-
     await state.update_data(
         pricing_key=key,
         pricing_section=section,
@@ -1033,10 +1034,10 @@ async def start_setting_edit(
     entry = SETTING_ENTRY_BY_KEY.get(key)
     texts = get_texts(db_user.language)
     lang_code = _language_code(db_user.language)
-    label = entry.label(lang_code) if entry else key
+    label = entry.label(lang_code, texts=texts) if entry else key
     current_value = bot_configuration_service.get_current_value(key)
-    formatted_current = bot_configuration_service.format_value_human(key, current_value)
-    guidance = bot_configuration_service.get_setting_guidance(key)
+    formatted_current = bot_configuration_service.format_value_human(key, current_value, language=texts.language)
+    guidance = bot_configuration_service.get_setting_guidance(key, language=texts.language)
 
     mode = 'price' if entry and entry.action == 'price' else 'setting'
 
@@ -1149,13 +1150,13 @@ async def process_pricing_input(
             await message.answer(
                 texts.t(
                     'ADMIN_PRICING_EDIT_INVALID',
-                    'Не удалось распознать цену. Укажите число в تومان (например 990 или 990.50).',
+                    'Не удалось распознать цену. Укажите число в рублях (например 990 или 990.50).',
                 )
             )
             return
     else:
         try:
-            new_value = bot_configuration_service.parse_user_value(key, raw_value)
+            new_value = bot_configuration_service.parse_user_value(key, raw_value, language=texts.language)
         except ValueError as error:
             error_text = str(error) or texts.t(
                 'ADMIN_PRICING_SETTING_INVALID',
@@ -1163,19 +1164,6 @@ async def process_pricing_input(
             )
             await message.answer(error_text)
             return
-
-    # Поясной ремень: ключ мог исчезнуть между prompt и вводом (или его никогда
-    # не было — например PRICE_15_DAYS из списка периодов в .env). Без проверки
-    # set_value упадёт с KeyError внутри get_definition.
-    if key.startswith('PRICE_') and key.endswith('_DAYS') and not hasattr(settings, key):
-        await message.answer(
-            texts.t(
-                'ADMIN_PRICING_PERIOD_UNSUPPORTED',
-                'Период не поддерживается: нет поля {key}. Уберите его из AVAILABLE_SUBSCRIPTION_PERIODS в .env.',
-            ).format(key=key)
-        )
-        await state.clear()
-        return
 
     await bot_configuration_service.set_value(db, key, new_value)
     await db.commit()
@@ -1203,9 +1191,9 @@ async def process_pricing_input(
         return
     entry = SETTING_ENTRY_BY_KEY.get(key)
     lang_code = _language_code(db_user.language)
-    label = entry.label(lang_code) if entry else (stored_label or key)
+    label = entry.label(lang_code, texts=texts) if entry else (stored_label or key)
     formatted_value = bot_configuration_service.format_value_human(
-        key, bot_configuration_service.get_current_value(key)
+        key, bot_configuration_service.get_current_value(key), language=texts.language
     )
     await message.answer(
         texts.t(
@@ -1252,7 +1240,7 @@ async def toggle_setting(
     await bot_configuration_service.set_value(db, key, new_value)
     await db.commit()
 
-    value_text = bot_configuration_service.format_value_human(key, new_value)
+    value_text = bot_configuration_service.format_value_human(key, new_value, language=db_user.language)
     await callback.answer(value_text, show_alert=False)
 
     text, keyboard = _build_section(section, db_user.language)
@@ -1308,7 +1296,7 @@ async def select_setting_choice(
         texts.t(
             'ADMIN_PRICING_CHOICE_UPDATED',
             'Выбрано: {label}',
-        ).format(label=target_option.label(lang_code))
+        ).format(label=target_option.label(lang_code, texts=texts))
     )
 
     text, keyboard = _build_section(section, db_user.language)

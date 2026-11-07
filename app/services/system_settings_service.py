@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, ClassVar, Optional, Union, get_args, get_origin
 
@@ -23,11 +24,27 @@ from app.database.crud.system_setting import (
 )
 from app.database.database import AsyncSessionLocal
 from app.database.models import SystemSetting
+from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
 from app.services.web_api_token_service import ensure_default_web_api_token
 
 
 logger = structlog.get_logger(__name__)
+
+
+def normalize_settings_language(language: str | None, fallback: str | None = None) -> str:
+    """Resolve supported BCP-47 language tags without accepting locale paths."""
+    for candidate in (language, fallback, DEFAULT_LANGUAGE, 'ru'):
+        if not isinstance(candidate, str):
+            continue
+        tag = candidate.strip().lower()
+        if not re.fullmatch(r'[a-z]{2}(?:[-_][a-z0-9]{2,8})*', tag):
+            continue
+        base = re.split('[-_]', tag)[0]
+        base = 'ua' if base == 'uk' else base
+        if base in {'ru', 'en', 'ua', 'zh', 'fa'}:
+            return base
+    return 'ru'
 
 
 def _title_from_key(key: str) -> str:
@@ -130,6 +147,31 @@ class BotConfigurationService:
         return value
 
     CATEGORY_TITLES: dict[str, str] = {
+        'ABUSE': 'Проверка нарушений',
+        'APPLE': 'Покупки Apple',
+        'BAN': 'Система блокировок',
+        'BLACKLIST': 'Чёрный список',
+        'BOT': 'Работа бота',
+        'CABINET': 'Личный кабинет',
+        'CART': 'Корзина',
+        'CONTESTS': 'Конкурсы',
+        'DAILY': 'Суточные подписки',
+        'DISPOSABLE': 'Одноразовая почта',
+        'EMAIL': 'Электронная почта',
+        'MEDIA': 'Медиафайлы',
+        'MENU': 'Меню',
+        'NALOGO': 'Налоговые чеки',
+        'OAUTH': 'Внешняя авторизация',
+        'PRICE': 'Цены',
+        'PROXY': 'Прокси',
+        'S2S': 'Серверные уведомления',
+        'SERVER': 'Сервер',
+        'SERVICE': 'Сервис',
+        'SMTP': 'Отправка почты',
+        'SUBSCRIPTION': 'Управление подписками',
+        'TARIFF': 'Смена тарифа',
+        'TEST': 'Тестовые учётные записи',
+        'YANDEX': 'Конверсии Яндекса',
         'CORE': get_texts().t('SETTINGS_CATEGORY_TITLE_CORE', '🤖 Основные настройки'),
         'SUPPORT': get_texts().t('SETTINGS_CATEGORY_TITLE_SUPPORT', '💬 Поддержка и тикеты'),
         'REGISTRATION_ACCESS': get_texts().t('SETTINGS_CATEGORY_TITLE_REGISTRATION_ACCESS', '🔐 Регистрация и доступ'),
@@ -148,7 +190,6 @@ class BotConfigurationService:
         'KASSA_AI': '💳 KassaAI',
         'RIOPAY': '💳 RioPay',
         'SEVERPAY': '💳 SeverPay',
-        'PAYPEAR': '💳 PayPear',
         'ROLLYPAY': '💳 RollyPay',
         'OVERPAY': '💳 Overpay',
         'AURAPAY': '💳 AuraPay',
@@ -157,6 +198,7 @@ class BotConfigurationService:
         'JUPITER': '🪐 Jupiter',
         'CISPAY': '💳 CisPay',
         'CASHERA': '💳 Cashera',
+        'ANORE': '💳 Anore',
         'TABPAY': '💳 TabPay',
         'PARITYPAY': '💳 ParityPay',
         'HOOSHPAY': '💳 کارت به کارت',
@@ -216,85 +258,81 @@ class BotConfigurationService:
     }
 
     CATEGORY_DESCRIPTIONS: dict[str, str] = {
-        'CORE': get_texts().t('SETTINGS_CATEGORY_DESC_CORE', 'Базовые параметры работы бота и обязательные ссылки.'),
-        'SUPPORT': get_texts().t('SETTINGS_CATEGORY_DESC_SUPPORT', 'Контакты поддержки, SLA и режимы обработки обращений.'),
-        'REGISTRATION_ACCESS': get_texts().t('SETTINGS_CATEGORY_DESC_REGISTRATION_ACCESS', 'Закрытая регистрация и допустимые способы приглашения новых пользователей.'),
-        'LOCALIZATION': get_texts().t('SETTINGS_CATEGORY_DESC_LOCALIZATION', 'Доступные языки, локализация интерфейса и выбор языка.'),
-        'CHANNEL': get_texts().t('SETTINGS_CATEGORY_DESC_CHANNEL', 'Настройки обязательной подписки на канал или группу.'),
-        'TIMEZONE': get_texts().t('SETTINGS_CATEGORY_DESC_TIMEZONE', 'Часовой пояс панели и отображение времени.'),
-        'PAYMENT': get_texts().t('SETTINGS_CATEGORY_DESC_PAYMENT', 'Общие тексты платежей, описания чеков и шаблоны.'),
-        'PAYMENT_VERIFICATION': get_texts().t('SETTINGS_CATEGORY_DESC_PAYMENT_VERIFICATION', 'Автоматическая проверка пополнений и интервал выполнения.'),
-        'YOOKASSA': get_texts().t('SETTINGS_CATEGORY_DESC_YOOKASSA', 'Интеграция с YooKassa: идентификаторы магазина и вебхуки.'),
-        'CRYPTOBOT': get_texts().t('SETTINGS_CATEGORY_DESC_CRYPTOBOT', 'CryptoBot и криптоплатежи через Telegram.'),
-        'HELEKET': get_texts().t('SETTINGS_CATEGORY_DESC_HELEKET', 'Heleket: криптоплатежи, ключи мерчанта и вебхуки.'),
-        'CLOUDPAYMENTS': get_texts().t('SETTINGS_CATEGORY_DESC_CLOUDPAYMENTS', 'CloudPayments: оплата банковскими картами, Public ID, API Secret и вебхуки.'),
-        'FREEKASSA': get_texts().t('SETTINGS_CATEGORY_DESC_FREEKASSA', 'Freekassa: ID магазина, API ключ, секретные слова и вебхуки.'),
-        'KASSA_AI': get_texts().t('SETTINGS_CATEGORY_DESC_KASSA_AI', 'KassaAI: отдельная платёжка api.fk.life с СБП, картами и SberPay.'),
-        'RIOPAY': get_texts().t('SETTINGS_CATEGORY_DESC_RIOPAY', 'RioPay: платёжная система api.riopay.online с поддержкой карт и СБП.'),
-        'PAYPEAR': get_texts().t('SETTINGS_CATEGORY_DESC_PAYPEAR', 'PayPear: платёжная система api.paypear.ru с поддержкой карт, СБП, SberPay и T-Pay.'),
-        'ROLLYPAY': get_texts().t('SETTINGS_CATEGORY_DESC_ROLLYPAY', 'RollyPay: платёжный шлюз rollypay.io с СБП, картами и криптовалютой.'),
-        'OVERPAY': get_texts().t('SETTINGS_CATEGORY_DESC_OVERPAY', 'Overpay: платёжный шлюз pay.overpay.io с mTLS и поддержкой карт и СБП.'),
-        'AURAPAY': get_texts().t('SETTINGS_CATEGORY_DESC_AURAPAY', 'AuraPay: платёжный шлюз aurapay.tech с поддержкой карт и СБП.'),
-        'ANTILOPAY': get_texts().t('SETTINGS_CATEGORY_DESC_ANTILOPAY', 'Antilopay: lk.antilopay.com, оплата картой, СБП и SberPay.'),
-        'ETOPLATEZHI': get_texts().t('SETTINGS_CATEGORY_DESC_ETOPLATEZHI', 'Etoplatezhi: paymentpage.etoplatezhi.ru, оплата картой и через СБП.'),
-        'JUPITER': get_texts().t('SETTINGS_CATEGORY_DESC_JUPITER', 'Jupiter (FPGate P2P v2.1): app.juppiter.tech, эквайринг СБП с HMAC-SHA256.'),
-        'CISPAY': get_texts().t('SETTINGS_CATEGORY_DESC_CISPAY', 'cisPay: api.cispay.app, H2H-оплата картой и СБП на хостинговой странице, вебхуки с HMAC-SHA256.'),
-        'CASHERA': get_texts().t('SETTINGS_CATEGORY_DESC_CASHERA', 'Cashera: api.cashera.cash, СБП, карты, крипта и CryptoBot; ключ pk_, секрет sk_, методы оплаты.'),
-        'TABPAY': get_texts().t('SETTINGS_CATEGORY_DESC_TABPAY', 'TabPay: tabpay.org, СБП и карты с 3-D Secure; вебхуки подписаны HMAC-SHA256 (X-Signature-V2).'),
-        'PARITYPAY': get_texts().t('SETTINGS_CATEGORY_DESC_PARITYPAY', 'ParityPay: api.paritypay.net v2, СБП и карты; уведомления подписаны HMAC-SHA256 (X-SIGNATURE).'),
-        'HOOSHPAY': get_texts().t('SETTINGS_CATEGORY_DESC_HOOSHPAY', 'HooshPay: hooshpay.xyz/api/v1, درگاه کارت‌به‌کارت ایرانی (تومان); وبهوک با HMAC-SHA256 (X-HooshPay-Signature). کلید HOOSHPAY_API_KEY + HOOSHPAY_API_SECRET.'),
-        'TONPAYS': get_texts().t('SETTINGS_CATEGORY_DESC_TONPAYS', 'TonPays: tonpays.online, درگاه کاستوم کارت‌به‌کارت (بستر تلگرام)؛ وبهوک با X-API-Key و delivery_id. کلید TONPAYS_API_KEY.'),
-        'ATLASPAY': get_texts().t('SETTINGS_CATEGORY_DESC_ATLASPAY', 'AtlasPay: api.atlaspay.space, درگاه کارت‌به‌کارت با تأیید پیامکی (مینی‌اپ تلگرام)؛ وبهوک HMAC-SHA256. کلید ATLASPAY_API_KEY + ATLASPAY_WEBHOOK_SECRET.'),
-        'NOWPAYMENTS': get_texts().t('SETTINGS_CATEGORY_DESC_NOWPAYMENTS', 'NOWPayments: api.nowpayments.io، دریافت کریپتو با تبدیل خودکار (invoice)؛ IPN با HMAC-SHA512. کلید NOWPAYMENTS_API_KEY + NOWPAYMENTS_IPN_SECRET.'),
-        'DONUT': get_texts().t('SETTINGS_CATEGORY_DESC_DONUT', 'Donut P2P: gw.donut.business, P2P-оплата картой, СБП по телефону и QR.'),
-        'LAVA': get_texts().t('SETTINGS_CATEGORY_DESC_LAVA', 'Lava Business: gate.lava.ru, оплата картой и СБП с HMAC-SHA256 и подтверждением через webhook.'),
-        'PLATEGA': get_texts().t('SETTINGS_CATEGORY_DESC_PLATEGA', '{platega_name}: merchant ID, секрет, ссылки возврата и методы оплаты.'),
-        'MULENPAY': get_texts().t('SETTINGS_CATEGORY_DESC_MULENPAY', 'Платежи {mulenpay_name} и параметры магазина.'),
-        'PAL24': get_texts().t('SETTINGS_CATEGORY_DESC_PAL24', 'PAL24 / PayPalych подключения и лимиты.'),
-        'TRIBUTE': get_texts().t('SETTINGS_CATEGORY_DESC_TRIBUTE', 'Tribute и донат-сервисы.'),
-        'TELEGRAM': get_texts().t('SETTINGS_CATEGORY_DESC_TELEGRAM', 'Telegram Stars и их стоимость.'),
-        'TELEGRAM_WIDGET': get_texts().t('SETTINGS_CATEGORY_DESC_TELEGRAM_WIDGET', 'Внешний вид виджета авторизации Telegram на странице входа в кабинет.'),
-        'TELEGRAM_OIDC': get_texts().t('SETTINGS_CATEGORY_DESC_TELEGRAM_OIDC', 'OpenID Connect авторизация через Telegram (новая система). Требует настройки в BotFather > Bot Settings > Web Login.'),
-        'WATA': get_texts().t('SETTINGS_CATEGORY_DESC_WATA', 'Wata: токен доступа, тип платежа и пределы сумм.'),
-        'SUBSCRIPTIONS_CORE': get_texts().t('SETTINGS_CATEGORY_DESC_SUBSCRIPTIONS_CORE', 'Лимиты устройств, трафика и базовые цены подписок.'),
-        'SIMPLE_SUBSCRIPTION': get_texts().t('SETTINGS_CATEGORY_DESC_SIMPLE_SUBSCRIPTION', 'Параметры упрощённой покупки: период, трафик, устройства и сквады.'),
-        'PERIODS': get_texts().t('SETTINGS_CATEGORY_DESC_PERIODS', 'Доступные периоды подписок и продлений.'),
-        'SUBSCRIPTION_PRICES': get_texts().t('SETTINGS_CATEGORY_DESC_SUBSCRIPTION_PRICES', 'Стоимость подписок по периодам в копейках.'),
-        'TRAFFIC': get_texts().t('SETTINGS_CATEGORY_DESC_TRAFFIC', 'Лимиты трафика и стратегии сброса.'),
-        'TRAFFIC_PACKAGES': get_texts().t('SETTINGS_CATEGORY_DESC_TRAFFIC_PACKAGES', 'Цены пакетов трафика и конфигурация предложений.'),
-        'TRIAL': get_texts().t('SETTINGS_CATEGORY_DESC_TRIAL', 'Длительность и ограничения пробного периода.'),
-        'REFERRAL': get_texts().t('SETTINGS_CATEGORY_DESC_REFERRAL', 'Бонусы и пороги реферальной программы.'),
-        'AUTOPAY': get_texts().t('SETTINGS_CATEGORY_DESC_AUTOPAY', 'Настройки автопродления и минимальный баланс.'),
-        'NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_DESC_NOTIFICATIONS', 'Пользовательские уведомления и кэширование сообщений.'),
-        'ADMIN_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_DESC_ADMIN_NOTIFICATIONS', 'Оповещения админам о событиях и тикетах.'),
-        'ADMIN_REPORTS': get_texts().t('SETTINGS_CATEGORY_DESC_ADMIN_REPORTS', 'Автоматические отчеты для команды.'),
-        'INTERFACE': get_texts().t('SETTINGS_CATEGORY_DESC_INTERFACE', 'Глобальные параметры интерфейса и брендирования.'),
-        'INTERFACE_BRANDING': get_texts().t('SETTINGS_CATEGORY_DESC_INTERFACE_BRANDING', 'Логотип и фирменный стиль.'),
-        'INTERFACE_SUBSCRIPTION': get_texts().t('SETTINGS_CATEGORY_DESC_INTERFACE_SUBSCRIPTION', 'Отображение ссылок и кнопок подписок.'),
-        'CONNECT_BUTTON': get_texts().t('SETTINGS_CATEGORY_DESC_CONNECT_BUTTON', 'Поведение кнопки «Подключиться» и miniapp.'),
-        'MINIAPP': get_texts().t('SETTINGS_CATEGORY_DESC_MINIAPP', 'Mini App и кастомные ссылки.'),
-        'HAPP': get_texts().t('SETTINGS_CATEGORY_DESC_HAPP', 'Интеграция Happ и связанные ссылки.'),
-        'INCY': get_texts().t('SETTINGS_CATEGORY_DESC_INCY', 'Шифрованные deep links INCY (incy://crypt1/...).'),
-        'SKIP': get_texts().t('SETTINGS_CATEGORY_DESC_SKIP', 'Настройки быстрого старта и гайд по подключению.'),
-        'ADDITIONAL': get_texts().t('SETTINGS_CATEGORY_DESC_ADDITIONAL', 'Конфигурация deep links и кеша.'),
-        'DATABASE': get_texts().t('SETTINGS_CATEGORY_DESC_DATABASE', 'Режим работы базы данных и пути до файлов.'),
-        'POSTGRES': get_texts().t('SETTINGS_CATEGORY_DESC_POSTGRES', 'Параметры подключения к PostgreSQL.'),
-        'SQLITE': get_texts().t('SETTINGS_CATEGORY_DESC_SQLITE', 'Файл SQLite и резервные параметры.'),
-        'REDIS': get_texts().t('SETTINGS_CATEGORY_DESC_REDIS', 'Подключение к Redis для кэша.'),
-        'REMNAWAVE': get_texts().t('SETTINGS_CATEGORY_DESC_REMNAWAVE', 'Параметры авторизации и интеграция с RemnaWave API.'),
-        'SERVER_STATUS': get_texts().t('SETTINGS_CATEGORY_DESC_SERVER_STATUS', 'Отображение статуса серверов и external URL.'),
-        'MONITORING': get_texts().t('SETTINGS_CATEGORY_DESC_MONITORING', 'Интервалы мониторинга и хранение логов.'),
-        'MAINTENANCE': get_texts().t('SETTINGS_CATEGORY_DESC_MAINTENANCE', 'Режим обслуживания, сообщения и интервалы.'),
-        'BACKUP': get_texts().t('SETTINGS_CATEGORY_DESC_BACKUP', 'Резервное копирование и расписание.'),
-        'VERSION': get_texts().t('SETTINGS_CATEGORY_DESC_VERSION', 'Отслеживание обновлений репозитория.'),
-        'WEB_API': get_texts().t('SETTINGS_CATEGORY_DESC_WEB_API', 'Web API, токены и права доступа.'),
-        'WEBHOOK': get_texts().t('SETTINGS_CATEGORY_DESC_WEBHOOK', 'Пути и секреты вебхуков.'),
-        'WEBHOOK_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_DESC_WEBHOOK_NOTIFICATIONS', 'Управление уведомлениями, которые получают пользователи при событиях RemnaWave (отключение/активация подписки, устройства, трафик и т.д.).'),
-        'LOG': get_texts().t('SETTINGS_CATEGORY_DESC_LOG', 'Уровни логирования и ротация.'),
-        'DEBUG': get_texts().t('SETTINGS_CATEGORY_DESC_DEBUG', 'Отладочные функции и безопасный режим.'),
-        'MODERATION': get_texts().t('SETTINGS_CATEGORY_DESC_MODERATION', 'Настройки фильтров отображаемых имен и защиты от фишинга.'),
-        'BAN_NOTIFICATIONS': get_texts().t('SETTINGS_CATEGORY_DESC_BAN_NOTIFICATIONS', 'Тексты уведомлений о блокировках, которые отправляются пользователям.'),
-        'INFO_PAGES': get_texts().t('SETTINGS_CATEGORY_DESC_INFO_PAGES', 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.'),
+        'CORE': 'Базовые параметры работы бота и обязательные ссылки.',
+        'SUPPORT': 'Контакты поддержки, SLA и режимы обработки обращений.',
+        'REGISTRATION_ACCESS': 'Закрытая регистрация и допустимые способы приглашения новых пользователей.',
+        'LOCALIZATION': 'Доступные языки, локализация интерфейса и выбор языка.',
+        'CHANNEL': 'Настройки обязательной подписки на канал или группу.',
+        'TIMEZONE': 'Часовой пояс панели и отображение времени.',
+        'PAYMENT': 'Общие тексты платежей, описания чеков и шаблоны.',
+        'PAYMENT_VERIFICATION': 'Автоматическая проверка пополнений и интервал выполнения.',
+        'YOOKASSA': 'Интеграция с YooKassa: идентификаторы магазина и вебхуки.',
+        'CRYPTOBOT': 'CryptoBot и криптоплатежи через Telegram.',
+        'HELEKET': 'Heleket: криптоплатежи, ключи мерчанта и вебхуки.',
+        'CLOUDPAYMENTS': 'CloudPayments: оплата банковскими картами, Public ID, API Secret и вебхуки.',
+        'FREEKASSA': 'Freekassa: ID магазина, API ключ, секретные слова и вебхуки.',
+        'KASSA_AI': 'KassaAI: отдельная платёжка api.fk.life с СБП, картами и SberPay.',
+        'RIOPAY': 'RioPay: платёжная система api.riopay.online с поддержкой карт и СБП.',
+        'ROLLYPAY': 'RollyPay: платёжный шлюз rollypay.io с СБП, картами и криптовалютой.',
+        'OVERPAY': 'Overpay: платёжный шлюз pay.overpay.io с mTLS и поддержкой карт и СБП.',
+        'AURAPAY': 'AuraPay: платёжный шлюз aurapay.tech с поддержкой карт и СБП.',
+        'ANTILOPAY': 'Antilopay: lk.antilopay.com, оплата картой, СБП и SberPay.',
+        'ETOPLATEZHI': 'Etoplatezhi: paymentpage.etoplatezhi.ru, оплата картой и через СБП.',
+        'JUPITER': 'Jupiter (FPGate P2P v2.1): app.juppiter.tech, эквайринг СБП с HMAC-SHA256.',
+        'CISPAY': 'CisPay: карта, СБП и опциональная криптовалюта на странице провайдера; webhook HMAC-SHA256.',
+        'CASHERA': 'Cashera: api.cashera.cash, СБП, карты, крипта и CryptoBot; ключ pk_, секрет sk_, методы оплаты.',
+        'ANORE': 'Anore: рублёвые счета, СБП, карты, ЮMoney и криптовалюта. Webhook HMAC-SHA256.',
+        'TABPAY': 'TabPay: tabpay.org, СБП и карты с 3-D Secure; вебхуки подписаны HMAC-SHA256 (X-Signature-V2).',
+        'PARITYPAY': 'ParityPay: api.paritypay.net v2, СБП и карты; уведомления подписаны HMAC-SHA256 (X-SIGNATURE).',
+        'DONUT': 'Donut P2P: gw.donut.business, P2P-оплата картой, СБП по телефону и QR.',
+        'LAVA': 'Lava Business: gate.lava.ru, оплата картой и СБП с HMAC-SHA256 и подтверждением через webhook.',
+        'PLATEGA': '{platega_name}: merchant ID, секрет, ссылки возврата и методы оплаты.',
+        'MULENPAY': 'Платежи {mulenpay_name} и параметры магазина.',
+        'PAL24': 'PAL24 / PayPalych подключения и лимиты.',
+        'TRIBUTE': 'Tribute и донат-сервисы.',
+        'TELEGRAM': 'Telegram Stars и их стоимость.',
+        'TELEGRAM_WIDGET': 'Внешний вид виджета авторизации Telegram на странице входа в кабинет.',
+        'TELEGRAM_OIDC': 'OpenID Connect авторизация через Telegram (новая система). Требует настройки в BotFather > Bot Settings > Web Login.',
+        'WATA': 'Wata: токен доступа, тип платежа и пределы сумм.',
+        'SUBSCRIPTIONS_CORE': 'Лимиты устройств, трафика и базовые цены подписок.',
+        'SIMPLE_SUBSCRIPTION': 'Параметры упрощённой покупки: период, трафик, устройства и сквады.',
+        'PERIODS': 'Доступные периоды подписок и продлений.',
+        'SUBSCRIPTION_PRICES': 'Стоимость подписок по периодам в копейках.',
+        'TRAFFIC': 'Лимиты трафика и стратегии сброса.',
+        'TRAFFIC_PACKAGES': 'Цены пакетов трафика и конфигурация предложений.',
+        'TRIAL': 'Длительность и ограничения пробного периода.',
+        'REFERRAL': 'Бонусы и пороги реферальной программы.',
+        'AUTOPAY': 'Настройки автопродления и минимальный баланс.',
+        'NOTIFICATIONS': 'Пользовательские уведомления и кэширование сообщений.',
+        'ADMIN_NOTIFICATIONS': 'Оповещения админам о событиях и тикетах.',
+        'ADMIN_REPORTS': 'Автоматические отчеты для команды.',
+        'INTERFACE': 'Глобальные параметры интерфейса и брендирования.',
+        'INTERFACE_BRANDING': 'Логотип и фирменный стиль.',
+        'INTERFACE_SUBSCRIPTION': 'Отображение ссылок и кнопок подписок.',
+        'CONNECT_BUTTON': 'Поведение кнопки «Подключиться» и miniapp.',
+        'MINIAPP': 'Mini App и кастомные ссылки.',
+        'HAPP': 'Интеграция Happ и связанные ссылки.',
+        'INCY': 'Шифрованные deep links INCY (incy://crypt1/...).',
+        'SKIP': 'Настройки быстрого старта и гайд по подключению.',
+        'ADDITIONAL': 'Конфигурация deep links и кеша.',
+        'DATABASE': 'Режим работы базы данных и пути до файлов.',
+        'POSTGRES': 'Параметры подключения к PostgreSQL.',
+        'SQLITE': 'Файл SQLite и резервные параметры.',
+        'REDIS': 'Подключение к Redis для кэша.',
+        'REMNAWAVE': 'Параметры авторизации и интеграция с RemnaWave API.',
+        'SERVER_STATUS': 'Отображение статуса серверов и external URL.',
+        'MONITORING': 'Интервалы мониторинга и хранение логов.',
+        'MAINTENANCE': 'Режим обслуживания, сообщения и интервалы.',
+        'BACKUP': 'Резервное копирование и расписание.',
+        'VERSION': 'Отслеживание обновлений репозитория.',
+        'WEB_API': 'Web API, токены и права доступа.',
+        'WEBHOOK': 'Пути и секреты вебхуков.',
+        'WEBHOOK_NOTIFICATIONS': 'Управление уведомлениями, которые получают пользователи при событиях RemnaWave (отключение/активация подписки, устройства, трафик и т.д.).',
+        'LOG': 'Уровни логирования и ротация.',
+        'DEBUG': 'Отладочные функции и безопасный режим.',
+        'MODERATION': 'Настройки фильтров отображаемых имен и защиты от фишинга.',
+        'BAN_NOTIFICATIONS': 'Тексты уведомлений о блокировках, которые отправляются пользователям.',
+        'INFO_PAGES': 'Видимость встроенных страниц (правила, политика, оферта, FAQ) в боте и веб-кабинете.',
         'GRACE_ACCESS': (
             get_texts().t('SETTINGS_CATEGORY_DESC_GRACE_ACCESS', 'Временный ограниченный доступ для истёкших и лимитных подписок. '
             'Здесь ключи лежат по отдельности; связанный экран с проверкой конфигурации и состоянием '
@@ -512,7 +550,6 @@ class BotConfigurationService:
         'KASSA_AI_': 'KASSA_AI',
         'RIOPAY_': 'RIOPAY',
         'SEVERPAY_': 'SEVERPAY',
-        'PAYPEAR_': 'PAYPEAR',
         'ROLLYPAY_': 'ROLLYPAY',
         'OVERPAY_': 'OVERPAY',
         'AURAPAY_': 'AURAPAY',
@@ -521,6 +558,7 @@ class BotConfigurationService:
         'JUPITER_': 'JUPITER',
         'CISPAY_': 'CISPAY',
         'CASHERA_': 'CASHERA',
+        'ANORE_': 'ANORE',
         'TABPAY_': 'TABPAY',
         'PARITYPAY_': 'PARITYPAY',
         'HOOSHPAY_': 'HOOSHPAY',
@@ -726,6 +764,15 @@ class BotConfigurationService:
     }
 
     SETTING_HINTS: dict[str, dict[str, str]] = {
+        'CISPAY_RECURRENT_ENABLED': {
+            'description': 'Автопродление тарифов через СБП CisPay в боте и кабинете.',
+            'format': 'Булево значение (да/нет).',
+            'example': 'false',
+            'warning': 'Первое подтверждение оплачивает период. CisPay должен разрешить подписки магазину. '
+            'Поддерживаются периоды от 7 до 360 дней. Выключение скрывает новое подключение, '
+            'но не отменяет действующие автоплатежи: отключайте их в карточке подписки.',
+            'dependencies': 'CISPAY_ENABLED, CISPAY_SBP_ENABLED, CISPAY_SHOP_ID, CISPAY_API_KEY',
+        },
         'SUPPORT_ADMIN_TICKET_NOTIFICATIONS_ENABLED': {
             'description': get_texts().t('SETTINGS_HINT_SUPPORT_ADMIN_TICKET_NOTIFICATIONS_ENABLED_DESCRIPTION', 'Сообщать администраторам в Telegram о новых тикетах и ответах пользователей.'),
             'format': get_texts().t('SETTINGS_HINT_SUPPORT_ADMIN_TICKET_NOTIFICATIONS_ENABLED_FORMAT', 'Булево значение (да/нет).'),
@@ -1166,11 +1213,15 @@ class BotConfigurationService:
         },
         'AUTO_PURCHASE_AFTER_TOPUP_ENABLED': {
             'description': (
-                get_texts().t('SETTINGS_HINT_AUTO_PURCHASE_AFTER_TOPUP_ENABLED_DESCRIPTION', 'При достаточном балансе автоматически оформляет сохранённую подписку сразу после пополнения.')
+                'При достаточном балансе автоматически оформляет сохранённую подписку '
+                'или возобновляет приостановленный из-за нехватки средств суточный тариф сразу после пополнения.'
             ),
             'format': get_texts().t('SETTINGS_HINT_AUTO_PURCHASE_AFTER_TOPUP_ENABLED_FORMAT', 'Булево значение.'),
             'example': 'true',
-            'warning': (get_texts().t('SETTINGS_HINT_AUTO_PURCHASE_AFTER_TOPUP_ENABLED_WARNING', 'Используйте с осторожностью: средства будут списаны мгновенно, если корзина найдена.')),
+            'warning': (
+                'Используйте с осторожностью: средства будут списаны мгновенно, если найдена корзина '
+                'или суточная подписка для возобновления. Подписки на паузе пользователя не возобновляются.'
+            ),
         },
         'SUPPORT_TICKET_SLA_MINUTES': {
             'description': get_texts().t('SETTINGS_HINT_SUPPORT_TICKET_SLA_MINUTES_DESCRIPTION', 'Лимит времени для ответа модераторов на тикет в минутах.'),
@@ -1608,8 +1659,21 @@ class BotConfigurationService:
     }
 
     @classmethod
-    def get_category_description(cls, category_key: str) -> str:
+    def _metadata_text(cls, key: str, default: str, language: str | None) -> str:
+        if language is None or not default:
+            return default
+        return get_texts(normalize_settings_language(language)).t(key, default)
+
+    @classmethod
+    def get_category_label(cls, category_key: str, language: str | None = None) -> str:
+        label = cls.CATEGORY_TITLES.get(category_key, category_key.capitalize())
+        label = cls._metadata_text(f'SETTINGS_CATEGORY_{category_key}_LABEL', label, language)
+        return cls._format_dynamic_copy(category_key, label)
+
+    @classmethod
+    def get_category_description(cls, category_key: str, language: str | None = None) -> str:
         description = cls.CATEGORY_DESCRIPTIONS.get(category_key, '')
+        description = cls._metadata_text(f'SETTINGS_CATEGORY_{category_key}_DESCRIPTION', description, language)
         return cls._format_dynamic_copy(category_key, description)
 
     @classmethod
@@ -1630,7 +1694,7 @@ class BotConfigurationService:
         return cls._is_env_override(key)
 
     @classmethod
-    def _format_numeric_with_unit(cls, key: str, value: float) -> str | None:
+    def _format_numeric_with_unit(cls, key: str, value: float, language: str | None = None) -> str | None:
         if isinstance(value, bool):
             return None
         upper_key = key.upper()
@@ -1643,18 +1707,16 @@ class BotConfigurationService:
                 return f'{value}'
         if upper_key.endswith('_PERCENT') or 'PERCENT' in upper_key:
             return f'{value}%'
-        if upper_key.endswith('_HOURS'):
-            return f'{value} ч'
-        if upper_key.endswith('_MINUTES'):
-            return f'{value} мин'
-        if upper_key.endswith('_SECONDS'):
-            return f'{value} сек'
-        if upper_key.endswith('_DAYS'):
-            return f'{value} дн'
-        if upper_key.endswith('_GB'):
-            return f'{value} ГБ'
-        if upper_key.endswith('_MB'):
-            return f'{value} МБ'
+        for unit, label in (
+            ('HOURS', 'ч'),
+            ('MINUTES', 'мин'),
+            ('SECONDS', 'сек'),
+            ('DAYS', 'дн'),
+            ('GB', 'ГБ'),
+            ('MB', 'МБ'),
+        ):
+            if upper_key.endswith(f'_{unit}'):
+                return cls._metadata_text(f'SETTINGS_VALUE_{unit}', '{value} ' + label, language).format(value=value)
         return None
 
     @classmethod
@@ -1666,33 +1728,28 @@ class BotConfigurationService:
         return parts or None
 
     @classmethod
-    def format_value_human(cls, key: str, value: Any) -> str:
+    def format_value_human(cls, key: str, value: Any, language: str | None = None) -> str:
         if key == 'SIMPLE_SUBSCRIPTION_SQUAD_UUID':
             if value is None:
-                return get_texts().t('SIMPLE_SUBSCRIPTION_SERVER_ANY', 'Любой доступный')
+                return cls._metadata_text('SETTINGS_VALUE_ANY_AVAILABLE', 'Любой доступный', language)
             if isinstance(value, str):
                 cleaned_value = value.strip()
                 if not cleaned_value:
-                    return get_texts().t('SIMPLE_SUBSCRIPTION_SERVER_ANY', 'Любой доступный')
+                    return cls._metadata_text('SETTINGS_VALUE_ANY_AVAILABLE', 'Любой доступный', language)
 
         if value is None:
             return '—'
 
         if isinstance(value, bool):
             return (
-                get_texts().t('SETTINGS_VALUE_ENABLED', '✅ ВКЛЮЧЕНО')
+                cls._metadata_text('SETTINGS_VALUE_ENABLED', '✅ ВКЛЮЧЕНО', language)
                 if value
-                else get_texts().t('SETTINGS_VALUE_DISABLED', '❌ ВЫКЛЮЧЕНО')
+                else cls._metadata_text('SETTINGS_VALUE_DISABLED', '❌ ВЫКЛЮЧЕНО', language)
             )
 
         if isinstance(value, (int, float)):
-            formatted = cls._format_numeric_with_unit(key, value)
-            if formatted is not None:
-                return formatted
-            # Целое float показываем без хвоста ".0" (курс 255000.0 → 255000).
-            if isinstance(value, float) and value.is_integer():
-                return str(int(value))
-            return str(value)
+            formatted = cls._format_numeric_with_unit(key, value, language)
+            return formatted or str(value)
 
         if isinstance(value, str):
             cleaned = value.strip()
@@ -1719,28 +1776,55 @@ class BotConfigurationService:
         return str(value)
 
     @classmethod
-    def get_setting_guidance(cls, key: str) -> dict[str, str]:
+    def get_setting_guidance(cls, key: str, language: str | None = None) -> dict[str, str]:
         definition = cls.get_definition(key)
         original = cls.get_original_value(key)
         type_label = definition.type_label
         hints = dict(cls.SETTING_HINTS.get(key, {}))
+        for field, value in hints.items():
+            # Only maintained static copy is translated. Example values and dependency
+            # keys remain verbatim unless the source itself contains explanatory prose.
+            if re.search('[А-Яа-я]', value):
+                hints[field] = cls._metadata_text(f'SETTINGS_HINT_{key}_{field.upper()}', value, language)
+            # These two display-name slots belong to our copy. Other braces are
+            # documentation for operator templates (e.g. {telegram_id}), not format
+            # arguments. Substitute once so braces inside a custom brand stay data.
+            hints[field] = re.sub(
+                r'\{(mulenpay_name|platega_name)\}',
+                lambda match: (
+                    settings.get_mulenpay_display_name()
+                    if match[1] == 'mulenpay_name'
+                    else settings.get_platega_display_name()
+                ),
+                hints[field],
+            )
 
-        base_description = hints.get('description') or get_texts().t(
-            'SETTINGS_GUIDANCE_DEFAULT_DESCRIPTION',
-            'Параметр <b>{display_name}</b> управляет категорией «{category_label}».',
-        ).format(display_name=definition.display_name, category_label=definition.category_label)
+        category_label = cls.get_category_label(definition.category_key, language)
+        default_description = (
+            cls._metadata_text(
+                'SETTINGS_HINT_DEFAULT_DESCRIPTION', 'Настройка категории «{category}».', language
+            ).format(category=category_label)
+            if language is not None
+            else f'Параметр <b>{definition.display_name}</b> управляет категорией «{definition.category_label}».'
+        )
+
+        base_description = hints.get('description') or default_description
         base_format = hints.get('format') or (
-            get_texts().t('SETTINGS_GUIDANCE_FORMAT_BOOL', 'Булево значение (да/нет).')
+            cls._metadata_text('SETTINGS_HINT_DEFAULT_BOOL_FORMAT', 'Булево значение (да/нет).', language)
             if definition.python_type is bool
-            else get_texts().t(
-                'SETTINGS_GUIDANCE_FORMAT_OTHER', 'Введите значение соответствующего типа (число или строку).'
+            else cls._metadata_text(
+                'SETTINGS_HINT_DEFAULT_VALUE_FORMAT',
+                'Введите значение соответствующего типа (число или строку).',
+                language,
             )
         )
-        example = hints.get('example') or (cls.format_value_human(key, original) if original is not None else '—')
-        warning = hints.get('warning') or get_texts().t(
-            'SETTINGS_GUIDANCE_DEFAULT_WARNING', 'Неверные значения могут привести к некорректной работе бота.'
+        example = hints.get('example') or (
+            cls.format_value_human(key, original, language) if original is not None else '—'
         )
-        dependencies = hints.get('dependencies') or definition.category_label
+        warning = hints.get('warning') or cls._metadata_text(
+            'SETTINGS_HINT_DEFAULT_WARNING', 'Неверные значения могут привести к некорректной работе бота.', language
+        )
+        dependencies = hints.get('dependencies') or category_label
 
         return {
             'description': base_description,
@@ -1776,7 +1860,7 @@ class BotConfigurationService:
             category_key = cls._resolve_category_key(key)
             category_label = cls.CATEGORY_TITLES.get(
                 category_key,
-                category_key.capitalize() if category_key else get_texts().t('SETTINGS_CATEGORY_OTHER', 'Прочее'),
+                category_key.capitalize() if category_key else 'Прочее',
             )
             category_label = cls._format_dynamic_copy(category_key, category_label)
 
@@ -1897,7 +1981,7 @@ class BotConfigurationService:
         if value is None:
             return '—'
         if isinstance(value, bool):
-            return get_texts().t('YES', '✅ Да') if value else get_texts().t('NO', '❌ Нет')
+            return '✅ Да' if value else '❌ Нет'
         if isinstance(value, (int, float)):
             return str(value)
         if isinstance(value, (list, dict, tuple, set)):
@@ -1943,14 +2027,31 @@ class BotConfigurationService:
         return cls.as_choice_key(value) in {cls.as_choice_key(option.value) for option in options}
 
     @classmethod
-    def get_choice_options(cls, key: str) -> list[ChoiceOption]:
+    def get_choice_options(cls, key: str, language: str | None = None) -> list[ChoiceOption]:
         cls.initialize_definitions()
-        dynamic = cls._get_dynamic_choice_options(key)
+        dynamic = cls._get_dynamic_choice_options(key, language)
         if dynamic is not None:
-            cls.CHOICES[key] = dynamic
-            cls._invalidate_choice_cache(key)
+            if language is None:
+                cls.CHOICES[key] = dynamic
+                cls._invalidate_choice_cache(key)
             return dynamic
-        return cls.CHOICES.get(key, [])
+        options = cls.CHOICES.get(key, [])
+        if language is None:
+            return options
+        localized = []
+        for option in options:
+            suffix = re.sub('[^A-Z0-9]+', '_', str(option.value).upper()).strip('_') or 'EMPTY'
+            prefix = f'SETTINGS_CHOICE_{key}_{suffix}'
+            localized.append(
+                ChoiceOption(
+                    option.value,
+                    cls._metadata_text(f'{prefix}_LABEL', option.label, language),
+                    cls._metadata_text(f'{prefix}_DESCRIPTION', option.description, language)
+                    if option.description
+                    else None,
+                )
+            )
+        return localized
 
     @classmethod
     def _invalidate_choice_cache(cls, key: str) -> None:
@@ -1958,17 +2059,17 @@ class BotConfigurationService:
         cls._choice_token_lookup.pop(key, None)
 
     @classmethod
-    def _get_dynamic_choice_options(cls, key: str) -> list[ChoiceOption] | None:
+    def _get_dynamic_choice_options(cls, key: str, language: str | None = None) -> list[ChoiceOption] | None:
         if key == 'SIMPLE_SUBSCRIPTION_PERIOD_DAYS':
-            return cls._build_simple_subscription_period_choices()
+            return cls._build_simple_subscription_period_choices(language)
         if key == 'SIMPLE_SUBSCRIPTION_DEVICE_LIMIT':
-            return cls._build_simple_subscription_device_choices()
+            return cls._build_simple_subscription_device_choices(language)
         if key == 'SIMPLE_SUBSCRIPTION_TRAFFIC_GB':
-            return cls._build_simple_subscription_traffic_choices()
+            return cls._build_simple_subscription_traffic_choices(language)
         return None
 
-    @staticmethod
-    def _build_simple_subscription_period_choices() -> list[ChoiceOption]:
+    @classmethod
+    def _build_simple_subscription_period_choices(cls, language: str | None = None) -> list[ChoiceOption]:
         raw_periods = str(getattr(settings, 'AVAILABLE_SUBSCRIPTION_PERIODS', '') or '')
         period_values: set[int] = set()
 
@@ -1997,7 +2098,7 @@ class BotConfigurationService:
             if not isinstance(price_value, int):
                 price_value = settings.BASE_SUBSCRIPTION_PRICE
 
-            label = f'{days} дн.'
+            label = cls._metadata_text('SETTINGS_CHOICE_DAYS', '{count} дн.', language).format(count=days)
             try:
                 if isinstance(price_value, int):
                     label = f'{label} — {settings.format_price(price_value)}'
@@ -2009,7 +2110,7 @@ class BotConfigurationService:
         return options
 
     @classmethod
-    def _build_simple_subscription_device_choices(cls) -> list[ChoiceOption]:
+    def _build_simple_subscription_device_choices(cls, language: str | None = None) -> list[ChoiceOption]:
         default_limit = getattr(settings, 'DEFAULT_DEVICE_LIMIT', 1) or 1
         try:
             default_limit = int(default_limit)
@@ -2034,14 +2135,20 @@ class BotConfigurationService:
         options: list[ChoiceOption] = []
         for count in range(1, upper_bound + 1):
             label = f'{count} {cls._pluralize_devices(count)}'
+            if language is not None:
+                label = cls._metadata_text('SETTINGS_CHOICE_DEVICES', 'Устройств: {count}', language).format(
+                    count=count
+                )
             if count == default_limit:
-                label = get_texts().t('SETTINGS_DEVICE_DEFAULT_LABEL', '{label} (по умолчанию)').format(label=label)
+                label = cls._metadata_text('SETTINGS_CHOICE_DEFAULT', '{label} (по умолчанию)', language).format(
+                    label=label
+                )
             options.append(ChoiceOption(count, label))
 
         return options
 
-    @staticmethod
-    def _build_simple_subscription_traffic_choices() -> list[ChoiceOption]:
+    @classmethod
+    def _build_simple_subscription_traffic_choices(cls, language: str | None = None) -> list[ChoiceOption]:
         try:
             packages = settings.get_traffic_packages()
         except Exception as error:
@@ -2077,9 +2184,9 @@ class BotConfigurationService:
         options: list[ChoiceOption] = []
         for gb in sorted(traffic_values):
             if gb <= 0:
-                label = get_texts().t('TRAFFIC_UNLIMITED_SHORT', 'Безлимит')
+                label = cls._metadata_text('SETTINGS_CHOICE_UNLIMITED', 'Безлимит', language)
             else:
-                label = f'{gb} ГБ'
+                label = cls._metadata_text('SETTINGS_VALUE_GB', '{value} ГБ', language).format(value=gb)
 
             price_label = None
             for package in packages:
@@ -2261,7 +2368,7 @@ class BotConfigurationService:
         await cls.initialize()
 
     @classmethod
-    def deserialize_value(cls, key: str, raw_value: str | None) -> Any:
+    def deserialize_value(cls, key: str, raw_value: str | None, language: str | None = None) -> Any:
         if raw_value is None:
             return None
 
@@ -2274,13 +2381,29 @@ class BotConfigurationService:
                 return True
             if value_lower in {'0', 'false', 'off', 'no', 'нет'}:
                 return False
-            raise ValueError(f'Неверное булево значение: {raw_value}')
+            if language is None:
+                raise ValueError(f'Неверное булево значение: {raw_value}')
+            raise ValueError(
+                cls._metadata_text('BOT_SETTINGS_ERROR_BOOL', "Введите 'true' или 'false' (или 'да'/'нет')", language)
+            )
 
         if python_type is int:
-            return int(raw_value)
+            try:
+                return int(raw_value)
+            except ValueError as error:
+                if language is None:
+                    raise
+                raise ValueError(
+                    cls._metadata_text('BOT_SETTINGS_ERROR_INTEGER', 'Введите целое число.', language)
+                ) from error
 
         if python_type is float:
-            return float(raw_value)
+            try:
+                return float(raw_value)
+            except ValueError as error:
+                if language is None:
+                    raise
+                raise ValueError(cls._metadata_text('BOT_SETTINGS_ERROR_NUMBER', 'Введите число.', language)) from error
 
         return raw_value
 
@@ -2299,12 +2422,12 @@ class BotConfigurationService:
         return str(value)
 
     @classmethod
-    def parse_user_value(cls, key: str, user_input: str) -> Any:
+    def parse_user_value(cls, key: str, user_input: str, language: str | None = None) -> Any:
         definition = cls.get_definition(key)
         text = (user_input or '').strip()
 
         if text.lower() in {'отмена', 'cancel'}:
-            raise ValueError(get_texts().t('SETTINGS_INPUT_CANCELLED', 'Ввод отменен пользователем'))
+            raise ValueError(cls._metadata_text('BOT_SETTINGS_ERROR_CANCELLED', 'Ввод отменен пользователем', language))
 
         if definition.is_optional and text.lower() in {'none', 'null', 'пусто', ''}:
             return None
@@ -2318,17 +2441,29 @@ class BotConfigurationService:
             if lowered in {'0', 'false', 'off', 'no', 'нет', 'выкл', 'disable', 'disabled'}:
                 return False
             raise ValueError(
-                get_texts().t('SETTINGS_INPUT_BOOL_PROMPT', "Введите 'true' или 'false' (или 'да'/'нет')")
+                cls._metadata_text('BOT_SETTINGS_ERROR_BOOL', "Введите 'true' или 'false' (или 'да'/'нет')", language)
             )
 
         if python_type is int:
-            parsed_value: Any = int(text)
+            try:
+                parsed_value: Any = int(text)
+            except ValueError as error:
+                if language is None:
+                    raise
+                raise ValueError(
+                    cls._metadata_text('BOT_SETTINGS_ERROR_INTEGER', 'Введите целое число.', language)
+                ) from error
         elif python_type is float:
-            parsed_value = float(text.replace(',', '.'))
+            try:
+                parsed_value = float(text.replace(',', '.'))
+            except ValueError as error:
+                if language is None:
+                    raise
+                raise ValueError(cls._metadata_text('BOT_SETTINGS_ERROR_NUMBER', 'Введите число.', language)) from error
         else:
             parsed_value = text
 
-        choices = cls.get_choice_options(key)
+        choices = cls.get_choice_options(key, language)
         if choices:
             allowed_values = {option.value for option in choices}
             if python_type is str:
@@ -2339,15 +2474,15 @@ class BotConfigurationService:
                 elif parsed_value not in allowed_values:
                     readable = ', '.join(f'{option.label} ({cls.format_value(option.value)})' for option in choices)
                     raise ValueError(
-                        get_texts().t('SETTINGS_INPUT_ALLOWED_VALUES', 'Доступные значения: {readable}').format(
-                            readable=readable
-                        )
+                        cls._metadata_text(
+                            'BOT_SETTINGS_ERROR_CHOICES', 'Доступные значения: {values}', language
+                        ).format(values=readable)
                     )
             elif parsed_value not in allowed_values:
                 readable = ', '.join(f'{option.label} ({cls.format_value(option.value)})' for option in choices)
                 raise ValueError(
-                    get_texts().t('SETTINGS_INPUT_ALLOWED_VALUES', 'Доступные значения: {readable}').format(
-                        readable=readable
+                    cls._metadata_text('BOT_SETTINGS_ERROR_CHOICES', 'Доступные значения: {values}', language).format(
+                        values=readable
                     )
                 )
 
@@ -2376,10 +2511,11 @@ class BotConfigurationService:
         лечь одной транзакцией; такой вызывающий обязан коммитить сам.
         """
         if cls.is_read_only(key) and not force:
-            raise ReadOnlySettingError(
-                get_texts().t('SETTINGS_ERROR_READ_ONLY', 'Setting {key} is read-only').format(key=key)
-            )
+            raise ReadOnlySettingError(f'Setting {key} is read-only')
 
+        from app.services.cispay_recurrent_guard import guard_cispay_credentials
+
+        await guard_cispay_credentials(db, key, value)
         raw_value = cls.serialize_value(key, value)
         await upsert_system_setting(db, key, raw_value)
         if commit:
@@ -2414,10 +2550,11 @@ class BotConfigurationService:
         пакетной записи.
         """
         if cls.is_read_only(key) and not force:
-            raise ReadOnlySettingError(
-                get_texts().t('SETTINGS_ERROR_READ_ONLY', 'Setting {key} is read-only').format(key=key)
-            )
+            raise ReadOnlySettingError(f'Setting {key} is read-only')
 
+        from app.services.cispay_recurrent_guard import guard_cispay_credentials
+
+        await guard_cispay_credentials(db, key, cls.get_original_value(key))
         await delete_system_setting(db, key)
         if commit:
             await db.commit()
@@ -2524,7 +2661,7 @@ class BotConfigurationService:
             )
 
     @classmethod
-    def get_setting_summary(cls, key: str) -> dict[str, Any]:
+    def get_setting_summary(cls, key: str, language: str | None = None) -> dict[str, Any]:
         definition = cls.get_definition(key)
         current = cls.get_current_value(key)
         original = cls.get_original_value(key)
@@ -2533,11 +2670,11 @@ class BotConfigurationService:
         return {
             'key': key,
             'name': definition.display_name,
-            'current': cls.format_value_human(key, current),
-            'original': cls.format_value_human(key, original),
+            'current': cls.format_value_human(key, current, language),
+            'original': cls.format_value_human(key, original, language),
             'type': definition.type_label,
             'category_key': definition.category_key,
-            'category_label': definition.category_label,
+            'category_label': cls.get_category_label(definition.category_key, language),
             'has_override': has_override,
             'is_read_only': cls.is_read_only(key),
         }

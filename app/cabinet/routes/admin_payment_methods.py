@@ -34,6 +34,7 @@ router = APIRouter(prefix='/admin/payment-methods', tags=['Cabinet Admin Payment
 class SubOptionInfo(BaseModel):
     id: str
     name: str
+    is_provider_enabled: bool = True
 
 
 class PaymentMethodConfigResponse(BaseModel):
@@ -81,20 +82,10 @@ class PaymentMethodConfigUpdateRequest(BaseModel):
         if not v:
             return None
         if len(v) > 20:
-            raise ValueError(
-                get_texts().t(
-                    'CABINET_PAYMENT_METHOD_SUB_OPTIONS_TOO_MANY',
-                    'sub_options cannot have more than 20 keys',
-                )
-            )
+            raise ValueError('sub_options cannot have more than 20 keys')
         for key in v:
             if not isinstance(key, str) or len(key) > 50:
-                raise ValueError(
-                    get_texts().t(
-                        'CABINET_PAYMENT_METHOD_SUB_OPTIONS_KEY_INVALID',
-                        'sub_options keys must be strings of at most 50 characters',
-                    )
-                )
+                raise ValueError('sub_options keys must be strings of at most 50 characters')
         return v
 
     quick_amounts: list[int] | None = None
@@ -179,7 +170,7 @@ async def list_payment_methods(
 ):
     """List all payment method configurations."""
     configs = await get_all_configs(db)
-    defaults = _get_method_defaults()
+    defaults = _get_method_defaults(include_disabled_sub_options=True)
     return [_enrich_config(c, defaults) for c in configs]
 
 
@@ -204,11 +195,9 @@ async def get_payment_method(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts()
-            .t('CABINET_PAYMENT_METHOD_NOT_FOUND', 'Payment method not found: {method_id}')
-            .format(method_id=method_id),
+            detail=f'Payment method not found: {method_id}',
         )
-    defaults = _get_method_defaults()
+    defaults = _get_method_defaults(include_disabled_sub_options=True)
     return _enrich_config(config, defaults)
 
 
@@ -287,12 +276,10 @@ async def update_payment_method(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts()
-            .t('CABINET_PAYMENT_METHOD_NOT_FOUND', 'Payment method not found: {method_id}')
-            .format(method_id=method_id),
+            detail=f'Payment method not found: {method_id}',
         )
 
     logger.info('Admin updated payment method config', admin_id=admin.id, method_id=method_id)
 
-    defaults = _get_method_defaults()
+    defaults = _get_method_defaults(include_disabled_sub_options=True)
     return _enrich_config(config, defaults)
