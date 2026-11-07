@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user
 from ...schemas.subscription import AutopayUpdateRequest

@@ -654,7 +654,7 @@ def _build_period_options_section(language: str) -> tuple[str, types.InlineKeybo
     available_subscription = set(settings.get_configured_subscription_periods())
     available_renewal = set(settings.get_configured_renewal_periods())
 
-    subscription_options = (14, 30, 60, 90, 180, 360)
+    subscription_options = (15, 30, 60, 90, 180, 360)
     renewal_options = (30, 60, 90, 180, 360)
 
     title = texts.t('ADMIN_PRICING_SECTION_PERIOD_OPTIONS_TITLE', '🗓 Доступные периоды')
@@ -1374,7 +1374,7 @@ async def toggle_period_option(
     if target == 'subscription':
         # Используем метод без фильтрации по ценам для админки
         current = set(settings.get_configured_subscription_periods())
-        options = {14, 30, 60, 90, 180, 360}
+        options = {15, 30, 60, 90, 180, 360}
         setting_key = 'AVAILABLE_SUBSCRIPTION_PERIODS'
     elif target == 'renewal':
         # Используем метод без фильтрации по ценам для админки
@@ -1387,6 +1387,18 @@ async def toggle_period_option(
 
     if days not in options:
         await callback.answer()
+        return
+
+    # Честность вместо ложного успеха: при env-override запись ляжет в БД,
+    # но применяться будет значение из .env — админ будет думать, что выключил.
+    if bot_configuration_service.is_env_locked(setting_key):
+        await callback.answer(
+            texts.t(
+                'ADMIN_PRICING_PERIOD_ENV_LOCKED',
+                'Сохранено в БД, но НЕ применено: значение задаётся переменной {key} из .env. Уберите её из .env и перезапустите бота.',
+            ).format(key=setting_key),
+            show_alert=True,
+        )
         return
 
     if days in current:

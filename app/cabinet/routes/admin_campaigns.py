@@ -29,6 +29,7 @@ from app.database.models import (
     Tariff,
     User,
 )
+from app.localization.texts import get_texts
 from app.services.partner_stats_service import PartnerStatsService
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -100,9 +101,10 @@ async def get_overview(
         raise
     except Exception as e:
         logger.error('Failed to get campaigns overview', error=str(e), exc_info=True)
+        texts = get_texts(admin.language)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load campaigns overview',
+            detail=texts.t('ADMIN_CAMPAIGNS_OVERVIEW_LOAD_FAILED', 'Failed to load campaigns overview'),
         )
 
 
@@ -215,11 +217,12 @@ async def get_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed campaign info."""
+    texts = get_texts(admin.language)
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Campaign not found',
+            detail=texts.t('ADMIN_CAMPAIGNS_NOT_FOUND', 'Campaign not found'),
         )
 
     tariff_info = None
@@ -261,12 +264,13 @@ async def get_campaign_chart_data(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get chart data for admin campaign analytics."""
+    texts = get_texts(admin.language)
     try:
         campaign = await get_campaign_by_id(db, campaign_id)
         if not campaign:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Campaign not found',
+                detail=texts.t('ADMIN_CAMPAIGNS_NOT_FOUND', 'Campaign not found'),
             )
 
         data = await PartnerStatsService.get_admin_campaign_chart_data(db, campaign_id)
@@ -277,7 +281,7 @@ async def get_campaign_chart_data(
         logger.error('Failed to get campaign chart data', error=str(e), campaign_id=campaign_id, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load campaign chart data',
+            detail=texts.t('ADMIN_CAMPAIGNS_CHART_LOAD_FAILED', 'Failed to load campaign chart data'),
         )
 
 
@@ -288,12 +292,13 @@ async def get_campaign_stats(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed campaign statistics."""
+    texts = get_texts(admin.language)
     try:
         campaign = await get_campaign_by_id(db, campaign_id)
         if not campaign:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Campaign not found',
+                detail=texts.t('ADMIN_CAMPAIGNS_NOT_FOUND', 'Campaign not found'),
             )
 
         stats = await get_campaign_statistics(db, campaign_id)
@@ -330,7 +335,7 @@ async def get_campaign_stats(
         logger.error('Failed to get campaign stats', error=str(e), campaign_id=campaign_id, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load campaign statistics',
+            detail=texts.t('ADMIN_CAMPAIGNS_STATS_LOAD_FAILED', 'Failed to load campaign statistics'),
         )
 
 
@@ -343,11 +348,12 @@ async def get_campaign_registrations(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get list of users registered through campaign."""
+    texts = get_texts(admin.language)
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Campaign not found',
+            detail=texts.t('ADMIN_CAMPAIGNS_NOT_FOUND', 'Campaign not found'),
         )
 
     offset = (page - 1) * per_page
@@ -421,12 +427,16 @@ async def create_new_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new advertising campaign."""
+    texts = get_texts(admin.language)
     # Check if start_parameter is unique
     existing = await get_campaign_by_start_parameter(db, request.start_parameter)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Campaign with start parameter '{request.start_parameter}' already exists",
+            detail=texts.t(
+                'ADMIN_CAMPAIGNS_START_PARAM_EXISTS',
+                "Campaign with start parameter '{start_parameter}' already exists",
+            ).format(start_parameter=request.start_parameter),
         )
 
     # Validate tariff exists if tariff bonus type
@@ -434,14 +444,14 @@ async def create_new_campaign(
         if not request.tariff_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Tariff ID is required for tariff bonus type',
+                detail=texts.t('ADMIN_CAMPAIGNS_TARIFF_ID_REQUIRED', 'Tariff ID is required for tariff bonus type'),
             )
         tariff_result = await db.execute(select(Tariff).where(Tariff.id == request.tariff_id))
         tariff = tariff_result.scalar_one_or_none()
         if not tariff:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Tariff not found',
+                detail=texts.t('ADMIN_CAMPAIGNS_TARIFF_NOT_FOUND', 'Tariff not found'),
             )
 
     # Validate partner exists and is approved
@@ -450,7 +460,7 @@ async def create_new_campaign(
         if not partner_user or partner_user.partner_status != PartnerStatus.APPROVED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Partner not found or not approved',
+                detail=texts.t('ADMIN_CAMPAIGNS_PARTNER_NOT_FOUND', 'Partner not found or not approved'),
             )
 
     campaign = await create_campaign(
@@ -483,11 +493,12 @@ async def update_existing_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update an existing campaign."""
+    texts = get_texts(admin.language)
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Campaign not found',
+            detail=texts.t('ADMIN_CAMPAIGNS_NOT_FOUND', 'Campaign not found'),
         )
 
     # Check if start_parameter is unique (if changing)
@@ -496,7 +507,10 @@ async def update_existing_campaign(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Campaign with start parameter '{request.start_parameter}' already exists",
+                detail=texts.t(
+                    'ADMIN_CAMPAIGNS_START_PARAM_EXISTS',
+                    "Campaign with start parameter '{start_parameter}' already exists",
+                ).format(start_parameter=request.start_parameter),
             )
 
     # Validate tariff if changing to tariff bonus type
@@ -508,7 +522,7 @@ async def update_existing_campaign(
             if not tariff:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Tariff not found',
+                    detail=texts.t('ADMIN_CAMPAIGNS_TARIFF_NOT_FOUND', 'Tariff not found'),
                 )
 
     # Build updates using model_fields_set to distinguish "not sent" from "sent as None"
@@ -545,7 +559,7 @@ async def update_existing_campaign(
             if not partner_user or partner_user.partner_status != PartnerStatus.APPROVED.value:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Partner not found or not approved',
+                    detail=texts.t('ADMIN_CAMPAIGNS_PARTNER_NOT_FOUND', 'Partner not found or not approved'),
                 )
         campaign.partner_user_id = new_partner_id
         campaign.updated_at = datetime.now(UTC)
@@ -569,11 +583,12 @@ async def delete_existing_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Delete a campaign."""
+    texts = get_texts(admin.language)
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Campaign not found',
+            detail=texts.t('ADMIN_CAMPAIGNS_NOT_FOUND', 'Campaign not found'),
         )
 
     # Check if campaign has registrations (COUNT query instead of loading all)
@@ -586,13 +601,16 @@ async def delete_existing_campaign(
     if reg_count > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Cannot delete campaign with {reg_count} registrations. Deactivate it instead.',
+            detail=texts.t(
+                'ADMIN_CAMPAIGNS_DELETE_HAS_REGISTRATIONS',
+                'Cannot delete campaign with {reg_count} registrations. Deactivate it instead.',
+            ).format(reg_count=reg_count),
         )
 
     await delete_campaign(db, campaign)
     logger.info('Admin deleted campaign', admin_id=admin.id, campaign_id=campaign_id, campaign_name=campaign.name)
 
-    return {'message': 'Campaign deleted successfully'}
+    return {'message': texts.t('ADMIN_CAMPAIGNS_DELETE_SUCCESS', 'Campaign deleted successfully')}
 
 
 @router.post('/{campaign_id}/toggle', response_model=CampaignToggleResponse)
@@ -602,11 +620,12 @@ async def toggle_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Toggle campaign active status."""
+    texts = get_texts(admin.language)
     campaign = await get_campaign_by_id(db, campaign_id)
     if not campaign:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Campaign not found',
+            detail=texts.t('ADMIN_CAMPAIGNS_NOT_FOUND', 'Campaign not found'),
         )
 
     new_status = not campaign.is_active

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import Subscription, User
+from app.localization.texts import get_texts
 
 from ...schemas.subscription import (
     ServerInfo,

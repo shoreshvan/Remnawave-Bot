@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import PaidTrafficResetIntent, Subscription, User
+from app.localization.texts import get_texts
 from app.services.panel_sync.identity import find_foreign_panel_owner
 
 
@@ -579,7 +580,9 @@ async def purchase_managed_reset(db, subscription_id: int, *, user_id: int, oper
             user_id=user_id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=amount,
-            description='Сброс трафика',
+            description=get_texts(getattr(subscription.user, 'language', settings.DEFAULT_LANGUAGE)).t(
+                'PAID_TRAFFIC_RESET_DESCRIPTION', 'Сброс трафика'
+            ),
             external_id=operation_key,
             commit=False,
         )

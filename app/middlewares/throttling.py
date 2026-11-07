@@ -8,6 +8,9 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
+from app.config import settings
+from app.localization.texts import get_texts
+
 
 logger = structlog.get_logger(__name__)
 
@@ -85,7 +88,13 @@ class ThrottlingMiddleware(BaseMiddleware):
                     max_calls=self.start_max_calls,
                 )
                 try:
-                    await event.answer(f'⏳ Слишком много запросов. Попробуйте через {cooldown} сек.')
+                    texts = get_texts(settings.DEFAULT_LANGUAGE)
+                    await event.answer(
+                        texts.t(
+                            'THROTTLING_START_BURST',
+                            '⏳ Слишком много запросов. Попробуйте через {cooldown} сек.',
+                        ).format(cooldown=cooldown)
+                    )
                 except TelegramAPIError:
                     pass
                 self.start_buckets[user_id] = timestamps
@@ -115,14 +124,21 @@ class ThrottlingMiddleware(BaseMiddleware):
                     if is_ticket_state:
                         return None
                 try:
-                    await event.answer('⏳ Пожалуйста, не отправляйте сообщения так часто!')
+                    texts = get_texts(settings.DEFAULT_LANGUAGE)
+                    await event.answer(
+                        texts.t('THROTTLING_MESSAGE_TOO_OFTEN', '⏳ Пожалуйста, не отправляйте сообщения так часто!')
+                    )
                 except TelegramAPIError:
                     pass
                 return None
             # Для callback допустим краткое уведомление
             if isinstance(event, CallbackQuery):
                 try:
-                    await event.answer('⏳ Слишком быстро! Подождите немного.', show_alert=True)
+                    texts = get_texts(settings.DEFAULT_LANGUAGE)
+                    await event.answer(
+                        texts.t('THROTTLING_CALLBACK_TOO_FAST', '⏳ Слишком быстро! Подождите немного.'),
+                        show_alert=True,
+                    )
                 except TelegramAPIError:
                     pass
                 return None

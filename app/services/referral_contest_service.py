@@ -24,6 +24,7 @@ from app.database.crud.referral_contest import (
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import ReferralContest, User
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -250,6 +251,7 @@ class ReferralContestService:
                 total_events=total_events,
                 today_events=today_events,
                 is_final=is_final,
+                language=user.language or settings.DEFAULT_LANGUAGE,
             )
 
             # Skip email-only users (no telegram_id)
@@ -283,14 +285,23 @@ class ReferralContestService:
         if not chat_id:
             return
 
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         lines = [
-            '🏆 <b>Конкурс рефералов</b>',
-            f'Название: <b>{html.escape(contest.title)}</b>',
-            f'Статус: {"финал" if is_final else "дневная сводка"}',
-            f'Временная зона: <code>{tz.key}</code>',
-            f'Всего рефералов: <b>{total_events}</b>',
+            texts.t('CONTEST_ADMIN_TITLE', '🏆 <b>Конкурс рефералов</b>'),
+            texts.t('CONTEST_ADMIN_NAME', 'Название: <b>{name}</b>').format(name=html.escape(contest.title)),
+            texts.t('CONTEST_ADMIN_STATUS', 'Статус: {status}').format(
+                status=(
+                    texts.t('CONTEST_STATUS_FINAL', 'финал')
+                    if is_final
+                    else texts.t('CONTEST_STATUS_DAILY', 'дневная сводка')
+                )
+            ),
+            texts.t('CONTEST_ADMIN_TIMEZONE', 'Временная зона: <code>{tz}</code>').format(tz=tz.key),
+            texts.t('CONTEST_ADMIN_TOTAL_REFERRALS', 'Всего рефералов: <b>{total}</b>').format(
+                total=total_events
+            ),
             '',
-            'Топ участников:',
+            texts.t('CONTEST_TOP_PARTICIPANTS', 'Топ участников:'),
         ]
 
         if leaderboard:
@@ -298,11 +309,11 @@ class ReferralContestService:
                 virt_mark = ' 👻' if is_virtual else ''
                 lines.append(f'{idx}. {html.escape(name)}{virt_mark} — {score}')
         else:
-            lines.append('Пока нет участников.')
+            lines.append(texts.t('ADMIN_CONTEST_EMPTY_LEADERBOARD', 'Пока нет участников.'))
 
         if contest.prize_text:
             lines.append('')
-            lines.append(f'Приз: {html.escape(contest.prize_text)}')
+            lines.append(texts.t('CONTEST_PRIZE', 'Приз: {prize}').format(prize=html.escape(contest.prize_text)))
 
         # Respect per-category enable/disable
         if not getattr(settings, 'ADMIN_NOTIFICATIONS_ENABLED', False) or not getattr(
@@ -339,24 +350,31 @@ class ReferralContestService:
         if not channel_id:
             return
 
+        texts = get_texts(settings.DEFAULT_LANGUAGE)
         lines = [
             f'🏆 {html.escape(contest.title)}',
-            '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги',
-            f'Время зоны: {tz.key}',
-            f'Всего участников: <b>{len(leaderboard)}</b>',
+            (
+                texts.t('CONTEST_RESULTS_FINAL', '🏁 Итоги конкурса')
+                if is_final
+                else texts.t('CONTEST_RESULTS_INTERIM', '📊 Промежуточные итоги')
+            ),
+            texts.t('CONTEST_CHANNEL_TIMEZONE', 'Время зоны: {tz}').format(tz=tz.key),
+            texts.t('CONTEST_CHANNEL_TOTAL_PARTICIPANTS', 'Всего участников: <b>{count}</b>').format(
+                count=len(leaderboard)
+            ),
             '',
-            'Топ участников:',
+            texts.t('CONTEST_TOP_PARTICIPANTS', 'Топ участников:'),
         ]
 
         if leaderboard:
             for idx, (name, score, _, _is_virtual) in enumerate(leaderboard[:5], start=1):
                 lines.append(f'{idx}. {html.escape(name)} — {score}')
         else:
-            lines.append('Пока нет участников.')
+            lines.append(texts.t('ADMIN_CONTEST_EMPTY_LEADERBOARD', 'Пока нет участников.'))
 
         if contest.prize_text:
             lines.append('')
-            lines.append(f'Приз: {html.escape(contest.prize_text)}')
+            lines.append(texts.t('CONTEST_PRIZE', 'Приз: {prize}').format(prize=html.escape(contest.prize_text)))
 
         try:
             await self.bot.send_message(
@@ -379,28 +397,45 @@ class ReferralContestService:
         total_events: int,
         today_events: int,
         is_final: bool,
+        language: str | None = None,
     ) -> str:
-        status_line = '🏁 Итоги конкурса' if is_final else '📊 Промежуточные итоги'
+        texts = get_texts(language or settings.DEFAULT_LANGUAGE)
+        status_line = (
+            texts.t('CONTEST_PARTICIPANT_STATUS_FINAL', '🏁 Итоги конкурса')
+            if is_final
+            else texts.t('CONTEST_PARTICIPANT_STATUS_INTERIM', '📊 Промежуточные итоги')
+        )
         lines = [
             f'🏆 {html.escape(contest.title)}',
             status_line,
             '',
-            f'Ваше место: <b>{rank}</b>',
-            f'Зачётов за всё время: <b>{score}</b>',
-            f'За сегодня: <b>{today_score}</b>',
-            f'Общий пул зачётов: <b>{total_events}</b> (сегодня {today_events})',
+            texts.t('CONTEST_PARTICIPANT_RANK', 'Ваше место: <b>{rank}</b>').format(rank=rank),
+            texts.t('CONTEST_PARTICIPANT_TOTAL_SCORE', 'Зачётов за всё время: <b>{score}</b>').format(score=score),
+            texts.t('CONTEST_PARTICIPANT_TODAY_SCORE', 'За сегодня: <b>{today_score}</b>').format(
+                today_score=today_score
+            ),
+            texts.t(
+                'CONTEST_PARTICIPANT_TOTAL_POOL',
+                'Общий пул зачётов: <b>{total_events}</b> (сегодня {today_events})',
+            ).format(total_events=total_events, today_events=today_events),
         ]
 
         if contest.prize_text:
             lines.append('')
-            lines.append(f'Призовой фонд: {html.escape(contest.prize_text)}')
+            lines.append(
+                texts.t('CONTEST_PARTICIPANT_PRIZE_FUND', 'Призовой фонд: {prize}').format(
+                    prize=html.escape(contest.prize_text)
+                )
+            )
 
         if not is_final:
             remaining = contest.end_at - datetime.now(UTC)
             if remaining.total_seconds() > 0:
                 hours_left = int(remaining.total_seconds() // 3600)
                 lines.append('')
-                lines.append(f'До окончания: ~{hours_left} ч.')
+                lines.append(
+                    texts.t('CONTEST_PARTICIPANT_TIME_LEFT', 'До окончания: ~{hours} ч.').format(hours=hours_left)
+                )
 
         return '\n'.join(lines)
 

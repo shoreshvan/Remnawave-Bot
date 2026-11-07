@@ -31,6 +31,7 @@ from app.services.maintenance_service import maintenance_service
 from app.services.monitoring_service import monitoring_service
 from app.services.nalogo_queue_service import nalogo_queue_service
 from app.services.payment_service import PaymentService
+from app.services.atlaspay_polling_service import atlaspay_polling_service
 from app.services.payment_verification_service import (
     PENDING_MAX_AGE,
     SUPPORTED_MANUAL_CHECK_METHODS,
@@ -597,6 +598,7 @@ async def main():
                 stage.log('Автопроверка отключена настройками')
 
             await auto_payment_verification_service.start()
+            await atlaspay_polling_service.start(payment_service)
             auto_verification_active = auto_payment_verification_service.is_running()
             if auto_verification_active:
                 stage.log('Фоновая автопроверка запущена')
@@ -986,6 +988,7 @@ async def main():
                 logger.warning('Не удалось отправить уведомление об остановке', error=shutdown_notify_error)
 
         logger.info('ℹ️ Остановка сервиса автопроверки пополнений...')
+        await atlaspay_polling_service.stop()
         try:
             await auto_payment_verification_service.stop()
         except Exception as error:

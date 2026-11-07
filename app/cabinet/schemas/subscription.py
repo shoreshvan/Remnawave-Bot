@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
+from app.localization.texts import get_texts
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -104,10 +106,15 @@ class RenewalOptionResponse(BaseModel):
 class RenewalRequest(BaseModel):
     """Request to renew subscription."""
 
-    period_days: int = Field(..., ge=1, le=3650, description='Renewal period in days')
+    period_days: int = Field(
+        ..., ge=1, le=3650, description=get_texts().t('CABINET_RENEWAL_PERIOD_DAYS_DESC', 'Renewal period in days')
+    )
     subscription_id: int | None = Field(
         default=None,
-        description='ID of subscription to renew (required in multi-tariff mode)',
+        description=get_texts().t(
+            'CABINET_RENEWAL_SUBSCRIPTION_ID_DESC',
+            'ID of subscription to renew (required in multi-tariff mode)',
+        ),
     )
     # See PurchasePreviewRequest.yandex_cid (#558449).
     yandex_cid: str | None = Field(
@@ -140,7 +147,10 @@ class TrafficPackageResponse(BaseModel):
 class TrafficPurchaseRequest(BaseModel):
     """Request to purchase additional traffic."""
 
-    gb: int = Field(..., ge=0, le=100_000, description='GB to purchase (0 = unlimited)')
+    gb: int = Field(
+        ..., ge=0, le=100_000,
+        description=get_texts().t('CABINET_TRAFFIC_PURCHASE_GB_DESC', 'GB to purchase (0 = unlimited)'),
+    )
     # See PurchasePreviewRequest.yandex_cid (#558449).
     yandex_cid: str | None = Field(
         None,
@@ -152,7 +162,10 @@ class TrafficPurchaseRequest(BaseModel):
 class DevicePurchaseRequest(BaseModel):
     """Request to purchase additional device slots."""
 
-    devices: int = Field(..., ge=1, le=100, description='Number of additional devices')
+    devices: int = Field(
+        ..., ge=1, le=100,
+        description=get_texts().t('CABINET_DEVICE_PURCHASE_COUNT_DESC', 'Number of additional devices'),
+    )
     # See PurchasePreviewRequest.yandex_cid (#558449).
     yandex_cid: str | None = Field(
         None,
@@ -165,7 +178,10 @@ class AutopayUpdateRequest(BaseModel):
     """Request to update autopay settings."""
 
     enabled: bool
-    days_before: int | None = Field(None, ge=1, le=30, description='Days before expiration to charge')
+    days_before: int | None = Field(
+        None, ge=1, le=30,
+        description=get_texts().t('CABINET_AUTOPAY_DAYS_BEFORE_DESC', 'Days before expiration to charge'),
+    )
 
 
 class TrialActivateRequest(BaseModel):
@@ -201,11 +217,22 @@ class TrialInfoResponse(BaseModel):
 class PurchaseSelectionRequest(BaseModel):
     """User's selection for subscription purchase."""
 
-    period_id: str | None = Field(None, description="Period ID like 'days:30'")
-    period_days: int | None = Field(None, ge=1, le=3650, description='Period in days')
-    traffic_value: int | None = Field(None, ge=0, le=100_000, description='Traffic in GB (0 = unlimited)')
-    servers: list[str] | None = Field(default_factory=list, description='Server UUIDs')
-    devices: int | None = Field(None, ge=1, le=100, description='Device limit')
+    period_id: str | None = Field(
+        None, description=get_texts().t('CABINET_PURCHASE_PERIOD_ID_DESC', "Period ID like 'days:30'")
+    )
+    period_days: int | None = Field(
+        None, ge=1, le=3650, description=get_texts().t('CABINET_PURCHASE_PERIOD_DAYS_DESC', 'Period in days')
+    )
+    traffic_value: int | None = Field(
+        None, ge=0, le=100_000,
+        description=get_texts().t('CABINET_PURCHASE_TRAFFIC_GB_DESC', 'Traffic in GB (0 = unlimited)'),
+    )
+    servers: list[str] | None = Field(
+        default_factory=list, description=get_texts().t('CABINET_PURCHASE_SERVERS_DESC', 'Server UUIDs')
+    )
+    devices: int | None = Field(
+        None, ge=1, le=100, description=get_texts().t('CABINET_PURCHASE_DEVICES_DESC', 'Device limit')
+    )
 
 
 class PurchasePreviewRequest(BaseModel):
@@ -221,7 +248,7 @@ class PurchasePreviewRequest(BaseModel):
         None,
         max_length=128,
         pattern=r'^[A-Za-z0-9._:-]{4,128}$',
-        description='Cached Yandex.Metrika ClientID (optional).',
+        description=get_texts().t('CABINET_YANDEX_CID_DESC', 'Cached Yandex.Metrika ClientID (optional).'),
     )
 
 
@@ -241,10 +268,15 @@ class TariffPurchaseRequest(BaseModel):
 
     checkout_id: UUID | None = Field(None, description='Stable purchase attempt ID; reuse on retries')
 
-    tariff_id: int = Field(..., description='Tariff ID to purchase')
-    period_days: int = Field(..., ge=1, le=3650, description='Period in days')
+    tariff_id: int = Field(..., description=get_texts().t('CABINET_TARIFF_PURCHASE_ID_DESC', 'Tariff ID to purchase'))
+    period_days: int = Field(
+        ..., ge=1, le=3650, description=get_texts().t('CABINET_PURCHASE_PERIOD_DAYS_DESC', 'Period in days')
+    )
     traffic_gb: int | None = Field(
-        None, ge=0, le=100_000, description='Custom traffic in GB (for custom_traffic_enabled tariffs)'
+        None, ge=0, le=100_000,
+        description=get_texts().t(
+            'CABINET_TARIFF_PURCHASE_TRAFFIC_GB_DESC', 'Custom traffic in GB (for custom_traffic_enabled tariffs)'
+        ),
     )
     # When the user is renewing an EXISTING subscription (multi-tariff
     # mode), the frontend passes the explicit subscription_id so the
@@ -255,14 +287,17 @@ class TariffPurchaseRequest(BaseModel):
     subscription_id: int | None = Field(
         None,
         ge=1,
-        description='Existing subscription_id when renewing (multi-tariff). Resolves race with concurrent panel webhooks.',
+        description=get_texts().t(
+            'CABINET_TARIFF_PURCHASE_SUBSCRIPTION_ID_DESC',
+            'Existing subscription_id when renewing (multi-tariff). Resolves race with concurrent panel webhooks.',
+        ),
     )
     # See PurchasePreviewRequest.yandex_cid (#558449).
     yandex_cid: str | None = Field(
         None,
         max_length=128,
         pattern=r'^[A-Za-z0-9._:-]{4,128}$',
-        description='Cached Yandex.Metrika ClientID (optional).',
+        description=get_texts().t('CABINET_YANDEX_CID_DESC', 'Cached Yandex.Metrika ClientID (optional).'),
     )
 
 

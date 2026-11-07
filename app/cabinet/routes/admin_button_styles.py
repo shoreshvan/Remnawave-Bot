@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.utils.button_styles_cache import (
     ALLOWED_STYLE_VALUES,
     BOT_LOCALES,
@@ -188,8 +189,12 @@ async def update_button_styles(
             if style_val not in ALLOWED_STYLE_VALUES:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f'Invalid style "{style_val}" for section "{section}". '
-                    f'Allowed: {", ".join(sorted(ALLOWED_STYLE_VALUES))}',
+                    detail=get_texts()
+                    .t(
+                        'CABINET_ADMIN_BUTTON_STYLES_INVALID_STYLE',
+                        'Invalid style "{style_val}" for section "{section}". Allowed: {allowed}',
+                    )
+                    .format(style_val=style_val, section=section, allowed=", ".join(sorted(ALLOWED_STYLE_VALUES))),
                 )
             current[section]['style'] = style_val
 
@@ -207,19 +212,33 @@ async def update_button_styles(
                 if locale_key not in BOT_LOCALES:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f'Invalid locale "{locale_key}" for section "{section}". '
-                        f'Allowed: {", ".join(BOT_LOCALES)}',
+                        detail=get_texts()
+                        .t(
+                            'CABINET_ADMIN_BUTTON_STYLES_INVALID_LOCALE',
+                            'Invalid locale "{locale_key}" for section "{section}". Allowed: {allowed}',
+                        )
+                        .format(locale_key=locale_key, section=section, allowed=", ".join(BOT_LOCALES)),
                     )
                 if not isinstance(label_val, str):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f'Label value for locale "{locale_key}" must be a string.',
+                        detail=get_texts()
+                        .t(
+                            'CABINET_ADMIN_BUTTON_STYLES_LABEL_NOT_STRING',
+                            'Label value for locale "{locale_key}" must be a string.',
+                        )
+                        .format(locale_key=locale_key),
                     )
                 stripped = label_val.strip()
                 if len(stripped) > MAX_LABEL_LENGTH:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f'Label for locale "{locale_key}" exceeds {MAX_LABEL_LENGTH} characters.',
+                        detail=get_texts()
+                        .t(
+                            'CABINET_ADMIN_BUTTON_STYLES_LABEL_TOO_LONG',
+                            'Label for locale "{locale_key}" exceeds {max_length} characters.',
+                        )
+                        .format(locale_key=locale_key, max_length=MAX_LABEL_LENGTH),
                     )
                 # Empty string = remove custom label (use default)
                 if stripped:

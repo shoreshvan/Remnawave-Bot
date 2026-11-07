@@ -2074,6 +2074,10 @@ class AdminNotificationService:
             'anore': f'💳 {settings.get_anore_display_name()}',
             'tabpay': f'💳 {settings.get_tabpay_display_name()}',
             'paritypay': f'💳 {settings.get_paritypay_display_name()}',
+            'hooshpay': f'💳 {settings.get_hooshpay_display_name()}',
+            'tonpays': f'💳 {settings.get_tonpays_display_name()}',
+            'atlaspay': f'💳 {settings.get_atlaspay_display_name()}',
+            'nowpayments': f'💳 {settings.get_nowpayments_display_name()}',
             'manual': texts.t('ADMIN_NOTIFY_031', '🛠️ Вручную (админ)'),
             'balance': texts.t('ADMIN_NOTIFY_025', '💰 С баланса'),
         }

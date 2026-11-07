@@ -29,6 +29,7 @@ from app.database.models import (
     EtoplatezhiPayment,
     FreekassaPayment,
     HeleketPayment,
+    HooshPayPayment,
     JupiterPayment,
     KassaAiPayment,
     LavaPayment,
@@ -42,6 +43,9 @@ from app.database.models import (
     RollyPayPayment,
     SeverPayPayment,
     TabPayPayment,
+    TonPaysPayment,
+    AtlasPayPayment,
+    NowPaymentsPayment,
     WataPayment,
     YooKassaPayment,
 )
@@ -75,6 +79,10 @@ _GATEWAY_REGISTRY: list[tuple[str, type, object]] = [
     (PaymentMethod.ANORE.value, AnorePayment, AnorePayment.is_paid.is_(True) & AnorePayment.is_test.is_(False)),
     (PaymentMethod.TABPAY.value, TabPayPayment, TabPayPayment.is_paid.is_(True)),
     (PaymentMethod.PARITYPAY.value, ParityPayPayment, ParityPayPayment.is_paid.is_(True)),
+    (PaymentMethod.HOOSHPAY.value, HooshPayPayment, HooshPayPayment.is_paid.is_(True)),
+    (PaymentMethod.TONPAYS.value, TonPaysPayment, TonPaysPayment.is_paid.is_(True)),
+    (PaymentMethod.ATLASPAY.value, AtlasPayPayment, AtlasPayPayment.is_paid.is_(True)),
+    (PaymentMethod.NOWPAYMENTS.value, NowPaymentsPayment, NowPaymentsPayment.is_paid.is_(True)),
 ]
 
 

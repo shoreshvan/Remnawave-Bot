@@ -3,6 +3,8 @@
 from datetime import datetime
 from typing import Any
 
+from app.localization.texts import get_texts
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -91,7 +93,12 @@ class TopUpResponse(BaseModel):
 class StarsInvoiceRequest(BaseModel):
     """Request to create Telegram Stars invoice for balance top-up."""
 
-    amount_kopeks: int = Field(..., ge=100, le=2_000_000_000, description='Amount in kopeks (min 1 ruble)')
+    amount_kopeks: int = Field(
+        ...,
+        ge=100,
+        le=2_000_000_000,
+        description=get_texts().t('CABINET_STARS_INVOICE_AMOUNT_KOPEKS_DESCRIPTION', 'Amount in kopeks (min 1 تومان)'),
+    )
 
 
 class StarsInvoiceResponse(BaseModel):

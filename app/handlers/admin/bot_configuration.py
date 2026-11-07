@@ -92,6 +92,10 @@ CATEGORY_GROUP_METADATA: dict[str, dict[str, object]] = {
             'ANORE',
             'TABPAY',
             'PARITYPAY',
+            'HOOSHPAY',
+            'TONPAYS',
+            'ATLASPAY',
+            'NOWPAYMENTS',
             'DONUT',
             'LAVA',
             'MULENPAY',
@@ -2866,6 +2870,16 @@ async def show_bot_config_setting(
         settings_page=settings_page,
     )
     await callback.answer()
+
+
+def _is_money_key(key: str) -> bool:
+    """Whether a setting key stores money in kopeks (displayed as Toman).
+
+    Same rule as ``format_value_human``: contains PRICE or ends with _KOPEKS.
+    Bare AMOUNT is not money (e.g. device counts).
+    """
+    upper_key = (key or '').upper()
+    return 'PRICE' in upper_key or '_KOPEKS' in upper_key
 
 
 @admin_required

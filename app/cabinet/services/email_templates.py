@@ -10,6 +10,7 @@ from functools import partial
 from typing import Any
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.services.notification_types import NotificationType
 
 

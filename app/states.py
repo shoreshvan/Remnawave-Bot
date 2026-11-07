@@ -54,6 +54,7 @@ class BalanceStates(StatesGroup):
     waiting_for_platega_method = State()
     waiting_for_cashera_method = State()
     waiting_for_stars_payment = State()
+    waiting_for_tonpays_receipt = State()
     waiting_for_support_request = State()
 
 

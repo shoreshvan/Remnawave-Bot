@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.external.cryptobot import CryptoBotService
+from app.localization.texts import get_texts
 from app.external.heleket import HeleketService
 from app.external.telegram_stars import TelegramStarsService
 from app.services.anore_service import anore_service
@@ -45,6 +46,10 @@ from app.services.payment.kassa_ai import KassaAiPaymentMixin
 from app.services.payment.lava import LavaPaymentMixin
 from app.services.payment.overpay import OverpayPaymentMixin
 from app.services.payment.paritypay import ParityPayPaymentMixin
+from app.services.payment.hooshpay import HooshpayPaymentMixin
+from app.services.payment.atlaspay import AtlaspayPaymentMixin
+from app.services.payment.nowpayments import NowpaymentsPaymentMixin
+from app.services.payment.tonpays import TonpaysPaymentMixin
 from app.services.payment.payer_identity import resolve_guest_payer
 from app.services.payment.riopay import RioPayPaymentMixin
 from app.services.payment.rollypay import RollyPayPaymentMixin
@@ -831,6 +836,10 @@ class PaymentService(
     AnorePaymentMixin,
     ParityPayPaymentMixin,
     CasheraPaymentMixin,
+    HooshpayPaymentMixin,
+    TonpaysPaymentMixin,
+    AtlaspayPaymentMixin,
+    NowpaymentsPaymentMixin,
 ):
     """Основной интерфейс платежей, делегирующий работу специализированным mixin-ам."""
 
@@ -1566,6 +1575,78 @@ class PaymentService(
                 }
             return None
 
+        # --- HooshPay ---------------------------------------------------------
+        if _base == 'hooshpay':
+            if not settings.is_hooshpay_enabled():
+                logger.warning('HooshPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_hooshpay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+                return_url=return_url,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'hooshpay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'hooshpay',
+                }
+            return None
+
+        # --- TonPays ----------------------------------------------------------
+        # The Telegram platform mandates buyer_chat_id, so guest (non-Telegram)
+        # purchases cannot use this gateway.
+        if _base == 'tonpays':
+            logger.warning('TonPays requires buyer_chat_id, cannot create guest payment')
+            return None
+
+        # --- NOWPayments ------------------------------------------------------
+        if _base == 'nowpayments':
+            if not settings.is_nowpayments_enabled():
+                logger.warning('NOWPayments is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_nowpayments_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'nowpayments')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'nowpayments',
+                }
+            return None
+
+        # --- AtlasPay ---------------------------------------------------------
+        # customerTelegramId is optional — unbound guest orders are allowed.
+        if _base == 'atlaspay':
+            if not settings.is_atlaspay_enabled():
+                logger.warning('AtlasPay is not enabled, cannot create guest payment')
+                return None
+
+            result = await self.create_atlaspay_payment(
+                db=db,
+                user_id=None,
+                amount_kopeks=amount_kopeks,
+                description=description,
+            )
+            if result:
+                await _patch_guest_metadata(result['local_payment_id'], 'atlaspay')
+                return {
+                    'payment_url': result.get('payment_url'),
+                    'payment_id': result.get('order_id'),
+                    'provider': 'atlaspay',
+                }
+            return None
+
         # --- Telegram Stars ---------------------------------------------------
         if payment_method == 'telegram_stars':
             if not settings.TELEGRAM_STARS_ENABLED:
@@ -1589,13 +1670,19 @@ class PaymentService(
             payload = f'guest_purchase_{purchase_token}'
 
             try:
+                stars_texts = get_texts(settings.DEFAULT_LANGUAGE)
                 invoice_url = await self.bot.create_invoice_link(
-                    title='Подарочная подписка VPN',
+                    title=stars_texts.t('PAYMENT_STARS_GIFT_INVOICE_TITLE', 'Подарочная подписка VPN'),
                     description=f'{description} ({stars_amount} ⭐)',
                     payload=payload,
                     provider_token='',
                     currency='XTR',
-                    prices=[LabeledPrice(label='Подарочная подписка', amount=stars_amount)],
+                    prices=[
+                        LabeledPrice(
+                            label=stars_texts.t('PAYMENT_STARS_GIFT_INVOICE_LABEL', 'Подарочная подписка'),
+                            amount=stars_amount,
+                        )
+                    ],
                 )
 
                 logger.info(

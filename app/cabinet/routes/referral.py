@@ -20,6 +20,7 @@ from app.database.models import (
     WithdrawalRequest,
     WithdrawalRequestStatus,
 )
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, get_optional_cabinet_user
 from ..schemas.referral import (
@@ -123,8 +124,13 @@ async def get_referral_info(
 
 @router.get('/list', response_model=ReferralListResponse)
 async def get_referral_list(
-    page: int = Query(1, ge=1, description='Page number'),
-    per_page: int = Query(20, ge=1, le=100, description='Items per page'),
+    page: int = Query(1, ge=1, description=get_texts().t('CABINET_REFERRAL_PARAM_PAGE', 'Page number')),
+    per_page: int = Query(
+        20,
+        ge=1,
+        le=100,
+        description=get_texts().t('CABINET_REFERRAL_PARAM_PER_PAGE', 'Items per page'),
+    ),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -173,12 +179,18 @@ async def get_referral_list(
 
 @router.get('/earnings', response_model=ReferralEarningsListResponse)
 async def get_referral_earnings(
-    page: int = Query(1, ge=1, description='Page number'),
-    per_page: int = Query(20, ge=1, le=100, description='Items per page'),
+    page: int = Query(1, ge=1, description=get_texts().t('CABINET_REFERRAL_PARAM_PAGE', 'Page number')),
+    per_page: int = Query(
+        20,
+        ge=1,
+        le=100,
+        description=get_texts().t('CABINET_REFERRAL_PARAM_PER_PAGE', 'Items per page'),
+    ),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get referral earnings history."""
+    texts = get_texts(user.language)
     # Base query
     query = select(ReferralEarning).where(ReferralEarning.user_id == user.id, not_referee_directed())
 
@@ -244,7 +256,7 @@ async def get_referral_earnings(
                 id=e.id,
                 amount_kopeks=e.amount_kopeks,
                 amount_rubles=e.amount_kopeks / 100,
-                reason=e.reason or 'Referral commission',
+                reason=e.reason or texts.t('CABINET_REFERRAL_COMMISSION_REASON', 'Referral commission'),
                 reward_type=getattr(e, 'reward_type', 'money') or 'money',
                 level=int(getattr(e, 'level', 1) or 1),
                 days_granted=int(getattr(e, 'days_granted', 0) or 0),
@@ -313,14 +325,21 @@ async def update_reward_choice(
     настроено правилом» и «подбирать автоматически», — и от «не присылали» он
     иначе неотличим.
     """
+    texts = get_texts(user.language)
     if request.set_reward_preference:
         if not settings.is_referral_reward_kind_choice_enabled():
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Reward kind choice is disabled')
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=texts.t('CABINET_REFERRAL_REWARD_KIND_DISABLED', 'Reward kind choice is disabled'),
+            )
         user.referral_reward_preference = normalize_reward_preference(request.reward_preference)
 
     if request.set_days_target:
         if not settings.is_referral_days_target_choice_enabled():
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Days target choice is disabled')
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=texts.t('CABINET_REFERRAL_DAYS_TARGET_DISABLED', 'Days target choice is disabled'),
+            )
 
         chosen = request.days_target_subscription_id
         if chosen is not None:
@@ -328,7 +347,10 @@ async def update_reward_choice(
             # чужому идентификатору не место в базе.
             allowed = {option.id for option in await _days_target_options(db, user)}
             if chosen not in allowed:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Subscription is not yours')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=texts.t('CABINET_REFERRAL_SUBSCRIPTION_NOT_YOURS', 'Subscription is not yours'),
+                )
         user.referral_days_subscription_id = chosen
 
     await db.commit()

@@ -186,6 +186,7 @@ def format_traffic_display(traffic_gb: int, is_fixed_mode: bool = None, language
     if is_fixed_mode is None:
         is_fixed_mode = settings.is_traffic_fixed()
 
+    texts = get_texts((language or 'ru').split('-')[0].lower())
     if traffic_gb == 0:
         if is_fixed_mode:
             return texts.t('SUBSCRIPTION_UI_UNLIMITED_LABEL', 'Безлимитный')

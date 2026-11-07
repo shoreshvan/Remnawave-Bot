@@ -5,6 +5,8 @@ import structlog
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, PreCheckoutQuery, TelegramObject, User as TgUser
 
+from app.config import settings
+from app.localization.texts import get_texts
 from app.services.blacklist_service import blacklist_service
 from app.utils.support_access import is_support_handler
 

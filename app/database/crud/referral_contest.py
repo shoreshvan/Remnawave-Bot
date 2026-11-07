@@ -835,7 +835,7 @@ async def sync_contest_events(
             event.amount_kopeks = total_paid
             stats['updated'] += 1
             # Логируем значительные изменения
-            if abs(old_amount - total_paid) > 10000:  # больше 100 руб разницы
+            if abs(old_amount - total_paid) > 10000:  # больше 100 تومان разницы
                 logger.debug(
                     'Событие (реферал): -> коп.',
                     event_id=event.id,

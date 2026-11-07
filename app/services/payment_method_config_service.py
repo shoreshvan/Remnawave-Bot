@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database.models import PaymentMethodConfig, PromoGroup
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -53,12 +54,13 @@ def get_display_sort_order(method_id: str) -> int | None:
 # Mapping: method_id -> (default_display_name_func, is_configured_func, default_min, default_max, has_sub_options)
 def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
     """Get default configuration for each payment method based on env vars."""
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
     return {
         'telegram_stars': {
             'default_display_name': settings.get_telegram_stars_display_name(),
             'is_configured': settings.TELEGRAM_STARS_ENABLED,
-            'default_min': 100,
-            'default_max': 1000000,
+            'default_min': 1000000,
+            'default_max': 2000000000,
             'available_sub_options': None,
         },
         'tribute': {
@@ -88,8 +90,8 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.YOOKASSA_MIN_AMOUNT_KOPEKS,
             'default_max': settings.YOOKASSA_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
             ],
         },
         'mulenpay': {
@@ -105,8 +107,8 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.PAL24_MIN_AMOUNT_KOPEKS,
             'default_max': settings.PAL24_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
             ],
         },
         'platega': {
@@ -129,8 +131,8 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.FREEKASSA_MIN_AMOUNT_KOPEKS,
             'default_max': settings.FREEKASSA_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'sbp', 'name': 'NSPK СБП'},
-                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_NSPK_SBP', 'NSPK СБП')},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
             ],
         },
         'freekassa_sbp': {
@@ -162,8 +164,8 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.KASSA_AI_MIN_AMOUNT_KOPEKS,
             'default_max': settings.KASSA_AI_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'card', 'name': 'Карта'},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
                 {'id': 'sberpay', 'name': 'SberPay'},
             ],
         },
@@ -187,9 +189,9 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.ROLLYPAY_MIN_AMOUNT_KOPEKS,
             'default_max': settings.ROLLYPAY_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'crypto', 'name': 'Криптовалюта'},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
+                {'id': 'crypto', 'name': texts.t('PAYMENT_SUBOPTION_CRYPTO', 'Криптовалюта')},
             ],
         },
         'overpay': {
@@ -205,8 +207,8 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.AURAPAY_MIN_AMOUNT_KOPEKS,
             'default_max': settings.AURAPAY_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
             ],
         },
         'etoplatezhi': {
@@ -215,8 +217,8 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.ETOPLATEZHI_MIN_AMOUNT_KOPEKS,
             'default_max': settings.ETOPLATEZHI_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
             ],
         },
         'antilopay': {
@@ -225,8 +227,8 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.ANTILOPAY_MIN_AMOUNT_KOPEKS,
             'default_max': settings.ANTILOPAY_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
                 {'id': 'sberpay', 'name': 'SberPay'},
             ],
         },
@@ -236,7 +238,7 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.JUPITER_MIN_AMOUNT_KOPEKS,
             'default_max': settings.JUPITER_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
             ],
         },
         'donut': {
@@ -245,9 +247,9 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.DONUT_MIN_AMOUNT_KOPEKS,
             'default_max': settings.DONUT_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
-                {'id': 'sbp_qr', 'name': 'СБП QR'},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
+                {'id': 'sbp_qr', 'name': texts.t('PAYMENT_SUBOPTION_SBP_QR', 'СБП QR')},
             ],
         },
         'lava': {
@@ -256,8 +258,8 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
             'default_min': settings.LAVA_MIN_AMOUNT_KOPEKS,
             'default_max': settings.LAVA_MAX_AMOUNT_KOPEKS,
             'available_sub_options': [
-                {'id': 'card', 'name': 'Карта'},
-                {'id': 'sbp', 'name': 'СБП'},
+                {'id': 'card', 'name': texts.t('PAYMENT_SUBOPTION_CARD', 'Карта')},
+                {'id': 'sbp', 'name': texts.t('PAYMENT_SUBOPTION_SBP', 'СБП')},
             ],
         },
         'cispay': {
@@ -305,6 +307,34 @@ def _get_method_defaults(*, include_disabled_sub_options: bool = False) -> dict:
                 }
                 for method in settings.get_anore_methods()
             ],
+        },
+        'hooshpay': {
+            'default_display_name': settings.get_hooshpay_display_name(),
+            'is_configured': settings.is_hooshpay_enabled(),
+            'default_min': settings.HOOSHPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.HOOSHPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
+        'tonpays': {
+            'default_display_name': settings.get_tonpays_display_name(),
+            'is_configured': settings.is_tonpays_enabled(),
+            'default_min': settings.TONPAYS_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.TONPAYS_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
+        'atlaspay': {
+            'default_display_name': settings.get_atlaspay_display_name(),
+            'is_configured': settings.is_atlaspay_enabled(),
+            'default_min': settings.ATLASPAY_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.ATLASPAY_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
+        },
+        'nowpayments': {
+            'default_display_name': settings.get_nowpayments_display_name(),
+            'is_configured': settings.is_nowpayments_enabled(),
+            'default_min': settings.NOWPAYMENTS_MIN_AMOUNT_KOPEKS,
+            'default_max': settings.NOWPAYMENTS_MAX_AMOUNT_KOPEKS,
+            'available_sub_options': None,
         },
         'tabpay': {
             'default_display_name': settings.get_tabpay_display_name(),
@@ -398,11 +428,15 @@ DEFAULT_METHOD_ORDER = [
     'anore',
     'tabpay',
     'paritypay',
+    'hooshpay',
+    'tonpays',
+    'atlaspay',
+    'nowpayments',
     'cashera',
 ]
 
 
-DEFAULT_QUICK_AMOUNTS = [10000, 30000, 50000, 100000]
+DEFAULT_QUICK_AMOUNTS = [1000000, 5000000, 20000000, 100000000]
 MAX_QUICK_AMOUNTS = 10
 MAX_QUICK_AMOUNT_KOPEKS = 100_000_000
 

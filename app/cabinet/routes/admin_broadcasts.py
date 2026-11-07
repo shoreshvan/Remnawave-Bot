@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import BroadcastHistory, PromoGroup, Subscription, SubscriptionStatus, Tariff, User
 from app.handlers.admin.messages import get_target_users_count
 from app.keyboards.admin import BROADCAST_BUTTONS, DEFAULT_BROADCAST_BUTTONS
+from app.localization.texts import get_texts
 from app.services.broadcast_audience import preview_audience_users, validate_audience
 from app.services.broadcast_service import (
     EMAIL_TARGET_PROMO_GROUP_PREFIX,
@@ -61,15 +62,15 @@ router = APIRouter(prefix='/admin/broadcasts', tags=['Cabinet Admin Broadcasts']
 # ============ Filter Labels ============
 
 FILTER_LABELS = {
-    'all': 'Все пользователи',
-    'active': 'Активные подписки',
-    'trial': 'Триальные',
-    'no': 'Без подписки',
-    'expiring': 'Истекают (3 дня)',
-    'expired': 'Истекшие',
-    'zero': 'Нулевой трафик',
-    'active_zero': 'Активные с нулевым трафиком',
-    'trial_zero': 'Триальные с нулевым трафиком',
+    'all': get_texts().t('BROADCAST_FILTER_ALL', 'Все пользователи'),
+    'active': get_texts().t('BROADCAST_FILTER_ACTIVE', 'Активные подписки'),
+    'trial': get_texts().t('BROADCAST_FILTER_TRIAL', 'Триальные'),
+    'no': get_texts().t('BROADCAST_FILTER_NO_SUBSCRIPTION', 'Без подписки'),
+    'expiring': get_texts().t('BROADCAST_FILTER_EXPIRING', 'Истекают (3 дня)'),
+    'expired': get_texts().t('BROADCAST_FILTER_EXPIRED', 'Истекшие'),
+    'zero': get_texts().t('BROADCAST_FILTER_ZERO_TRAFFIC', 'Нулевой трафик'),
+    'active_zero': get_texts().t('BROADCAST_FILTER_ACTIVE_ZERO', 'Активные с нулевым трафиком'),
+    'trial_zero': get_texts().t('BROADCAST_FILTER_TRIAL_ZERO', 'Триальные с нулевым трафиком'),
 }
 
 FILTER_GROUPS = {
@@ -85,14 +86,14 @@ FILTER_GROUPS = {
 }
 
 CUSTOM_FILTER_LABELS = {
-    'custom_today': 'Регистрация сегодня',
-    'custom_week': 'Регистрация за неделю',
-    'custom_month': 'Регистрация за месяц',
-    'custom_active_today': 'Активны сегодня',
-    'custom_inactive_week': 'Неактивны 7+ дней',
-    'custom_inactive_month': 'Неактивны 30+ дней',
-    'custom_referrals': 'Пришли по рефералу',
-    'custom_direct': 'Прямая регистрация',
+    'custom_today': get_texts().t('BROADCAST_FILTER_CUSTOM_TODAY', 'Регистрация сегодня'),
+    'custom_week': get_texts().t('BROADCAST_FILTER_CUSTOM_WEEK', 'Регистрация за неделю'),
+    'custom_month': get_texts().t('BROADCAST_FILTER_CUSTOM_MONTH', 'Регистрация за месяц'),
+    'custom_active_today': get_texts().t('BROADCAST_FILTER_CUSTOM_ACTIVE_TODAY', 'Активны сегодня'),
+    'custom_inactive_week': get_texts().t('BROADCAST_FILTER_CUSTOM_INACTIVE_WEEK', 'Неактивны 7+ дней'),
+    'custom_inactive_month': get_texts().t('BROADCAST_FILTER_CUSTOM_INACTIVE_MONTH', 'Неактивны 30+ дней'),
+    'custom_referrals': get_texts().t('BROADCAST_FILTER_CUSTOM_REFERRALS', 'Пришли по рефералу'),
+    'custom_direct': get_texts().t('BROADCAST_FILTER_CUSTOM_DIRECT', 'Прямая регистрация'),
 }
 
 CUSTOM_FILTER_GROUPS = {
@@ -110,11 +111,11 @@ CUSTOM_FILTER_GROUPS = {
 # ============ Email Filter Labels ============
 
 EMAIL_FILTER_LABELS = {
-    'all_email': 'Все с email',
-    'email_only': 'Только email-регистрация',
-    'telegram_with_email': 'Telegram с email',
-    'active_email': 'С активной подпиской',
-    'expired_email': 'С истекшей подпиской',
+    'all_email': get_texts().t('BROADCAST_EMAIL_FILTER_ALL', 'Все с email'),
+    'email_only': get_texts().t('BROADCAST_EMAIL_FILTER_EMAIL_ONLY', 'Только email-регистрация'),
+    'telegram_with_email': get_texts().t('BROADCAST_EMAIL_FILTER_TELEGRAM_WITH_EMAIL', 'Telegram с email'),
+    'active_email': get_texts().t('BROADCAST_EMAIL_FILTER_ACTIVE', 'С активной подпиской'),
+    'expired_email': get_texts().t('BROADCAST_EMAIL_FILTER_EXPIRED', 'С истекшей подпиской'),
 }
 
 EMAIL_FILTER_GROUPS = {

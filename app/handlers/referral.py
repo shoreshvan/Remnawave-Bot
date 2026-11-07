@@ -781,14 +781,15 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
         await callback.answer(reason, show_alert=True)
         return
 
-    available = wd_stats.get('available_total', 0) if wd_stats else 0
+    # Decimal из SUM() в PostgreSQL не сериализуется в JSON-хранилище aiogram.
+    available = int(wd_stats.get('available_total', 0) or 0) if wd_stats else 0
 
     # Сохраняем доступный баланс в состоянии
     await state.update_data(available_balance=available)
     await state.set_state(ReferralWithdrawalStates.waiting_for_amount)
 
     text = texts.t(
-        'REFERRAL_WITHDRAWAL_ENTER_AMOUNT', '💸 Введите сумму для вывода в рублях\n\nДоступно: <b>{amount}</b>'
+        'REFERRAL_WITHDRAWAL_ENTER_AMOUNT', '💸 Введите сумму для вывода в تومان\n\nДоступно: <b>{amount}</b>'
     ).format(amount=texts.format_price(available))
 
     keyboard = types.InlineKeyboardMarkup(
@@ -815,11 +816,11 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
     """Обрабатывает ввод суммы для вывода."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
-    available = data.get('available_balance', 0)
+    available = int(data.get('available_balance', 0) or 0)
 
     try:
         # Парсим сумму (в рублях)
-        amount_text = message.text.strip().replace(',', '.').replace('₽', '').replace(' ', '')
+        amount_text = message.text.strip().replace(',', '.').replace('₽', '').replace('تومان', '').replace(' ', '')
         amount_rubles = float(amount_text)
         amount_kopeks = int(amount_rubles * 100)
 
@@ -865,7 +866,7 @@ async def process_withdrawal_amount(message: types.Message, db_user: User, db: A
 
         await message.answer(text, reply_markup=keyboard)
 
-    except ValueError:
+    except (ValueError, OverflowError):
         await message.answer(texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите корректную сумму'))
 
 
@@ -905,7 +906,7 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
     """Обрабатывает ввод реквизитов и показывает подтверждение."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
-    amount_kopeks = data.get('withdrawal_amount', 0)
+    amount_kopeks = int(data.get('withdrawal_amount', 0) or 0)
     payment_details = message.text.strip()
 
     if len(payment_details) < 10:
@@ -954,8 +955,25 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
     """Подтверждает и создаёт заявку на вывод."""
     texts = get_texts(db_user.language)
     data = await state.get_data()
-    amount_kopeks = data.get('withdrawal_amount', 0)
-    payment_details = data.get('payment_details', '')
+    amount_kopeks = int(data.get('withdrawal_amount', 0) or 0)
+    payment_details = str(data.get('payment_details') or '')
+
+    # Защита от устаревшей кнопки/потерянного FSM-состояния: иначе можно
+    # создать заявку на 0 تومان с пустыми реквизитами.
+    if amount_kopeks <= 0:
+        await state.clear()
+        await callback.answer(
+            texts.t('REFERRAL_WITHDRAWAL_INVALID_AMOUNT', '❌ Введите положительную сумму'),
+            show_alert=True,
+        )
+        return
+    if len(payment_details.strip()) < 10:
+        await state.clear()
+        await callback.answer(
+            texts.t('REFERRAL_WITHDRAWAL_DETAILS_TOO_SHORT', '❌ Реквизиты слишком короткие'),
+            show_alert=True,
+        )
+        return
 
     await state.clear()
 
@@ -969,29 +987,48 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
         return
 
     # Отправляем уведомление админам
-    analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
+    try:
+        analysis = json.loads(request.risk_analysis) if request.risk_analysis else {}
+    except (json.JSONDecodeError, TypeError):
+        analysis = {}
+    if not isinstance(analysis, dict):
+        analysis = {}
 
     user_id_display = html_escape(str(db_user.telegram_id or db_user.email or f'#{db_user.id}'))
-    safe_name = html_escape(db_user.full_name or 'Без имени')
+    safe_name = html_escape(db_user.full_name or texts.t('REFERRAL_WITHDRAWAL_NO_NAME', 'Без имени'))
     safe_details = html_escape(payment_details)
-    admin_text = f"""
-🔔 <b>Новая заявка на вывод #{request.id}</b>
+    admin_text = texts.t(
+        'REFERRAL_WITHDRAWAL_ADMIN_NOTIFICATION',
+        """
+🔔 <b>Новая заявка на вывод #{id}</b>
 
-👤 Пользователь: {safe_name}
-🆔 ID: <code>{user_id_display}</code>
-💰 Сумма: <b>{amount_kopeks / 100:.0f}₽</b>
+👤 Пользователь: {name}
+🆔 ID: <code>{user_id}</code>
+💰 Сумма: <b>{amount:.0f} تومان</b>
 
 💳 Реквизиты:
-<code>{safe_details}</code>
+<code>{details}</code>
 
-{referral_withdrawal_service.format_analysis_for_admin(analysis)}
-"""
+{analysis}
+""",
+    ).format(
+        id=request.id,
+        name=safe_name,
+        user_id=user_id_display,
+        amount=amount_kopeks / 100,
+        details=safe_details,
+        analysis=referral_withdrawal_service.format_analysis_for_admin(analysis),
+    )
 
     # Кнопки — по роли получателя: в группе только действия, в личке админа ещё
     # профиль (по id из базы: у callback admin_user_<telegram_id> обработчика нет).
     notification_service = AdminNotificationService(callback.bot)
     admin_keyboard = get_withdrawal_request_keyboard(
-        request.id, request.status, user_db_id=db_user.id, role=notification_service.resolve_recipient_role()
+        request.id,
+        request.status,
+        user_db_id=db_user.id,
+        role=notification_service.resolve_recipient_role(),
+        texts=texts,
     )
 
     try:

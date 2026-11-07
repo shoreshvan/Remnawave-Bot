@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 import structlog
 from aiogram import Bot
 from fastapi import APIRouter, Request, Response, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from app.config import settings
 from app.database.crud.mulenpay import get_mulenpay_payment_by_mulen_id
@@ -2016,6 +2016,247 @@ def create_payment_router(bot: Bot, payment_service: PaymentService) -> APIRoute
                     logger.exception('ParityPay webhook processing error', error=e)
 
             _spawn_webhook_bg(_process_paritypay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # HooshPay webhook (hooshpay.xyz/api/v1)
+    if settings.is_hooshpay_configured():
+
+        @router.get(settings.HOOSHPAY_WEBHOOK_PATH)
+        async def hooshpay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'hooshpay_webhook',
+                    'enabled': settings.is_hooshpay_enabled(),
+                }
+            )
+
+        @router.post(settings.HOOSHPAY_WEBHOOK_PATH)
+        async def hooshpay_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.hooshpay_service import hooshpay_service
+
+            # Подпись считается по РАЗОБРАННОМУ телу, пересобранному с сортировкой
+            # ключей (ksort + json_encode на стороне провайдера).
+            payload = hooshpay_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not hooshpay_service.verify_callback_signature(payload, request.headers.get('X-HooshPay-Signature')):
+                logger.warning('HooshPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # HooshPay ждёт HTTP 200 как подтверждение и иначе повторяет доставку.
+            # Подтверждаем сразу после проверки подписи, зачисление доделываем
+            # фоном: обработчик берёт свою сессию БД и блокирует строку платежа,
+            # поэтому параллельные доставки безопасны.
+            async def _process_hooshpay_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_hooshpay_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'HooshPay webhook processing failed',
+                            order_id=payload.get('order_id'),
+                            invoice=payload.get('invoice'),
+                            payment_status=payload.get('status'),
+                        )
+                except Exception as e:
+                    logger.exception('HooshPay webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_hooshpay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # TonPays webhook (tonpays.online custom gateway, Telegram platform)
+    if settings.is_tonpays_configured():
+
+        @router.get(settings.TONPAYS_WEBHOOK_PATH)
+        async def tonpays_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'tonpays_webhook',
+                    'enabled': settings.is_tonpays_enabled(),
+                }
+            )
+
+        @router.post(settings.TONPAYS_WEBHOOK_PATH)
+        async def tonpays_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.tonpays_service import tonpays_service
+
+            # Auth = X-API-Key match (the X-TonPays-Signature construction
+            # scheme is undocumented); dedup happens on delivery_id in the mixin.
+            payload = tonpays_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            if not tonpays_service.verify_callback_auth(request.headers, payload):
+                logger.warning('TonPays webhook: auth failed')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # TonPays retries delivery on non-200. Ack right after auth, credit
+            # in background under a row lock so parallel deliveries are safe.
+            async def _process_tonpays_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_tonpays_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'TonPays webhook processing failed',
+                            order_id=payload.get('order_id'),
+                            invoice=payload.get('invoice_id'),
+                            payment_status=payload.get('status'),
+                        )
+                except Exception as e:
+                    logger.exception('TonPays webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_tonpays_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    # AtlasPay webhook (api.atlaspay.space)
+    if settings.is_atlaspay_configured():
+
+        @router.get(settings.ATLASPAY_WEBHOOK_PATH)
+        async def atlaspay_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'atlaspay_webhook',
+                    'enabled': settings.is_atlaspay_enabled(),
+                }
+            )
+
+        @router.post(settings.ATLASPAY_WEBHOOK_PATH)
+        async def atlaspay_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.atlaspay_service import atlaspay_service
+
+            payload = atlaspay_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # HMAC-SHA256 over the body with the account webhookSecret. Raw
+            # bytes first, compact canonical JSON as fallback (docs sample signs
+            # JSON.stringify(req.body)). Answer fast: provider waits only 5s
+            # and never retries — the mixin re-verifies via API anyway.
+            if not atlaspay_service.verify_callback_signature(
+                raw_body, payload, request.headers.get('X-Webhook-Signature')
+            ):
+                logger.warning('AtlasPay webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            async def _process_atlaspay_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_atlaspay_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'AtlasPay webhook processing failed',
+                            order_ref=payload.get('merchantOrderRef'),
+                            provider_order=payload.get('orderId'),
+                            event=payload.get('event'),
+                        )
+                except Exception as e:
+                    logger.exception('AtlasPay webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_atlaspay_bg())
+            return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
+
+        routes_registered = True
+
+    try:
+        from pathlib import Path
+
+        _result_page = Path(__file__).resolve().parents[1] / 'cabinet' / 'static' / 'payment_result.html'
+        if _result_page.exists():
+
+            @router.get(settings.NOWPAYMENTS_RESULT_PATH)
+            async def payment_result_page() -> FileResponse:
+                return FileResponse(
+                    _result_page,
+                    media_type='text/html; charset=utf-8',
+                    headers={'Cache-Control': 'no-store'},
+                )
+
+            routes_registered = True
+        else:
+            logger.warning('Payment result page not found, route skipped', path=str(_result_page))
+        from app.webserver.payment_result import create_payment_result_router
+
+        router.include_router(create_payment_result_router())
+    except Exception as e:
+        logger.error('Failed to mount payment result page', error=e)
+
+    # NOWPayments IPN (api.nowpayments.io)
+    if settings.is_nowpayments_configured():
+
+        @router.get(settings.NOWPAYMENTS_WEBHOOK_PATH)
+        async def nowpayments_health() -> JSONResponse:
+            return JSONResponse(
+                {
+                    'status': 'ok',
+                    'service': 'nowpayments_webhook',
+                    'enabled': settings.is_nowpayments_enabled(),
+                }
+            )
+
+        @router.post(settings.NOWPAYMENTS_WEBHOOK_PATH)
+        async def nowpayments_webhook(request: Request) -> JSONResponse:
+            raw_body = await request.body()
+
+            from app.services.nowpayments_service import nowpayments_service
+
+            payload = nowpayments_service.parse_callback_body(raw_body)
+            if payload is None:
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # HMAC-SHA512 over the key-sorted compact JSON with the IPN Secret
+            # (raw-bytes fallback for proxies that reformat spacing).
+            if not nowpayments_service.verify_callback_signature(
+                raw_body, payload, request.headers.get('x-nowpayments-sig')
+            ):
+                logger.warning('NOWPayments webhook: invalid signature')
+                return JSONResponse({'status': 'error'}, status_code=status.HTTP_400_BAD_REQUEST)
+
+            # A single IPN per status change; ack fast and credit in background
+            # under a row lock so parallel deliveries are safe.
+            async def _process_nowpayments_bg() -> None:
+                try:
+                    success = await _process_payment_service_callback(
+                        payment_service,
+                        payload,
+                        'process_nowpayments_callback',
+                    )
+                    if not success:
+                        logger.error(
+                            'NOWPayments webhook processing failed',
+                            order_id=payload.get('order_id'),
+                            provider_payment=payload.get('payment_id'),
+                            payment_status=payload.get('payment_status'),
+                        )
+                except Exception as e:
+                    logger.exception('NOWPayments webhook processing error', error=e)
+
+            _spawn_webhook_bg(_process_nowpayments_bg())
             return JSONResponse({'status': 'ok'}, status_code=status.HTTP_200_OK)
 
         routes_registered = True

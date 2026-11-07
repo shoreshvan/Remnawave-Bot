@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import structlog
 from aiogram import Dispatcher, F, types
+from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,11 @@ from app.config import settings
 from app.database.models import PaymentMethod, User
 from app.localization.texts import get_texts
 from app.services.payment_service import PaymentService
+from app.services.payment.manual_credit import (
+    IRANIAN_FORCE_CREDIT_METHODS,
+    can_force_credit,
+    force_credit_iranian_payment,
+)
 from app.services.payment_verification_service import (
     SUPPORTED_MANUAL_CHECK_METHODS,
     PendingPayment,
@@ -64,6 +70,14 @@ def _method_display(method: PaymentMethod, language: str = 'ru') -> str:
         return settings.get_tabpay_display_name()
     if method == PaymentMethod.PARITYPAY:
         return settings.get_paritypay_display_name()
+    if method == PaymentMethod.HOOSHPAY:
+        return settings.get_hooshpay_display_name()
+    if method == PaymentMethod.TONPAYS:
+        return settings.get_tonpays_display_name()
+    if method == PaymentMethod.ATLASPAY:
+        return settings.get_atlaspay_display_name()
+    if method == PaymentMethod.NOWPAYMENTS:
+        return settings.get_nowpayments_display_name()
     return method.value
 
 
@@ -348,6 +362,18 @@ def _build_detail_keyboard(
             ]
         )
 
+    if (record.method == PaymentMethod.NOWPAYMENTS and not record.is_paid) or can_force_credit(
+        record.method, record.payment
+    ):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_PAYMENT_FORCE_CREDIT', '⚡ Force credit'),
+                    callback_data=f'admin_payment_force_{record.method.value}_{record.local_id}',
+                )
+            ]
+        )
+
     rows.append([InlineKeyboardButton(text=texts.BACK, callback_data='admin_payments')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -541,7 +567,7 @@ async def show_payments_overview(
         except ValueError:
             page = 1
 
-    records = await list_recent_pending_payments(db)
+    records = await list_recent_pending_payments(db, include_manual_review=True)
     total = len(records)
     total_pages = max(1, math.ceil(total / PAGE_SIZE))
     page = max(page, 1)
@@ -696,6 +722,129 @@ async def manual_check_payment(
         )
 
     await callback.answer(message, show_alert=True)
+
+
+@admin_required
+@error_handler
+async def force_credit_payment_prompt(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+) -> None:
+    texts = get_texts(db_user.language)
+    parsed = _parse_method_and_id(callback.data, prefix='admin_payment_force_')
+    if not parsed:
+        await callback.answer(texts.t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'), show_alert=True)
+        return
+    method, payment_id = parsed
+    if method not in IRANIAN_FORCE_CREDIT_METHODS | {PaymentMethod.NOWPAYMENTS}:
+        await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_NOT_SUPPORTED', '❌ Force credit is only available for NOWPayments.'), show_alert=True)
+        return
+    record = await get_payment_record(db, method, payment_id)
+    if not record:
+        await callback.answer(texts.t('ADMIN_PAYMENT_NOT_FOUND', 'Payment not found.'), show_alert=True)
+        return
+    if record.is_paid:
+        await callback.answer(texts.t('ADMIN_PAYMENT_ALREADY_PAID', '✅ Already paid.'), show_alert=True)
+        return
+    if method in IRANIAN_FORCE_CREDIT_METHODS and not can_force_credit(method, record.payment):
+        await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_REFUSED', '❌ Refused for this status.'), show_alert=True)
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_PAYMENT_FORCE_YES', '✅ Yes, force credit'),
+                    callback_data=f'admin_payment_forceyes_{method.value}_{payment_id}',
+                ),
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_PAYMENT_FORCE_NO', '❌ Cancel'),
+                    callback_data=f'admin_payment_forcecancel_{method.value}_{payment_id}',
+                ),
+            ]
+        ]
+    )
+    await callback.message.edit_text(
+        texts.t(
+            'ADMIN_IRANIAN_FORCE_CONFIRM' if method in IRANIAN_FORCE_CREDIT_METHODS else 'ADMIN_PAYMENT_FORCE_CONFIRM_TEXT',
+            '⚠️ Credit the FULL invoice amount without provider verification? Confirm only after checking receipt of funds. '
+            'Underpayments will also receive the FULL invoice amount.',
+        )
+        + chr(10)
+        + chr(10)
+        + _build_payment_details_text(record, texts=texts, language=db_user.language),
+        parse_mode='HTML',
+        reply_markup=keyboard,
+    )
+    await callback.answer()
+
+
+@admin_required
+@error_handler
+async def force_credit_payment_yes(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+) -> None:
+    texts = get_texts(db_user.language)
+    parsed = _parse_method_and_id(callback.data, prefix='admin_payment_forceyes_')
+    if not parsed:
+        await callback.answer(texts.t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'), show_alert=True)
+        return
+    method, payment_id = parsed
+    if method not in IRANIAN_FORCE_CREDIT_METHODS | {PaymentMethod.NOWPAYMENTS}:
+        await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_NOT_SUPPORTED', '❌ Not supported.'), show_alert=True)
+        return
+    record = await get_payment_record(db, method, payment_id)
+    if not record:
+        await callback.answer(texts.t('ADMIN_PAYMENT_NOT_FOUND', 'Payment not found.'), show_alert=True)
+        return
+    if record.is_paid:
+        await callback.answer(texts.t('ADMIN_PAYMENT_ALREADY_PAID', '✅ Already paid.'), show_alert=True)
+        return
+
+    payment_service = PaymentService(callback.bot)
+    order_id = getattr(record.payment, 'order_id', None)
+    if not order_id:
+        await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_NO_ORDER', '❌ No order id.'), show_alert=True)
+        return
+
+    if method == PaymentMethod.NOWPAYMENTS:
+        updated = await payment_service.force_credit_nowpayments_payment(db, order_id, trigger='admin_force')
+    else:
+        updated = await force_credit_iranian_payment(
+            db, payment_service, method, payment_id, admin_id=callback.from_user.id
+        )
+    if not updated:
+        await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_FAILED', '❌ Force credit failed.'), show_alert=True)
+        return
+
+    refreshed = await get_payment_record(db, method, payment_id)
+    if refreshed:
+        await _render_payment_details(callback, db_user, refreshed)
+    await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_SUCCESS', '✅ Force-credited.'), show_alert=True)
+
+
+@admin_required
+@error_handler
+async def force_credit_payment_cancel(
+    callback: types.CallbackQuery,
+    db_user: User,
+    db: AsyncSession,
+) -> None:
+    texts = get_texts(db_user.language)
+    parsed = _parse_method_and_id(callback.data, prefix='admin_payment_forcecancel_')
+    if not parsed:
+        await callback.answer(texts.t('ADMIN_PAYMENT_INVALID_REFERENCE', '❌ Invalid payment reference'), show_alert=True)
+        return
+    method, payment_id = parsed
+    record = await get_payment_record(db, method, payment_id)
+    if not record:
+        await callback.answer(texts.t('ADMIN_PAYMENT_NOT_FOUND', 'Payment not found.'), show_alert=True)
+        return
+    await _render_payment_details(callback, db_user, record)
+    await callback.answer(texts.t('ADMIN_PAYMENT_FORCE_CANCELLED', 'Cancelled.'), show_alert=True)
 
 
 @admin_required
@@ -876,7 +1025,70 @@ async def export_payments(
     await callback.answer(texts.t('ADMIN_PAYMENTS_EXPORT_SUCCESS', '✅ Файл отправлен'))
 
 
+@admin_required
+@error_handler
+async def force_credit_command(
+    message: types.Message,
+    db_user: User,
+    db: AsyncSession,
+) -> None:
+    texts = get_texts(db_user.language)
+    args = (message.text or '').split(maxsplit=1)
+    if len(args) < 2 or not args[1].strip():
+        await message.answer(texts.t('ADMIN_NP_FORCE_USAGE', 'Usage: /np_force_credit <order_id>'))
+        return
+    order_id = args[1].strip()
+
+    from app.database.crud.nowpayments import get_nowpayments_payment_by_order_id
+
+    payment = await get_nowpayments_payment_by_order_id(db, order_id)
+    if not payment:
+        await message.answer(texts.t('ADMIN_PAYMENT_NOT_FOUND', 'Payment not found.'))
+        return
+    if payment.is_paid:
+        await message.answer(texts.t('ADMIN_PAYMENT_ALREADY_PAID', '✅ Already paid.'))
+        return
+    if (payment.status or '').lower() in {'failed', 'refunded', 'expired', 'success'}:
+        await message.answer(texts.t('ADMIN_PAYMENT_FORCE_REFUSED', '❌ Refused for this status.'))
+        return
+
+    record = await get_payment_record(db, PaymentMethod.NOWPAYMENTS, payment.id)
+    if not record:
+        await message.answer(texts.t('ADMIN_PAYMENT_NOT_FOUND', 'Payment not found.'))
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_PAYMENT_FORCE_YES', '✅ Yes, force credit'),
+                    callback_data=f'admin_payment_forceyes_nowpayments_{payment.id}',
+                ),
+                InlineKeyboardButton(
+                    text=texts.t('ADMIN_PAYMENT_FORCE_NO', '❌ Cancel'),
+                    callback_data=f'admin_payment_forcecancel_nowpayments_{payment.id}',
+                ),
+            ]
+        ]
+    )
+    await message.answer(
+        texts.t(
+            'ADMIN_PAYMENT_FORCE_CONFIRM_TEXT',
+            '⚠️ Force-credit this NOWPayments invoice without provider verification?',
+        )
+        + chr(10)
+        + chr(10)
+        + _build_payment_details_text(record, texts=texts, language=db_user.language),
+        parse_mode='HTML',
+        reply_markup=keyboard,
+    )
+
+
 def register_handlers(dp: Dispatcher) -> None:
+    dp.callback_query.register(force_credit_payment_prompt, F.data.startswith('admin_payment_force_'))
+    dp.callback_query.register(force_credit_payment_yes, F.data.startswith('admin_payment_forceyes_'))
+    dp.callback_query.register(force_credit_payment_cancel, F.data.startswith('admin_payment_forcecancel_'))
+    dp.message.register(force_credit_command, Command('np_force_credit'))
     dp.callback_query.register(check_all_payments, F.data == 'admin_payments_check_all')
     dp.callback_query.register(export_payments, F.data == 'admin_payments_export')
     dp.callback_query.register(manual_check_payment, F.data.startswith('admin_payment_check_'))

@@ -78,8 +78,8 @@ def test_healthy_start_shows_every_section_and_no_warnings():
     assert '<code>v4.14.0</code>' in text
     assert '4 558' in text
     assert '+37' in text
-    assert '3 450 ₽' in text
-    assert '24 012 ₽' in text, 'баланс — рублями целиком, а не «24.0K RUB»'
+    assert '3 450 تومان' in text
+    assert '24 012 تومان' in text, 'баланс — рублями целиком, а не «24.0K RUB»'
     assert '142 мс' in text
     assert 'Режим продаж: мультитариф' in text
     assert 'Требует внимания' not in text

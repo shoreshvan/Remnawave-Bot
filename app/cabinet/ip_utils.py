@@ -5,6 +5,7 @@ from ipaddress import ip_address, ip_network
 from fastapi import HTTPException, Request, status
 
 from app.config import settings
+from app.localization.texts import get_texts
 
 
 def _is_trusted_proxy(peer_ip: str, trusted: set[str]) -> bool:
@@ -36,7 +37,7 @@ def get_client_ip(request: Request) -> str:
     if not request.client:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Unable to determine client IP',
+            detail=get_texts().t('CABINET_CLIENT_IP_UNDETERMINED', 'Unable to determine client IP'),
         )
     peer_ip = request.client.host
     trusted_proxies = settings.get_cabinet_trusted_proxies()

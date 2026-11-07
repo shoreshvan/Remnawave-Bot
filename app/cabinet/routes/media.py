@@ -15,6 +15,7 @@ from app.bot_factory import create_bot
 from app.config import settings
 from app.database.models import User
 from app.utils.public_url import public_url
+from app.localization.texts import get_texts
 
 from ..dependencies import get_current_cabinet_user
 from ..schemas.media import TELEGRAM_FILE_ID_PATTERN

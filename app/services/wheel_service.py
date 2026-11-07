@@ -33,6 +33,7 @@ from app.database.models import (
     WheelPrizeType,
     WheelSpinPaymentType,
 )
+from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 
 

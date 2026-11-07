@@ -2412,6 +2412,54 @@ def get_payment_methods_keyboard(amount_kopeks: int, language: str = DEFAULT_LAN
         )
         has_direct_payment_methods = True
 
+    if settings.is_hooshpay_enabled():
+        hooshpay_name = settings.get_hooshpay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_HOOSHPAY', f'💳 {hooshpay_name}'),
+                    callback_data=_build_callback('hooshpay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_tonpays_enabled():
+        tonpays_name = settings.get_tonpays_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_TONPAYS', f'💳 {tonpays_name}'),
+                    callback_data=_build_callback('tonpays'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_atlaspay_enabled():
+        atlaspay_name = settings.get_atlaspay_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_ATLASPAY', f'💳 {atlaspay_name}'),
+                    callback_data=_build_callback('atlaspay'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
+    if settings.is_nowpayments_enabled():
+        nowpayments_name = settings.get_nowpayments_display_name()
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text=texts.t('PAYMENT_NOWPAYMENTS', f'💎 {nowpayments_name}'),
+                    callback_data=_build_callback('nowpayments'),
+                )
+            ]
+        )
+        has_direct_payment_methods = True
+
     if settings.is_support_topup_enabled():
         keyboard.append(
             [

@@ -27,6 +27,7 @@ from app.database.crud.system_errors import (
     mark_delivery_result,
 )
 from app.database.models import SystemErrorEvent, User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, require_permission
 
@@ -222,7 +223,10 @@ async def get_system_error(
     """Полная запись с трейсбеком и контекстом."""
     event = await get_error_event(db, event_id)
     if not event:
-        raise HTTPException(status_code=404, detail='Error event not found')
+        raise HTTPException(
+            status_code=404,
+            detail=get_texts().t('CABINET_ADMIN_SYSTEM_ERRORS_EVENT_NOT_FOUND', 'Error event not found'),
+        )
 
     return _to_detail(event)
 
@@ -240,7 +244,10 @@ async def retry_system_error_delivery(
     """
     event = await get_error_event(db, event_id)
     if not event:
-        raise HTTPException(status_code=404, detail='Error event not found')
+        raise HTTPException(
+            status_code=404,
+            detail=get_texts().t('CABINET_ADMIN_SYSTEM_ERRORS_EVENT_NOT_FOUND', 'Error event not found'),
+        )
 
     try:
         await _resend_to_admin_chat(event)

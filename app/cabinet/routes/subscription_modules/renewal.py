@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import PaymentMethod, SubscriptionStatus, User
+from app.localization.texts import get_texts
 from app.services.pricing_engine import pricing_engine
 from app.services.subscription_renewal_service import (
     SubscriptionRenewalChargeError,
@@ -38,7 +39,10 @@ router = APIRouter()
 async def get_renewal_options(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t('CABINET_RENEWAL_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff'),
+    ),
 ):
     """Get available subscription renewal options with prices."""
     from .helpers import resolve_subscription
@@ -110,13 +114,17 @@ async def renew_subscription(
     request: RenewalRequest,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(
+        None,
+        description=get_texts().t('CABINET_RENEWAL_SUBSCRIPTION_ID_PARAM', 'Subscription ID for multi-tariff'),
+    ),
 ):
     """Renew subscription (pay from balance)."""
+    texts = get_texts(user.language)
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Subscription renewal is restricted for this account',
+            detail=texts.t('CABINET_RENEWAL_RESTRICTED', 'Subscription renewal is restricted for this account'),
         )
 
     # Support subscription_id from both query param and body (backward compat)
@@ -127,14 +135,17 @@ async def renew_subscription(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No subscription found',
+            detail=texts.t('CABINET_RENEWAL_NO_SUBSCRIPTION_FOUND', 'No subscription found'),
         )
 
     # Classic subscriptions cannot be renewed when tariff mode is enabled
     if settings.is_tariffs_mode() and not subscription.tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Classic subscriptions cannot be renewed. Please purchase a tariff.',
+            detail=texts.t(
+                'CABINET_RENEWAL_CLASSIC_NOT_RENEWABLE',
+                'Classic subscriptions cannot be renewed. Please purchase a tariff.',
+            ),
         )
 
     _non_renewable = {SubscriptionStatus.DISABLED.value, SubscriptionStatus.PENDING.value}
@@ -142,7 +153,10 @@ async def renew_subscription(
     if _actual_status in _non_renewable:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Cannot renew subscription with status: {_actual_status}',
+            detail=texts.t(
+                'CABINET_RENEWAL_CANNOT_RENEW_STATUS',
+                'Cannot renew subscription with status: {status}',
+            ).format(status=_actual_status),
         )
 
     if (
@@ -158,7 +172,7 @@ async def renew_subscription(
     if request.period_days not in available_periods:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Selected renewal period is not available',
+            detail=texts.t('CABINET_RENEWAL_PERIOD_UNAVAILABLE', 'Selected renewal period is not available'),
         )
 
     # Lock user row to prevent TOCTOU on promo-offer state
@@ -183,7 +197,7 @@ async def renew_subscription(
         if renewal_tariff is None or not renewal_tariff.has_configured_price_for_period(request.period_days):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid renewal period',
+                detail=texts.t('CABINET_RENEWAL_INVALID_PERIOD', 'Invalid renewal period'),
             )
 
     original_price_kopeks = pricing.original_total
@@ -221,7 +235,10 @@ async def renew_subscription(
             'saved_cart': True,
             'missing_amount': missing,
             'return_to_cart': True,
-            'description': f'Продление подписки на {request.period_days} дней'
+            'description': texts.t(
+                'CABINET_RENEWAL_TRANSACTION_DESCRIPTION',
+                'Продление подписки на {days} дней',
+            ).format(days=request.period_days)
             + (f' ({tariff_name})' if tariff_name else ''),
             'discount_percent': discount_percent,
             'consume_promo_offer': promo_offer_discount_value > 0,
@@ -249,7 +266,10 @@ async def renew_subscription(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
+                'message': texts.t(
+                    'CABINET_RENEWAL_INSUFFICIENT_FUNDS',
+                    'Недостаточно средств. Не хватает {amount}',
+                ).format(amount=settings.format_price(missing, round_kopeks=False)),
                 'missing_amount': missing,
                 'cart_saved': True,
                 'cart_mode': 'extend',
@@ -258,7 +278,10 @@ async def renew_subscription(
 
     # Centralized renewal: balance deduction, extension, RemnaWave sync, admin notification,
     # server price recording, and compensating refund on failure.
-    renewal_description = f'Продление подписки на {request.period_days} дней' + (f' ({tariff.name})' if tariff else '')
+    renewal_description = texts.t(
+        'CABINET_RENEWAL_TRANSACTION_DESCRIPTION',
+        'Продление подписки на {days} дней',
+    ).format(days=request.period_days) + (f' ({tariff.name})' if tariff else '')
     renewal_service = SubscriptionRenewalService()
 
     try:
@@ -275,7 +298,10 @@ async def renew_subscription(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_funds',
-                'message': 'Недостаточно средств (concurrent check)',
+                'message': texts.t(
+                    'CABINET_RENEWAL_INSUFFICIENT_FUNDS_CONCURRENT',
+                    'Недостаточно средств (concurrent check)',
+                ),
             },
         )
 
@@ -293,7 +319,7 @@ async def renew_subscription(
         logger.debug('yandex_conv purchase hook failed (non-fatal)', user_id=user.id, error=str(yconv_err))
 
     response: dict[str, Any] = {
-        'message': 'Subscription renewed successfully',
+        'message': texts.t('CABINET_RENEWAL_SUCCESS', 'Subscription renewed successfully'),
         'new_end_date': result.subscription.end_date.isoformat(),
         'amount_paid_kopeks': price_kopeks,
     }

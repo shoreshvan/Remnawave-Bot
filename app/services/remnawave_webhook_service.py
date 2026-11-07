@@ -110,42 +110,68 @@ _EXPIRATION_HOURS_TO_TEXT_KEY: dict[int, str] = {
 
 # Admin event display names for notification messages
 _ADMIN_NODE_EVENTS: dict[str, str] = {
-    'node.created': '🟢 Нода создана',
-    'node.modified': '🔧 Нода изменена',
-    'node.disabled': '🔴 Нода отключена',
-    'node.enabled': '🟢 Нода включена',
-    'node.deleted': '🗑️ Нода удалена',
-    'node.connection_lost': '🚨 Потеряно соединение с нодой',
-    'node.connection_restored': '✅ Соединение с нодой восстановлено',
-    'node.traffic_notify': '📊 Уведомление о трафике ноды',
+    'node.created': get_texts().t('WEBHOOK_ADMIN_NODE_CREATED', '🟢 Нода создана'),
+    'node.modified': get_texts().t('WEBHOOK_ADMIN_NODE_MODIFIED', '🔧 Нода изменена'),
+    'node.disabled': get_texts().t('WEBHOOK_ADMIN_NODE_DISABLED', '🔴 Нода отключена'),
+    'node.enabled': get_texts().t('WEBHOOK_ADMIN_NODE_ENABLED', '🟢 Нода включена'),
+    'node.deleted': get_texts().t('WEBHOOK_ADMIN_NODE_DELETED', '🗑️ Нода удалена'),
+    'node.connection_lost': get_texts().t(
+        'WEBHOOK_ADMIN_NODE_CONNECTION_LOST', '🚨 Потеряно соединение с нодой'
+    ),
+    'node.connection_restored': get_texts().t(
+        'WEBHOOK_ADMIN_NODE_CONNECTION_RESTORED', '✅ Соединение с нодой восстановлено'
+    ),
+    'node.traffic_notify': get_texts().t('WEBHOOK_ADMIN_NODE_TRAFFIC_NOTIFY', '📊 Уведомление о трафике ноды'),
 }
 
 _ADMIN_SERVICE_EVENTS: dict[str, str] = {
-    'service.panel_started': '🚀 Панель RemnaWave запущена',
-    'service.login_attempt_failed': '🔐 Неудачная попытка входа в панель',
-    'service.login_attempt_success': '🔓 Успешный вход в панель',
-    'service.subpage_config_changed': '📄 Конфиг страницы подписки изменён',
+    'service.panel_started': get_texts().t('WEBHOOK_ADMIN_PANEL_STARTED', '🚀 Панель RemnaWave запущена'),
+    'service.login_attempt_failed': get_texts().t(
+        'WEBHOOK_ADMIN_LOGIN_FAILED', '🔐 Неудачная попытка входа в панель'
+    ),
+    'service.login_attempt_success': get_texts().t('WEBHOOK_ADMIN_LOGIN_SUCCESS', '🔓 Успешный вход в панель'),
+    'service.subpage_config_changed': get_texts().t(
+        'WEBHOOK_ADMIN_SUBPAGE_CONFIG_CHANGED', '📄 Конфиг страницы подписки изменён'
+    ),
     # 2.8.0: новые события жизненного цикла API-токена панели (security-релевантно)
-    'service.api_token_created': '🔑 Создан API-токен панели',
-    'service.api_token_deleted': '🗝️ Удалён API-токен панели',
+    'service.api_token_created': get_texts().t('WEBHOOK_ADMIN_API_TOKEN_CREATED', '🔑 Создан API-токен панели'),
+    'service.api_token_deleted': get_texts().t('WEBHOOK_ADMIN_API_TOKEN_DELETED', '🗝️ Удалён API-токен панели'),
 }
 
 _ADMIN_CRM_EVENTS: dict[str, str] = {
-    'crm.infra_billing_node_payment_in_7_days': '💳 Оплата ноды через 7 дней',
-    'crm.infra_billing_node_payment_in_48hrs': '💳 Оплата ноды через 48 часов',
-    'crm.infra_billing_node_payment_in_24hrs': '⚠️ Оплата ноды через 24 часа',
-    'crm.infra_billing_node_payment_due_today': '🔴 Оплата ноды сегодня',
-    'crm.infra_billing_node_payment_overdue_24hrs': '❗ Просрочка оплаты ноды: 24 часа',
-    'crm.infra_billing_node_payment_overdue_48hrs': '❗ Просрочка оплаты ноды: 48 часов',
-    'crm.infra_billing_node_payment_overdue_7_days': '🚨 Просрочка оплаты ноды: 7 дней',
+    'crm.infra_billing_node_payment_in_7_days': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_PAYMENT_IN_7_DAYS', '💳 Оплата ноды через 7 дней'
+    ),
+    'crm.infra_billing_node_payment_in_48hrs': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_PAYMENT_IN_48H', '💳 Оплата ноды через 48 часов'
+    ),
+    'crm.infra_billing_node_payment_in_24hrs': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_PAYMENT_IN_24H', '⚠️ Оплата ноды через 24 часа'
+    ),
+    'crm.infra_billing_node_payment_due_today': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_PAYMENT_DUE_TODAY', '🔴 Оплата ноды сегодня'
+    ),
+    'crm.infra_billing_node_payment_overdue_24hrs': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_OVERDUE_24H', '❗ Просрочка оплаты ноды: 24 часа'
+    ),
+    'crm.infra_billing_node_payment_overdue_48hrs': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_OVERDUE_48H', '❗ Просрочка оплаты ноды: 48 часов'
+    ),
+    'crm.infra_billing_node_payment_overdue_7_days': get_texts().t(
+        'WEBHOOK_ADMIN_BILLING_OVERDUE_7_DAYS', '🚨 Просрочка оплаты ноды: 7 дней'
+    ),
 }
 
 _ADMIN_ERROR_EVENTS: dict[str, str] = {
-    'errors.bandwidth_usage_threshold_reached_max_notifications': '⚠️ Достигнут лимит уведомлений о трафике',
+    'errors.bandwidth_usage_threshold_reached_max_notifications': get_texts().t(
+        'WEBHOOK_ADMIN_BANDWIDTH_MAX_NOTIFICATIONS', '⚠️ Достигнут лимит уведомлений о трафике'
+    ),
 }
 
 _ADMIN_TORRENT_BLOCKER_EVENTS: dict[str, str] = {
-    'torrent_blocker.report': '🚫 Торрент-блокировщик: обнаружен торрент',
+    'torrent_blocker.report': get_texts().t(
+        'WEBHOOK_ADMIN_TORRENT_REPORT', '🚫 Торрент-блокировщик: обнаружен торрент'
+    ),
 }
 
 _ADMIN_NODE_CONNECTION_EVENTS = frozenset({'node.connection_lost', 'node.connection_restored'})

@@ -9,6 +9,7 @@ from PIL import Image as PILImage
 
 from app.config import settings
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.news_media_service import (
     SavedMedia,
     delete_media_file,
@@ -69,13 +70,15 @@ async def upload_media(
     if not data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Empty file',
+            detail=get_texts().t('CABINET_NEWS_MEDIA_EMPTY_FILE', 'Empty file'),
         )
 
     if len(data) >= absolute_max_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f'File too large. Absolute maximum: {settings.MEDIA_MAX_VIDEO_SIZE_MB} MB',
+            detail=get_texts()
+            .t('CABINET_NEWS_MEDIA_TOO_LARGE_ABSOLUTE', 'File too large. Absolute maximum: {max_mb} MB')
+            .format(max_mb=settings.MEDIA_MAX_VIDEO_SIZE_MB),
         )
 
     # Detect type from magic bytes
@@ -84,7 +87,10 @@ async def upload_media(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail='Unsupported file type. Allowed: JPEG, PNG, WebP, MP4, WebM',
+            detail=get_texts().t(
+                'CABINET_NEWS_MEDIA_UNSUPPORTED_TYPE',
+                'Unsupported file type. Allowed: JPEG, PNG, WebP, MP4, WebM',
+            ),
         ) from None
 
     # Enforce per-type size limits
@@ -92,7 +98,12 @@ async def upload_media(
     if len(data) > max_size_mb * _BYTES_PER_MB:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f'File too large. Maximum size for {media_type}: {max_size_mb} MB',
+            detail=get_texts()
+            .t(
+                'CABINET_NEWS_MEDIA_TOO_LARGE_FOR_TYPE',
+                'File too large. Maximum size for {media_type}: {max_size_mb} MB',
+            )
+            .format(media_type=media_type, max_size_mb=max_size_mb),
         )
 
     upload_path = settings.get_media_upload_path()
@@ -112,7 +123,7 @@ async def upload_media(
         logger.warning('Failed to save uploaded media', media_type=media_type, error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail='Failed to process uploaded file',
+            detail=get_texts().t('CABINET_NEWS_MEDIA_PROCESS_FAILED', 'Failed to process uploaded file'),
         ) from None
 
     logger.info(
@@ -135,7 +146,7 @@ async def delete_media(
     if not _SAFE_FILENAME_RE.match(filename):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid filename',
+            detail=get_texts().t('CABINET_NEWS_MEDIA_INVALID_FILENAME', 'Invalid filename'),
         )
 
     upload_path = settings.get_media_upload_path()
@@ -144,7 +155,7 @@ async def delete_media(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='File not found',
+            detail=get_texts().t('CABINET_NEWS_MEDIA_FILE_NOT_FOUND', 'File not found'),
         )
 
     logger.info('Media deleted', filename=filename, admin_id=admin.id)

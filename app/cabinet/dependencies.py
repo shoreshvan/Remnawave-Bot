@@ -12,6 +12,7 @@ from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import User, UserStatus
+from app.localization.texts import get_texts
 from app.services.blacklist_service import blacklist_service
 from app.services.maintenance_service import maintenance_service
 from app.services.rbac_bootstrap_service import is_user_admin_by_env

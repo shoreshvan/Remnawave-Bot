@@ -14,6 +14,7 @@ from app.database.crud.server_squad import (
     update_server_squad_promo_groups,
 )
 from app.database.models import PromoGroup, ServerSquad, Subscription, Tariff, User
+from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -111,7 +112,7 @@ async def get_server(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Server not found',
+            detail=get_texts().t('CABINET_ADMIN_SERVERS_NOT_FOUND', 'Server not found'),
         )
 
     promo_groups = await _get_server_promo_groups(db, server)
@@ -154,7 +155,7 @@ async def update_existing_server(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Server not found',
+            detail=get_texts().t('CABINET_ADMIN_SERVERS_NOT_FOUND', 'Server not found'),
         )
 
     # Build updates dict
@@ -199,7 +200,7 @@ async def toggle_server(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Server not found',
+            detail=get_texts().t('CABINET_ADMIN_SERVERS_NOT_FOUND', 'Server not found'),
         )
 
     new_status = not server.is_available
@@ -211,7 +212,10 @@ async def toggle_server(
     return ServerToggleResponse(
         id=server_id,
         is_available=new_status,
-        message=f'Server {status_text}',
+        message=get_texts().t(
+            'CABINET_ADMIN_SERVERS_TOGGLE_STATUS',
+            'Server {status_text}',
+        ).format(status_text=status_text),
     )
 
 
@@ -226,7 +230,7 @@ async def toggle_server_trial(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Server not found',
+            detail=get_texts().t('CABINET_ADMIN_SERVERS_NOT_FOUND', 'Server not found'),
         )
 
     new_status = not server.is_trial_eligible
@@ -238,7 +242,10 @@ async def toggle_server_trial(
     return ServerTrialToggleResponse(
         id=server_id,
         is_trial_eligible=new_status,
-        message=f'Server {status_text}',
+        message=get_texts().t(
+            'CABINET_ADMIN_SERVERS_TOGGLE_STATUS',
+            'Server {status_text}',
+        ).format(status_text=status_text),
     )
 
 
@@ -253,7 +260,7 @@ async def get_server_stats(
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Server not found',
+            detail=get_texts().t('CABINET_ADMIN_SERVERS_NOT_FOUND', 'Server not found'),
         )
 
     active_subs = await count_active_users_for_squad(db, server.squad_uuid)
@@ -296,7 +303,7 @@ async def sync_servers(
         if not subscription_service.is_configured:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='RemnaWave is not configured',
+                detail=get_texts().t('CABINET_ADMIN_SERVERS_NOT_CONFIGURED', 'RemnaWave is not configured'),
             )
 
         # Get squads from RemnaWave
@@ -304,7 +311,10 @@ async def sync_servers(
         if squads is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='Failed to fetch squads from RemnaWave',
+                detail=get_texts().t(
+                    'CABINET_ADMIN_SERVERS_SQUADS_FETCH_FAILED',
+                    'Failed to fetch squads from RemnaWave',
+                ),
             )
 
         # Sync with database
@@ -316,7 +326,10 @@ async def sync_servers(
             created=created,
             updated=updated,
             removed=removed,
-            message=f'Synced: {created} created, {updated} updated, {removed} removed',
+            message=get_texts().t(
+                'CABINET_ADMIN_SERVERS_SYNC_RESULT',
+                'Synced: {created} created, {updated} updated, {removed} removed',
+            ).format(created=created, updated=updated, removed=removed),
         )
 
     except HTTPException:
@@ -325,5 +338,5 @@ async def sync_servers(
         logger.error('Failed to sync servers', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Sync failed: {e!s}',
+            detail=get_texts().t('CABINET_ADMIN_SERVERS_SYNC_FAILED', 'Sync failed: {error}').format(error=e),
         )

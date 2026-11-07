@@ -14,6 +14,7 @@ from app.database.models import (
     WithdrawalRequest,
     WithdrawalRequestStatus,
 )
+from app.localization.texts import get_texts
 from app.services.referral_withdrawal_service import referral_withdrawal_service
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -76,7 +77,7 @@ async def list_withdrawals(
             WithdrawalRequest.status == WithdrawalRequestStatus.PENDING.value
         )
     )
-    pending_total = pending_total_result.scalar() or 0
+    pending_total = int(pending_total_result.scalar() or 0)
 
     query = query.order_by(desc(WithdrawalRequest.created_at)).offset(offset).limit(limit)
     result = await db.execute(query)
@@ -131,7 +132,7 @@ async def get_withdrawal_detail(
     if not withdrawal:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Заявка не найдена',
+            detail=get_texts(admin.language).t('CABINET_ADMIN_WITHDRAWALS_NOT_FOUND', 'Заявка не найдена'),
         )
 
     user = await db.get(User, withdrawal.user_id)
@@ -170,7 +171,7 @@ async def get_withdrawal_detail(
         admin_comment=withdrawal.admin_comment,
         balance_kopeks=user.balance_kopeks if user else 0,
         total_referrals=referral_count.scalar() or 0,
-        total_earnings_kopeks=total_earnings.scalar() or 0,
+        total_earnings_kopeks=int(total_earnings.scalar() or 0),
         created_at=withdrawal.created_at,
         processed_at=withdrawal.processed_at,
     )
@@ -207,9 +208,13 @@ async def approve_withdrawal(
             withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
             user = await db.get(User, withdrawal.user_id) if withdrawal else None
             if user and withdrawal:
+                texts = get_texts(user.language)
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
                 comment_text = f'\n{request.comment}' if request.comment else ''
-                tg_message = f'✅ Ваш запрос на вывод {formatted_amount} одобрен.{comment_text}'
+                tg_message = texts.t(
+                    'CABINET_ADMIN_WITHDRAWALS_TG_APPROVED',
+                    '✅ Ваш запрос на вывод {amount} одобрен.{comment}',
+                ).format(amount=formatted_amount, comment=comment_text)
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_approved(
@@ -245,7 +250,10 @@ async def reject_withdrawal(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error or 'Не удалось отклонить заявку',
+            detail=error
+            or get_texts(admin.language).t(
+                'CABINET_ADMIN_WITHDRAWALS_REJECT_FAILED', 'Не удалось отклонить заявку'
+            ),
         )
 
     # Notify user about rejection
@@ -258,9 +266,19 @@ async def reject_withdrawal(
             withdrawal = await db.get(WithdrawalRequest, withdrawal_id)
             user = await db.get(User, withdrawal.user_id) if withdrawal else None
             if user and withdrawal:
+                texts = get_texts(user.language)
                 formatted_amount = settings.format_price(withdrawal.amount_kopeks)
-                comment_text = f'\nПричина: {request.comment}' if request.comment else ''
-                tg_message = f'❌ Ваш запрос на вывод {formatted_amount} отклонён.{comment_text}'
+                comment_text = (
+                    texts.t('CABINET_ADMIN_WITHDRAWALS_TG_REJECT_REASON', '\nПричина: {comment}').format(
+                        comment=request.comment
+                    )
+                    if request.comment
+                    else ''
+                )
+                tg_message = texts.t(
+                    'CABINET_ADMIN_WITHDRAWALS_TG_REJECTED',
+                    '❌ Ваш запрос на вывод {amount} отклонён.{comment}',
+                ).format(amount=formatted_amount, comment=comment_text)
                 bot = create_bot()
                 try:
                     await notification_delivery_service.notify_withdrawal_rejected(
@@ -294,7 +312,10 @@ async def complete_withdrawal(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error or 'Не удалось завершить заявку',
+            detail=error
+            or get_texts(admin.language).t(
+                'CABINET_ADMIN_WITHDRAWALS_COMPLETE_FAILED', 'Не удалось завершить заявку'
+            ),
         )
 
     return {'success': True}

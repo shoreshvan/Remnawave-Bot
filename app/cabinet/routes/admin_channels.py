@@ -12,6 +12,7 @@ from app.database.crud.required_channel import (
     update_channel,
 )
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.channel_subscription_service import channel_subscription_service
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -68,7 +69,8 @@ async def update_channel_endpoint(
     update_data = data.model_dump(exclude_unset=True)
     ch = await update_channel(db, channel_db_id, **update_data)
     if not ch:
-        raise HTTPException(status_code=404, detail='Channel not found')
+        texts = get_texts(_admin.language)
+        raise HTTPException(status_code=404, detail=texts.t('CABINET_CHANNELS_NOT_FOUND', 'Channel not found'))
     await channel_subscription_service.invalidate_channels_cache()
     return ChannelResponse.model_validate(ch)
 
@@ -81,7 +83,8 @@ async def toggle_channel_endpoint(
 ) -> ChannelResponse:
     ch = await toggle_channel(db, channel_db_id)
     if not ch:
-        raise HTTPException(status_code=404, detail='Channel not found')
+        texts = get_texts(_admin.language)
+        raise HTTPException(status_code=404, detail=texts.t('CABINET_CHANNELS_NOT_FOUND', 'Channel not found'))
     await channel_subscription_service.invalidate_channels_cache()
     return ChannelResponse.model_validate(ch)
 
@@ -94,5 +97,6 @@ async def delete_channel_endpoint(
 ) -> None:
     ok = await delete_channel(db, channel_db_id)
     if not ok:
-        raise HTTPException(status_code=404, detail='Channel not found')
+        texts = get_texts(_admin.language)
+        raise HTTPException(status_code=404, detail=texts.t('CABINET_CHANNELS_NOT_FOUND', 'Channel not found'))
     await channel_subscription_service.invalidate_channels_cache()

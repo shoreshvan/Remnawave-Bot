@@ -23,6 +23,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
+from app.localization.texts import get_texts
 from app.utils.cache import RateLimitCache
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -593,7 +594,7 @@ async def get_referral_network(
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': str(GRAPH_RATE_WINDOW)},
         )
     logger.info('Fetching referral network graph', admin_id=admin.id)
@@ -730,7 +731,7 @@ async def get_scope_options(
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': str(DETAIL_RATE_WINDOW)},
         )
 
@@ -990,7 +991,7 @@ async def get_scoped_referral_network(
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': str(GRAPH_RATE_WINDOW)},
         )
 
@@ -1002,12 +1003,18 @@ async def get_scoped_referral_network(
     if total_items == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='At least one campaign, partner, or user must be selected',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REFERRAL_NETWORK_SCOPE_REQUIRED',
+                'At least one campaign, partner, or user must be selected',
+            ),
         )
     if total_items > MAX_SCOPE_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Too many items selected (max {MAX_SCOPE_ITEMS})',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REFERRAL_NETWORK_TOO_MANY_ITEMS',
+                'Too many items selected (max {max})',
+            ).format(max=MAX_SCOPE_ITEMS),
         )
 
     all_scoped_user_ids: set[int] = set()
@@ -1072,7 +1079,10 @@ async def get_scoped_referral_network(
     if not all_scoped_user_ids and not all_campaign_ids:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No valid items found for the provided IDs',
+            detail=get_texts().t(
+                'CABINET_ADMIN_REFERRAL_NETWORK_NO_VALID_ITEMS',
+                'No valid items found for the provided IDs',
+            ),
         )
 
     # Discover campaigns that scoped users registered through (runs for all scopes)
@@ -1100,7 +1110,7 @@ async def get_network_user_detail(
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': str(DETAIL_RATE_WINDOW)},
         )
     logger.info('Fetching network user detail', admin_id=admin.id, target_user_id=user_id)
@@ -1117,7 +1127,7 @@ async def get_network_user_detail(
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_USER_NOT_FOUND', 'User not found'),
         )
 
     # Direct referral count
@@ -1256,7 +1266,7 @@ async def get_network_campaign_detail(
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': str(DETAIL_RATE_WINDOW)},
         )
     logger.info('Fetching network campaign detail', admin_id=admin.id, campaign_id=campaign_id)
@@ -1269,7 +1279,7 @@ async def get_network_campaign_detail(
     if campaign is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Campaign not found',
+            detail=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_CAMPAIGN_NOT_FOUND', 'Campaign not found'),
         )
 
     # Registration count
@@ -1360,7 +1370,12 @@ async def get_network_campaign_detail(
 
 @router.get('/search', response_model=NetworkSearchResult)
 async def search_referral_network(
-    q: str = Query(..., min_length=1, max_length=200, description='Search query'),
+    q: str = Query(
+        ...,
+        min_length=1,
+        max_length=200,
+        description=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_SEARCH_QUERY_DESC', 'Search query'),
+    ),
     admin: User = Depends(require_permission('stats:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> NetworkSearchResult:
@@ -1374,7 +1389,7 @@ async def search_referral_network(
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=get_texts().t('CABINET_ADMIN_REFERRAL_NETWORK_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': str(SEARCH_RATE_WINDOW)},
         )
     logger.info('Searching referral network', admin_id=admin.id, query_len=len(q))

@@ -20,6 +20,7 @@ from app.database.database import AsyncSessionLocal
 from app.database.models import (
     AnorePayment,
     AntilopayPayment,
+    AtlasPayPayment,
     AuraPayPayment,
     CasheraPayment,
     CisPayPayment,
@@ -29,6 +30,7 @@ from app.database.models import (
     EtoplatezhiPayment,
     FreekassaPayment,
     HeleketPayment,
+    HooshPayPayment,
     JupiterPayment,
     KassaAiPayment,
     LavaPayment,
@@ -41,6 +43,8 @@ from app.database.models import (
     RollyPayPayment,
     SeverPayPayment,
     TabPayPayment,
+    TonPaysPayment,
+    NowPaymentsPayment,
     Transaction,
     TransactionType,
     User,
@@ -98,6 +102,10 @@ SUPPORTED_MANUAL_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.TABPAY,
         PaymentMethod.PARITYPAY,
         PaymentMethod.CASHERA,
+        PaymentMethod.HOOSHPAY,
+        PaymentMethod.TONPAYS,
+        PaymentMethod.ATLASPAY,
+        PaymentMethod.NOWPAYMENTS,
         # ETOPLATEZHI / JUPITER / DONUT / LAVA — webhook-driven,
         # без API-метода синхронизации БД, manual check не реализован.
     }
@@ -129,6 +137,10 @@ SUPPORTED_AUTO_CHECK_METHODS: frozenset[PaymentMethod] = frozenset(
         PaymentMethod.TABPAY,
         PaymentMethod.PARITYPAY,
         PaymentMethod.CASHERA,
+        PaymentMethod.HOOSHPAY,
+        PaymentMethod.TONPAYS,
+        PaymentMethod.ATLASPAY,
+        PaymentMethod.NOWPAYMENTS,
     }
 )
 
@@ -186,6 +198,14 @@ def method_display_name(method: PaymentMethod) -> str:
         return settings.get_tabpay_display_name()
     if method == PaymentMethod.PARITYPAY:
         return settings.get_paritypay_display_name()
+    if method == PaymentMethod.HOOSHPAY:
+        return settings.get_hooshpay_display_name()
+    if method == PaymentMethod.TONPAYS:
+        return settings.get_tonpays_display_name()
+    if method == PaymentMethod.ATLASPAY:
+        return settings.get_atlaspay_display_name()
+    if method == PaymentMethod.NOWPAYMENTS:
+        return settings.get_nowpayments_display_name()
     if method == PaymentMethod.TELEGRAM_STARS:
         return 'Telegram Stars'
     return method.value
@@ -242,6 +262,14 @@ def _method_is_enabled(method: PaymentMethod) -> bool:
         return settings.is_tabpay_enabled()
     if method == PaymentMethod.PARITYPAY:
         return settings.is_paritypay_enabled()
+    if method == PaymentMethod.HOOSHPAY:
+        return settings.is_hooshpay_enabled()
+    if method == PaymentMethod.TONPAYS:
+        return settings.is_tonpays_enabled()
+    if method == PaymentMethod.ATLASPAY:
+        return settings.is_atlaspay_enabled()
+    if method == PaymentMethod.NOWPAYMENTS:
+        return settings.is_nowpayments_enabled()
     return False
 
 
@@ -559,6 +587,38 @@ def _is_paritypay_pending(payment: ParityPayPayment) -> bool:
     from app.services.payment.paritypay import PARITYPAY_PENDING_STATUSES
 
     return (payment.status or '').lower() in PARITYPAY_PENDING_STATUSES
+
+
+def _is_hooshpay_pending(payment: HooshPayPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.hooshpay import HOOSHPAY_PENDING_STATUSES
+
+    return (payment.status or '').lower() in HOOSHPAY_PENDING_STATUSES
+
+
+def _is_tonpays_pending(payment: TonPaysPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.tonpays import TONPAYS_PENDING_STATUSES
+
+    return (payment.status or '').lower() in TONPAYS_PENDING_STATUSES
+
+
+def _is_atlaspay_pending(payment: AtlasPayPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.atlaspay import ATLASPAY_PENDING_STATUSES
+
+    return (payment.status or '').lower() in ATLASPAY_PENDING_STATUSES
+
+
+def _is_nowpayments_pending(payment: NowPaymentsPayment) -> bool:
+    if payment.is_paid:
+        return False
+    from app.services.payment.nowpayments import NOWPAYMENTS_PENDING_STATUSES
+
+    return (payment.status or '').lower() in NOWPAYMENTS_PENDING_STATUSES
 
 
 def _is_anore_pending(payment: AnorePayment) -> bool:
@@ -1157,6 +1217,125 @@ async def _fetch_paritypay_payments(db: AsyncSession, cutoff: datetime) -> list[
     return records
 
 
+async def _fetch_hooshpay_payments(
+    db: AsyncSession, cutoff: datetime, *, include_manual_review: bool = False
+) -> list[PendingPayment]:
+    stmt = (
+        select(HooshPayPayment)
+        .options(selectinload(HooshPayPayment.user))
+        .where(HooshPayPayment.created_at >= cutoff)
+        .order_by(desc(HooshPayPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_hooshpay_pending(payment) and not (
+            include_manual_review and not payment.is_paid
+            and payment.status in {'manual_review', 'amount_mismatch'}
+        ):
+            continue
+        record = _build_record(
+            PaymentMethod.HOOSHPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
+async def _fetch_tonpays_payments(
+    db: AsyncSession, cutoff: datetime, *, include_manual_review: bool = False
+) -> list[PendingPayment]:
+    stmt = (
+        select(TonPaysPayment)
+        .options(selectinload(TonPaysPayment.user))
+        .where(TonPaysPayment.created_at >= cutoff)
+        .order_by(desc(TonPaysPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_tonpays_pending(payment) and not (
+            include_manual_review and not payment.is_paid
+            and payment.status in {'manual_review', 'amount_mismatch'}
+        ):
+            continue
+        record = _build_record(
+            PaymentMethod.TONPAYS,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
+async def _fetch_atlaspay_payments(
+    db: AsyncSession, cutoff: datetime, *, include_manual_review: bool = False
+) -> list[PendingPayment]:
+    stmt = (
+        select(AtlasPayPayment)
+        .options(selectinload(AtlasPayPayment.user))
+        .where(AtlasPayPayment.created_at >= cutoff)
+        .order_by(desc(AtlasPayPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_atlaspay_pending(payment) and not (
+            include_manual_review and not payment.is_paid
+            and payment.status in {'manual_review', 'amount_mismatch'}
+        ):
+            continue
+        record = _build_record(
+            PaymentMethod.ATLASPAY,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
+async def _fetch_nowpayments_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
+    stmt = (
+        select(NowPaymentsPayment)
+        .options(selectinload(NowPaymentsPayment.user))
+        .where(NowPaymentsPayment.created_at >= cutoff)
+        .order_by(desc(NowPaymentsPayment.created_at))
+    )
+    result = await db.execute(stmt)
+    records: list[PendingPayment] = []
+    for payment in result.scalars().all():
+        if not _is_nowpayments_pending(payment):
+            continue
+        record = _build_record(
+            PaymentMethod.NOWPAYMENTS,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+        if record:
+            records.append(record)
+    return records
+
+
 async def _fetch_tabpay_payments(db: AsyncSession, cutoff: datetime) -> list[PendingPayment]:
     stmt = (
         select(TabPayPayment)
@@ -1331,6 +1510,7 @@ async def list_recent_pending_payments(
     db: AsyncSession,
     *,
     max_age: timedelta = PENDING_MAX_AGE,
+    include_manual_review: bool = False,
 ) -> list[PendingPayment]:
     """Return pending payments (top-ups) from supported providers within the age window."""
 
@@ -1361,6 +1541,10 @@ async def list_recent_pending_payments(
         await _fetch_tabpay_payments(db, cutoff),
         await _fetch_anore_payments(db, cutoff),
         await _fetch_paritypay_payments(db, cutoff),
+        await _fetch_hooshpay_payments(db, cutoff, include_manual_review=include_manual_review),
+        await _fetch_tonpays_payments(db, cutoff, include_manual_review=include_manual_review),
+        await _fetch_atlaspay_payments(db, cutoff, include_manual_review=include_manual_review),
+        await _fetch_nowpayments_payments(db, cutoff),
         await _fetch_stars_transactions(db, cutoff),
         await _fetch_platega_recurring_charges(db, cutoff),
     )
@@ -1693,6 +1877,66 @@ async def get_payment_record(
             expires_at=getattr(payment, 'expires_at', None),
         )
 
+    if method == PaymentMethod.HOOSHPAY:
+        payment = await db.get(HooshPayPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
+    if method == PaymentMethod.TONPAYS:
+        payment = await db.get(TonPaysPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
+    if method == PaymentMethod.ATLASPAY:
+        payment = await db.get(AtlasPayPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
+    if method == PaymentMethod.NOWPAYMENTS:
+        payment = await db.get(NowPaymentsPayment, local_payment_id)
+        if not payment:
+            return None
+        await db.refresh(payment, attribute_names=['user'])
+        return _build_record(
+            method,
+            payment,
+            identifier=payment.order_id,
+            amount_kopeks=payment.amount_kopeks,
+            status=payment.status or '',
+            is_paid=bool(payment.is_paid),
+            expires_at=getattr(payment, 'expires_at', None),
+        )
+
     if method == PaymentMethod.TABPAY:
         payment = await db.get(TabPayPayment, local_payment_id)
         if not payment:
@@ -1900,6 +2144,34 @@ async def run_manual_check(
             paritypay_payment = await db.get(ParityPayPayment, local_payment_id)
             if paritypay_payment:
                 result = await payment_service.check_paritypay_payment_status(db, paritypay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.HOOSHPAY:
+            hooshpay_payment = await db.get(HooshPayPayment, local_payment_id)
+            if hooshpay_payment:
+                result = await payment_service.check_hooshpay_payment_status(db, hooshpay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.TONPAYS:
+            tonpays_payment = await db.get(TonPaysPayment, local_payment_id)
+            if tonpays_payment:
+                result = await payment_service.check_tonpays_payment_status(db, tonpays_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.ATLASPAY:
+            atlaspay_payment = await db.get(AtlasPayPayment, local_payment_id)
+            if atlaspay_payment:
+                result = await payment_service.check_atlaspay_payment_status(db, atlaspay_payment.order_id)
+                payment = result.get('payment') if result else None
+            else:
+                payment = None
+        elif method == PaymentMethod.NOWPAYMENTS:
+            nowpayments_payment = await db.get(NowPaymentsPayment, local_payment_id)
+            if nowpayments_payment:
+                result = await payment_service.check_nowpayments_payment_status(db, nowpayments_payment.order_id)
                 payment = result.get('payment') if result else None
             else:
                 payment = None

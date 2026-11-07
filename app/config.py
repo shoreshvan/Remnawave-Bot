@@ -376,11 +376,11 @@ class Settings(BaseSettings):
     SERVER_STATUS_ITEMS_PER_PAGE: int = 10
 
     BASE_SUBSCRIPTION_PRICE: int = 50000
-    AVAILABLE_SUBSCRIPTION_PERIODS: str = '14,30,60,90,180,360'
+    AVAILABLE_SUBSCRIPTION_PERIODS: str = '15,30,60,90,180,360'
     AVAILABLE_RENEWAL_PERIODS: str = '30,90,180'
-    PRICE_14_DAYS: int = 50000
-    PRICE_30_DAYS: int = 99000
-    PRICE_60_DAYS: int = 189000
+    PRICE_15_DAYS: int = 2500000
+    PRICE_30_DAYS: int = 10000000
+    PRICE_60_DAYS: int = 25000000
     PRICE_90_DAYS: int = 269000
     PRICE_180_DAYS: int = 499000
     PRICE_360_DAYS: int = 899000
@@ -445,9 +445,13 @@ class Settings(BaseSettings):
     # Базовая цена сброса в копейках (используется если режим "period" или как минимальная цена)
     TRAFFIC_RESET_BASE_PRICE: int = 0  # 0 = использовать PERIOD_PRICES[30]
 
-    REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 10000
-    REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 10000
-    REFERRAL_INVITER_BONUS_KOPEKS: int = 10000
+    REFERRAL_MINIMUM_TOPUP_KOPEKS: int = 5_000_000  # 50 000 туманов
+    # Максимальная сумма ручного изменения баланса админом (копейки = 1/100 تومان).
+    # Защита от опечаток; оператор меняет под себя через .env, без правок кода.
+    ADMIN_BALANCE_EDIT_MAX_KOPEKS: int = 2_000_000_000  # 20 000 000 تومان
+    ADMIN_BALANCE_EDIT_MIN_KOPEKS: int = 1_000_000  # 10 000 تومان — единый минимум ручной зарядки
+    REFERRAL_FIRST_TOPUP_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
+    REFERRAL_INVITER_BONUS_KOPEKS: int = 5_000_000  # 50 000 туманов
     REFERRAL_COMMISSION_PERCENT: int = 25
     REFERRAL_FIRST_PAYMENT_COMMISSION_PERCENT: int | None = None
     REFERRAL_RECURRING_COMMISSION_TIERS: str = ''  # Формат: "0:10,10:15,50:20,100:25"
@@ -484,7 +488,7 @@ class Settings(BaseSettings):
 
     # Настройки вывода реферального баланса
     REFERRAL_WITHDRAWAL_ENABLED: bool = False  # Включить возможность вывода
-    REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 100000  # Мин. сумма вывода (1000₽)
+    REFERRAL_WITHDRAWAL_MIN_AMOUNT_KOPEKS: int = 50_000_000  # Мин. сумма вывода (500 000 туманов)
     REFERRAL_WITHDRAWAL_COOLDOWN_DAYS: int = 30  # Частота запросов на вывод
     REFERRAL_WITHDRAWAL_ONLY_REFERRAL_BALANCE: bool = True  # Только реф. баланс (False = реф + свой)
     REFERRAL_WITHDRAWAL_REQUISITES_TEXT: str = ''  # Текст-подсказка для реквизитов при выводе
@@ -506,7 +510,7 @@ class Settings(BaseSettings):
     REFERRAL_PARTNER_SECTION_VISIBLE: bool = True  # Показывать раздел партнёрки в кабинете
 
     # Настройки анализа на подозрительность
-    REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS: int = 50000  # Мин. сумма от 1 реферала (500₽)
+    REFERRAL_WITHDRAWAL_SUSPICIOUS_MIN_DEPOSIT_KOPEKS: int = 20_000_000  # Мин. сумма от 1 реферала (200 000 туманов)
     REFERRAL_WITHDRAWAL_SUSPICIOUS_MAX_DEPOSITS_PER_MONTH: int = 10  # Макс. пополнений от 1 реферала/мес
     REFERRAL_WITHDRAWAL_SUSPICIOUS_NO_PURCHASES_RATIO: float = 2.0  # Пополнил в X раз больше чем потратил
 
@@ -584,7 +588,7 @@ class Settings(BaseSettings):
     # >0 → autopay charges this many days each cycle by default (must be present in tariff/renewal periods).
     # Per-subscription override lives in Subscription.autopay_period_days.
     DEFAULT_AUTOPAY_PERIOD_DAYS: int = 0
-    MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 10000
+    MIN_BALANCE_FOR_AUTOPAY_KOPEKS: int = 5_000_000  # 50 000 туманов
 
     # ── Антиспам уведомлений об ошибке автоплатежа ──
     # Максимум уведомлений об ошибке списания за ОДИН цикл подписки (до следующего end_date).
@@ -596,7 +600,7 @@ class Settings(BaseSettings):
     # (legacy-режим). 0 — без повторов (только первое + финальное).
     AUTOPAY_FAIL_REPEAT_INTERVAL_HOURS: int = 0
 
-    SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 20000
+    SUBSCRIPTION_RENEWAL_BALANCE_THRESHOLD_KOPEKS: int = 10_000_000  # 100 000 туманов
 
     MONITORING_INTERVAL: int = 60
     # Жёсткий per-send таймаут (сек) на отправку уведомлений из MonitoringService.
@@ -622,13 +626,14 @@ class Settings(BaseSettings):
     MAINTENANCE_MESSAGE: str = '🔧 Ведутся технические работы. Сервис временно недоступен. Попробуйте позже.'
 
     TELEGRAM_STARS_ENABLED: bool = True
-    # ₽ per 1 ⭐. Matches Telegram's own cash-out rate (~0.95–1.0 ₽/⭐ as of
-    # 2026-05) so an integer-ruble top-up round-trips losslessly:
-    # rubles_to_stars(150) → 150 ⭐ → stars_to_rubles(150) → 150 ₽.
-    # The previous 1.3 default undervalued stars by ~30% (bot quoted 115 ⭐
-    # for a 150 ₽ top-up, credited only 149.50 ₽ back — a built-in
-    # rounding loss visible on every payment).
-    TELEGRAM_STARS_RATE_RUB: float = 1.0
+    # Toman credited per 1 ⭐. Home currency is Toman; the identifier keeps
+    # its historical _RUB suffix only for back-compat (existing env vars and
+    # the persisted system-setting key must keep resolving) — the value is
+    # home-currency units, not rubles. Tunable here, via env, or in the admin
+    # panel. At 4000, top-ups that are multiples of 4000 round-trip losslessly
+    # (40 000 → 10 ⭐ → 40 000); other amounts snap to the nearest 4000 step,
+    # inherent to Stars' whole-unit granularity.
+    TELEGRAM_STARS_RATE_RUB: float = 4000.0
     TELEGRAM_STARS_DISPLAY_NAME: str = 'Telegram Stars'
 
     # Telegram Login Widget (cabinet auth page)
@@ -739,6 +744,13 @@ class Settings(BaseSettings):
     CRYPTOBOT_DEFAULT_ASSET: str = 'USDT'
     CRYPTOBOT_ASSETS: str = 'USDT,TON,BTC,ETH'
     CRYPTOBOT_INVOICE_EXPIRES_HOURS: int = 24
+    # Toman per 1 USD, used to convert CryptoBot's USD/USDT invoices to the
+    # home currency (Toman) and back. Iran's USD rate is operator-set, not
+    # published like USD/RUB was, so this replaces the old live FX fetch.
+    # Change it in .env or the admin panel (category CRYPTOBOT) with no code
+    # change — the converter reads it live, so a panel edit applies without a
+    # restart. Must be > 0.
+    CRYPTOBOT_USD_TO_TOMAN_RATE: float = 255000.0
 
     HELEKET_ENABLED: bool = False
     HELEKET_DISPLAY_NAME: str = 'Heleket Crypto'
@@ -1186,6 +1198,67 @@ class Settings(BaseSettings):
     PARITYPAY_SBP_ENABLED: bool = False
     PARITYPAY_SBP_DISPLAY_NAME: str = 'СБП (ParityPay)'
 
+    # HooshPay (hooshpay.xyz/api/v1) — иранский card-to-card шлюз, суммы в توманах
+    HOOSHPAY_ENABLED: bool = False
+    HOOSHPAY_API_KEY: str | None = None  # X-API-KEY — ключ запросов (hp_live_...)
+    # Секрет для проверки подписи вебхука (X-HooshPay-Signature, HMAC-SHA256).
+    # Отдельный от API-ключа: утечка одного не даёт подделать другое.
+    HOOSHPAY_API_SECRET: str | None = None
+    HOOSHPAY_BASE_URL: str = 'https://hooshpay.xyz/api/v1'
+    HOOSHPAY_DISPLAY_NAME: str = 'کارت به کارت'
+    # fee_mode: '' | 'seller' | 'buyer' | 'split'. Пусто = берётся из настроек
+    # аккаунта HooshPay (комиссия по умолчанию 20%).
+    HOOSHPAY_FEE_MODE: str | None = None
+    HOOSHPAY_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان — реальный минимум API HooshPay
+    HOOSHPAY_MAX_AMOUNT_KOPEKS: int = 150000000  # 1500000 تومان — реальный максимум API HooshPay
+    HOOSHPAY_WEBHOOK_PATH: str = '/hooshpay-webhook'
+    HOOSHPAY_INVOICE_LIFETIME_MINUTES: int = 30
+    HOOSHPAY_RETURN_URL: str | None = None
+
+    # TonPays custom gateway, Telegram platform (tonpays.online, card-to-card).
+    # В отличие от HooshPay здесь нет hosted payment_url: показываем покупателю
+    # card_number/card_name + final_amount, чек принимает ручная проверка.
+    TONPAYS_ENABLED: bool = False
+    TONPAYS_API_KEY: str | None = None  # X-API-Key — кастомный TG-ключ из панели магазина
+    TONPAYS_BASE_URL: str = 'https://tonpays.online'
+    TONPAYS_DISPLAY_NAME: str = 'کارت به کارت'
+    # Лимиты провайдера в документации не указаны — взяты как у соседнего
+    # карточного шлюза (HooshPay real: 50000..1500000), подтвердить живым тестом.
+    TONPAYS_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان
+    TONPAYS_MAX_AMOUNT_KOPEKS: int = 150000000  # 1500000 تومان
+    TONPAYS_WEBHOOK_PATH: str = '/tonpays-webhook'
+    TONPAYS_INVOICE_LIFETIME_MINUTES: int = 30
+    TONPAYS_RECEIPT_MAX_BYTES: int = 10 * 1024 * 1024  # 10 МБ по документации
+    TONPAYS_CHANGE_CARD_COOLDOWN_SECONDS: int = 60
+
+    # AtlasPay (api.atlaspay.space/api/v1) — card-to-card с SMS-подтверждением,
+    # оплата через Telegram mini-app по customerStartLink. Суммы в целых томанах;
+    # totalAmountToman (с уникальной добавкой) показываем покупателю, зачисляем base.
+    ATLASPAY_ENABLED: bool = False
+    ATLASPAY_API_KEY: str | None = None  # X-API-Key из панели магазина
+    ATLASPAY_WEBHOOK_SECRET: str | None = None  # Секрет подписи вебхука (X-Webhook-Signature, HMAC-SHA256)
+    ATLASPAY_BASE_URL: str = 'https://api.atlaspay.space/api/v1'
+    ATLASPAY_DISPLAY_NAME: str = 'کارت به کارت'
+    ATLASPAY_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان
+    ATLASPAY_MAX_AMOUNT_KOPEKS: int = 250000000  # 2500000 تومان
+    ATLASPAY_WEBHOOK_PATH: str = '/atlaspay-webhook'
+    # Дедлайн провайдера всегда 20 минут (paymentDeadlineAt) — только для текста.
+    ATLASPAY_DEADLINE_MINUTES: int = 20
+
+    # NOWPayments (api.nowpayments.io/v1) — приём крипты с авто-конвертацией.
+    # price_currency не знает IRR: суммы в تومان переводим в USD по ручному курсу.
+    NOWPAYMENTS_ENABLED: bool = False
+    NOWPAYMENTS_API_KEY: str | None = None  # x-api-key из кабинета NOWPayments
+    NOWPAYMENTS_IPN_SECRET: str | None = None  # IPN Secret (HMAC-SHA512, x-nowpayments-sig)
+    NOWPAYMENTS_BASE_URL: str = 'https://api.nowpayments.io/v1'
+    NOWPAYMENTS_DISPLAY_NAME: str = 'ارز دیجیتال'
+    NOWPAYMENTS_MIN_AMOUNT_KOPEKS: int = 5000000  # 50000 تومان (подтвердить живым тестом)
+    NOWPAYMENTS_MAX_AMOUNT_KOPEKS: int = 250000000  # 2500000 تومان (подтвердить живым тестом)
+    NOWPAYMENTS_WEBHOOK_PATH: str = '/nowpayments-webhook'
+    NOWPAYMENTS_RESULT_PATH: str = '/payment/result'
+    # Курс доллара для перевода تومان -> USD (ЦБ его не отдаёт, задаётся вручную).
+    NOWPAYMENTS_USD_TO_TOMAN_RATE: float = 255000.0
+
     # Lava (Lava Business API, api.lava.ru)
     LAVA_ENABLED: bool = False
     LAVA_BASE_URL: str = 'https://api.lava.ru'
@@ -1330,6 +1403,13 @@ class Settings(BaseSettings):
 
     # Округление цен при отображении (≤50 коп вниз, >50 коп вверх)
     PRICE_ROUNDING_ENABLED: bool = True
+
+    # Домашняя валюта сервиса — иранский туман.
+    # Все внутренние суммы хранятся в минорных единицах (1/100 тумана) —
+    # та же конвенция, что раньше была с копейками.
+    HOME_CURRENCY_CODE: str = 'IRT'
+    CURRENCY_SYMBOL: str = 'تومان'
+    PRICE_THOUSANDS_SEPARATOR: str = ','
 
     LOG_LEVEL: str = 'INFO'
     LOG_FILE: str = 'logs/bot.log'
@@ -1521,7 +1601,7 @@ class Settings(BaseSettings):
     # Эндпоинт рассчитан на автоматизацию (AI-агент поддержки), поэтому у него есть
     # предохранитель: агент, ошибшийся на два нуля, упрётся в лимит, а не подарит
     # человеку годовую подписку. 0 — без ограничения.
-    WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 1_000_000
+    WEB_API_MANUAL_DEPOSIT_MAX_KOPEKS: int = 5_000_000_000  # 50 000 000 туманов
 
     ENABLE_DEEP_LINKS: bool = True
     APP_CONFIG_CACHE_TTL: int = 3600
@@ -2370,35 +2450,38 @@ class Settings(BaseSettings):
 
     def format_price(self, price_kopeks: int, round_kopeks: bool | None = None) -> str:
         """
-        Форматирует цену в копейках для отображения пользователю.
+        Форматирует цену из минорных единиц (1/100 тумана) для отображения.
 
         Args:
-            price_kopeks: Сумма в копейках
-            round_kopeks: Если True, округляет копейки (≤50 вниз, >50 вверх).
-                         Если None, использует настройку PRICE_ROUNDING_ENABLED.
+            price_kopeks: Сумма в минорных единицах (100 = 1 туман)
+            round_kopeks: Если True, отбрасывает дробную часть (≤0.50 вниз,
+                         >0.50 вверх). Если None, использует настройку
+                         PRICE_ROUNDING_ENABLED.
 
         Returns:
-            Отформатированная строка цены (например, "150 ₽")
+            Отформатированная строка цены (например, "1,500 تومان")
         """
         # Используем настройку если не передано явно
         should_round = round_kopeks if round_kopeks is not None else self.PRICE_ROUNDING_ENABLED
 
         sign = '-' if price_kopeks < 0 else ''
-        abs_kopeks = abs(price_kopeks)
-        rubles, kopeks = divmod(abs_kopeks, 100)
+        abs_minor = abs(price_kopeks)
+        tomans, minor = divmod(abs_minor, 100)
+        symbol = self.CURRENCY_SYMBOL
+        separator = self.PRICE_THOUSANDS_SEPARATOR
 
         if should_round:
-            # Округление: ≤50 коп вниз, >50 коп вверх
-            if kopeks > 50:
-                rubles += 1
-            return f'{sign}{rubles} ₽'
+            # Округление: ≤0.50 вниз, >0.50 вверх
+            if minor > 50:
+                tomans += 1
+            return f'{sign}{tomans:,} {symbol}'.replace(',', separator)
 
-        # Без округления - показываем точное значение
-        if kopeks:
-            value = f'{sign}{rubles}.{kopeks:02d}'.rstrip('0').rstrip('.')
-            return f'{value} ₽'
+        # Без округления - показываем точное значение с дробной частью
+        if minor:
+            fraction = f'{minor:02d}'.rstrip('0')
+            return f'{sign}{tomans:,}.{fraction} {symbol}'.replace(',', separator)
 
-        return f'{sign}{rubles} ₽'
+        return f'{sign}{tomans:,} {symbol}'.replace(',', separator)
 
     def get_reports_chat_id(self) -> str | None:
         if self.ADMIN_REPORTS_CHAT_ID:
@@ -3504,6 +3587,112 @@ class Settings(BaseSettings):
     def get_paritypay_sbp_display_name_html(self) -> str:
         return html.escape(self.get_paritypay_sbp_display_name())
 
+    def is_hooshpay_configured(self) -> bool:
+        """Есть ли учётные данные провайдера — без учёта флага включения."""
+        return bool(self.HOOSHPAY_API_KEY and self.HOOSHPAY_API_SECRET)
+
+    def is_hooshpay_enabled(self) -> bool:
+        # Для работы шлюза достаточно API-ключа: REST авторизуется заголовком
+        # X-API-KEY, секрет нужен ТОЛЬКО для проверки подписи вебхука. Поэтому
+        # секрет требует is_hooshpay_configured() (по нему монтируется вебхук),
+        # а не это условие — без вебхука оплата всё равно подтверждается
+        # периодическим опросом (payment_verification_service).
+        return bool(self.HOOSHPAY_ENABLED and self.HOOSHPAY_API_KEY)
+
+    def get_hooshpay_display_name(self) -> str:
+        name = (self.HOOSHPAY_DISPLAY_NAME or '').strip()
+        return name or 'HooshPay'
+
+    def get_hooshpay_display_name_html(self) -> str:
+        return html.escape(self.get_hooshpay_display_name())
+
+    def get_hooshpay_callback_url(self) -> str | None:
+        """Публичный адрес вебхука. Без WEBHOOK_URL не передаём ничего —
+        тогда HooshPay берёт адрес callback_url из настроек кассы."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.HOOSHPAY_WEBHOOK_PATH}'
+
+    def get_hooshpay_return_url(self) -> str | None:
+        return self.HOOSHPAY_RETURN_URL or None
+
+    def is_tonpays_configured(self) -> bool:
+        """Есть ли ключ провайдера — без учёта флага включения."""
+        return bool(self.TONPAYS_API_KEY)
+
+    def is_tonpays_enabled(self) -> bool:
+        return bool(self.TONPAYS_ENABLED and self.TONPAYS_API_KEY)
+
+    def get_tonpays_display_name(self) -> str:
+        name = (self.TONPAYS_DISPLAY_NAME or '').strip()
+        return name or 'کارت به کارت'
+
+    def get_tonpays_display_name_html(self) -> str:
+        return html.escape(self.get_tonpays_display_name())
+
+    def get_tonpays_callback_url(self) -> str | None:
+        """Публичный адрес вебхука. Без WEBHOOK_URL не передаём ничего."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.TONPAYS_WEBHOOK_PATH}'
+
+    def is_atlaspay_configured(self) -> bool:
+        """Есть ли ключ провайдера — без учёта флага включения."""
+        return bool(self.ATLASPAY_API_KEY)
+
+    def is_atlaspay_enabled(self) -> bool:
+        return bool(self.ATLASPAY_ENABLED and self.ATLASPAY_API_KEY)
+
+    def get_atlaspay_display_name(self) -> str:
+        name = (self.ATLASPAY_DISPLAY_NAME or '').strip()
+        return name or 'کارت به کارت'
+
+    def get_atlaspay_display_name_html(self) -> str:
+        return html.escape(self.get_atlaspay_display_name())
+
+    def get_atlaspay_callback_url(self) -> str | None:
+        """Публичный адрес вебхука (можно переопределять на каждый заказ)."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.ATLASPAY_WEBHOOK_PATH}'
+
+    def is_nowpayments_configured(self) -> bool:
+        """Есть ли ключ API — без учёта флага включения."""
+        return bool(self.NOWPAYMENTS_API_KEY)
+
+    def is_nowpayments_enabled(self) -> bool:
+        return bool(self.NOWPAYMENTS_ENABLED and self.NOWPAYMENTS_API_KEY)
+
+    def get_nowpayments_display_name(self) -> str:
+        name = (self.NOWPAYMENTS_DISPLAY_NAME or '').strip()
+        return name or 'ارز دیجیتال'
+
+    def get_nowpayments_display_name_html(self) -> str:
+        return html.escape(self.get_nowpayments_display_name())
+
+    def get_nowpayments_callback_url(self) -> str | None:
+        """Публичный адрес IPN. Без WEBHOOK_URL не передаём ничего."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.NOWPAYMENTS_WEBHOOK_PATH}'
+
+    def get_nowpayments_result_page_url(self) -> str | None:
+        """Публичный адрес страницы результата (success_url для инвойсов)."""
+        if not self.WEBHOOK_URL:
+            return None
+        return f'{self.WEBHOOK_URL.rstrip("/")}{self.NOWPAYMENTS_RESULT_PATH}'
+
+    def get_nowpayments_usd_rate(self) -> float:
+        rate = self.NOWPAYMENTS_USD_TO_TOMAN_RATE or 0
+        return float(rate) if rate > 0 else 0.0
+
+    def nowpayments_toman_to_usd(self, amount_kopeks: int) -> float:
+        """Копейки -> USD для price_amount (округление до центов)."""
+        rate = self.get_nowpayments_usd_rate()
+        if rate <= 0:
+            raise ValueError('NOWPayments USD rate must be positive')
+        return round((amount_kopeks / 100) / rate, 2)
+
     def is_donut_configured(self) -> bool:
         """Есть ли учётные данные провайдера — без учёта флага включения."""
         return self.DONUT_TOKEN is not None and self.DONUT_SECRET is not None
@@ -3833,7 +4022,7 @@ class Settings(BaseSettings):
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
             if not periods_str or not periods_str.strip():
-                allowed_periods = {14, 30, 60, 90, 180, 360}
+                allowed_periods = {15, 30, 60, 90, 180, 360}
             else:
                 allowed_periods = set()
                 for period_str in periods_str.split(','):
@@ -3841,7 +4030,7 @@ class Settings(BaseSettings):
                     if period_str:
                         allowed_periods.add(int(period_str))
         except (ValueError, AttributeError):
-            allowed_periods = {14, 30, 60, 90, 180, 360}
+            allowed_periods = {15, 30, 60, 90, 180, 360}
 
         # Возвращаем только разрешённые периоды (без фильтрации по цене,
         # т.к. в режиме classic цена складывается из серверов/трафика/устройств)
@@ -3882,16 +4071,16 @@ class Settings(BaseSettings):
         try:
             periods_str = self.AVAILABLE_SUBSCRIPTION_PERIODS
             if not periods_str or not periods_str.strip():
-                return [14, 30, 60, 90, 180, 360]
+                return [15, 30, 60, 90, 180, 360]
 
             periods = []
             for period_str in periods_str.split(','):
                 period_str = period_str.strip()
                 if period_str:
                     periods.append(int(period_str))
-            return sorted(periods) if periods else [14, 30, 60, 90, 180, 360]
+            return sorted(periods) if periods else [15, 30, 60, 90, 180, 360]
         except (ValueError, AttributeError):
-            return [14, 30, 60, 90, 180, 360]
+            return [15, 30, 60, 90, 180, 360]
 
     def get_configured_renewal_periods(self) -> list[int]:
         """
@@ -4611,7 +4800,7 @@ settings = Settings()
 ENV_OVERRIDE_KEYS = set(settings.model_fields_set)
 
 _PERIOD_PRICE_FIELDS: dict[int, str] = {
-    14: 'PRICE_14_DAYS',
+    15: 'PRICE_15_DAYS',
     30: 'PRICE_30_DAYS',
     60: 'PRICE_60_DAYS',
     90: 'PRICE_90_DAYS',

@@ -4,7 +4,7 @@ from app.localization.texts import get_texts
 
 
 MIN_MANUAL_TOPUP_RUBLES = 1
-MAX_MANUAL_TOPUP_RUBLES = 50000
+MAX_MANUAL_TOPUP_RUBLES = 20000000
 
 
 def _rubles(kopeks: int) -> str:

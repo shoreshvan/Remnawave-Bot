@@ -21,6 +21,7 @@ from app.database.crud.landing import get_active_landing_by_slug, get_purchase_b
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user import get_user_by_email
 from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff
+from app.localization.texts import get_texts
 from app.services.gift_claim_service import (
     GiftClaimAlreadyOwnedError,
     GiftClaimNotActivatableError,

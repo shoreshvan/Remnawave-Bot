@@ -8,6 +8,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.security import APIKeyHeader
 
 from app.database.database import AsyncSessionLocal
+from app.localization.texts import get_texts
 from app.services.event_emitter import event_emitter
 from app.services.web_api_token_service import web_api_token_service
 from app.utils.websocket_errors import CLIENT_GONE_ERRORS, is_client_gone
@@ -67,12 +68,18 @@ async def websocket_endpoint(websocket: WebSocket):
 
     if not token:
         logger.debug('WebSocket: No token provided from', client_host=client_host)
-        await _reject(websocket, 'Unauthorized: No token provided')
+        await _reject(
+            websocket,
+            get_texts().t('API_WS_UNAUTHORIZED_NO_TOKEN', 'Unauthorized: No token provided'),
+        )
         return
 
     if not await verify_websocket_token(websocket, token):
         logger.debug('WebSocket: Invalid token from', client_host=client_host)
-        await _reject(websocket, 'Unauthorized: Invalid token')
+        await _reject(
+            websocket,
+            get_texts().t('API_WS_UNAUTHORIZED_INVALID_TOKEN', 'Unauthorized: Invalid token'),
+        )
         return
 
     # Только после успешной проверки принимаем соединение
@@ -96,7 +103,7 @@ async def websocket_endpoint(websocket: WebSocket):
             {
                 'type': 'connection',
                 'status': 'connected',
-                'message': 'WebSocket connection established',
+                'message': get_texts().t('API_WS_CONNECTION_ESTABLISHED', 'WebSocket connection established'),
             }
         )
 

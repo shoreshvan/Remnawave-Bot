@@ -22,6 +22,7 @@ from app.database.crud.referral import create_referral_earning, get_user_campaig
 from app.database.crud.user import add_user_balance
 from app.database.models import ReferralEarning, User
 from app.utils.timezone import local_date, local_day_bounds
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -716,14 +717,18 @@ class ReferralDiagnosticsService:
             try:
                 user = users_map.get(lost.telegram_id)
                 if not user:
-                    detail.error = 'Пользователь не найден в БД'
+                    detail.error = get_texts(settings.DEFAULT_LANGUAGE).t(
+                        'REFERRAL_DIAG_ERROR_USER_NOT_IN_DB', 'Пользователь не найден в БД'
+                    )
                     report.errors += 1
                     report.details.append(detail)
                     continue
 
                 referrer = referrers_map.get(lost.expected_referrer_id) if lost.expected_referrer_id else None
                 if not referrer:
-                    detail.error = 'Реферер не найден'
+                    detail.error = get_texts(settings.DEFAULT_LANGUAGE).t(
+                        'REFERRAL_DIAG_ERROR_REFERRER_NOT_FOUND', 'Реферер не найден'
+                    )
                     report.errors += 1
                     report.details.append(detail)
                     continue
@@ -790,13 +795,16 @@ class ReferralDiagnosticsService:
                                     db,
                                     user,
                                     settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
-                                    'Восстановленный бонус за первое пополнение (потерянный реферал)',
+                                    get_texts(user.language).t(
+                                        'REFERRAL_TRANSACTION_RESTORED_FIRST_TOPUP_LOST',
+                                        'Восстановленный бонус за первое пополнение (потерянный реферал)',
+                                    ),
                                     create_transaction=True,
                                     transaction_type=TransactionType.REFERRAL_REWARD,
                                 )
                                 user.has_made_first_topup = True
                                 logger.info(
-                                    '💰 Начислен бонус рефералу ₽',
+                                    '💰 Начислен бонус рефералу تومان',
                                     telegram_id=user.telegram_id,
                                     REFERRAL_FIRST_TOPUP_BONUS_KOPEKS=settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS / 100,
                                 )
@@ -817,7 +825,12 @@ class ReferralDiagnosticsService:
                                     db,
                                     referrer,
                                     inviter_bonus,
-                                    f'Восстановленный бонус за реферала {user.full_name or user.username or user.telegram_id}',
+                                    get_texts(referrer.language)
+                                    .t(
+                                        'REFERRAL_TRANSACTION_RESTORED_REFERRAL',
+                                        'Восстановленный бонус за реферала {name}',
+                                    )
+                                    .format(name=user.full_name or user.username or user.telegram_id),
                                     create_transaction=True,
                                     transaction_type=TransactionType.REFERRAL_REWARD,
                                 )
@@ -834,7 +847,7 @@ class ReferralDiagnosticsService:
                                 )
 
                                 logger.info(
-                                    '💰 Начислен бонус рефереру ₽',
+                                    '💰 Начислен бонус рефереру تومان',
                                     telegram_id=referrer.telegram_id or referrer.id,
                                     inviter_bonus=inviter_bonus / 100,
                                 )
@@ -842,7 +855,9 @@ class ReferralDiagnosticsService:
                                 # Добавляем в активные конкурсы рефералов
                                 await self._add_to_active_contests(db, user, referrer, first_topup.amount_kopeks)
                     else:
-                        detail.error = 'Бонусы уже начислены ранее'
+                        detail.error = get_texts(settings.DEFAULT_LANGUAGE).t(
+                            'REFERRAL_DIAG_ERROR_BONUS_ALREADY', 'Бонусы уже начислены ранее'
+                        )
 
                 report.details.append(detail)
 
@@ -855,7 +870,7 @@ class ReferralDiagnosticsService:
         if apply:
             await db.commit()
             logger.info(
-                '✅ Исправлено рефералов: начислено бонусов: ₽ + ₽',
+                '✅ Исправлено рефералов: начислено бонусов: تومان + تومان',
                 users_fixed=report.users_fixed,
                 bonuses_to_referrals=report.bonuses_to_referrals / 100,
                 bonuses_to_referrers=report.bonuses_to_referrers / 100,
@@ -1037,7 +1052,9 @@ class ReferralDiagnosticsService:
             )
 
             if not referral or not referrer:
-                detail.error = 'Пользователь не найден'
+                detail.error = get_texts(settings.DEFAULT_LANGUAGE).t(
+                    'REFERRAL_DIAG_ERROR_USER_NOT_FOUND', 'Пользователь не найден'
+                )
                 report.errors += 1
                 report.details.append(detail)
                 continue
@@ -1055,13 +1072,16 @@ class ReferralDiagnosticsService:
                             db,
                             referral,
                             missing.referral_bonus_amount,
-                            'Восстановленный бонус за первое пополнение',
+                            get_texts(referral.language).t(
+                                'REFERRAL_TRANSACTION_RESTORED_FIRST_TOPUP',
+                                'Восстановленный бонус за первое пополнение',
+                            ),
                             create_transaction=True,
                             transaction_type=TransactionType.REFERRAL_REWARD,
                         )
                         referral.has_made_first_topup = True
                         logger.info(
-                            '💰 Начислен бонус рефералу ₽',
+                            '💰 Начислен бонус рефералу تومان',
                             telegram_id=referral.telegram_id,
                             referral_bonus_amount=missing.referral_bonus_amount / 100,
                         )
@@ -1076,7 +1096,12 @@ class ReferralDiagnosticsService:
                             db,
                             referrer,
                             missing.referrer_bonus_amount,
-                            f'Восстановленный бонус за реферала {referral.full_name or referral.username or referral.telegram_id}',
+                            get_texts(referrer.language)
+                            .t(
+                                'REFERRAL_TRANSACTION_RESTORED_REFERRAL',
+                                'Восстановленный бонус за реферала {name}',
+                            )
+                            .format(name=referral.full_name or referral.username or referral.telegram_id),
                             create_transaction=True,
                             transaction_type=TransactionType.REFERRAL_REWARD,
                         )
@@ -1092,7 +1117,7 @@ class ReferralDiagnosticsService:
                             campaign_id=campaign_id,
                         )
                         logger.info(
-                            '💰 Начислен бонус рефереру ₽',
+                            '💰 Начислен бонус рефереру تومان',
                             telegram_id=referrer.telegram_id,
                             referrer_bonus_amount=missing.referrer_bonus_amount / 100,
                         )
@@ -1112,7 +1137,7 @@ class ReferralDiagnosticsService:
         if apply:
             await db.commit()
             logger.info(
-                '✅ Начислено бонусов: ₽ рефералам + ₽ рефереерам',
+                '✅ Начислено бонусов: تومان рефералам + تومان рефереерам',
                 bonuses_to_referrals=report.bonuses_to_referrals / 100,
                 bonuses_to_referrers=report.bonuses_to_referrers / 100,
             )

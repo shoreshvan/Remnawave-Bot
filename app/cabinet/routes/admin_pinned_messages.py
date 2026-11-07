@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot_factory import create_bot
 from app.database.models import PinnedMessage, User
+from app.localization.texts import get_texts
 from app.services.pinned_message_service import (
     broadcast_pinned_message,
     deactivate_active_pinned_message,
@@ -49,7 +50,12 @@ def _check_broadcast_cooldown() -> None:
         remaining = int(_BROADCAST_COOLDOWN_SECONDS - elapsed)
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            f'Broadcast cooldown active. Try again in {remaining} seconds.',
+            get_texts()
+            .t(
+                'CABINET_ADMIN_PINNED_MESSAGES_COOLDOWN_ACTIVE',
+                'Broadcast cooldown active. Try again in {remaining} seconds.',
+            )
+            .format(remaining=remaining),
         )
     _last_broadcast_time = now
 
@@ -132,7 +138,10 @@ async def get_pinned_message(
     result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_ADMIN_PINNED_MESSAGES_NOT_FOUND', 'Pinned message not found'),
+        )
     return _serialize_pinned_message(msg)
 
 
@@ -157,7 +166,12 @@ async def create_pinned_message(
 
     content = payload.content.strip()
     if not content and not payload.media:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Either content or media must be provided')
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            get_texts().t(
+                'CABINET_ADMIN_PINNED_MESSAGES_CONTENT_OR_MEDIA_REQUIRED', 'Either content or media must be provided'
+            ),
+        )
 
     media_type = payload.media.type if payload.media else None
     media_file_id = payload.media.file_id if payload.media else None
@@ -203,7 +217,10 @@ async def update_pinned_message(
     result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_ADMIN_PINNED_MESSAGES_NOT_FOUND', 'Pinned message not found'),
+        )
 
     if payload.content is not None:
         sanitized = sanitize_html(payload.content)
@@ -242,7 +259,10 @@ async def update_pinned_message_settings(
     result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_ADMIN_PINNED_MESSAGES_NOT_FOUND', 'Pinned message not found'),
+        )
 
     if payload.send_before_menu is not None:
         msg.send_before_menu = payload.send_before_menu
@@ -322,7 +342,10 @@ async def activate_pinned_message(
     result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_ADMIN_PINNED_MESSAGES_NOT_FOUND', 'Pinned message not found'),
+        )
 
     await db.execute(
         update(PinnedMessage)
@@ -364,7 +387,10 @@ async def broadcast_message(
     result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_ADMIN_PINNED_MESSAGES_NOT_FOUND', 'Pinned message not found'),
+        )
 
     sent_count, failed_count = await broadcast_pinned_message(_get_bot(), db, msg)
 
@@ -393,12 +419,18 @@ async def delete_pinned_message(
     result = await db.execute(select(PinnedMessage).where(PinnedMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'Pinned message not found')
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            get_texts().t('CABINET_ADMIN_PINNED_MESSAGES_NOT_FOUND', 'Pinned message not found'),
+        )
 
     if msg.is_active:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            'Cannot delete active pinned message. Deactivate it first.',
+            get_texts().t(
+                'CABINET_ADMIN_PINNED_MESSAGES_CANNOT_DELETE_ACTIVE',
+                'Cannot delete active pinned message. Deactivate it first.',
+            ),
         )
 
     await db.delete(msg)

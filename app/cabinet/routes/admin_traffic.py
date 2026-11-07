@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.bot_factory import create_bot
 from app.database.models import Subscription, Transaction, TransactionType, User
+from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 
 from ..dependencies import get_cabinet_db, require_permission
@@ -336,22 +337,32 @@ async def get_traffic_usage(
     end_date: str = Query('', max_length=10),
 ):
     """Get paginated per-user traffic usage by node."""
+    texts = get_texts(admin.language)
     # Determine date range: custom dates or period-based
     if start_date.strip() and end_date.strip():
         try:
             start_dt = datetime.strptime(start_date.strip(), '%Y-%m-%d').replace(tzinfo=UTC)
             end_dt = datetime.strptime(end_date.strip(), '%Y-%m-%d').replace(tzinfo=UTC, hour=23, minute=59, second=59)
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid date format. Use YYYY-MM-DD.')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t('CABINET_TRAFFIC_INVALID_DATE_FORMAT', 'Invalid date format. Use YYYY-MM-DD.'),
+            )
 
         now = datetime.now(UTC)
         end_dt = min(end_dt, now)
 
         if start_dt > end_dt:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='start_date must be before end_date.')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t('CABINET_TRAFFIC_START_BEFORE_END', 'start_date must be before end_date.'),
+            )
 
         if (end_dt - start_dt).days > 31:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Date range cannot exceed 31 days.')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t('CABINET_TRAFFIC_RANGE_TOO_LONG', 'Date range cannot exceed 31 days.'),
+            )
 
         start_str = start_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
         end_str = end_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -632,10 +643,11 @@ async def export_traffic_csv(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Generate CSV with traffic usage and send to admin's Telegram DM."""
+    texts = get_texts(admin.language)
     if not admin.telegram_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Admin has no Telegram ID configured',
+            detail=texts.t('CABINET_TRAFFIC_NO_TELEGRAM_ID', 'Admin has no Telegram ID configured'),
         )
 
     # Determine date range: custom dates or period-based
@@ -646,14 +658,23 @@ async def export_traffic_csv(
                 tzinfo=UTC, hour=23, minute=59, second=59
             )
         except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid date format. Use YYYY-MM-DD.')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t('CABINET_TRAFFIC_INVALID_DATE_FORMAT', 'Invalid date format. Use YYYY-MM-DD.'),
+            )
 
         now = datetime.now(UTC)
         end_dt = min(end_dt, now)
         if start_dt > end_dt:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='start_date must be before end_date.')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t('CABINET_TRAFFIC_START_BEFORE_END', 'start_date must be before end_date.'),
+            )
         if (end_dt - start_dt).days > 31:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Date range cannot exceed 31 days.')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t('CABINET_TRAFFIC_RANGE_TOO_LONG', 'Date range cannot exceed 31 days.'),
+            )
 
         start_str = start_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
         end_str = end_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -784,13 +805,18 @@ async def export_traffic_csv(
             await bot.send_document(
                 chat_id=admin.telegram_id,
                 document=BufferedInputFile(csv_bytes, filename=filename),
-                caption=f'Traffic usage report ({period_label})\nUsers: {len(rows)}',
+                caption=texts.t(
+                    'CABINET_TRAFFIC_CSV_CAPTION', 'Traffic usage report ({period_label})\nUsers: {count}'
+                ).format(period_label=period_label, count=len(rows)),
             )
     except Exception:
         logger.error('Failed to send CSV to admin', telegram_id=admin.telegram_id, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to send CSV report. Please try again later.',
+            detail=texts.t('CABINET_TRAFFIC_CSV_SEND_FAILED', 'Failed to send CSV report. Please try again later.'),
         )
 
-    return ExportCsvResponse(success=True, message=f'CSV sent ({len(rows)} users)')
+    return ExportCsvResponse(
+        success=True,
+        message=texts.t('CABINET_TRAFFIC_CSV_SENT', 'CSV sent ({count} users)').format(count=len(rows)),
+    )
