@@ -339,6 +339,42 @@ class NowpaymentsPaymentMixin:
                     else None,
                     callback_payload=callback_payload,
                 )
+                # Notify admin + user about the underpayment so it doesn't sit
+                # unnoticed. Best-effort: never fail the webhook on notify errors.
+                if getattr(self, 'bot', None):
+                    try:
+                        from app.services.admin_notification_service import AdminNotificationService
+
+                        notification_service = AdminNotificationService(self.bot)
+                        await notification_service.send_admin_notification(
+                            text=(
+                                '⚠️ NOWPayments underpayment (manual review)'
+                                + chr(10)
+                                + 'Order: ' + str(payment.order_id)
+                                + chr(10)
+                                + 'Expected: ' + str(payment.amount_kopeks) + ' kopeks'
+                                + chr(10)
+                                + 'Actually paid: ' + str(payload.get('actually_paid')) + ' ' + str(payload.get('pay_currency') or '')
+                                + chr(10)
+                                + 'User id: ' + str(payment.user_id)
+                            ),
+                        )
+                    except Exception as error:
+                        logger.error('NOWPayments admin notification (underpayment) error', error=error)
+                    try:
+                        payment_module = import_module('app.services.payment_service')
+                        user = await payment_module.get_user_by_id(db, payment.user_id)
+                        if user and getattr(user, 'telegram_id', None):
+                            texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                            await self.bot.send_message(
+                                user.telegram_id,
+                                texts.t(
+                                    'NOWPAYMENTS_UNDERPAID_REVIEW',
+                                    '⚠️ مبلغ واریزی کمتر از مبلغ فاکتور است و در انتظار بررسی پشتیبانی است.',
+                                ),
+                            )
+                    except Exception as error:
+                        logger.error('NOWPayments user notification (underpayment) error', error=error)
                 return True
 
             nowpayments_crud.remember_nowpayments_event(payment, event_key)
@@ -356,42 +392,6 @@ class NowpaymentsPaymentMixin:
                 pay_amount=str(payload.get('pay_amount')) if payload.get('pay_amount') is not None else None,
                 callback_payload=callback_payload,
             )
-            # Notify admin + user about the underpayment so it doesn't sit
-            # unnoticed. Best-effort: never fail the webhook on notify errors.
-            if getattr(self, 'bot', None):
-                try:
-                    from app.services.admin_notification_service import AdminNotificationService
-
-                    notification_service = AdminNotificationService(self.bot)
-                    await notification_service.send_admin_notification(
-                        text=(
-                            '⚠️ NOWPayments underpayment (manual review)'
-                            + chr(10)
-                            + 'Order: ' + str(payment.order_id)
-                            + chr(10)
-                            + 'Expected: ' + str(payment.amount_kopeks) + ' kopeks'
-                            + chr(10)
-                            + 'Actually paid: ' + str(payload.get('actually_paid')) + ' ' + str(payload.get('pay_currency') or '')
-                            + chr(10)
-                            + 'User id: ' + str(payment.user_id)
-                        ),
-                    )
-                except Exception as error:
-                    logger.error('NOWPayments admin notification (underpayment) error', error=error)
-                try:
-                    payment_module = import_module('app.services.payment_service')
-                    user = await payment_module.get_user_by_id(db, payment.user_id)
-                    if user and getattr(user, 'telegram_id', None):
-                        texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                        await self.bot.send_message(
-                            user.telegram_id,
-                            texts.t(
-                                'NOWPAYMENTS_UNDERPAID_REVIEW',
-                                '⚠️ مبلغ واریزی کمتر از مبلغ فاکتور است و در انتظار بررسی پشتیبانی است.',
-                            ),
-                        )
-                except Exception as error:
-                    logger.error('NOWPayments user notification (underpayment) error', error=error)
             return True
 
         except Exception as e:
