@@ -18,6 +18,7 @@ from app.database.crud.saved_payment_method import (
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, Transaction, User
 from app.localization.texts import get_texts
+from app.utils.transaction_description import localize_transaction_description
 from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.services.payment_service import PaymentService
 from app.services.payment_verification_service import (
@@ -116,7 +117,7 @@ async def get_transactions(
                 type=t.type,
                 amount_kopeks=amount_kopeks,
                 amount_rubles=amount_kopeks / 100,
-                description=t.description,
+                description=localize_transaction_description(t.description, user.language),
                 payment_method=t.payment_method,
                 is_completed=t.is_completed,
                 created_at=t.created_at,

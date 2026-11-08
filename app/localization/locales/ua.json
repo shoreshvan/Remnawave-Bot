@@ -1061,7 +1061,7 @@
   "MAIN_MENU_RICH_TRIAL_ACTIVATED": "🎉 <b>Тестову підписку активовано!</b>",
   "MAIN_MENU_RICH_TRIAL_BUTTON": "🚀 Активувати тріал",
   "MAIN_MENU_TEST_ACCESS_HEADER": "🧪 Тестові сервери активні: {servers}",
-  "MAIN_MENU_TEST_ACCESS_TIMER": "⏳ Доступ діє ще: {time_left}\n<code>{bar}</code>",
+  "MAIN_MENU_TEST_ACCESS_TIMER": "⏳ Доступ діє ще: {time_left}\n{bar}",
   "MANAGE_DEVICES_BUTTON": "🔧 Керування пристроями",
   "MARK_AS_ANSWERED": "✅ Позначити як такий, що отримав відповідь",
   "MENU_ADMIN": "⚙️ Адмін-панель",
@@ -1462,7 +1462,7 @@
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "🚫 Ваші підписки призупинено, оскільки ви відписались від обов'язкового каналу.\n\nПідпишіться на всі канали для відновлення доступу до VPN.",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Активовано дод. знижку {percent}%. \n\nСумується з іншими знижками!",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "⚡ Дод. знижка {percent}%: -{amount}",
-  "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Знижка діє ще: {time_left}\n<code>{bar}</code>",
+  "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Знижка діє ще: {time_left}\n{bar}",
   "SUBSCRIPTION_PURCHASED": "🎉 Підписку успішно придбано!",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE": "✅ Вашу підписку відновлено!\n\nДякуємо за підписку на канали. VPN знову активний.",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE_MULTI": "✅ Ваші підписки відновлено!\n\nДякуємо за підписку на канали. VPN знову активний.",
@@ -7123,5 +7123,6 @@
   "SETTINGS_CATEGORY_DESC_HOOSHPAY": "HooshPay: hooshpay.xyz/api/v1, картковий шлюз (تومان); вебхук з HMAC-SHA256 (X-HooshPay-Signature).",
   "SETTINGS_CATEGORY_DESC_TONPAYS": "TonPays: tonpays.online, кастомний картковий шлюз (Telegram); вебхук за X-API-Key та delivery_id. Ключ TONPAYS_API_KEY.",
   "SETTINGS_CATEGORY_DESC_ATLASPAY": "AtlasPay: api.atlaspay.space, картка-картці з SMS-підтвердженням (Telegram mini-app); HMAC-SHA256 вебхук. Ключі ATLASPAY_API_KEY + ATLASPAY_WEBHOOK_SECRET.",
-  "SETTINGS_CATEGORY_DESC_NOWPAYMENTS": "NOWPayments: api.nowpayments.io, прийом крипти з авто-конвертацією (invoice); HMAC-SHA512 IPN. Ключі NOWPAYMENTS_API_KEY + NOWPAYMENTS_IPN_SECRET."
+  "SETTINGS_CATEGORY_DESC_NOWPAYMENTS": "NOWPayments: api.nowpayments.io, прийом крипти з авто-конвертацією (invoice); HMAC-SHA512 IPN. Ключі NOWPAYMENTS_API_KEY + NOWPAYMENTS_IPN_SECRET.",
+  "TRANSACTION_DAILY_PLAN_PURCHASE": "Купівля добового тарифу {tariff} (перший день)"
 }

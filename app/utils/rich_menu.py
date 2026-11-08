@@ -16,6 +16,7 @@ telegram-bot-api) модуль запоминает недоступность �
 логотипом идут через delete+send (существующие fallback-и photo_message).
 """
 
+from app.utils.progress_bar import colored_progress_bar
 import html
 import re
 from datetime import UTC, datetime, timedelta
@@ -62,7 +63,6 @@ from app.utils.validators import sanitize_html
 logger = structlog.get_logger(__name__)
 
 _RTL_LANGUAGES = frozenset({'ar', 'fa', 'he'})
-_PROGRESS_BAR_LENGTH = 10
 
 # Сервер не поддерживает rich-сообщения (устаревший self-hosted bot-api).
 # Взводится один раз до рестарта — по образцу _happ_encrypt_unavailable.
@@ -256,15 +256,10 @@ def _tg_time(moment: datetime, time_format: str, fallback: str) -> str:
 
 
 def _progress_bar(seconds_left: float, total_seconds: float) -> str:
-    # Тот же вид [████░░░░░░], что у таймеров промо-предложений (app/utils/promo_offer.py).
     if total_seconds <= 0:
         total_seconds = seconds_left or 1
     ratio = max(0.0, min(1.0, seconds_left / total_seconds))
-    filled = int(round(ratio * _PROGRESS_BAR_LENGTH))
-    filled = max(0, min(_PROGRESS_BAR_LENGTH, filled))
-    if filled == 0 and seconds_left > 0:
-        filled = 1
-    return f'[{"█" * filled}{"░" * (_PROGRESS_BAR_LENGTH - filled)}]'
+    return colored_progress_bar(ratio * 100, color='green', remaining=True)
 
 
 def _rich_status_label(texts, actual_status: str, is_trial: bool) -> str:
@@ -533,7 +528,7 @@ async def _build_single_subscription_block(user: User, texts, db: AsyncSession) 
             '{days}', str(local_days_until(end_date, current_time))
         )
         relative_line = _rich_text(relative_template).replace('{when}', _tg_time(end_date, 'r', days_left_text))
-        lines.append(f'<code>{_progress_bar(seconds_left, total_seconds)}</code> {relative_line}')
+        lines.append(f'{_progress_bar(seconds_left, total_seconds)}\n{relative_line}')
 
     if actual_status in {'active', 'trial', 'limited'}:
         traffic_template = texts.t('MAIN_MENU_RICH_TRAFFIC', '📊 Трафик: {traffic}')

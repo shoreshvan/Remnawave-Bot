@@ -1,3 +1,4 @@
+from app.utils.progress_bar import colored_progress_bar
 import html
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -415,10 +416,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                             percent = min(100, max(0, (remaining_seconds / total_seconds) * 100))
 
                             # Генерируем прогресс-бар
-                            bar_length = 10
-                            filled = int(bar_length * percent / 100)
-                            empty = bar_length - filled
-                            progress_bar = '▓' * filled + '░' * empty
+                            progress_bar = colored_progress_bar(percent, color='green', remaining=True)
 
                             tariff_info_lines.append('')
                             tariff_info_lines.append(
@@ -426,7 +424,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                                     'SUBSCRIPTION_UI_HOURS_MINUTES_CHARGE', '⏳ До списания: {hours}ч {minutes}мин'
                                 ).format(hours=hours_left, minutes=minutes_left)
                             )
-                            tariff_info_lines.append(f'[{progress_bar}] {percent:.0f}%')
+                            tariff_info_lines.append(f'{progress_bar} {percent:.0f}%')
                     else:
                         tariff_info_lines.append('')
                         tariff_info_lines.append(
@@ -544,9 +542,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                     max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0),
                 )
 
-                bar_length = 10
-                filled = int((progress_percent / 100) * bar_length)
-                bar = '▰' * filled + '▱' * (bar_length - filled)
+                bar = colored_progress_bar(progress_percent)
 
                 # Форматируем дату истечения
                 expire_date = format_local_datetime(purchase.expires_at, '%d.%m.%Y')

@@ -20,6 +20,7 @@ from app.keyboards.inline import (
 )
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.utils.transaction_description import localize_transaction_description
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.utils.timezone import format_local_datetime
@@ -361,7 +362,7 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
         )
 
         text += f'{emoji} {amount_text}\n'
-        text += f'📝 {html.escape(transaction.description or "")}\n'
+        text += f'📝 {html.escape(localize_transaction_description(transaction.description, db_user.language) or "")}\n'
         text += f'📅 {format_local_datetime(transaction.created_at, "%d.%m.%Y %H:%M")}\n\n'
 
     keyboard = []

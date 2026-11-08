@@ -1,3 +1,4 @@
+from app.utils.progress_bar import colored_progress_bar
 import asyncio
 import html
 from datetime import UTC, datetime, timedelta
@@ -1508,9 +1509,7 @@ async def confirm_broadcast(callback: types.CallbackQuery, db_user: User, state:
     ) -> str:
         processed = current_sent + current_failed + current_blocked
         percent = round(processed / total * 100, 1) if total > 0 else 0
-        bar_length = 20
-        filled = int(bar_length * processed / total) if total > 0 else 0
-        bar = '█' * filled + '░' * (bar_length - filled)
+        bar = colored_progress_bar(percent)
 
         if phase == 'sending':
             blocked_line = (

@@ -1059,7 +1059,7 @@
   "MAIN_MENU_RICH_TRIAL_ACTIVATED": "🎉 <b>试用订阅已激活！</b>",
   "MAIN_MENU_RICH_TRIAL_BUTTON": "🚀 激活试用",
   "MAIN_MENU_TEST_ACCESS_HEADER": "🧪测试服务器已激活：{servers}",
-  "MAIN_MENU_TEST_ACCESS_TIMER": "⏳访问剩余时间：{time_left}\n<code>{bar}</code>",
+  "MAIN_MENU_TEST_ACCESS_TIMER": "⏳访问剩余时间：{time_left}\n{bar}",
   "MANAGE_DEVICES_BUTTON": "🔧设备管理",
   "MARK_AS_ANSWERED": "✅标记为已回复",
   "MENU_ADMIN": "⚙️管理面板",
@@ -1458,7 +1458,7 @@
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "🚫 由于您退出了必需频道，您的所有订阅已暂停。\n\n请订阅所有频道以恢复VPN访问。",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡已激活额外{percent}%折扣。\n\n可与其他折扣叠加！",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "⚡额外{percent}%折扣：-{amount}",
-  "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳折扣剩余时间：{time_left}\n<code>{bar}</code>",
+  "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳折扣剩余时间：{time_left}\n{bar}",
   "SUBSCRIPTION_PURCHASED": "🎉订阅已成功购买！",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE": "✅ 您的订阅已恢复！\n\n感谢您订阅频道。VPN已重新激活。",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE_MULTI": "✅ 您的所有订阅已恢复！\n\n感谢您订阅频道。VPN已重新激活。",
@@ -7123,5 +7123,6 @@
   "SETTINGS_CATEGORY_DESC_HOOSHPAY": "HooshPay: hooshpay.xyz/api/v1，卡对卡网关（تومان）；HMAC-SHA256 webhook (X-HooshPay-Signature)。",
   "SETTINGS_CATEGORY_DESC_TONPAYS": "TonPays: tonpays.online，自定义卡对卡网关（Telegram）；通过 X-API-Key 和 delivery_id 的 webhook。密钥 TONPAYS_API_KEY.",
   "SETTINGS_CATEGORY_DESC_ATLASPAY": "AtlasPay: api.atlaspay.space，带短信验证的卡对卡（Telegram mini-app）；HMAC-SHA256 webhook。密钥 ATLASPAY_API_KEY + ATLASPAY_WEBHOOK_SECRET.",
-  "SETTINGS_CATEGORY_DESC_NOWPAYMENTS": "NOWPayments: api.nowpayments.io，带自动兑换的加密货币收款（invoice）；HMAC-SHA512 IPN。密钥 NOWPAYMENTS_API_KEY + NOWPAYMENTS_IPN_SECRET."
+  "SETTINGS_CATEGORY_DESC_NOWPAYMENTS": "NOWPayments: api.nowpayments.io，带自动兑换的加密货币收款（invoice）；HMAC-SHA512 IPN。密钥 NOWPAYMENTS_API_KEY + NOWPAYMENTS_IPN_SECRET.",
+  "TRANSACTION_DAILY_PLAN_PURCHASE": "购买日套餐 {tariff}（首日）"
 }

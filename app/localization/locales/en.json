@@ -1122,7 +1122,7 @@
   "MAIN_MENU_RICH_TRIAL_ACTIVATED": "🎉 <b>Trial subscription activated!</b>",
   "MAIN_MENU_RICH_TRIAL_BUTTON": "🚀 Activate trial",
   "MAIN_MENU_TEST_ACCESS_HEADER": "🧪 Test servers active: {servers}",
-  "MAIN_MENU_TEST_ACCESS_TIMER": "⏳ Access active for {time_left}\n<code>{bar}</code>",
+  "MAIN_MENU_TEST_ACCESS_TIMER": "⏳ Access active for {time_left}\n{bar}",
   "MANAGE_DEVICES_BUTTON": "🔧 Manage devices",
   "MARK_AS_ANSWERED": "✅ Mark as answered",
   "MENU_ADMIN": "⚙️ Admin panel",
@@ -1531,7 +1531,7 @@
   "SUBSCRIPTION_DEACTIVATED_CHANNEL_UNSUBSCRIBE_MULTI": "🚫 Your subscriptions have been paused because you left a required channel.\n\nSubscribe to all channels to restore VPN access.",
   "SUBSCRIPTION_PROMO_DISCOUNT_HINT": "⚡ Extra {percent}% discount is active and will apply automatically. It stacks with other discounts.",
   "SUBSCRIPTION_PROMO_DISCOUNT_NOTE": "⚡ Extra discount {percent}%: -{amount}",
-  "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Discount active for {time_left}\n<code>{bar}</code>",
+  "SUBSCRIPTION_PROMO_DISCOUNT_TIMER": "⏳ Discount active for {time_left}\n{bar}",
   "SUBSCRIPTION_PURCHASED": "🎉 Subscription purchased successfully!",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE": "✅ Your subscription has been restored!\n\nThank you for subscribing to the channels. VPN is active again.",
   "SUBSCRIPTION_REACTIVATED_CHANNEL_SUBSCRIBE_MULTI": "✅ Your subscriptions have been restored!\n\nThank you for subscribing to the channels. VPN is active again.",
@@ -7123,5 +7123,6 @@
   "SETTINGS_CATEGORY_DESC_HOOSHPAY": "HooshPay: hooshpay.xyz/api/v1, card-to-card gateway (تومان); webhook with HMAC-SHA256 (X-HooshPay-Signature).",
   "SETTINGS_CATEGORY_DESC_TONPAYS": "TonPays: tonpays.online, custom card-to-card gateway (Telegram platform); webhook via X-API-Key and delivery_id. Key TONPAYS_API_KEY.",
   "SETTINGS_CATEGORY_DESC_ATLASPAY": "AtlasPay: api.atlaspay.space, card-to-card with SMS verification (Telegram mini-app); HMAC-SHA256 webhook. Keys ATLASPAY_API_KEY + ATLASPAY_WEBHOOK_SECRET.",
-  "SETTINGS_CATEGORY_DESC_NOWPAYMENTS": "NOWPayments: api.nowpayments.io, crypto intake with auto-conversion (invoice); HMAC-SHA512 IPN. Keys NOWPAYMENTS_API_KEY + NOWPAYMENTS_IPN_SECRET."
+  "SETTINGS_CATEGORY_DESC_NOWPAYMENTS": "NOWPayments: api.nowpayments.io, crypto intake with auto-conversion (invoice); HMAC-SHA512 IPN. Keys NOWPAYMENTS_API_KEY + NOWPAYMENTS_IPN_SECRET.",
+  "TRANSACTION_DAILY_PLAN_PURCHASE": "Daily plan purchase: {tariff} (first day)"
 }

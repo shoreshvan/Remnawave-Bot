@@ -1,3 +1,4 @@
+from app.utils.progress_bar import colored_progress_bar
 import html
 from datetime import UTC, datetime
 from typing import Any
@@ -410,9 +411,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
                     max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0),
                 )
 
-                bar_length = 10
-                filled = int((progress_percent / 100) * bar_length)
-                bar = '▰' * filled + '▱' * (bar_length - filled)
+                bar = colored_progress_bar(progress_percent)
 
                 # Форматируем дату истечения
                 expire_date = format_local_datetime(purchase.expires_at, '%d.%m.%Y')

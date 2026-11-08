@@ -2437,7 +2437,10 @@ async def confirm_daily_tariff_purchase(
         pass
 
     purchase_user_id = db_user.id
-    description = f'Покупка суточного тарифа {tariff.name} (первый день)'
+    description = texts.t(
+        'TRANSACTION_DAILY_PLAN_PURCHASE',
+        'Покупка суточного тарифа {tariff} (первый день)',
+    ).format(tariff=tariff.name)
     try:
         if not await subtract_user_balance(
             db,
