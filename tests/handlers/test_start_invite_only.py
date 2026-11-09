@@ -109,8 +109,8 @@ async def test_invite_denial_includes_support_button_when_contact_is_configured(
     texts = SimpleNamespace(
         language='ru',
         t=lambda key, default=None: {
-            'registration_invite_required': 'invite required',
-            'registration_contact_support': 'Contact support',
+            'REGISTRATION_INVITE_REQUIRED': 'invite required',
+            'REGISTRATION_CONTACT_SUPPORT': 'Contact support',
         }.get(key, default),
     )
     monkeypatch.setattr(

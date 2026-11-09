@@ -223,7 +223,7 @@ async def test_builder_single_subscription_structure(monkeypatch):
     assert 'format="r"' in html_out
     # Прогресс-бар остатка дней
     assert '\u2066' in html_out
-    assert sum(html_out.count(cell) for cell in ('🟩', '🟨', '🟥', '⬜')) == 10
+    assert sum(html_out.count(cell) for cell in ('▰', '▱')) == 10
     # Баланс из format_price
     assert '1,250' in html_out
 

@@ -57,6 +57,15 @@ from app.utils.timezone import format_local_datetime
 logger = structlog.get_logger(__name__)
 
 
+def _callback_texts(callback: types.CallbackQuery, db_user: User | None = None):
+    language = (
+        getattr(db_user, 'language', None)
+        or getattr(callback.from_user, 'language_code', None)
+        or settings.DEFAULT_LANGUAGE
+    )
+    return get_texts(language.strip().lower().replace('_', '-').split('-')[0])
+
+
 def _format_rubles(amount_kopeks: int) -> str:
     rubles = Decimal(amount_kopeks) / Decimal(100)
 
@@ -233,7 +242,7 @@ async def show_main_menu(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -262,12 +271,8 @@ async def show_main_menu(
         await callback.answer()
 
 
-async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
-    language = getattr(callback.from_user, 'language_code', None) or settings.DEFAULT_LANGUAGE
-    try:
-        texts = get_texts(language)
-    except Exception:
-        texts = get_texts()
+async def handle_profile_unavailable(callback: types.CallbackQuery, db_user: User | None = None) -> None:
+    texts = _callback_texts(callback, db_user)
 
     await callback.answer(
         texts.t(
@@ -281,7 +286,7 @@ async def handle_profile_unavailable(callback: types.CallbackQuery) -> None:
 async def show_service_rules(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -365,7 +370,7 @@ async def show_info_menu(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -420,7 +425,7 @@ async def show_promo_groups_info(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -568,7 +573,7 @@ async def show_faq_pages(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -632,7 +637,7 @@ async def show_faq_page(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -779,7 +784,7 @@ async def show_privacy_policy(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -903,7 +908,7 @@ async def show_public_offer(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -1026,7 +1031,7 @@ async def show_info_page(
     db: AsyncSession,
 ):
     if db_user is None:
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t('USER_NOT_FOUND_ERROR', 'Ошибка: пользователь не найден.'),
             show_alert=True,
@@ -1124,7 +1129,7 @@ async def show_language_menu(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -1166,7 +1171,7 @@ async def process_language_change(
 ):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -1198,7 +1203,7 @@ async def process_language_change(
     }
 
     if normalized_selected not in available_map:
-        await callback.answer('❌ Unsupported language', show_alert=True)
+        await callback.answer(texts.t('LANGUAGE_UNSUPPORTED', '❌ Unsupported language'), show_alert=True)
         return
 
     resolved_language = available_map[normalized_selected].lower()
@@ -1228,7 +1233,7 @@ async def process_language_change(
 async def handle_back_to_menu(callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession):
     if db_user is None:
         # Пользователь не найден, используем язык по умолчанию
-        texts = get_texts(settings.DEFAULT_LANGUAGE)
+        texts = _callback_texts(callback)
         await callback.answer(
             texts.t(
                 'USER_NOT_FOUND_ERROR',
@@ -1368,7 +1373,7 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
     current_time = datetime.now(UTC)
     lines: list[str] = []
     for sub in subscriptions:
-        tariff_name = html.escape(sub.tariff.name) if sub.tariff else 'Подписка'
+        tariff_name = html.escape(sub.tariff.name) if sub.tariff else texts.t('SUBSCRIPTION_UI_NAME', 'Подписка')
         actual = sub.actual_status
 
         if actual in ('active', 'trial'):
@@ -1379,15 +1384,17 @@ async def _get_multi_tariff_status(user, texts, db: AsyncSession) -> tuple[str, 
             emoji = '🔴'
 
         if actual == 'expired':
-            status_suffix = ' — истекла'
+            status_suffix = texts.t('MENU_SUBSCRIPTION_EXPIRED_SUFFIX', ' — истекла')
         elif actual == 'disabled':
-            status_suffix = ' — отключена'
+            status_suffix = texts.t('MENU_SUBSCRIPTION_DISABLED_SUFFIX', ' — отключена')
         elif actual == 'limited':
-            status_suffix = ' — лимит трафика'
+            status_suffix = texts.t('MENU_SUBSCRIPTION_LIMITED_SUFFIX', ' — лимит трафика')
         elif sub.end_date and sub.end_date > current_time:
             days_left = local_days_until(sub.end_date, current_time)
             end_str = format_local_datetime(sub.end_date, '%d.%m.%Y')
-            status_suffix = f' — до {end_str} ({days_left} дн.)'
+            status_suffix = texts.t(
+                'MENU_SUBSCRIPTION_UNTIL_SUFFIX', ' — до {end_date} ({days} дн.)'
+            ).format(end_date=end_str, days=days_left)
         else:
             status_suffix = ''
 
@@ -1427,7 +1434,9 @@ async def get_main_menu_text(user, texts, db: AsyncSession):
                 tariff = await get_tariff_by_id(db, subscription.tariff_id)
                 if tariff:
                     is_daily_tariff = getattr(tariff, 'is_daily', False)
-                    tariff_info_block = f'\n📦 Тариф: {html.escape(tariff.name)}'
+                    tariff_info_block = '\n' + texts.t('MAIN_MENU_RICH_TARIFF', '📦 Тариф: {tariff}').format(
+                        tariff=html.escape(tariff.name)
+                    )
             except Exception as e:
                 logger.debug('Не удалось загрузить тариф для главного меню', error=e)
 
@@ -1622,7 +1631,9 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 db_user,
                 subscription,
                 pricing,
-                description=f'Автоматическое продление на {best_period} дней',
+                description=texts.t('MENU_AUTO_RENEWAL_DESCRIPTION', 'Автоматическое продление на {days} дней').format(
+                    days=best_period
+                ),
                 payment_method=PaymentMethod.BALANCE,
             )
 
@@ -1639,7 +1650,7 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 db,
                 db_user,
                 best_price,
-                f'Активация подписки на {best_period} дней',
+                texts.t('MENU_ACTIVATION_DESCRIPTION', 'Активация подписки на {days} дней').format(days=best_period),
                 mark_as_paid_subscription=True,
                 consume_promo_offer=consume_promo,
             )
@@ -1667,7 +1678,9 @@ async def handle_activate_button(callback: types.CallbackQuery, db_user: User, d
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=best_price,
-                description=f'Активация подписки на {best_period} дней',
+                description=texts.t('MENU_ACTIVATION_DESCRIPTION', 'Активация подписки на {days} дней').format(
+                    days=best_period
+                ),
                 payment_method=PaymentMethod.BALANCE,
             )
 

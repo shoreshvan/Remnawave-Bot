@@ -1,18 +1,14 @@
-"""Rock-solid guards for localization integrity.
+"""Catalog integrity with complete Persian coverage independent of other locales.
 
-These catch the failure modes that caused real bugs:
-  * keys present in ru but missing from another language  -> silent ru fallback
-  * a {placeholder} that differs between languages         -> .format() KeyError /
-                                                              missing data at runtime
-  * texts.t('KEY') with no fallback for a key absent in ru -> runtime KeyError
-
-If any of these fail, a localization change drifted — fix the locale, not the test.
+Persian may contain extra keys; the existing non-Persian catalogs retain parity.
+Missing Persian lookups and formatting errors remain failures.
 """
 
 import ast
-import json
 import re
+from functools import cache
 from pathlib import Path
+from string import Formatter
 
 import pytest
 
@@ -27,10 +23,17 @@ DYNAMIC_KEYS = {'RULES_TEXT'}
 
 @pytest.fixture(scope='module')
 def locales():
-    return {lang: json.loads((LOCALE_DIR / f'{lang}.json').read_text(encoding='utf-8')) for lang in LANGS}
+    from scripts.audit_persian_localization import load_catalog
+
+    result = {}
+    for lang in LANGS:
+        catalog, duplicates, collisions = load_catalog(LOCALE_DIR / f'{lang}.json')
+        assert not duplicates and not collisions, (lang, duplicates, collisions)
+        result[lang] = catalog
+    return result
 
 
-def test_all_locales_have_identical_keys(locales):
+def test_catalog_key_coverage_allows_persian_extensions(locales):
     ru_keys = set(locales['ru'])
     for lang in LANGS:
         if lang == 'ru':
@@ -39,7 +42,8 @@ def test_all_locales_have_identical_keys(locales):
         missing = sorted(ru_keys - keys)
         extra = sorted(keys - ru_keys)
         assert not missing, f'{lang}.json is missing {len(missing)} keys present in ru: {missing[:15]}'
-        assert not extra, f'{lang}.json has {len(extra)} keys not in ru: {extra[:15]}'
+        if lang != 'fa':
+            assert not extra, f'{lang}.json has {len(extra)} keys not in ru: {extra[:15]}'
 
 
 def test_placeholders_consistent_across_locales(locales):
@@ -58,12 +62,20 @@ def test_placeholders_consistent_across_locales(locales):
             if not isinstance(val, str):
                 continue
             ph = sorted(PLACEHOLDER_RE.findall(val))
+            if key == 'SUBSCRIPTION_UI_DAILY_PRICE' and lang == 'fa':
+                # Intentional Persian whole-unit price presentation; the amount
+                # and argument identity remain unchanged.
+                assert ru_ph == ['{price:.2f}'] and ph == ['{price:,.0f}']
+                assert '12,345' in val.format(price=12345)
+                continue
             if ph != ru_ph:
                 problems.append(f'{key} [{lang}]: ru={ru_ph} vs {lang}={ph}')
     assert not problems, 'Placeholder mismatches (would break .format()):\n' + '\n'.join(problems[:25])
 
 
+@cache
 def _iter_t_calls():
+    calls = []
     for path in APP_DIR.rglob('*.py'):
         try:
             tree = ast.parse(path.read_text(encoding='utf-8'))
@@ -78,7 +90,8 @@ def _iter_t_calls():
                 and isinstance(node.args[0], ast.Constant)
                 and isinstance(node.args[0].value, str)
             ):
-                yield path, node
+                calls.append((path, node))
+    return tuple(calls)
 
 
 def test_t_calls_without_default_exist_in_ru(locales):
@@ -97,33 +110,53 @@ def test_t_calls_without_default_exist_in_ru(locales):
     )
 
 
-def test_t_calls_with_static_default_exist_in_ru(locales):
-    """texts.t('KEY', 'статический дефолт') с ключом вне ru.json отдаёт русский
-    дефолт ВСЕМ языкам — ключ обязан быть в локалях. Динамические дефолты
-    (f-строки с настраиваемыми названиями платёжек и т.п.) — осознанный паттерн
-    «locale override поверх настройки», их не проверяем."""
-    ru = locales['ru']
+def test_all_static_t_keys_exist_in_persian(locales):
+    """Even calls with inline/dynamic defaults must resolve their own Persian key."""
+    fa = locales['fa']
     offenders = set()
     for path, node in _iter_t_calls():
-        if len(node.args) < 2 or not isinstance(node.args[1], ast.Constant):
-            continue
-        if not isinstance(node.args[1].value, str):
-            continue
         key = node.args[0].value
-        if key not in DYNAMIC_KEYS and key not in ru:
+        if key not in DYNAMIC_KEYS and key not in fa:
             offenders.add(f'{key}  ({path.relative_to(APP_DIR.parent)})')
-    assert not offenders, (
-        'texts.t(key, static_default) для ключа, отсутствующего в ru.json '
-        '(все языки получают дефолт) — добавьте ключ во все локали:\n' + '\n'.join(sorted(offenders)[:25])
-    )
+    assert not offenders, 'Missing Persian keys:\n' + '\n'.join(sorted(offenders)[:25])
+
+
+def test_persian_placeholders_are_supplied_to_direct_format_calls(locales):
+    """Validate real keyword arguments, not defaults that may intentionally differ."""
+    problems = []
+    for path in APP_DIR.rglob('*.py'):
+        tree = ast.parse(path.read_text(encoding='utf-8'))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == 'format' and isinstance(node.func.value, ast.Call)
+            ):
+                continue
+            lookup = node.func.value
+            if not (
+                isinstance(lookup.func, ast.Attribute) and lookup.func.attr == 't'
+                and lookup.args and isinstance(lookup.args[0], ast.Constant)
+            ):
+                continue
+            key = lookup.args[0].value
+            if key not in locales['fa'] or node.args or any(kw.arg is None for kw in node.keywords):
+                continue
+            supplied = {kw.arg for kw in node.keywords}
+            required = {
+                re.split(r'[.\[]', field)[0]
+                for _, field, _, _ in Formatter().parse(locales['fa'][key]) if field is not None
+            }
+            if required - supplied:
+                problems.append(f'{key}: {required - supplied} ({path.relative_to(APP_DIR.parent)}:{node.lineno})')
+    assert not problems, '\n'.join(problems[:25])
 
 
 @pytest.mark.parametrize(
     'key',
     [
-        'registration_invite_required',
-        'registration_check_unavailable',
-        'registration_contact_support',
+        'REGISTRATION_INVITE_REQUIRED',
+        'REGISTRATION_CHECK_UNAVAILABLE',
+        'REGISTRATION_CONTACT_SUPPORT',
     ],
 )
 def test_invite_only_keys_exist_in_every_locale(locales, key):

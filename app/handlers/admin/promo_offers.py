@@ -1776,7 +1776,7 @@ async def show_selected_user_details(
             if offer.bonus_amount_kopeks:
                 parts.append(
                     texts.t(
-                        'ADMIN_PROMO_OFFER_SEND_USER_OFFER_BONUS',
+                        'ADMIN_PROMO_OFFER_SEND_USER_OFFER_BONUS_AMOUNT',
                         'Бонус {amount}',
                     ).format(amount=settings.format_price(offer.bonus_amount_kopeks))
                 )

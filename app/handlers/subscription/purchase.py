@@ -424,7 +424,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
                                     'SUBSCRIPTION_UI_HOURS_MINUTES_CHARGE', '⏳ До списания: {hours}ч {minutes}мин'
                                 ).format(hours=hours_left, minutes=minutes_left)
                             )
-                            tariff_info_lines.append(f'{progress_bar} {percent:.0f}%')
+                            tariff_info_lines.append(progress_bar)
                     else:
                         tariff_info_lines.append('')
                         tariff_info_lines.append(

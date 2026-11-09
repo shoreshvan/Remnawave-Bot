@@ -153,13 +153,13 @@ async def _evaluate_telegram_registration_access(
 def _registration_denial_text(texts: Any, decision: RegistrationAccessDecision) -> str:
     if decision.reason is RegistrationAccessReason.CHECK_UNAVAILABLE:
         return texts.t(
-            'registration_check_unavailable',
+            'REGISTRATION_CHECK_UNAVAILABLE',
             'Не удалось проверить приглашение. Повторите попытку позже или обратитесь в поддержку.',
         )
     if decision.reason is RegistrationAccessReason.BLOCKED:
         return texts.t('ACCESS_DENIED')
     return texts.t(
-        'registration_invite_required',
+        'REGISTRATION_INVITE_REQUIRED',
         '🔒 Регистрация доступна только по приглашению.\n\n'
         'Используйте действительную пригласительную ссылку или обратитесь в поддержку.',
     )
@@ -177,7 +177,7 @@ async def _answer_registration_denial(
             inline_keyboard=[
                 [
                     types.InlineKeyboardButton(
-                        text=texts.t('registration_contact_support'),
+                        text=texts.t('REGISTRATION_CONTACT_SUPPORT'),
                         url=support_url,
                     )
                 ]
@@ -518,6 +518,8 @@ _COUPON_ERROR_TEXTS = {
     'internal': '❌ Произошла ошибка при активации купона. Попробуйте позже или обратитесь в поддержку.',
 }
 
+_COUPON_ERROR_KEYS = {code: f'COUPON_REDEMPTION_{code.upper()}' for code in _COUPON_ERROR_TEXTS}
+
 
 async def _redeem_pending_coupon(
     db: AsyncSession,
@@ -529,6 +531,7 @@ async def _redeem_pending_coupon(
 
     Must be called BEFORE state.clear() to preserve the token.
     """
+    texts = get_texts(user.language)
     coupon_token: str | None = None
     try:
         fresh_state = await state.get_data()
@@ -540,7 +543,10 @@ async def _redeem_pending_coupon(
             result = await redeem_coupon(db, coupon_token, user)
         except CouponRedemptionError as error:
             await answer_func(
-                _COUPON_ERROR_TEXTS.get(error.code, _COUPON_ERROR_TEXTS['invalid']),
+                texts.t(
+                    _COUPON_ERROR_KEYS.get(error.code, _COUPON_ERROR_KEYS['invalid']),
+                    _COUPON_ERROR_TEXTS.get(error.code, _COUPON_ERROR_TEXTS['invalid']),
+                ),
                 parse_mode=ParseMode.HTML,
             )
             return
@@ -550,7 +556,10 @@ async def _redeem_pending_coupon(
             token_prefix=(coupon_token or '')[:5],
         )
         try:
-            await answer_func(_COUPON_ERROR_TEXTS['internal'], parse_mode=ParseMode.HTML)
+            await answer_func(
+                texts.t(_COUPON_ERROR_KEYS['internal'], _COUPON_ERROR_TEXTS['internal']),
+                parse_mode=ParseMode.HTML,
+            )
         except Exception:
             pass
         return
@@ -560,7 +569,10 @@ async def _redeem_pending_coupon(
     try:
         tariff_name = html.escape(result.tariff_name)
         await answer_func(
-            f'🎟 <b>Купон активирован!</b>\n{tariff_name} — {result.period_days} дн.\n\nВаша подписка обновлена.',
+            texts.t(
+                'COUPON_REDEEMED',
+                '🎟 <b>Купон активирован!</b>\n{tariff} — {days} дн.\n\nВаша подписка обновлена.',
+            ).format(tariff=tariff_name, days=result.period_days),
             parse_mode=ParseMode.HTML,
         )
     except Exception:
@@ -996,7 +1008,7 @@ async def _apply_campaign_bonus_if_needed(
             'CAMPAIGN_BONUS_TARIFF',
             "🎁 Вам выдан тариф '{tariff_name}' на {days} дней!\n📊 Трафик: {traffic}\n📱 Устройств: {devices}",
         ).format(
-            tariff_name=result.tariff_name or 'Подарочный',
+            tariff_name=html.escape(result.tariff_name or texts.t('CAMPAIGN_GIFT_TARIFF_NAME', 'Подарочный')),
             days=result.tariff_duration_days,
             traffic=traffic_text,
             devices=result.subscription_device_limit,
@@ -1026,7 +1038,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         return False
 
     data = await state.get_data() or {}
-    language = data.get('language') or (getattr(user, 'language', None) if user else None) or DEFAULT_LANGUAGE
+    language = _registration_language(data, message.from_user, user)
     texts = get_texts(language)
 
     if not message.text:
@@ -1068,7 +1080,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         )
 
         if current_state != RegistrationStates.waiting_for_referral_code.state:
-            language = data.get('language', DEFAULT_LANGUAGE)
+            language = _registration_language(data, message.from_user, user)
             texts = get_texts(language)
 
             rules_text = await _rules_for_telegram(language)
@@ -1103,7 +1115,7 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
         )
 
         if current_state != RegistrationStates.waiting_for_referral_code.state:
-            language = data.get('language', DEFAULT_LANGUAGE)
+            language = _registration_language(data, message.from_user, user)
             texts = get_texts(language)
 
             rules_text = await _rules_for_telegram(language)
@@ -1130,17 +1142,29 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
     return True
 
 
-def _get_language_prompt_text() -> str:
-    return '🌐 Выберите язык / Choose your language:'
+def _registration_language(data: dict, telegram_user, user=None) -> str:
+    language = (
+        getattr(user, 'language', None)
+        or data.get('language')
+        or getattr(telegram_user, 'language_code', None)
+        or settings.DEFAULT_LANGUAGE
+        or DEFAULT_LANGUAGE
+    )
+    return language.strip().lower().replace('_', '-').split('-')[0]
+
+
+def _get_language_prompt_text(language: str = DEFAULT_LANGUAGE) -> str:
+    return get_texts(language).t('LANGUAGE_PROMPT', '🌐 Выберите язык / Choose your language:')
 
 
 async def _prompt_language_selection(message: types.Message, state: FSMContext) -> None:
     logger.info('🌐 LANGUAGE: Запрос выбора языка для пользователя', from_user_id=message.from_user.id)
 
     await state.set_state(RegistrationStates.waiting_for_language)
+    language = _registration_language(await state.get_data() or {}, message.from_user)
     await message.answer(
-        _get_language_prompt_text(),
-        reply_markup=get_language_selection_keyboard(),
+        _get_language_prompt_text(language),
+        reply_markup=get_language_selection_keyboard(language=language),
     )
 
 
@@ -1152,7 +1176,7 @@ async def _continue_registration_after_language(
     db: AsyncSession,
 ) -> None:
     data = await state.get_data() or {}
-    language = data.get('language', DEFAULT_LANGUAGE)
+    language = _registration_language(data, getattr(callback or message, 'from_user', None))
     texts = get_texts(language)
 
     target_message = callback.message if callback else message
@@ -1283,7 +1307,7 @@ async def cmd_start(message: types.Message, state: FSMContext, db: AsyncSession,
         lock_limited=False,
     )
     if not access_decision.allowed:
-        language = getattr(access_user, 'language', None) or data.get('language', DEFAULT_LANGUAGE)
+        language = _registration_language(data, message.from_user, access_user)
         await _answer_registration_denial(message.answer, get_texts(language), access_decision)
         await state.clear()
         return
@@ -1856,7 +1880,10 @@ async def process_language_selection(
             normalized_selected=normalized_selected,
             from_user_id=callback.from_user.id,
         )
-        await callback.answer('❌ Unsupported language', show_alert=True)
+        language = _registration_language(await state.get_data() or {}, callback.from_user)
+        await callback.answer(
+            get_texts(language).t('LANGUAGE_UNSUPPORTED', '❌ Unsupported language'), show_alert=True
+        )
         return
 
     resolved_language = available_map[normalized_selected].lower()
@@ -2010,7 +2037,7 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext,
     current_state = await state.get_state()
     logger.info('📊 Текущее состояние', current_state=current_state)
 
-    language = DEFAULT_LANGUAGE
+    language = _registration_language({}, callback.from_user)
     texts = get_texts(language)
 
     try:
@@ -2079,7 +2106,7 @@ async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FS
     current_state = await state.get_state()
     logger.info('📊 Текущее состояние', current_state=current_state)
 
-    language = DEFAULT_LANGUAGE
+    language = _registration_language({}, callback.from_user)
     texts = get_texts(language)
 
     try:
@@ -3090,7 +3117,7 @@ async def required_sub_channel_check(
 ):
     from app.utils.message_patch import _cache_logo_file_id, caption_exceeds_telegram_limit, get_logo_media
 
-    language = DEFAULT_LANGUAGE
+    language = _registration_language({}, query.from_user, db_user)
     texts = get_texts(language)
 
     try:
