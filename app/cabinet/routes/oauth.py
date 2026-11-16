@@ -78,7 +78,7 @@ async def _gate_oauth_identity(
         email_verified=bool(user_info.email_verified),
         verified_admin=verified_admin,
     )
-    raise_for_registration_decision(decision)
+    raise_for_registration_decision(decision, language=user.language if user else None)
     if user is not None and user.status != UserStatus.ACTIVE.value:
         if user.status == UserStatus.DELETED.value:
             await revive_deleted_user(db, user, source=f'oauth_{provider}_invite_gate')

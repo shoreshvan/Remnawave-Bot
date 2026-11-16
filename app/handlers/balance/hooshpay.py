@@ -165,6 +165,14 @@ async def process_hooshpay_payment_amount(
         )
         return
 
+    if amount_kopeks % 100 != 0:
+        await message.answer(
+            texts.t('HOOSHPAY_AMOUNT_MUST_BE_WHOLE', 'مبلغ باید به تومان کامل باشد (بدون خرده).'),
+            reply_markup=get_back_keyboard(db_user.language),
+            parse_mode='HTML',
+        )
+        return
+
     await state.clear()
 
     await _create_hooshpay_payment_and_respond(

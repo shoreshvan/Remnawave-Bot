@@ -320,6 +320,15 @@ async def handle_tonpays_check(
         return
 
     status = (result.get('status') or '').lower()
+    if status == 'amount_mismatch':
+        await callback.answer(
+            texts.t(
+                'PAYMENT_CHECK_AMOUNT_MISMATCH',
+                '⚠️ مبلغ گزارش‌شده با فاکتور مطابقت ندارد. پرداخت خودکار تأیید نشد؛ برای بررسی با پشتیبانی تماس بگیرید.',
+            ),
+            show_alert=True,
+        )
+        return
     if status == 'expired':
         await state.clear()
         await callback.answer(
@@ -428,7 +437,9 @@ async def process_tonpays_receipt(
     photo = message.photo[-1]
     if photo.file_size and photo.file_size > settings.TONPAYS_RECEIPT_MAX_BYTES:
         await message.answer(
-            texts.t('TONPAYS_RECEIPT_TOO_LARGE', 'حجم فیش بیش از حد مجاز است (حداکثر ۱۰ مگابایت).')
+            texts.t('TONPAYS_RECEIPT_SIZE_LIMIT', 'حجم فیش بیش از حد مجاز است (حداکثر {megabytes} مگابایت).').format(
+                megabytes=f'{settings.TONPAYS_RECEIPT_MAX_BYTES / (1024 * 1024):g}'
+            )
         )
         return
 
@@ -442,7 +453,9 @@ async def process_tonpays_receipt(
 
     if len(file_bytes) > settings.TONPAYS_RECEIPT_MAX_BYTES:
         await message.answer(
-            texts.t('TONPAYS_RECEIPT_TOO_LARGE', 'حجم فیش بیش از حد مجاز است (حداکثر ۱۰ مگابایت).')
+            texts.t('TONPAYS_RECEIPT_SIZE_LIMIT', 'حجم فیش بیش از حد مجاز است (حداکثر {megabytes} مگابایت).').format(
+                megabytes=f'{settings.TONPAYS_RECEIPT_MAX_BYTES / (1024 * 1024):g}'
+            )
         )
         return
 

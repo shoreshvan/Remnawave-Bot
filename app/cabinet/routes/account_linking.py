@@ -58,6 +58,7 @@ from ..auth.telegram_auth import (
 )
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..ip_utils import get_client_ip
+from ..utils.request_language import get_request_language
 from ..schemas.auth import UserResponse
 from .auth import _create_auth_response, _store_refresh_token, _user_to_response
 
@@ -849,9 +850,11 @@ async def link_server_complete(
     Provider is resolved from the state token if not explicitly provided.
     """
     # Rate limit by IP (unauthenticated endpoint)
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'server_complete', limit=10, window=60, fail_closed=True):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail='Too many requests')
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail=texts.t('CABINET_TOO_MANY_REQUESTS', 'Too many requests'))
 
     # 1. Validate and consume state from Redis (one-time use).
     #    Provider may be None — validate_oauth_state will skip provider check,
@@ -860,7 +863,7 @@ async def link_server_complete(
     if not state_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid or expired OAuth state',
+            detail=texts.t('CABINET_LINK_OAUTH_STATE_INVALID', 'Invalid or expired OAuth state'),
         )
 
     # Resolve provider from state data (canonical source)
@@ -868,7 +871,7 @@ async def link_server_complete(
     if not state_provider or state_provider not in OAUTH_PROVIDER_COLUMNS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Could not determine OAuth provider',
+            detail=texts.t('CABINET_LINK_PROVIDER_UNDETERMINED', 'Could not determine OAuth provider'),
         )
 
     # If request explicitly provides a provider, ensure it matches the state
@@ -880,7 +883,7 @@ async def link_server_complete(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Provider does not match OAuth state',
+            detail=texts.t('CABINET_LINK_PROVIDER_MISMATCH', 'Provider does not match OAuth state'),
         )
 
     provider_name: str = state_provider
@@ -889,7 +892,7 @@ async def link_server_complete(
     if state_data.get('linking') != 'true' or not state_data.get('user_id'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='OAuth state was not initiated for account linking',
+            detail=texts.t('CABINET_LINK_OAUTH_STATE_NOT_LINKING', 'OAuth state was not initiated for account linking'),
         )
 
     # 3. Parse and validate user_id from state
@@ -898,7 +901,7 @@ async def link_server_complete(
     except (ValueError, TypeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid user_id in OAuth state',
+            detail=texts.t('CABINET_LINK_STATE_USER_INVALID', 'Invalid user_id in OAuth state'),
         ) from exc
 
     # 4. Load user from DB
@@ -906,7 +909,7 @@ async def link_server_complete(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='User not found',
+            detail=texts.t('CABINET_AUTH_USER_NOT_FOUND', 'User not found'),
         )
 
     # 5-9. Exchange code, fetch user info, link or merge

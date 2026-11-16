@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import uuid
 from datetime import UTC, datetime, timedelta
 from importlib import import_module
@@ -85,7 +86,7 @@ class NowpaymentsPaymentMixin:
         *,
         user_id: int | None,
         amount_kopeks: int,
-        description: str = 'Balance top-up',
+        description: str | None = None,
         language: str = 'ru',
     ) -> dict[str, Any] | None:
         """Creates a NOWPayments invoice and returns the hosted pay page URL."""
@@ -120,6 +121,8 @@ class NowpaymentsPaymentMixin:
             return None
 
         payment_module = import_module('app.services.payment_service')
+        if description is None:
+            description = get_texts(language).t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'Balance top-up')
         if user_id is not None:
             user = await payment_module.get_user_by_id(db, user_id)
             tg_id = user.telegram_id if user else user_id
@@ -346,17 +349,18 @@ class NowpaymentsPaymentMixin:
                         from app.services.admin_notification_service import AdminNotificationService
 
                         notification_service = AdminNotificationService(self.bot)
+                        admin_texts = await notification_service._notification_texts(db)
                         await notification_service.send_admin_notification(
-                            text=(
-                                '⚠️ NOWPayments underpayment (manual review)'
-                                + chr(10)
-                                + 'Order: ' + str(payment.order_id)
-                                + chr(10)
-                                + 'Expected: ' + str(payment.amount_kopeks) + ' kopeks'
-                                + chr(10)
-                                + 'Actually paid: ' + str(payload.get('actually_paid')) + ' ' + str(payload.get('pay_currency') or '')
-                                + chr(10)
-                                + 'User id: ' + str(payment.user_id)
+                            text=admin_texts.t(
+                                'NOWPAYMENTS_ADMIN_UNDERPAID_REVIEW',
+                                '⚠️ NOWPayments: پرداخت ناقص؛ نیازمند بررسی\nسفارش: {order_id}\n'
+                                'مبلغ مورد انتظار: {expected}\nمبلغ واریزی: {paid} {currency}\nشناسهٔ کاربر: {user_id}',
+                            ).format(
+                                order_id=html.escape(str(payment.order_id)),
+                                expected=settings.format_price(payment.amount_kopeks),
+                                paid=html.escape(str(payload.get('actually_paid'))),
+                                currency=html.escape(str(payload.get('pay_currency') or '')),
+                                user_id=payment.user_id,
                             ),
                         )
                     except Exception as error:

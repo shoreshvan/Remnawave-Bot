@@ -28,6 +28,14 @@ logger = structlog.get_logger(__name__)
 TRAFFIC_PRICES = get_traffic_prices()
 
 
+def hide_subscription_device_row(template: str) -> str:
+    """Remove the optional device row by its fields, independently of its translation."""
+    return ''.join(
+        line for line in template.splitlines(keepends=True)
+        if not ('{devices_used}' in line and ('{device_limit}' in line or '{devices_limit}' in line))
+    )
+
+
 async def resolve_subscription_from_context(
     callback,
     db_user: User,
@@ -656,13 +664,13 @@ def get_traffic_switch_keyboard(
         elif total_price_diff > 0:
             emoji = '⬆️'
             action_text = ''
-            price_text = f' (+{total_price_diff // 100}₽{period_text})'
+            price_text = f' (+{total_price_diff // 100} {settings.CURRENCY_SYMBOL}{period_text})'
             if discount_percent > 0:
                 discount_total = int((price_per_month - current_price_per_month) * price_multiplier) - total_price_diff
                 if discount_total > 0:
                     price_text += texts.t(
-                        'SUBSCRIPTION_UI_BREAKDOWN_DISCOUNT', ' (скидка {percent}%: -{amount}₽)'
-                    ).format(percent=discount_percent, amount=discount_total // 100)
+                        'KEYBOARD_DISCOUNT_SUFFIX', ' (скидка {percent}%: -{amount} {currency})'
+                    ).format(percent=discount_percent, amount=discount_total // 100, currency=settings.CURRENCY_SYMBOL)
         elif total_price_diff < 0:
             emoji = '⬇️'
             action_text = ''

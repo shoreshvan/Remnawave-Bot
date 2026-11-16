@@ -1,5 +1,6 @@
 """Actionable, exact RUB input limits for rejected Telegram top-ups."""
 
+from app.config import settings
 from app.localization.texts import get_texts
 
 
@@ -16,20 +17,22 @@ def format_topup_amount_retry(language: str, minimum: int, maximum: int, *, too_
     texts = get_texts(language)
     lower = max(minimum, MIN_MANUAL_TOPUP_RUBLES * 100)
     upper = min(maximum, MAX_MANUAL_TOPUP_RUBLES * 100)
-    values = {'minimum': _rubles(lower), 'maximum': _rubles(upper)}
+    values = {'minimum': _rubles(lower), 'maximum': _rubles(upper), 'currency': settings.CURRENCY_SYMBOL}
     if lower > upper:
         return texts.t(
-            'TOPUP_RETRY_NO_RANGE',
+            'TOPUP_RETRY_NO_RANGE_CURRENCY' if texts.language == 'fa' else 'TOPUP_RETRY_NO_RANGE',
             '❌ У этого способа нет допустимой суммы для ручного ввода '
-            '(минимум {minimum} ₽, максимум {maximum} ₽). Выберите другой способ оплаты.',
+            '(минимум {minimum} {currency}, максимум {maximum} {currency}). Выберите другой способ оплаты.',
         ).format(**values)
-    key = 'TOPUP_RETRY_TOO_LOW' if too_low else 'TOPUP_RETRY_TOO_HIGH'
+    key = 'TOPUP_RETRY_TOO_LOW_CURRENCY' if too_low else 'TOPUP_RETRY_TOO_HIGH_CURRENCY'
+    if texts.language != 'fa':
+        key = 'TOPUP_RETRY_TOO_LOW' if too_low else 'TOPUP_RETRY_TOO_HIGH'
     fallback = (
-        '❌ Минимальная сумма пополнения — {minimum} ₽.\n\n'
+        '❌ Минимальная сумма пополнения — {minimum} {currency}.\n\n'
         if too_low
-        else '❌ Максимальная сумма пополнения — {maximum} ₽.\n\n'
+        else '❌ Максимальная сумма пополнения — {maximum} {currency}.\n\n'
     ) + (
-        'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {minimum} ₽ и не больше {maximum} ₽.'
+        'Чтобы продолжить, отправьте боту сообщение с суммой пополнения не меньше {minimum} {currency} и не больше {maximum} {currency}.'
     )
     message = texts.t(key, fallback).format(**values)
     whole_ruble_example = (lower + 99) // 100

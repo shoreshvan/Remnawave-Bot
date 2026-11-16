@@ -13,6 +13,7 @@ from app.config import settings
 from app.database.crud.anore import create_anore_payment as create_record
 from app.database.crud.transaction import create_transaction
 from app.database.models import AnorePayment, GuestPurchase, PaymentMethod, TransactionType, User
+from app.localization.texts import get_texts
 from app.services.anore_service import AnoreAPIError, anore_service, parse_rubles_to_kopeks
 
 
@@ -58,7 +59,7 @@ class AnorePaymentMixin:
         *,
         user_id: int | None,
         amount_kopeks: int,
-        description: str = 'Пополнение баланса',
+        description: str | None = None,
         email: str | None = None,
         language: str = 'ru',
         payment_method_type: str | None = None,
@@ -82,6 +83,10 @@ class AnorePaymentMixin:
         user = await db.get(User, user_id) if user_id is not None else None
         if user_id is not None and (user is None or user.status == 'deleted' or user.restriction_topup):
             return None
+        if description is None:
+            description = get_texts(getattr(user, 'language', None) or language).t(
+                'PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'Пополнение баланса'
+            )
         method_config = await get_config_by_method_id(db, 'anore')
         methods = list(config.methods)
         minimum, maximum = config.min_amount_kopeks, config.max_amount_kopeks
@@ -258,7 +263,9 @@ class AnorePaymentMixin:
                             user_id=user.id,
                             type=TransactionType.DEPOSIT,
                             amount_kopeks=payment.amount_kopeks,
-                            description=f'Пополнение через {settings.get_anore_display_name()}',
+                            description=get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
+                                'NOWPAYMENTS_TRANSACTION_DESCRIPTION', 'Пополнение через {display_name}'
+                            ).format(display_name=settings.get_anore_display_name()),
                             payment_method=PaymentMethod.ANORE,
                             external_id=payment.order_id,
                             commit=False,

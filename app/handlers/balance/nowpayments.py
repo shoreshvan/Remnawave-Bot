@@ -57,10 +57,10 @@ async def _create_nowpayments_payment_and_respond(
     texts = get_texts(db_user.language)
 
     payment_service = PaymentService()
-    # NOWPayments shows order_description on its hosted page: keep it English.
+    # The hosted page displays this description to the buyer.
     description = settings.PAYMENT_BALANCE_TEMPLATE.format(
         service_name=settings.PAYMENT_SERVICE_NAME,
-        description='Balance top-up',
+        description=texts.t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'Balance top-up'),
     )
 
     result = await payment_service.create_nowpayments_payment(
@@ -262,6 +262,15 @@ async def handle_nowpayments_check(
         return
 
     status = (result.get('status') or '').lower()
+    if status == 'amount_mismatch':
+        await callback.answer(
+            texts.t(
+                'PAYMENT_CHECK_AMOUNT_MISMATCH',
+                '⚠️ مبلغ گزارش‌شده با فاکتور مطابقت ندارد. پرداخت خودکار تأیید نشد؛ برای بررسی با پشتیبانی تماس بگیرید.',
+            ),
+            show_alert=True,
+        )
+        return
     if status == 'expired':
         await state.clear()
         await callback.answer(

@@ -13,6 +13,7 @@ import hashlib
 from fastapi import HTTPException, status
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.utils.cache import RateLimitCache
 
 
@@ -29,14 +30,14 @@ def _windows() -> tuple[tuple[str, int, int], ...]:
     )
 
 
-async def enforce_email_registration_throttle(client_ip: str) -> None:
+async def enforce_email_registration_throttle(client_ip: str, *, language: str | None = None) -> None:
     for action, limit, window in _windows():
         if limit <= 0:
             continue
         if await RateLimitCache.is_ip_rate_limited(client_ip, action, limit=limit, window=window, fail_closed=True):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail='Too many requests',
+                detail=get_texts(language).t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
                 headers={'Retry-After': str(window)},
             )
 
@@ -53,7 +54,7 @@ def _address_digest(email: str) -> str:
     return hashlib.sha256(email.strip().lower().encode()).hexdigest()[:32]
 
 
-async def enforce_verification_resend_throttle(client_ip: str, email: str) -> None:
+async def enforce_verification_resend_throttle(client_ip: str, email: str, *, language: str | None = None) -> None:
     """Дроссель кнопки «Отправить письмо ещё раз» на экране «Проверьте почту».
 
     Экран открыт без входа в аккаунт, поэтому окна идут по IP — и отдельно по
@@ -69,7 +70,7 @@ async def enforce_verification_resend_throttle(client_ip: str, email: str) -> No
         if await RateLimitCache.is_ip_rate_limited(client_ip, action, limit=limit, window=window, fail_closed=True):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail='Too many requests',
+                detail=get_texts(language).t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
                 headers={'Retry-After': str(window)},
             )
 
@@ -79,6 +80,6 @@ async def enforce_verification_resend_throttle(client_ip: str, email: str) -> No
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=get_texts(language).t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': str(HOUR)},
         )

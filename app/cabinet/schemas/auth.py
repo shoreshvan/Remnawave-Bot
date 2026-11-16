@@ -191,61 +191,71 @@ class AutoLoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     """Token pair response."""
 
-    access_token: str
-    refresh_token: str
-    token_type: str = 'bearer'
+    model_config = {'title': 'توکن‌های ورود', 'json_schema_extra': {'description': 'توکن دسترسی و توکن تمدید نشست'}}
+
+    access_token: str = Field(..., title='توکن دسترسی')
+    refresh_token: str = Field(..., title='توکن تمدید نشست')
+    token_type: str = Field('bearer', title='نوع توکن')
     expires_in: int = Field(
         ...,
-        description=get_texts().t('CABINET_AUTH_EXPIRES_IN_DESCRIPTION', 'Access token expiration in seconds'),
+        title='مدت اعتبار', description=get_texts('fa').t('CABINET_AUTH_EXPIRES_IN_DESCRIPTION', 'Access token expiration in seconds'),
     )
 
 
 class UserResponse(BaseModel):
     """User data response."""
 
-    id: int
-    telegram_id: int | None = None  # Nullable для email-only пользователей
-    username: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    email: str | None = None
-    email_verified: bool = False
-    balance_kopeks: int = 0
-    balance_rubles: float = 0.0
-    referral_code: str | None = None
-    language: str = 'ru'
-    created_at: datetime
-    auth_type: str = 'telegram'  # "telegram" или "email"
+    id: int = Field(..., title='شناسهٔ کاربر')
+    telegram_id: int | None = Field(None, title='شناسهٔ تلگرام')  # Nullable для email-only пользователей
+    username: str | None = Field(None, title='نام کاربری')
+    first_name: str | None = Field(None, title='نام')
+    last_name: str | None = Field(None, title='نام خانوادگی')
+    email: str | None = Field(None, title='نشانی ایمیل')
+    email_verified: bool = Field(False, title='تأییدشدن ایمیل')
+    balance_kopeks: int = Field(0, title='موجودی در مقیاس ذخیره‌سازی')
+    balance_rubles: float = Field(0.0, title='موجودی در مقیاس نمایشی')
+    referral_code: str | None = Field(None, title='کد دعوت')
+    language: str = Field('ru', title='زبان حساب')
+    created_at: datetime = Field(..., title='زمان ایجاد حساب')
+    auth_type: str = Field('telegram', title='روش ورود')  # "telegram" или "email"
 
     class Config:
         from_attributes = True
+        title = 'اطلاعات کاربر'
+        json_schema_extra = {'description': 'اطلاعات حساب کاربر واردشده'}
 
 
 class UserAvatarResponse(BaseModel):
     """Фото профиля Telegram для шапки кабинета: подписанная ссылка на прокси медиа или null."""
 
-    photo_url: str | None = None
+    model_config = {'title': 'تصویر کاربر', 'json_schema_extra': {'description': 'نشانی تصویر نمایه یا مقدار خالی در نبود تصویر'}}
+
+    photo_url: str | None = Field(None, title='نشانی تصویر')
 
 
 class CampaignBonusInfo(BaseModel):
     """Info about campaign bonus applied during auth."""
 
-    campaign_name: str
-    bonus_type: str
-    balance_kopeks: int = 0
-    subscription_days: int | None = None
-    tariff_name: str | None = None
+    model_config = {'title': 'پاداش کمپین', 'json_schema_extra': {'description': 'اطلاعات پاداش اعمال‌شده هنگام ورود'}}
+
+    campaign_name: str = Field(..., title='نام کمپین')
+    bonus_type: str = Field(..., title='نوع پاداش')
+    balance_kopeks: int = Field(0, title='مبلغ پاداش در مقیاس ذخیره‌سازی')
+    subscription_days: int | None = Field(None, title='تعداد روز اشتراک')
+    tariff_name: str | None = Field(None, title='نام تعرفه')
 
 
 class AuthResponse(BaseModel):
     """Full authentication response with tokens and user."""
 
-    access_token: str
-    refresh_token: str
-    token_type: str = 'bearer'
-    expires_in: int
-    user: UserResponse
-    campaign_bonus: CampaignBonusInfo | None = None
+    model_config = {'title': 'نتیجهٔ ورود', 'json_schema_extra': {'description': 'توکن‌های نشست، اطلاعات کاربر و پاداش احتمالی کمپین'}}
+
+    access_token: str = Field(..., title='توکن دسترسی')
+    refresh_token: str = Field(..., title='توکن تمدید نشست')
+    token_type: str = Field('bearer', title='نوع توکن')
+    expires_in: int = Field(..., title='مدت اعتبار', description='مدت اعتبار توکن دسترسی بر حسب ثانیه')
+    user: UserResponse = Field(..., title='اطلاعات کاربر')
+    campaign_bonus: CampaignBonusInfo | None = Field(None, title='پاداش کمپین')
 
 
 class EmailRegisterStandaloneRequest(BaseModel):
@@ -302,43 +312,56 @@ class RegisterResponse(BaseModel):
 class EmailChangeRequest(BaseModel):
     """Request to initiate email change."""
 
+    model_config = {'title': 'درخواست تغییر ایمیل', 'json_schema_extra': {'description': 'ثبت درخواست تغییر نشانی ایمیل حساب'}}
+
     new_email: EmailStr = Field(
         ...,
-        description=get_texts().t('CABINET_AUTH_NEW_EMAIL_DESCRIPTION', 'New email address'),
+        title='ایمیل جدید',
+        description=get_texts('fa').t('CABINET_AUTH_NEW_EMAIL_DESCRIPTION', 'New email address'),
     )
 
 
 class EmailChangeVerifyRequest(BaseModel):
     """Request to verify email change with code."""
 
+    model_config = {'title': 'تأیید تغییر ایمیل', 'json_schema_extra': {'description': 'تأیید تغییر ایمیل با کد ارسال‌شده به نشانی جدید'}}
+
     code: str = Field(
         ..., min_length=6, max_length=6, pattern=r'^\d{6}$',
-        description=get_texts().t('CABINET_AUTH_VERIFICATION_CODE_DESCRIPTION', '6-digit verification code'),
+        title='کد تأیید',
+        description=get_texts('fa').t('CABINET_AUTH_VERIFICATION_CODE_DESCRIPTION', '6-digit verification code'),
     )
 
 
 class EmailMergeVerifyRequest(BaseModel):
     """Request to confirm an email account merge with the emailed code."""
 
+    model_config = {'title': 'تأیید ادغام حساب', 'json_schema_extra': {'description': 'تأیید مالکیت ایمیل برای ادغام حساب‌ها با کد ارسالی'}}
+
     code: str = Field(
         ..., min_length=6, max_length=6, pattern=r'^\d{6}$',
-        description=get_texts().t('CABINET_AUTH_CONFIRMATION_CODE_DESCRIPTION', '6-digit confirmation code'),
+        title='کد تأیید',
+        description=get_texts('fa').t('CABINET_AUTH_CONFIRMATION_CODE_DESCRIPTION', '6-digit confirmation code'),
     )
 
 
 class EmailChangeResponse(BaseModel):
     """Response for email change initiation."""
 
-    message: str = Field(..., description=get_texts().t('CABINET_AUTH_SUCCESS_MESSAGE_DESCRIPTION', 'Success message'))
+    model_config = {'title': 'نتیجهٔ درخواست تغییر ایمیل', 'json_schema_extra': {'description': 'نتیجهٔ درخواست، نشانی جدید و مدت اعتبار کد تأیید'}}
+
+    message: str = Field(..., title='پیام نتیجه', description='نتیجهٔ درخواست تغییر ایمیل و وضعیت ارسال تأییدیه')
     new_email: str = Field(
         ...,
-        description=get_texts().t(
+        title='ایمیل جدید',
+        description=get_texts('fa').t(
             'CABINET_AUTH_NEW_EMAIL_PENDING_DESCRIPTION', 'New email address pending verification'
         ),
     )
     expires_in_minutes: int = Field(
         ...,
-        description=get_texts().t(
+        title='مدت اعتبار کد',
+        description=get_texts('fa').t(
             'CABINET_AUTH_CODE_EXPIRATION_MINUTES_DESCRIPTION', 'Code expiration time in minutes'
         ),
     )
@@ -347,17 +370,19 @@ class EmailChangeResponse(BaseModel):
 class DeepLinkTokenResponse(BaseModel):
     """Response with deep link auth token."""
 
+    model_config = {'title': 'لینک ورود تلگرام', 'json_schema_extra': {'description': 'توکن ورود، نام ربات و مدت اعتبار لینک'}}
+
     token: str = Field(
         ...,
-        description=get_texts().t('CABINET_AUTH_ONE_TIME_TOKEN_DESCRIPTION', 'One-time auth token'),
+        title='توکن ورود', description=get_texts('fa').t('CABINET_AUTH_ONE_TIME_TOKEN_DESCRIPTION', 'One-time auth token'),
     )
     bot_username: str = Field(
         ...,
-        description=get_texts().t('CABINET_AUTH_BOT_USERNAME_DESCRIPTION', 'Bot username for deep link'),
+        title='نام کاربری ربات', description=get_texts('fa').t('CABINET_AUTH_BOT_USERNAME_DESCRIPTION', 'Bot username for deep link'),
     )
     expires_in: int = Field(
         ...,
-        description=get_texts().t('CABINET_AUTH_TOKEN_TTL_DESCRIPTION', 'Token TTL in seconds'),
+        title='مدت اعتبار', description='مدت اعتبار لینک ورود بر حسب ثانیه',
     )
 
 
@@ -368,16 +393,18 @@ class DeepLinkPollRequest(BaseModel):
     Only campaign_slug is supported (campaign bonus can apply to existing users).
     """
 
+    model_config = {'title': 'پیگیری ورود تلگرام', 'json_schema_extra': {'description': 'توکن لینک ورود و شناسهٔ اختیاری کمپین'}}
+
     token: str = Field(
         ..., min_length=16, max_length=128,
-        description=get_texts().t('CABINET_AUTH_DEEP_LINK_TOKEN_DESCRIPTION', 'Deep link auth token'),
+        title='توکن ورود', description=get_texts('fa').t('CABINET_AUTH_DEEP_LINK_TOKEN_DESCRIPTION', 'Deep link auth token'),
     )
     campaign_slug: str | None = Field(
         None,
         min_length=1,
         max_length=64,
         pattern=r'^[a-zA-Z0-9_-]+$',
-        description=get_texts().t(
+        title='شناسهٔ کمپین', description=get_texts('fa').t(
             'CABINET_AUTH_CAMPAIGN_SLUG_CABINET_URL_DESCRIPTION',
             'Campaign slug captured from cabinet URL',
         ),

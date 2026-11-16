@@ -61,6 +61,8 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.decorators import error_handler
 from app.utils.legacy_subscription import is_legacy_subscription as _legacy_subscription
 
+from .common import hide_subscription_device_row
+
 
 logger = structlog.get_logger(__name__)
 
@@ -470,10 +472,7 @@ async def show_subscription_info(callback: types.CallbackQuery, db_user: User, d
         )
 
     if not show_devices:
-        message_template = message_template.replace(
-            '\n📱 Устройства: {devices_used} / {device_limit}',
-            '',
-        )
+        message_template = hide_subscription_device_row(message_template)
 
     device_limit_display = Texts.format_device_limit(subscription.device_limit)
 
@@ -1013,7 +1012,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
             charged_amount = await charge_trial_activation_if_required(
                 db,
                 db_user,
-                description='Активация триала через бота',
+                description=texts.t('BOT_TRIAL_ACTIVATION_DESCRIPTION', 'فعال‌سازی اشتراک آزمایشی از طریق ربات'),
             )
         except TrialPaymentInsufficientFunds as error:
             rollback_success = await rollback_trial_subscription_activation(db, subscription)
@@ -1090,7 +1089,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 db_user,
                 subscription,
                 charged_amount,
-                refund_description='Возврат оплаты за активацию триала через бота',
+                refund_description=texts.t('BOT_TRIAL_REFUND_DESCRIPTION', 'بازگشت هزینهٔ فعال‌سازی اشتراک آزمایشی از طریق ربات'),
             )
             if not revert_result.subscription_rolled_back:
                 failure_text = texts.t(
@@ -1125,7 +1124,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 db_user,
                 subscription,
                 charged_amount,
-                refund_description='Возврат оплаты за активацию триала через бота',
+                refund_description=texts.t('BOT_TRIAL_REFUND_DESCRIPTION', 'بازگشت هزینهٔ فعال‌سازی اشتراک آزمایشی از طریق ربات'),
             )
             if not revert_result.subscription_rolled_back:
                 failure_text = texts.t(
@@ -1348,7 +1347,7 @@ async def activate_trial(callback: types.CallbackQuery, db_user: User, db: Async
                 db_user,
                 subscription,
                 charged_amount,
-                refund_description='Возврат оплаты за активацию триала через бота',
+                refund_description=texts.t('BOT_TRIAL_REFUND_DESCRIPTION', 'بازگشت هزینهٔ فعال‌سازی اشتراک آزمایشی از طریق ربات'),
             )
             if not revert_result.subscription_rolled_back:
                 failure_text = texts.t(
@@ -2101,7 +2100,9 @@ async def confirm_extend_subscription(
             'saved_cart': True,
             'missing_amount': missing_kopeks,
             'return_to_cart': True,
-            'description': f'Продление подписки на {days} дней',
+            'description': texts.t(
+                'CABINET_RENEWAL_TRANSACTION_DESCRIPTION', 'تمدید اشتراک به مدت {days} روز'
+            ).format(days=days),
             'consume_promo_offer': bool(promo_offer_discount > 0),
             'device_limit': device_limit,
             'devices': device_limit,
@@ -2125,7 +2126,9 @@ async def confirm_extend_subscription(
         return
 
     old_traffic_gb = subscription.traffic_limit_gb
-    renewal_description = f'Продление подписки на {days} дней ({months_in_period} мес)'
+    renewal_description = texts.t(
+        'SUBSCRIPTION_RENEWAL_PERIOD_DESCRIPTION', 'تمدید اشتراک به مدت {days} روز ({months} ماه)'
+    ).format(days=days, months=months_in_period)
 
     try:
         renewal_service = SubscriptionRenewalService()
@@ -2590,7 +2593,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
             db,
             db_user,
             final_price,
-            f'Покупка подписки на {data["period_days"]} дней',
+            texts.t('SUBSCRIPTION_PURCHASE_DAYS_DESCRIPTION', 'خرید اشتراک به مدت {days} روز').format(
+                days=data['period_days']
+            ),
             consume_promo_offer=promo_offer_discount_value > 0,
             mark_as_paid_subscription=True,
             commit=not managed_purchase,
@@ -2745,7 +2750,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                     user_id=db_user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=final_price,
-                    description=f'Подписка на {period_days} дней ({months_in_period} мес)',
+                    description=texts.t(
+                        'SUBSCRIPTION_PURCHASE_PERIOD_DESCRIPTION', 'اشتراک {days} روزه ({months} ماه)'
+                    ).format(days=period_days, months=months_in_period),
                     commit=False,
                 )
                 await stage_paid_base_grant(
@@ -2807,7 +2814,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 amount_kopeks=final_price,
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
-                description=f'Подписка на {period_days} дней ({months_in_period} мес)',
+                description=texts.t(
+                    'SUBSCRIPTION_PURCHASE_PERIOD_DESCRIPTION', 'اشتراک {days} روزه ({months} ماه)'
+                ).format(days=period_days, months=months_in_period),
             )
 
         from app.database.crud.server_squad import add_user_to_servers, get_server_ids_by_uuids
@@ -2871,7 +2880,9 @@ async def confirm_purchase(callback: types.CallbackQuery, state: FSMContext, db_
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=final_price,
-                description=f'Подписка на {period_days} дней ({months_in_period} мес)',
+                description=texts.t(
+                    'SUBSCRIPTION_PURCHASE_PERIOD_DESCRIPTION', 'اشتراک {days} روزه ({months} ماه)'
+                ).format(days=period_days, months=months_in_period),
             )
 
         try:
@@ -3209,10 +3220,7 @@ async def handle_subscription_settings(callback: types.CallbackQuery, db_user: U
     )
 
     if not show_devices:
-        settings_template = settings_template.replace(
-            '\n📱 Устройства: {devices_used} / {devices_limit}',
-            '',
-        )
+        settings_template = hide_subscription_device_row(settings_template)
 
     devices_limit_display = Texts.format_device_limit(subscription.device_limit)
 
@@ -3290,12 +3298,38 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
         subscription = await lock_daily_accounting_subscription(db, subscription, db_user.id)
     except ValueError as error:
         await db.rollback()
-        await callback.answer(str(error), show_alert=True)
+        error_messages = {
+            'Daily subscription ownership changed': texts.t(
+                'DAILY_SUBSCRIPTION_ACCESS_CHANGED',
+                'دسترسی به این اشتراک تغییر کرده است. فهرست اشتراک‌ها را دوباره باز کنید.',
+            ),
+            'Daily resume is unavailable during grace': texts.t(
+                'DAILY_SUBSCRIPTION_GRACE_ACTIVE', 'تا پایان مهلت ارفاقی، ازسرگیری اشتراک روزانه امکان‌پذیر نیست.'
+            ),
+            'Daily resume awaits completed migration': texts.t(
+                'DAILY_SUBSCRIPTION_MIGRATION_PENDING', 'پس از پایان انتقال اشتراک، دوباره برای ازسرگیری تلاش کنید.'
+            ),
+            'Сначала отключите автоплатёж CisPay и дождитесь подтверждения отключения.': texts.t(
+                'DAILY_SUBSCRIPTION_CISPAY_CONFLICT',
+                'ابتدا پرداخت خودکار CisPay را غیرفعال کنید و منتظر تأیید غیرفعال‌شدن آن بمانید.',
+            ),
+        }
+        message = error_messages.get(str(error))
+        if message is None:
+            logger.warning('Daily subscription state change rejected', error=error)
+            message = texts.t(
+                'DAILY_SUBSCRIPTION_STATE_ERROR',
+                'تغییر وضعیت اشتراک روزانه انجام نشد. دوباره تلاش کنید و اگر مشکل ادامه داشت با پشتیبانی تماس بگیرید.',
+            )
+        await callback.answer(message, show_alert=True)
         return
     db_user = await lock_user_for_pricing(db, db_user.id)
     managed = subscription.traffic_accounting_mode == 'managed'
     if subscription.is_trial:
-        await callback.answer('Subscription renewal is unavailable', show_alert=True)
+        await callback.answer(
+            texts.t('DAILY_SUBSCRIPTION_TRIAL_UNAVAILABLE', 'این عملیات برای اشتراک آزمایشی در دسترس نیست.'),
+            show_alert=True,
+        )
         return
 
     # Проверяем что это суточный тариф
@@ -3323,7 +3357,13 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
     )
     needs_resume = was_paused or is_inactive
     if needs_resume and db_user.restriction_subscription:
-        await callback.answer('Subscription renewal is unavailable', show_alert=True)
+        await callback.answer(
+            texts.t(
+                'DAILY_SUBSCRIPTION_RESUME_RESTRICTED',
+                'ازسرگیری اشتراک برای حساب شما مجاز نیست. با پشتیبانی تماس بگیرید.',
+            ),
+            show_alert=True,
+        )
         return
 
     # При возобновлении проверяем баланс
@@ -3340,8 +3380,8 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                     texts.t(
                         'SUBSCRIPTION_UI_RESUME_INSUFFICIENT',
                         '❌ Недостаточно средств для возобновления. Требуется: {amount}',
-                    ).format(amount=settings.format_price(daily_price)),
-                ),
+                    ),
+                ).format(amount=settings.format_price(daily_price)),
                 show_alert=True,
             )
             return
@@ -3356,7 +3396,10 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                 db,
                 db_user,
                 daily_price,
-                f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                texts.t(
+                    'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION',
+                    'پرداخت روزانهٔ تعرفهٔ «{tariff_name}» (ازسرگیری)',
+                ).format(tariff_name=tariff.name),
                 mark_as_paid_subscription=True,
                 commit=not managed,
             )
@@ -3367,8 +3410,8 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                         texts.t(
                             'SUBSCRIPTION_UI_RESUME_INSUFFICIENT',
                             '❌ Недостаточно средств для возобновления. Требуется: {amount}',
-                        ).format(amount=settings.format_price(daily_price)),
-                    ),
+                        ),
+                    ).format(amount=settings.format_price(daily_price)),
                     show_alert=True,
                 )
                 return
@@ -3382,7 +3425,10 @@ async def handle_toggle_daily_subscription_pause(callback: types.CallbackQuery, 
                     user_id=db_user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=daily_price,
-                    description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    description=texts.t(
+                        'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION',
+                        'پرداخت روزانهٔ تعرفهٔ «{tariff_name}» (ازسرگیری)',
+                    ).format(tariff_name=tariff.name),
                     commit=not managed,
                 )
             except Exception as tx_error:
@@ -5161,7 +5207,9 @@ async def _extend_existing_subscription(
             'saved_cart': True,
             'missing_amount': missing_kopeks,
             'return_to_cart': True,
-            'description': f'Продление подписки на {period_days} дней',
+            'description': texts.t(
+                'CABINET_RENEWAL_TRANSACTION_DESCRIPTION', 'تمدید اشتراک به مدت {days} روز'
+            ).format(days=period_days),
             'device_limit': device_limit,
             'devices': device_limit,
             'traffic_limit_gb': traffic_limit_gb,
@@ -5188,7 +5236,7 @@ async def _extend_existing_subscription(
         db,
         db_user,
         price_kopeks,
-        f'Продление подписки на {period_days} дней',
+        texts.t('CABINET_RENEWAL_TRANSACTION_DESCRIPTION', 'تمدید اشتراک به مدت {days} روز').format(days=period_days),
         consume_promo_offer=consume_promo,
         mark_as_paid_subscription=True,
     )
@@ -5254,7 +5302,7 @@ async def _extend_existing_subscription(
                 db,
                 db_user,
                 price_kopeks,
-                'Возврат: ошибка продления подписки',
+                texts.t('SUBSCRIPTION_RENEWAL_REFUND_DESCRIPTION', 'بازگشت وجه به‌دلیل خطا در تمدید اشتراک'),
                 create_transaction=True,
                 transaction_type=TransactionType.REFUND,
             )
@@ -5302,7 +5350,9 @@ async def _extend_existing_subscription(
         user_id=db_user.id,
         type=TransactionType.SUBSCRIPTION_PAYMENT,
         amount_kopeks=price_kopeks,
-        description=f'Продление подписки на {period_days} дней',
+        description=texts.t('CABINET_RENEWAL_TRANSACTION_DESCRIPTION', 'تمدید اشتراک به مدت {days} روز').format(
+            days=period_days
+        ),
     )
 
     # Отправляем уведомление админу

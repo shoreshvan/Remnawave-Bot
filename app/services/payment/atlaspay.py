@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.database.models import PaymentMethod, TransactionType
 from app.services.atlaspay_service import atlaspay_service, toman_to_kopeks
 from app.utils.payment_logger import payment_logger as logger
@@ -67,7 +68,7 @@ class AtlaspayPaymentMixin:
         user_id: int | None,
         amount_kopeks: int,
         customer_telegram_id: int | None = None,
-        description: str = 'Balance top-up',
+        description: str | None = None,
         language: str = 'ru',
     ) -> dict[str, Any] | None:
         """Creates an AtlasPay order and returns the mini-app start link."""
@@ -91,6 +92,8 @@ class AtlaspayPaymentMixin:
             return None
 
         payment_module = import_module('app.services.payment_service')
+        if description is None:
+            description = get_texts(language).t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'Balance top-up')
         telegram_id: int | None = customer_telegram_id
         if user_id is not None:
             user = await payment_module.get_user_by_id(db, user_id)
@@ -477,7 +480,9 @@ class AtlaspayPaymentMixin:
             )
 
         display_name = settings.get_atlaspay_display_name()
-        description = f'Пополнение через {display_name}'
+        description = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
+            'NOWPAYMENTS_TRANSACTION_DESCRIPTION', 'Пополнение через {display_name}'
+        ).format(display_name=display_name)
 
         transaction = existing_transaction
         created_transaction = False
@@ -571,12 +576,13 @@ class AtlaspayPaymentMixin:
                 keyboard = await self.build_topup_success_keyboard(user)
                 await self.bot.send_message(
                     user.telegram_id,
-                    (
-                        '✅ <b>Пополнение успешно!</b>\n\n'
-                        f'\U0001f4b0 Сумма: {settings.format_price(payment.amount_kopeks)}\n'
-                        f'\U0001f4b3 Способ: {display_name}\n'
-                        f'\U0001f194 Транзакция: {transaction.id}\n\n'
-                        'Баланс пополнен автоматически!'
+                    get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE).t(
+                        'NOWPAYMENTS_TOPUP_SUCCESS',
+                        '✅ شارژ با موفقیت انجام شد!\n\nمبلغ: {amount}\nروش: {method}\nتراکنش: {transaction_id}',
+                    ).format(
+                        amount=settings.format_price(payment.amount_kopeks),
+                        method=display_name,
+                        transaction_id=transaction.id,
                     ),
                     parse_mode='HTML',
                     reply_markup=keyboard,

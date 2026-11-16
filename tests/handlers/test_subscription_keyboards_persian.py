@@ -3,6 +3,7 @@
 import re
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -14,11 +15,13 @@ def buttons(markup):
     result = {button.callback_data: button.text for row in markup.inline_keyboard for button in row}
     for label in result.values():
         assert not re.search(r'[А-Яа-яЁё]', label), label
+        assert '₽' not in label, label
     return result
 
 
 @pytest.fixture
 def frozen_clock(monkeypatch):
+    monkeypatch.setattr(inline.settings, 'CURRENCY_SYMBOL', 'تومان')
     now = datetime(2030, 1, 1, tzinfo=UTC)
 
     class Clock(datetime):
@@ -49,8 +52,8 @@ def test_topup_period_price_and_discount(persian, monkeypatch, frozen_clock, day
     result = buttons(inline.get_add_traffic_keyboard('fa', frozen_clock + timedelta(days=days), 10, sub_id=7))
     price, discount = int(27000 * days / 30) // 100, int(3000 * days / 30) // 100
     for key in ('add_traffic_0', 'add_traffic_50'):
-        assert f'{price} ₽' in result[key]
-        assert f'تخفیف 10٪: -{discount}₽' in result[key]
+        assert f'{price} تومان' in result[key]
+        assert f'تخفیف 10٪: -{discount} تومان' in result[key]
         assert ('برای ۱ روز' if days == 1 else f'برای {days} روز') in result[key]
     assert 'sm:7' in result
 
@@ -63,7 +66,7 @@ def test_tariff_topup_remains_monthly_regardless_of_subscription_length(persian,
         'fa', {50: 10000}, frozen_clock + timedelta(days=180), 10
     ))
     assert short == long
-    assert short['add_traffic_50'] == '📊 +50 گیگابایت ترافیک - 90 ₽ /ماه (تخفیف 10٪: -10₽)'
+    assert short['add_traffic_50'] == '📊 +50 گیگابایت ترافیک - 90 تومان /ماه (تخفیف 10٪: -10 تومان)'
 
 
 def test_autopay_days_and_periods_are_persian(persian):
@@ -83,7 +86,7 @@ def test_device_choices_include_current_free_paid_and_no_refund(persian, monkeyp
     result = buttons(inline.get_change_devices_keyboard(3, 'fa', frozen_clock + timedelta(days=30), 10))
     assert result['change_devices_3'] == '✅ 3 دستگاه (فعلی)'
     assert 'بدون بازگشت وجه' in result['change_devices_2']
-    assert '27₽' in result['change_devices_4'] and 'تخفیف 10٪: -3₽' in result['change_devices_4']
+    assert '27 تومان' in result['change_devices_4'] and 'تخفیف 10٪: -3 تومان' in result['change_devices_4']
     free = buttons(inline.get_change_devices_keyboard(1, 'fa'))
     assert 'رایگان' in free['change_devices_2']
     initial = buttons(inline.get_devices_keyboard(2, 'fa'))
@@ -97,9 +100,9 @@ def test_country_choices_and_apply_totals(persian, monkeypatch, frozen_clock):
     result = buttons(inline.get_manage_countries_keyboard(
         countries, ['a'], [], 'fa', frozen_clock + timedelta(days=60), 10, sub_id=7
     ))
-    assert '270₽/ماه × 60 روز = 540₽' in result['country_manage_a']
-    assert 'تخفیف 10٪: -60₽' in result['country_manage_a']
-    assert result['countries_apply'] == '✅ اعمال تغییرات (540 ₽)'
+    assert '270 تومان/ماه × 60 روز = 540 تومان' in result['country_manage_a']
+    assert 'تخفیف 10٪: -60 تومان' in result['country_manage_a']
+    assert result['countries_apply'] == '✅ اعمال تغییرات (540 تومان)'
     assert 'sm:7' in result
     free = buttons(inline.get_manage_countries_keyboard(countries, ['b'], [], 'fa'))
     assert free['countries_apply'] == '✅ اعمال تغییرات'
@@ -134,3 +137,37 @@ def test_ticket_defaults_and_operator_text(persian):
     assert 'کاربر ناشناس' in admin['admin_view_ticket_7']
     assert 'عنوان انتخابی' in user['view_ticket_8']
     assert 'نام انتخابی' in admin['admin_view_ticket_8']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('screen', ['show_trial_offer', 'activate_trial'])
+async def test_trial_screens_show_toman_without_changing_amount(persian, monkeypatch, screen):
+    from app.database.crud import server_squad
+    from app.handlers.subscription import purchase
+    from app.services import trial_activation_service
+
+    monkeypatch.setattr(inline.settings, 'CURRENCY_SYMBOL', 'تومان')
+    monkeypatch.setattr(inline.settings, 'TRIAL_DURATION_DAYS', 3)
+    monkeypatch.setattr(type(inline.settings), 'is_tariffs_mode', lambda self: False)
+    monkeypatch.setattr(type(inline.settings), 'is_trial_disabled_for_user', lambda self, auth: False)
+    monkeypatch.setattr(type(inline.settings), 'is_trial_paid_activation_enabled', lambda self: True)
+    monkeypatch.setattr(type(inline.settings), 'get_trial_activation_price', lambda self: 500000)
+    monkeypatch.setattr(trial_activation_service, 'get_trial_activation_charge_amount', lambda: 500000)
+    monkeypatch.setattr(server_squad, 'get_trial_eligible_server_squads', AsyncMock(return_value=[]))
+    callback = SimpleNamespace(message=SimpleNamespace(edit_text=AsyncMock()), answer=AsyncMock())
+    user = SimpleNamespace(language='fa', auth_type='telegram', restriction_subscription=False,
+                           balance_kopeks=700000, is_trial_already_used=lambda: False)
+    await getattr(purchase, screen)(callback, user, AsyncMock())
+    text = callback.message.edit_text.await_args.args[0]
+    assert inline.settings.format_price(500000) in text
+    assert 'تومان' in text and '₽' not in text
+    if screen == 'activate_trial':
+        assert inline.settings.format_price(700000) in text
+
+
+def test_subscription_labels_follow_configured_currency(persian, monkeypatch):
+    monkeypatch.setattr(inline.settings, 'CURRENCY_SYMBOL', 'واحد آزمایشی')
+    result = inline.get_add_traffic_keyboard_from_tariff('fa', {50: 10000}, discount_percent=10)
+    label = result.inline_keyboard[0][0].text
+    assert '90 واحد آزمایشی' in label and '-10 واحد آزمایشی' in label
+    assert '₽' not in label and 'تومان' not in label

@@ -1249,7 +1249,8 @@ async def create_topup(
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id,
+                    language=user.language,
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
                 return_url=cabinet_success_url,
@@ -1290,7 +1291,8 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 customer_telegram_id=getattr(user, 'telegram_id', None),
                 description=settings.get_balance_payment_description(
-                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id,
+                    language=user.language,
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
             )
@@ -1312,14 +1314,13 @@ async def create_topup(
                 )
 
             payment_service = PaymentService()
-            # NOWPayments shows order_description on its hosted page: keep it English.
             result = await payment_service.create_nowpayments_payment(
                 db=db,
                 user_id=user.id,
                 amount_kopeks=request.amount_kopeks,
                 description=settings.PAYMENT_BALANCE_TEMPLATE.format(
                     service_name=settings.PAYMENT_SERVICE_NAME,
-                    description='Balance top-up',
+                    description=texts.t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'شارژ موجودی'),
                 ),
                 language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
             )
@@ -1370,6 +1371,33 @@ async def create_topup(
 
 
 def _get_status_info(record: PendingPayment) -> tuple[str, str]:
+    emoji, label = _get_status_info_legacy(record)
+    language = getattr(record.user, 'language', None)
+    if language != 'fa' or record.method not in {
+        PaymentMethod.ATLASPAY, PaymentMethod.HOOSHPAY, PaymentMethod.TONPAYS, PaymentMethod.NOWPAYMENTS,
+    }:
+        return emoji, label
+    keys = {
+        'Ожидает оплаты': 'ADMIN_PAYMENT_STATUS_PENDING',
+        'Оплачено': 'ADMIN_PAYMENT_STATUS_PAID',
+        'Истёк': 'ADMIN_PAYMENT_STATUS_EXPIRED',
+        'Отменён': 'ADMIN_PAYMENT_STATUS_CANCELED',
+        'Ошибка оплаты': 'CABINET_PAYMENT_STATUS_FAILED',
+        'Ошибка': 'ADMIN_PAYMENT_STATUS_FAILED',
+        'Отклонено': 'CABINET_PAYMENT_STATUS_REJECTED',
+        'Несовпадение суммы': 'CABINET_PAYMENT_STATUS_AMOUNT_MISMATCH',
+        'Ожидает подтверждения': 'CABINET_PAYMENT_STATUS_CONFIRMING',
+        'Требуется действие': 'CABINET_PAYMENT_STATUS_ACTION_REQUIRED',
+        'Проверка недоплаты': 'CABINET_PAYMENT_STATUS_UNDERPAID_REVIEW',
+        'Требуется проверка': 'CABINET_PAYMENT_STATUS_REVIEW',
+        'Подтверждается сетью': 'CABINET_PAYMENT_STATUS_NETWORK_CONFIRMING',
+        'Возвращён': 'CABINET_PAYMENT_STATUS_REFUNDED',
+        'Неизвестно': 'ADMIN_PAYMENT_STATUS_UNKNOWN',
+    }
+    return emoji, get_texts(language).t(keys[label])
+
+
+def _get_status_info_legacy(record: PendingPayment) -> tuple[str, str]:
     """Get status emoji and text for a pending payment."""
     status = (record.status or '').lower()
 
@@ -1769,10 +1797,11 @@ def _record_to_response(record: PendingPayment) -> PendingPaymentResponse:
     )
 
 
-@router.get('/pending-payments', response_model=PendingPaymentListResponse)
+@router.get('/pending-payments', response_model=PendingPaymentListResponse,
+            summary='فهرست پرداخت‌های در انتظار', description='نمایش پرداخت‌های در انتظار کاربر برای بررسی وضعیت پرداخت.')
 async def get_pending_payments(
-    page: int = Query(1, ge=1, description='Page number'),
-    per_page: int = Query(10, ge=1, le=50, description='Items per page'),
+    page: int = Query(1, ge=1, description='شمارهٔ صفحه'),
+    per_page: int = Query(10, ge=1, le=50, description='تعداد پرداخت‌ها در هر صفحه'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -1800,19 +1829,21 @@ async def get_pending_payments(
     )
 
 
-@router.get('/pending-payments/{method}/latest', response_model=PendingPaymentResponse)
+@router.get('/pending-payments/{method}/latest', response_model=PendingPaymentResponse,
+            summary='آخرین پرداخت', description='نمایش آخرین پرداخت کاربر در یک ساعت گذشته برای روش پرداخت پشتیبانی‌شده.')
 async def get_latest_payment_by_method(
     method: str,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's most recent payment for a given method (any status, not just pending)."""
+    texts = get_texts(user.language)
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid payment method: {method}',
+            detail=texts.t('CABINET_PAYMENT_INVALID_METHOD', 'روش پرداخت نامعتبر است'),
         )
 
     from datetime import UTC, datetime, timedelta
@@ -1822,25 +1853,33 @@ async def get_latest_payment_by_method(
     from app.database.models import (
         AnorePayment,
         AntilopayPayment,
+        AtlasPayPayment,
         AuraPayPayment,
         CisPayPayment,
         CloudPaymentsPayment,
         CryptoBotPayment,
         FreekassaPayment,
         HeleketPayment,
+        HooshPayPayment,
         KassaAiPayment,
         MulenPayPayment,
+        NowPaymentsPayment,
         OverpayPayment,
         Pal24Payment,
         PlategaPayment,
         RioPayPayment,
         RollyPayPayment,
         SeverPayPayment,
+        TonPaysPayment,
         WataPayment,
         YooKassaPayment,
     )
 
     model_map: dict[PaymentMethod, type] = {
+        PaymentMethod.ATLASPAY: AtlasPayPayment,
+        PaymentMethod.HOOSHPAY: HooshPayPayment,
+        PaymentMethod.TONPAYS: TonPaysPayment,
+        PaymentMethod.NOWPAYMENTS: NowPaymentsPayment,
         PaymentMethod.CISPAY: CisPayPayment,
         PaymentMethod.ANORE: AnorePayment,
         PaymentMethod.ANTILOPAY: AntilopayPayment,
@@ -1865,7 +1904,7 @@ async def get_latest_payment_by_method(
     if not model:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Unsupported payment method: {method}',
+            detail=texts.t('CABINET_PAYMENT_LATEST_UNSUPPORTED', 'نمایش آخرین پرداخت برای این روش پشتیبانی نمی‌شود'),
         )
 
     cutoff = datetime.now(UTC) - timedelta(hours=1)
@@ -1873,7 +1912,7 @@ async def get_latest_payment_by_method(
         select(model)
         .options(selectinload(model.user))
         .where(model.user_id == user.id, model.created_at >= cutoff)
-        .order_by(desc(model.created_at))
+        .order_by(desc(model.created_at), desc(model.id))
         .limit(1)
     )
     result = await db.execute(stmt)
@@ -1882,13 +1921,19 @@ async def get_latest_payment_by_method(
     if not payment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No recent payments found',
+            detail=texts.t('CABINET_PAYMENT_NO_RECENT', 'پرداختی در یک ساعت گذشته یافت نشد'),
         )
 
     record = PendingPayment(
         local_id=payment.id,
         method=payment_method,
-        identifier=str(getattr(payment, 'correlation_id', None) or payment.id),
+        identifier=str(
+            payment.order_id
+            if payment_method in {
+                PaymentMethod.ATLASPAY, PaymentMethod.HOOSHPAY, PaymentMethod.TONPAYS, PaymentMethod.NOWPAYMENTS,
+            }
+            else getattr(payment, 'correlation_id', None) or payment.id
+        ),
         amount_kopeks=payment.amount_kopeks,
         status=payment.status or '',
         is_paid=bool(payment.is_paid),
@@ -1901,7 +1946,8 @@ async def get_latest_payment_by_method(
     return _record_to_response(record)
 
 
-@router.get('/pending-payments/{method}/{payment_id}', response_model=PendingPaymentResponse)
+@router.get('/pending-payments/{method}/{payment_id}', response_model=PendingPaymentResponse,
+            summary='جزئیات پرداخت', description='نمایش جزئیات پرداخت متعلق به حساب کاربر.')
 async def get_pending_payment_details(
     method: str,
     payment_id: int,
@@ -1909,12 +1955,13 @@ async def get_pending_payment_details(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get details of a specific pending payment."""
+    texts = get_texts(user.language)
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid payment method: {method}',
+            detail=texts.t('CABINET_PAYMENT_INVALID_METHOD', 'روش پرداخت نامعتبر است'),
         )
 
     record = await get_payment_record(db, payment_method, payment_id)
@@ -1922,20 +1969,21 @@ async def get_pending_payment_details(
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Payment not found',
+            detail=texts.t('CABINET_BALANCE_PAYMENT_NOT_FOUND', 'پرداخت یافت نشد'),
         )
 
     # Check that payment belongs to the current user
     if not record.user or record.user.id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Access denied',
+            detail=texts.t('CABINET_BALANCE_ACCESS_DENIED', 'دسترسی رد شد'),
         )
 
     return _record_to_response(record)
 
 
-@router.post('/pending-payments/{method}/{payment_id}/check', response_model=ManualCheckResponse)
+@router.post('/pending-payments/{method}/{payment_id}/check', response_model=ManualCheckResponse,
+             summary='استعلام وضعیت پرداخت', description='استعلام و به‌روزرسانی وضعیت پرداخت متعلق به حساب کاربر.')
 async def check_payment_status(
     method: str,
     payment_id: int,
@@ -1943,12 +1991,13 @@ async def check_payment_status(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Manually check and update payment status."""
+    texts = get_texts(user.language)
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid payment method: {method}',
+            detail=texts.t('CABINET_PAYMENT_INVALID_METHOD', 'روش پرداخت نامعتبر است'),
         )
 
     # Get current record
@@ -1957,21 +2006,21 @@ async def check_payment_status(
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Payment not found',
+            detail=texts.t('CABINET_BALANCE_PAYMENT_NOT_FOUND', 'پرداخت یافت نشد'),
         )
 
     # Check that payment belongs to the current user
     if not record.user or record.user.id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Access denied',
+            detail=texts.t('CABINET_BALANCE_ACCESS_DENIED', 'دسترسی رد شد'),
         )
 
     # Check if manual check is available
     if not _is_checkable(record):
         return ManualCheckResponse(
             success=False,
-            message='Ручная проверка недоступна для этого платежа',
+            message=texts.t('CABINET_PAYMENT_CHECK_UNAVAILABLE', 'استعلام دستی برای این پرداخت در دسترس نیست'),
             payment=_record_to_response(record),
             status_changed=False,
         )
@@ -1990,7 +2039,7 @@ async def check_payment_status(
     if not updated:
         return ManualCheckResponse(
             success=False,
-            message='Не удалось проверить статус платежа',
+            message=texts.t('CABINET_PAYMENT_CHECK_FAILED', 'استعلام وضعیت پرداخت انجام نشد؛ دوباره تلاش کنید'),
             payment=_record_to_response(record),
             status_changed=False,
         )
@@ -1999,9 +2048,9 @@ async def check_payment_status(
 
     if status_changed:
         _, new_status_text = _get_status_info(updated)
-        message = f'Статус обновлён: {new_status_text}'
+        message = texts.t('CABINET_PAYMENT_STATUS_UPDATED', 'وضعیت به‌روزرسانی شد: {status}').format(status=new_status_text)
     else:
-        message = 'Статус не изменился'
+        message = texts.t('CABINET_PAYMENT_STATUS_UNCHANGED', 'وضعیت پرداخت تغییری نکرده است')
 
     return ManualCheckResponse(
         success=True,

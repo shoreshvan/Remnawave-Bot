@@ -274,6 +274,15 @@ async def handle_atlaspay_check(
         return
 
     status = (result.get('status') or '').lower()
+    if status == 'amount_mismatch':
+        await callback.answer(
+            texts.t(
+                'PAYMENT_CHECK_AMOUNT_MISMATCH',
+                '⚠️ مبلغ گزارش‌شده با فاکتور مطابقت ندارد. پرداخت خودکار تأیید نشد؛ برای بررسی با پشتیبانی تماس بگیرید.',
+            ),
+            show_alert=True,
+        )
+        return
     if status == 'expired':
         await state.clear()
         await callback.answer(

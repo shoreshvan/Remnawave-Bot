@@ -55,7 +55,7 @@ async def evaluate_public_registration(
     )
 
 
-def raise_for_registration_decision(decision: RegistrationAccessDecision) -> None:
+def raise_for_registration_decision(decision: RegistrationAccessDecision, *, language: str | None = None) -> None:
     if decision.allowed:
         return
     if decision.reason is RegistrationAccessReason.CHECK_UNAVAILABLE:
@@ -66,7 +66,7 @@ def raise_for_registration_decision(decision: RegistrationAccessDecision) -> Non
     if decision.reason is RegistrationAccessReason.BLOCKED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=get_texts().t('CABINET_AUTH_ACCOUNT_NOT_ACTIVE', 'User account is not active'),
+            detail=get_texts(language).t('CABINET_AUTH_ACCOUNT_NOT_ACTIVE', 'User account is not active'),
         )
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

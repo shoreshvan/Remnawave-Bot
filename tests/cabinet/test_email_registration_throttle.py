@@ -86,14 +86,16 @@ async def test_standalone_registration_uses_the_throttle(monkeypatch):
     monkeypatch.setattr(auth, 'get_client_ip', lambda _request: '9.9.9.9')
     seen: list[str] = []
 
-    async def throttle(ip: str) -> None:
+    async def throttle(ip: str, *, language=None) -> None:
         seen.append(ip)
         raise HTTPException(status_code=429, detail='Too many requests', headers={'Retry-After': '86400'})
 
     monkeypatch.setattr(auth, 'enforce_email_registration_throttle', throttle)
 
     with pytest.raises(HTTPException) as limited:
-        await auth.register_email_standalone(request=object(), raw_request=object(), db=SimpleNamespace())
+        await auth.register_email_standalone(
+            request=object(), raw_request=SimpleNamespace(headers={}), db=SimpleNamespace(),
+        )
 
     assert limited.value.status_code == 429
     assert seen == ['9.9.9.9']

@@ -202,16 +202,20 @@ class AdminNotificationService:
                 return texts.t('ADMIN_NOTIFY_042', 'ID {v0} (не найден)').format(v0=referred_by_id)
 
             if referrer.username:
-                return f'{format_username_link(referrer.username)} (ID: {referred_by_id})'
+                return texts.t('ADMIN_NOTIFY_REFERRER_WITH_ID', '{username} (ID: {user_id})').format(
+                    username=format_username_link(referrer.username), user_id=referred_by_id
+                )
             if referrer.telegram_id:
-                return f'ID {referrer.telegram_id}'
+                return texts.t('ADMIN_NOTIFY_REFERRER_ID', 'ID {user_id}').format(user_id=referrer.telegram_id)
             if referrer.email:
                 return f'📧 {html.escape(referrer.email)}'
-            return f'User#{referred_by_id}'
+            return texts.t('ADMIN_NOTIFY_USER_ID_FALLBACK', 'User#{user_id}').format(user_id=referred_by_id)
 
         except Exception as e:
             logger.error('Ошибка получения данных рефера', referred_by_id=referred_by_id, error=e)
-            return f'ID {referred_by_id}'
+            return texts.t('ADMIN_NOTIFY_REFERRER_LOAD_FAILED', 'ID {user_id} (load failed)').format(
+                user_id=referred_by_id
+            )
 
     async def _get_user_promo_group(self, db: AsyncSession, user: User) -> PromoGroup | None:
         promo_group = _loaded_relationship(user, 'promo_group')
@@ -248,7 +252,8 @@ class AdminNotificationService:
             )
             return None
 
-    def _get_user_display(self, user: User) -> str:
+    def _get_user_display(self, user: User, texts: Texts | None = None) -> str:
+        texts = texts or get_texts(settings.DEFAULT_LANGUAGE)
         first_name = getattr(user, 'first_name', '') or ''
         if first_name:
             return html.escape(first_name)
@@ -262,10 +267,10 @@ class AdminNotificationService:
             email = getattr(user, 'email', None)
             if email:
                 return html.escape(email)
-            return f'User#{getattr(user, "id", "Unknown")}'
-        return f'ID{telegram_id}'
+            return self._get_user_identifier_display(user, texts=texts)
+        return texts.t('ADMIN_NOTIFY_TELEGRAM_ID_FALLBACK', 'ID{user_id}').format(user_id=telegram_id)
 
-    def _get_user_identifier_display(self, user: User) -> str:
+    def _get_user_identifier_display(self, user: User, texts: Texts | None = None) -> str:
         """Get user identifier for display in notifications (telegram_id or email)."""
         telegram_id = getattr(user, 'telegram_id', None)
         if telegram_id:
@@ -275,17 +280,22 @@ class AdminNotificationService:
         if email:
             return f'📧 {html.escape(email)}'
 
-        return f'User#{getattr(user, "id", "Unknown")}'
+        texts = texts or get_texts(settings.DEFAULT_LANGUAGE)
+        user_id = getattr(user, 'id', None)
+        if user_id is None:
+            return texts.t('ADMIN_NOTIFY_USER_UNKNOWN_FALLBACK', 'Unknown')
+        return texts.t('ADMIN_NOTIFY_USER_ID_FALLBACK', 'User#{user_id}').format(user_id=user_id)
 
-    def _get_user_identifier_label(self, user: User) -> str:
+    def _get_user_identifier_label(self, user: User, texts: Texts | None = None) -> str:
         """Get label for user identifier (Telegram ID or Email)."""
+        texts = texts or get_texts(settings.DEFAULT_LANGUAGE)
         telegram_id = getattr(user, 'telegram_id', None)
         if telegram_id:
-            return 'Telegram ID'
+            return texts.t('ADMIN_NOTIFY_LABEL_TELEGRAM_ID', 'Telegram ID')
         email = getattr(user, 'email', None)
         if email:
-            return 'Email'
-        return 'ID'
+            return texts.t('ADMIN_NOTIFY_LABEL_EMAIL', 'Email')
+        return texts.t('ADMIN_NOTIFY_LABEL_ID', 'ID')
 
     async def _record_subscription_event(
         self,
@@ -501,7 +511,7 @@ class AdminNotificationService:
                 else texts.t('ADMIN_NOTIFY_056', '🔄 Существующий')
             )
             promo_group = await self._get_user_promo_group(db, user)
-            user_display = self._get_user_display(user)
+            user_display = self._get_user_display(user, texts=texts)
 
             trial_device_limit = subscription.device_limit
             if trial_device_limit is None:
@@ -517,8 +527,8 @@ class AdminNotificationService:
                     v0=settings.format_price(charged_amount_kopeks)
                 )
 
-            user_id_label = self._get_user_identifier_label(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_id_label = self._get_user_identifier_label(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
 
             # Получаем название тарифа (если режим тарифов)
             tariff_name = await self._get_tariff_name(db, subscription)
@@ -528,7 +538,9 @@ class AdminNotificationService:
                 '',
                 texts.t('ADMIN_NOTIFY_059', '👤 <b>Пользователь:</b> {v0}').format(v0=user_display),
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), texts.t("ADMIN_NOTIFY_088", "отсутствует"))}',
+                texts.t('ADMIN_NOTIFY_USERNAME_LINE', '📱 <b>Username:</b> {username}').format(
+                    username=format_username_link(getattr(user, 'username', None), texts.t('ADMIN_NOTIFY_088', 'отсутствует'))
+                ),
                 texts.t('ADMIN_NOTIFY_060', '👥 <b>Статус:</b> {v0}').format(v0=user_status),
                 '',
             ]
@@ -681,8 +693,8 @@ class AdminNotificationService:
                 if transaction
                 else texts.t('ADMIN_NOTIFY_064', 'Баланс')
             )
-            user_display = self._get_user_display(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_display = self._get_user_display(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
 
             # Формируем компактное сообщение
             message_lines = [
@@ -855,8 +867,8 @@ class AdminNotificationService:
         balance_change = user.balance_kopeks - old_balance
         subscription_status = self._get_subscription_status(subscription, texts=texts)
         timestamp = format_local_datetime(datetime.now(UTC), '%d.%m.%Y %H:%M:%S')
-        user_display = self._get_user_display(user)
-        user_id_display = self._get_user_identifier_display(user)
+        user_display = self._get_user_display(user, texts=texts)
+        user_id_display = self._get_user_identifier_display(user, texts=texts)
 
         # --- Основной блок ---
         message_lines: list[str] = [
@@ -869,12 +881,13 @@ class AdminNotificationService:
         if username:
             message_lines.append(f'📱 {format_username_link(username)}')
 
-        # These four labels are generated by our payment senders; other text is caller-owned.
+        # These labels are generated by our payment senders; other text is caller-owned.
         topup_labels = {
             '🆕 Первое пополнение': texts.t('ADMIN_NOTIFY_FIRST_TOPUP_ICON', '🆕 Первое пополнение'),
             '🔄 Пополнение': texts.t('ADMIN_NOTIFY_TOPUP_ICON', '🔄 Пополнение'),
             'Первое пополнение': texts.t('ADMIN_NOTIFY_FIRST_TOPUP', 'Первое пополнение'),
             'Пополнение': texts.t('ADMIN_NOTIFY_TOPUP', 'Пополнение'),
+            '🧾 Ручное пополнение': texts.t('ADMIN_NOTIFY_MANUAL_TOPUP_ICON', '🧾 Ручное пополнение'),
         }
         message_lines.append(f'💳 {topup_labels.get(topup_status, topup_status)}')
 
@@ -902,6 +915,10 @@ class AdminNotificationService:
         message_lines.append(texts.t('ADMIN_NOTIFY_020', '📱 Подписка: {v0}').format(v0=subscription_status))
 
         # --- Реферер (только если есть) ---
+        if getattr(user, 'referred_by_id', None):
+            from app.utils.user_utils import format_referrer_info
+
+            referrer_info = format_referrer_info(user, texts=texts)
         if referrer_info and referrer_info not in ('Нет', texts.t('ADMIN_BACKUP_UI_035', 'Нет')):
             message_lines.append(texts.t('ADMIN_NOTIFY_066', '🔗 Реферер: {v0}').format(v0=referrer_info))
 
@@ -1173,9 +1190,9 @@ class AdminNotificationService:
             servers_info = await self._get_servers_info(subscription.connected_squads, texts=texts)
             promo_group = await self._get_user_promo_group(db, user)
             promo_block = self._format_promo_group_block(promo_group, texts=texts)
-            user_display = self._get_user_display(user)
-            user_id_label = self._get_user_identifier_label(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_display = self._get_user_display(user, texts=texts)
+            user_id_label = self._get_user_identifier_label(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
 
             message = texts.t(
                 'ADMIN_NOTIFY_023',
@@ -1255,16 +1272,18 @@ class AdminNotificationService:
             promo_block = self._format_promo_group_block(promo_group, texts=texts)
             type_display = self._get_promocode_type_display(promocode_data.get('type'), texts=texts)
             usage_info = f'{promocode_data.get("current_uses", 0)}/{promocode_data.get("max_uses", 0)}'
-            user_display = self._get_user_display(user)
-            user_id_label = self._get_user_identifier_label(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_display = self._get_user_display(user, texts=texts)
+            user_id_label = self._get_user_identifier_label(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
 
             message_lines = [
                 texts.t('ADMIN_NOTIFY_074', '🎫 <b>АКТИВАЦИЯ ПРОМОКОДА</b>'),
                 '',
                 texts.t('ADMIN_NOTIFY_059', '👤 <b>Пользователь:</b> {v0}').format(v0=user_display),
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), texts.t("ADMIN_NOTIFY_088", "отсутствует"))}',
+                texts.t('ADMIN_NOTIFY_USERNAME_LINE', '📱 <b>Username:</b> {username}').format(
+                    username=format_username_link(getattr(user, 'username', None), texts.t('ADMIN_NOTIFY_088', 'отсутствует'))
+                ),
                 '',
                 promo_block,
                 '',
@@ -1592,16 +1611,18 @@ class AdminNotificationService:
                 )
             elif automatic:
                 initiator_line = texts.t('ADMIN_NOTIFY_133', '🤖 Автоматическое назначение')
-            user_display = self._get_user_display(user)
-            user_id_label = self._get_user_identifier_label(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_display = self._get_user_display(user, texts=texts)
+            user_id_label = self._get_user_identifier_label(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
 
             message_lines = [
                 f'{title}',
                 '',
                 texts.t('ADMIN_NOTIFY_059', '👤 <b>Пользователь:</b> {v0}').format(v0=user_display),
                 f'🆔 <b>{user_id_label}:</b> {user_id_display}',
-                f'📱 <b>Username:</b> {format_username_link(getattr(user, "username", None), texts.t("ADMIN_NOTIFY_088", "отсутствует"))}',
+                texts.t('ADMIN_NOTIFY_USERNAME_LINE', '📱 <b>Username:</b> {username}').format(
+                    username=format_username_link(getattr(user, 'username', None), texts.t('ADMIN_NOTIFY_088', 'отсутствует'))
+                ),
                 '',
                 self._format_promo_group_block(
                     new_group, title=texts.t('ADMIN_NOTIFY_180', 'Новая промогруппа'), icon='🏆', texts=texts
@@ -1970,9 +1991,9 @@ class AdminNotificationService:
         """
         texts = await self._notification_texts()
         try:
-            user_display = self._get_user_display(user)
-            user_id_label = self._get_user_identifier_label(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_display = self._get_user_display(user, texts=texts)
+            user_id_label = self._get_user_identifier_label(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
             username = format_username_link(getattr(user, 'username', None), texts.t('ADMIN_NOTIFY_088', 'отсутствует'))
             subscription_line = f'#{subscription.id}'
             if tariff_name:
@@ -2050,6 +2071,7 @@ class AdminNotificationService:
 
     def _get_payment_method_display(self, payment_method: str | None, texts: Texts | None = None) -> str:
         # The no-context form is also persisted in historical subscription events.
+        localized_display = texts is not None
         texts = texts or get_texts('ru')
         if not payment_method:
             return texts.t('ADMIN_NOTIFY_025', '💰 С баланса')
@@ -2082,6 +2104,23 @@ class AdminNotificationService:
             'balance': texts.t('ADMIN_NOTIFY_025', '💰 С баланса'),
         }
 
+        if localized_display:
+            for method in (
+                'riopay', 'severpay', 'rollypay', 'overpay', 'aurapay',
+                'etoplatezhi', 'antilopay', 'jupiter', 'donut', 'lava',
+            ):
+                name = getattr(settings, f'get_{method}_display_name')()
+                method_names[method] = texts.t('ADMIN_NOTIFY_PAYMENT_PROVIDER', '💳 {name}').format(
+                    name=html.escape(name)
+                )
+            method_names['apple_iap'] = texts.t('ADMIN_NOTIFY_PAYMENT_APPLE_IAP', '🍎 Apple in-app purchase')
+            method_names['platega_recurrent'] = texts.t(
+                'ADMIN_NOTIFY_PAYMENT_PLATEGA_RECURRENT', '💳 {name} (recurring payment)'
+            ).format(name=html.escape(settings.get_platega_display_name()))
+            if payment_method not in method_names:
+                return texts.t('ADMIN_NOTIFY_PAYMENT_UNKNOWN', '💳 Unknown payment method ({code})').format(
+                    code=html.escape(payment_method)
+                )
         return method_names.get(payment_method, f'💳 {html.escape(payment_method)}')
 
     def _format_traffic(self, traffic_gb: int, texts: Texts | None = None) -> str:
@@ -2448,8 +2487,8 @@ class AdminNotificationService:
             return False
 
         try:
-            user_display = self._get_user_display(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_display = self._get_user_display(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
 
             # Определяем заголовок по типу операции
             update_titles = {
@@ -2577,8 +2616,8 @@ class AdminNotificationService:
                         'ADMIN_NOTIFY_159',
                         '• {v0} ({v1}) · #{v2}{v3}: {v4} устр. при лимите {v5}, за {v6} дн. в работе {v7}',
                     ).format(
-                        v0=self._get_user_display(user),
-                        v1=self._get_user_identifier_display(user),
+                        v0=self._get_user_display(user, texts=texts),
+                        v1=self._get_user_identifier_display(user, texts=texts),
                         v2=subscription.id,
                         v3=tariff_part,
                         v4=overflow.devices,
@@ -2660,8 +2699,8 @@ class AdminNotificationService:
             return False
 
         try:
-            user_display = self._get_user_display(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_display = self._get_user_display(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
 
             message_lines = [
                 texts.t('ADMIN_NOTIFY_101', '🤝 <b>ЗАЯВКА НА ПАРТНЁРКУ</b>'),
@@ -2742,8 +2781,8 @@ class AdminNotificationService:
             return False
 
         try:
-            user_display = self._get_user_display(user)
-            user_id_display = self._get_user_identifier_display(user)
+            user_display = self._get_user_display(user, texts=texts)
+            user_id_display = self._get_user_identifier_display(user, texts=texts)
 
             message_lines = [
                 texts.t('ADMIN_NOTIFY_102', '💸 <b>ЗАПРОС НА ВЫВОД СРЕДСТВ</b>'),
@@ -2819,8 +2858,11 @@ class AdminNotificationService:
             from app.keyboards.withdrawal import get_withdrawal_request_keyboard
 
             user = getattr(request, 'user', None)
-            user_display = self._get_user_display(user) if user else 'Unknown'
-            user_id_display = self._get_user_identifier_display(user) if user else '—'
+            user_display = (
+                self._get_user_display(user, texts=texts)
+                if user else texts.t('ADMIN_NOTIFY_USER_UNKNOWN_FALLBACK', 'Unknown')
+            )
+            user_id_display = self._get_user_identifier_display(user, texts=texts) if user else '—'
             username = getattr(user, 'username', None) if user else None
 
             message_lines = [
@@ -2832,7 +2874,11 @@ class AdminNotificationService:
                 ),
             ]
             if username:
-                message_lines.append(f'📱 <b>Username:</b> {format_username_link(username)}')
+                message_lines.append(
+                    texts.t('ADMIN_NOTIFY_USERNAME_LINE', '📱 <b>Username:</b> {username}').format(
+                        username=format_username_link(username)
+                    )
+                )
             message_lines.extend(
                 [
                     texts.t('ADMIN_NOTIFY_166', '💵 <b>Сумма:</b> {v0}').format(

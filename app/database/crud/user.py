@@ -1835,8 +1835,11 @@ async def verify_and_apply_email_change(db: AsyncSession, user: User, code: str)
     Returns:
         Tuple of (success: bool, message: str)
     """
+    from app.localization.texts import get_texts
+
+    texts = get_texts(user.language)
     if not user.email_change_new or not user.email_change_code:
-        return False, 'No pending email change'
+        return False, texts.t('CABINET_AUTH_NO_PENDING_EMAIL_CHANGE', 'No pending email change')
 
     if user.email_change_expires and datetime.now(UTC) > user.email_change_expires:
         # Clear expired data
@@ -1844,10 +1847,10 @@ async def verify_and_apply_email_change(db: AsyncSession, user: User, code: str)
         user.email_change_code = None
         user.email_change_expires = None
         await db.commit()
-        return False, 'Verification code has expired'
+        return False, texts.t('CABINET_EMAIL_CHANGE_CODE_EXPIRED', 'Verification code has expired')
 
     if not hmac.compare_digest(str(user.email_change_code), str(code)):
-        return False, 'Invalid verification code'
+        return False, texts.t('CABINET_AUTH_INVALID_CONFIRMATION_CODE', 'Invalid verification code')
 
     # Check if new email is still available
     existing = await get_user_by_email(db, user.email_change_new)
@@ -1856,7 +1859,7 @@ async def verify_and_apply_email_change(db: AsyncSession, user: User, code: str)
         user.email_change_code = None
         user.email_change_expires = None
         await db.commit()
-        return False, 'This email is already taken'
+        return False, texts.t('CABINET_AUTH_EMAIL_ALREADY_REGISTERED', 'This email is already taken')
 
     old_email = user.email
     new_email = user.email_change_new
@@ -1876,7 +1879,7 @@ async def verify_and_apply_email_change(db: AsyncSession, user: User, code: str)
     await db.refresh(user)
 
     logger.info('Email changed for user', user_id=user.id, old_email=old_email, new_email=new_email)
-    return True, 'Email changed successfully'
+    return True, texts.t('CABINET_EMAIL_CHANGE_SUCCESS', 'Email changed successfully')
 
 
 async def clear_email_change_pending(db: AsyncSession, user: User) -> None:

@@ -23,7 +23,7 @@ from app.database.crud.user import verify_and_apply_email_change
 
 
 def _user() -> SimpleNamespace:
-    return SimpleNamespace(id=1, email='owner@example.com', email_verified=True)
+    return SimpleNamespace(id=1, email='owner@example.com', email_verified=True, language='fa')
 
 
 def _db() -> AsyncMock:
@@ -110,6 +110,7 @@ async def test_request_change_rejects_unowned_admin_email() -> None:
 async def test_verify_and_apply_rejects_wrong_code_and_applies_correct() -> None:
     pending = SimpleNamespace(
         id=1,
+        language='fa',
         email='old@example.com',
         email_change_new='new@example.com',
         email_change_code='654321',

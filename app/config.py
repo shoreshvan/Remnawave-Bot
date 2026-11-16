@@ -4102,10 +4102,21 @@ class Settings(BaseSettings):
             return [30, 60, 90, 180, 360]
 
     def get_balance_payment_description(
-        self, amount_kopeks: int, telegram_user_id: int | None = None, user_db_id: int | None = None
+        self, amount_kopeks: int, telegram_user_id: int | None = None, user_db_id: int | None = None,
+        *, language: str | None = None,
     ) -> str:
         # Базовое описание
         description = f'{self.PAYMENT_BALANCE_DESCRIPTION} на {self.format_price(amount_kopeks)}'
+        if language == 'fa':
+            from app.localization.texts import get_texts
+
+            texts = get_texts(language)
+            label = self.PAYMENT_BALANCE_DESCRIPTION
+            if label == type(self).model_fields['PAYMENT_BALANCE_DESCRIPTION'].default:
+                label = texts.t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'شارژ موجودی')
+            description = texts.t('PAYMENT_BALANCE_DESCRIPTION_AMOUNT', '{description} به مبلغ {amount}').format(
+                description=label, amount=self.format_price(amount_kopeks),
+            )
 
         # Добавляем идентификатор пользователя (TG ID приоритет, fallback на DB ID)
         if telegram_user_id is not None:
