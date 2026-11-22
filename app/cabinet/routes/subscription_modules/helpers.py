@@ -52,7 +52,7 @@ async def resolve_subscription(
     if subscription_id and settings.is_multi_tariff_enabled():
         subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
         if not subscription:
-            raise HTTPException(status_code=404, detail='Subscription not found')
+            raise HTTPException(status_code=404, detail=get_texts(user.language).t('CABINET_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'))
         return subscription
 
     if settings.is_multi_tariff_enabled() and not subscription_id:
@@ -110,7 +110,7 @@ def _apply_addon_discount(
     }
 
 
-def ensure_subscription_has_tariff(subscription: Any) -> None:
+def ensure_subscription_has_tariff(subscription: Any, *, language: str | None = None) -> None:
     """Докупки старой подписке не продаются — сперва переход на тариф.
 
     Старая подписка (платная, без тарифа при включённых тарифах) считала бы
@@ -121,7 +121,7 @@ def ensure_subscription_has_tariff(subscription: Any) -> None:
     if is_legacy_subscription(subscription):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'tariff_required', 'message': 'Subscription has no tariff. Choose a tariff first.'},
+            detail={'code': 'tariff_required', 'message': get_texts(language).t('CABINET_SUBSCRIPTION_CHOOSE_TARIFF_FIRST', 'Subscription has no tariff. Choose a tariff first.')},
         )
 
 

@@ -59,6 +59,7 @@ from ..auth.telegram_auth import (
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 from ..ip_utils import get_client_ip
 from ..utils.request_language import get_request_language
+from ..utils.persian_auth_route import PersianAuthRoute
 from ..schemas.auth import UserResponse
 from .auth import _create_auth_response, _store_refresh_token, _user_to_response
 
@@ -442,7 +443,7 @@ async def _exchange_and_link_oauth(
 # Router 1: Account linking (JWT required)
 # ---------------------------------------------------------------------------
 
-router = APIRouter(prefix='/auth/account', tags=['Cabinet Account Linking'])
+router = APIRouter(prefix='/auth/account', tags=['Cabinet Account Linking'], route_class=PersianAuthRoute)
 
 
 @router.get('/linked-providers', response_model=LinkedProvidersResponse)

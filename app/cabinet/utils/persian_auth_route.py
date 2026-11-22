@@ -11,7 +11,8 @@ from app.localization.texts import get_texts
 class PersianAuthRoute(APIRoute):
     def get_route_handler(self):
         handler = super().get_route_handler()
-        if not self.path.endswith(('/auth/email/change', '/auth/email/change/verify',
+        account_link = '/auth/account/link/' in self.path or '/auth/account/unlink/' in self.path
+        if not account_link and not self.path.endswith(('/auth/email/change', '/auth/email/change/verify',
                                    '/auth/email/change/cancel', '/auth/email/change/status', '/auth/deeplink/poll')):
             return handler
 
@@ -31,6 +32,30 @@ class PersianAuthRoute(APIRoute):
                         key = 'CABINET_INPUT_REQUIRED'
                     elif kind == 'json_invalid':
                         key = 'CABINET_INPUT_JSON_INVALID'
+                    elif account_link:
+                        reason = str(error.get('ctx', {}).get('error', ''))
+                        if reason.startswith('Provide exactly one of:'):
+                            key = 'CABINET_LINK_INPUT_MULTIPLE_METHODS'
+                        elif reason.startswith('Provide one of:'):
+                            key = 'CABINET_LINK_TELEGRAM_PROVIDE_ONE'
+                        elif reason == 'Login Widget mode requires id, auth_date, and hash fields':
+                            key = 'CABINET_LINK_INPUT_WIDGET_INCOMPLETE'
+                        elif field == ('provider',):
+                            key = 'CABINET_LINK_INPUT_PROVIDER_INVALID'
+                        elif field == ('code',):
+                            key = 'CABINET_LINK_INPUT_CODE_INVALID'
+                        elif field == ('state',):
+                            key = 'CABINET_LINK_INPUT_STATE_INVALID'
+                        elif kind in {'int_parsing', 'int_type', 'int_from_float'}:
+                            key = 'CABINET_LINK_INPUT_INTEGER_REQUIRED'
+                        elif kind == 'string_too_long':
+                            key = 'CABINET_LINK_INPUT_TOO_LONG'
+                        elif field == ('hash',):
+                            key = 'CABINET_LINK_INPUT_HASH_INVALID'
+                        elif kind == 'string_type':
+                            key = 'CABINET_LINK_INPUT_TEXT_REQUIRED'
+                        else:
+                            key = 'CABINET_INPUT_BODY_INVALID'
                     elif field == ('new_email',):
                         key = 'CABINET_INPUT_EMAIL_INVALID'
                     elif field == ('code',):
@@ -42,6 +67,8 @@ class PersianAuthRoute(APIRoute):
                     else:
                         key = 'CABINET_INPUT_BODY_INVALID'
                     error['msg'] = texts.t(key, 'Invalid request input')
+                    if key == 'CABINET_LINK_INPUT_TOO_LONG':
+                        error['msg'] = error['msg'].format(limit=error['ctx']['max_length'])
                     if 'ctx' in error:
                         error['ctx'] = dict(error['ctx'])
                         for name in ('reason', 'error'):
