@@ -8,12 +8,12 @@ from typing import Any
 import structlog
 
 from app.config import settings
+from app.localization.texts import get_texts
 
 # Используем локальную исправленную версию библиотеки
 from app.lib.nalogo import Client
 from app.lib.nalogo.dto.income import IncomeClient, IncomeType
 from app.lib.nalogo.exceptions import UnauthorizedException
-from app.localization.texts import get_texts
 from app.utils.cache import cache
 from app.utils.proxy import mask_proxy_url, sanitize_proxy_error
 

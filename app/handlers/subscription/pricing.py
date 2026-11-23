@@ -1,3 +1,4 @@
+from app.utils.progress_bar import colored_progress_bar
 import html
 from datetime import UTC, datetime
 from typing import Any
@@ -13,7 +14,7 @@ from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import get_display_subscription_link
 from app.utils.timezone import format_local_datetime
 
-from .common import logger
+from .common import hide_subscription_device_row, logger
 from .countries import _get_available_countries, _get_countries_info
 from .devices import get_current_devices_count
 from .promo import _build_promo_group_discount_text, _get_promo_offer_hint
@@ -351,13 +352,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
     info_template = texts.SUBSCRIPTION_INFO
 
     if not devices_selection_enabled:
-        info_template = info_template.replace(
-            '\n📱 <b>Устройства:</b> {devices_used} / {devices_limit}',
-            '',
-        ).replace(
-            '\n📱 <b>Devices:</b> {devices_used} / {devices_limit}',
-            '',
-        )
+        info_template = hide_subscription_device_row(info_template)
 
     info_text = info_template.format(
         status=status_text,
@@ -410,9 +405,7 @@ async def get_subscription_info_text(subscription, texts, db_user, db: AsyncSess
                     max(0.0, (elapsed_seconds / total_duration_seconds * 100) if total_duration_seconds > 0 else 0),
                 )
 
-                bar_length = 10
-                filled = int((progress_percent / 100) * bar_length)
-                bar = '▰' * filled + '▱' * (bar_length - filled)
+                bar = colored_progress_bar(progress_percent)
 
                 # Форматируем дату истечения
                 expire_date = format_local_datetime(purchase.expires_at, '%d.%m.%Y')

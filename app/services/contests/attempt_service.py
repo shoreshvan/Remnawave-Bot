@@ -53,12 +53,16 @@ class ContestAttemptService:
         Returns:
             AttemptResult with outcome details
         """
+        from app.localization.texts import get_texts
+
+        texts = get_texts(language)
+
         tpl = round_obj.template
         if not tpl:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message='Конкурс не найден',
+                message=texts.t('CONTEST_NOT_FOUND', 'Конкурс не найден'),
             )
 
         # Check if user already played
@@ -67,7 +71,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message='У вас уже была попытка',
+                message=texts.t('CONTEST_ATTEMPT_ALREADY_USED', 'У вас уже была попытка'),
                 already_played=True,
             )
 
@@ -77,7 +81,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message='Тип игры не поддерживается',
+                message=texts.t('CONTEST_GAME_TYPE_UNSUPPORTED', 'Тип игры не поддерживается'),
             )
 
         check_result = strategy.check_answer(pick, round_obj.payload or {}, language)
@@ -108,13 +112,15 @@ class ContestAttemptService:
             return AttemptResult(
                 success=True,
                 is_winner=True,
-                message=f'🎉 Победа! {prize_msg}' if prize_msg else '🎉 Победа!',
+                message=texts.t('CONTEST_WIN_WITH_PRIZE', '🎉 Победа! {prize}').format(prize=prize_msg)
+                if prize_msg
+                else texts.t('CONTEST_WIN_NO_PRIZE', '🎉 Победа!'),
             )
 
         return AttemptResult(
             success=True,
             is_winner=False,
-            message=check_result.response_text or 'Неудача',
+            message=check_result.response_text or texts.t('CONTEST_ATTEMPT_FAILED', 'Неудача'),
         )
 
     async def process_text_attempt(
@@ -138,12 +144,16 @@ class ContestAttemptService:
         Returns:
             AttemptResult with outcome details
         """
+        from app.localization.texts import get_texts
+
+        texts = get_texts(language)
+
         tpl = round_obj.template
         if not tpl:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message='Конкурс не найден',
+                message=texts.t('CONTEST_NOT_FOUND', 'Конкурс не найден'),
             )
 
         # For text games, attempt should already exist (created in render phase)
@@ -152,7 +162,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message='Сначала начните игру',
+                message=texts.t('CONTEST_START_GAME_FIRST', 'Сначала начните игру'),
             )
 
         # Check if already answered
@@ -160,7 +170,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message='У вас уже была попытка',
+                message=texts.t('CONTEST_ATTEMPT_ALREADY_USED', 'У вас уже была попытка'),
                 already_played=True,
             )
 
@@ -170,7 +180,7 @@ class ContestAttemptService:
             return AttemptResult(
                 success=False,
                 is_winner=False,
-                message='Тип игры не поддерживается',
+                message=texts.t('CONTEST_GAME_TYPE_UNSUPPORTED', 'Тип игры не поддерживается'),
             )
 
         check_result = strategy.check_answer(text_answer, round_obj.payload or {}, language)
@@ -195,13 +205,16 @@ class ContestAttemptService:
             return AttemptResult(
                 success=True,
                 is_winner=True,
-                message=f'🎉 Победа! {prize_msg}' if prize_msg else '🎉 Победа!',
+                message=texts.t('CONTEST_WIN_WITH_PRIZE', '🎉 Победа! {prize}').format(prize=prize_msg)
+                if prize_msg
+                else texts.t('CONTEST_WIN_NO_PRIZE', '🎉 Победа!'),
             )
 
         return AttemptResult(
             success=True,
             is_winner=False,
-            message=check_result.response_text or 'Неверно, попробуй в следующем раунде',
+            message=check_result.response_text
+            or texts.t('CONTEST_ANSWER_WRONG_NEXT_ROUND', 'Неверно, попробуй в следующем раунде'),
         )
 
     async def create_pending_attempt(
@@ -310,7 +323,9 @@ class ContestAttemptService:
             tariff_name = getattr(subscription.tariff, 'name', None) if subscription.tariff else None
             prize_text = texts.t('CONTEST_PRIZE_GRANTED', 'Бонус {days} дней зачислен!').format(days=days)
             if tariff_name:
-                prize_text += f' (подписка "{tariff_name}")'
+                prize_text += texts.t('CONTEST_PRIZE_SUBSCRIPTION_SUFFIX', ' (подписка "{name}")').format(
+                    name=tariff_name
+                )
             return prize_text
 
         if prize_type == PrizeType.BALANCE.value:

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user
 
@@ -129,7 +130,10 @@ async def send_test_notification(
     # For now, just return success
     return {
         'success': True,
-        'message': 'Test notification request received. You will receive a test message shortly.',
+        'message': get_texts().t(
+            'CABINET_NOTIFICATIONS_TEST_SENT',
+            'Test notification request received. You will receive a test message shortly.',
+        ),
     }
 
 

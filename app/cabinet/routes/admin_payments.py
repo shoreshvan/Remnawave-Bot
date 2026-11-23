@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot_factory import create_bot
 from app.database.models import PaymentMethod, User
+from app.localization.texts import get_texts
 from app.services.payment_search_service import (
     MAX_ALL_TIME_DAYS,
     PeriodPreset,

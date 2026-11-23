@@ -15,6 +15,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.database.crud.system_setting import get_setting_value
 from app.services.system_settings_service import BotConfigurationService
 
@@ -45,11 +46,14 @@ async def is_email_auth_enabled(db: AsyncSession) -> bool:
     return settings.is_cabinet_email_auth_enabled()
 
 
-async def require_email_auth_enabled(db: AsyncSession) -> None:
+async def require_email_auth_enabled(db: AsyncSession, *, language: str | None = None) -> None:
     """Первый шаг любого email/password-роута: до rate-limit и до таблицы users."""
     if await is_email_auth_enabled(db):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail={'code': EMAIL_AUTH_DISABLED_CODE, 'message': 'Email authentication is disabled'},
+        detail={
+            'code': EMAIL_AUTH_DISABLED_CODE,
+            'message': get_texts(language).t('CABINET_EMAIL_AUTH_DISABLED', 'Email authentication is disabled'),
+        },
     )

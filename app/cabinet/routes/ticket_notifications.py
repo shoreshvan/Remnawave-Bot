@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.ticket_notification import TicketNotificationCRUD
 from app.database.models import User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, require_permission
 
@@ -51,7 +52,12 @@ class UnreadCountResponse(BaseModel):
 # User endpoints
 @router.get('', response_model=TicketNotificationListResponse)
 async def get_user_notifications(
-    unread_only: bool = Query(False, description='Only return unread notifications'),
+    unread_only: bool = Query(
+        False,
+        description=get_texts().t(
+            'CABINET_TICKET_NOTIFICATIONS_UNREAD_ONLY_DESC', 'Only return unread notifications'
+        ),
+    ),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_cabinet_user),
@@ -86,19 +92,23 @@ async def mark_notification_as_read(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Mark a notification as read."""
+    texts = get_texts(user.language)
     # Security: Verify notification belongs to current user and is not an admin notification
     notification = await TicketNotificationCRUD.get_by_id(db, notification_id)
     if not notification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Notification not found',
+            detail=texts.t('CABINET_TICKET_NOTIFICATIONS_NOT_FOUND', 'Notification not found'),
         )
 
     # Check ownership: notification must belong to user and not be an admin notification
     if notification.user_id != user.id or notification.is_for_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to mark this notification as read",
+            detail=texts.t(
+                'CABINET_TICKET_NOTIFICATIONS_NO_PERMISSION',
+                "You don't have permission to mark this notification as read",
+            ),
         )
 
     await TicketNotificationCRUD.mark_as_read(db, notification_id)
@@ -129,7 +139,12 @@ async def mark_ticket_notifications_as_read(
 # Admin endpoints
 @admin_router.get('', response_model=TicketNotificationListResponse)
 async def get_admin_notifications(
-    unread_only: bool = Query(False, description='Only return unread notifications'),
+    unread_only: bool = Query(
+        False,
+        description=get_texts().t(
+            'CABINET_TICKET_NOTIFICATIONS_UNREAD_ONLY_DESC', 'Only return unread notifications'
+        ),
+    ),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     admin: User = Depends(require_permission('tickets:read')),
@@ -164,19 +179,20 @@ async def mark_admin_notification_as_read(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Mark an admin notification as read."""
+    texts = get_texts(admin.language)
     # Security: Verify notification exists and is an admin notification
     notification = await TicketNotificationCRUD.get_by_id(db, notification_id)
     if not notification:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Notification not found',
+            detail=texts.t('CABINET_TICKET_NOTIFICATIONS_NOT_FOUND', 'Notification not found'),
         )
 
     # Check that this is actually an admin notification
     if not notification.is_for_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='This is not an admin notification',
+            detail=texts.t('CABINET_TICKET_NOTIFICATIONS_NOT_ADMIN', 'This is not an admin notification'),
         )
 
     await TicketNotificationCRUD.mark_as_read(db, notification_id)

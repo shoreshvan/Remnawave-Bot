@@ -18,6 +18,7 @@ from app.database.crud.saved_payment_method import (
 from app.database.crud.user import get_user_by_id
 from app.database.models import PaymentMethod, Transaction, User
 from app.localization.texts import get_texts
+from app.utils.transaction_description import localize_transaction_description
 from app.services.payment_method_config_service import get_enabled_methods_for_user
 from app.services.payment_service import PaymentService
 from app.services.payment_verification_service import (
@@ -116,7 +117,7 @@ async def get_transactions(
                 type=t.type,
                 amount_kopeks=amount_kopeks,
                 amount_rubles=amount_kopeks / 100,
-                description=t.description,
+                description=localize_transaction_description(t.description, user.language),
                 payment_method=t.payment_method,
                 is_completed=t.is_completed,
                 created_at=t.created_at,
@@ -233,23 +234,24 @@ async def create_stars_invoice(
     Создать Telegram Stars invoice для пополнения баланса.
     Используется в Telegram Mini App для прямой оплаты Stars.
     """
+    texts = get_texts(user.language)
     if not settings.TELEGRAM_STARS_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Telegram Stars payments are not enabled',
+            detail=texts.t('CABINET_BALANCE_STARS_NOT_ENABLED', 'Telegram Stars payments are not enabled'),
         )
 
     # Validate amount
-    if request.amount_kopeks < 100:
+    if request.amount_kopeks < 1000000:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Minimum amount is 1.00 RUB',
+            detail=texts.t('CABINET_BALANCE_STARS_MIN_AMOUNT', 'Minimum amount is 10000 تومان'),
         )
 
-    if request.amount_kopeks > 1000000:
+    if request.amount_kopeks > 2000000000:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Maximum amount is 10,000.00 RUB',
+            detail=texts.t('CABINET_BALANCE_STARS_MAX_AMOUNT', 'Maximum amount is 20000000 تومان'),
         )
 
     # Calculate Stars amount and normalize kopeks to match exact star value
@@ -266,7 +268,7 @@ async def create_stars_invoice(
         logger.error('Error calculating Stars amount', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to calculate Stars amount',
+            detail=texts.t('CABINET_BALANCE_STARS_CALC_FAILED', 'Failed to calculate Stars amount'),
         )
 
     # Create payload for tracking payment
@@ -307,7 +309,7 @@ async def create_stars_invoice(
         logger.error('Error creating Stars invoice', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to create Stars invoice',
+            detail=texts.t('CABINET_BALANCE_STARS_INVOICE_FAILED', 'Failed to create Stars invoice'),
         )
 
 
@@ -318,10 +320,11 @@ async def create_topup(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create payment for balance top-up."""
+    texts = get_texts(user.language)
     if getattr(user, 'restriction_topup', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Balance top-up is restricted for this account',
+            detail=texts.t('CABINET_BALANCE_TOPUP_RESTRICTED', 'Balance top-up is restricted for this account'),
         )
 
     # Validate payment method
@@ -331,20 +334,24 @@ async def create_topup(
     if not method or not method.is_available:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid or unavailable payment method',
+            detail=texts.t('CABINET_BALANCE_TOPUP_INVALID_METHOD', 'Invalid or unavailable payment method'),
         )
 
     # Validate amount
     if request.amount_kopeks < method.min_amount_kopeks:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Minimum amount is {method.min_amount_kopeks / 100:.2f} RUB',
+            detail=texts.t('CABINET_BALANCE_TOPUP_MIN_AMOUNT', 'Minimum amount is {amount} تومان').format(
+                amount=f'{method.min_amount_kopeks / 100:.2f}'
+            ),
         )
 
     if request.amount_kopeks > method.max_amount_kopeks:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Maximum amount is {method.max_amount_kopeks / 100:.2f} RUB',
+            detail=texts.t('CABINET_BALANCE_TOPUP_MAX_AMOUNT', 'Maximum amount is {amount} تومان').format(
+                amount=f'{method.max_amount_kopeks / 100:.2f}'
+            ),
         )
 
     amount_rubles = request.amount_kopeks / 100
@@ -396,14 +403,16 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create YooKassa payment',
+                    detail=texts.t('CABINET_BALANCE_YOOKASSA_FAILED', 'Failed to create YooKassa payment'),
                 )
 
         elif request.payment_method == 'cryptobot':
             if not settings.is_cryptobot_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='CryptoBot payment method is unavailable',
+                    detail=texts.t(
+                        'CABINET_BALANCE_CRYPTOBOT_UNAVAILABLE', 'CryptoBot payment method is unavailable'
+                    ),
                 )
 
             try:
@@ -422,7 +431,7 @@ async def create_topup(
             except (InvalidOperation, ValueError):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Unable to convert amount to USD',
+                    detail=texts.t('CABINET_BALANCE_CRYPTOBOT_CONVERT_FAILED', 'Unable to convert amount to USD'),
                 )
 
             payment_service = PaymentService()
@@ -446,7 +455,7 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create CryptoBot invoice',
+                    detail=texts.t('CABINET_BALANCE_CRYPTOBOT_FAILED', 'Failed to create CryptoBot invoice'),
                 )
 
         elif request.payment_method == 'telegram_stars':
@@ -454,21 +463,24 @@ async def create_topup(
             bot_username = settings.get_bot_username() or 'bot'
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Telegram Stars payments are only available through the bot. Please use @{bot_username}',
+                detail=texts.t(
+                    'CABINET_BALANCE_STARS_BOT_ONLY',
+                    'Telegram Stars payments are only available through the bot. Please use @{bot_username}',
+                ).format(bot_username=bot_username),
             )
 
         elif request.payment_method == 'platega':
             if not settings.is_platega_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Platega payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_PLATEGA_UNAVAILABLE', 'Platega payment method is unavailable'),
                 )
 
             active_methods = settings.get_platega_active_methods()
             if not active_methods:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='No Platega payment methods configured',
+                    detail=texts.t('CABINET_BALANCE_PLATEGA_NO_METHODS', 'No Platega payment methods configured'),
                 )
 
             # Use payment_option if provided, otherwise use first active method
@@ -478,13 +490,15 @@ async def create_topup(
             except (TypeError, ValueError):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Invalid Platega payment option',
+                    detail=texts.t('CABINET_BALANCE_PLATEGA_INVALID_OPTION', 'Invalid Platega payment option'),
                 )
 
             if method_code not in active_methods:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Selected Platega method is unavailable',
+                    detail=texts.t(
+                        'CABINET_BALANCE_PLATEGA_METHOD_UNAVAILABLE', 'Selected Platega method is unavailable'
+                    ),
                 )
 
             payment_service = PaymentService()
@@ -507,14 +521,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Platega payment',
+                    detail=texts.t('CABINET_BALANCE_PLATEGA_FAILED', 'Failed to create Platega payment'),
                 )
 
         elif request.payment_method == 'heleket':
             if not settings.is_heleket_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Heleket payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_HELEKET_UNAVAILABLE', 'Heleket payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -536,14 +550,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Heleket payment',
+                    detail=texts.t('CABINET_BALANCE_HELEKET_FAILED', 'Failed to create Heleket payment'),
                 )
 
         elif request.payment_method == 'mulenpay':
             if not settings.is_mulenpay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='MulenPay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_MULENPAY_UNAVAILABLE', 'MulenPay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -563,14 +577,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create MulenPay payment',
+                    detail=texts.t('CABINET_BALANCE_MULENPAY_FAILED', 'Failed to create MulenPay payment'),
                 )
 
         elif request.payment_method == 'pal24':
             if not settings.is_pal24_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='PAL24 payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_PAL24_UNAVAILABLE', 'PAL24 payment method is unavailable'),
                 )
 
             # Use payment_option to select card or sbp (default: sbp)
@@ -611,14 +625,14 @@ async def create_topup(
             if not payment_url:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create PAL24 payment',
+                    detail=texts.t('CABINET_BALANCE_PAL24_FAILED', 'Failed to create PAL24 payment'),
                 )
 
         elif request.payment_method == 'wata':
             if not settings.is_wata_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Wata payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_WATA_UNAVAILABLE', 'Wata payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -640,14 +654,16 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Wata payment',
+                    detail=texts.t('CABINET_BALANCE_WATA_FAILED', 'Failed to create Wata payment'),
                 )
 
         elif request.payment_method == 'cloudpayments':
             if not settings.is_cloudpayments_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='CloudPayments payment method is unavailable',
+                    detail=texts.t(
+                        'CABINET_BALANCE_CLOUDPAYMENTS_UNAVAILABLE', 'CloudPayments payment method is unavailable'
+                    ),
                 )
 
             payment_service = PaymentService()
@@ -670,14 +686,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create CloudPayments payment',
+                    detail=texts.t('CABINET_BALANCE_CLOUDPAYMENTS_FAILED', 'Failed to create CloudPayments payment'),
                 )
 
         elif request.payment_method == 'freekassa':
             if not settings.is_freekassa_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='FreeKassa payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_FREEKASSA_UNAVAILABLE', 'FreeKassa payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -697,14 +713,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create FreeKassa payment',
+                    detail=texts.t('CABINET_BALANCE_FREEKASSA_FAILED', 'Failed to create FreeKassa payment'),
                 )
 
         elif request.payment_method == 'kassa_ai':
             if not settings.is_kassa_ai_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='KassaAI payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_KASSA_AI_UNAVAILABLE', 'KassaAI payment method is unavailable'),
                 )
 
             # Use payment_option to select sbp or card
@@ -731,14 +747,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create KassaAI payment',
+                    detail=texts.t('CABINET_BALANCE_KASSA_AI_FAILED', 'Failed to create KassaAI payment'),
                 )
 
         elif request.payment_method == 'riopay':
             if not settings.is_riopay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='RioPay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_RIOPAY_UNAVAILABLE', 'RioPay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -760,14 +776,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create RioPay payment',
+                    detail=texts.t('CABINET_BALANCE_RIOPAY_FAILED', 'Failed to create RioPay payment'),
                 )
 
         elif request.payment_method == 'tribute':
             if not settings.TRIBUTE_ENABLED or not settings.TRIBUTE_DONATE_LINK:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Tribute payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_TRIBUTE_UNAVAILABLE', 'Tribute payment method is unavailable'),
                 )
 
             user_identifier = user.telegram_id or user.id
@@ -778,7 +794,7 @@ async def create_topup(
             if not settings.is_severpay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='SeverPay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_SEVERPAY_UNAVAILABLE', 'SeverPay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -800,14 +816,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create SeverPay payment',
+                    detail=texts.t('CABINET_BALANCE_SEVERPAY_FAILED', 'Failed to create SeverPay payment'),
                 )
 
         elif request.payment_method == 'rollypay':
             if not settings.is_rollypay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='RollyPay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_ROLLYPAY_UNAVAILABLE', 'RollyPay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -831,14 +847,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create RollyPay payment',
+                    detail=texts.t('CABINET_BALANCE_ROLLYPAY_FAILED', 'Failed to create RollyPay payment'),
                 )
 
         elif request.payment_method == 'overpay':
             if not settings.is_overpay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Overpay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_OVERPAY_UNAVAILABLE', 'Overpay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -846,7 +862,7 @@ async def create_topup(
             if option is not None and option not in ('fps', 'card', 'int'):
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail='Invalid Overpay payment_option',
+                    detail=texts.t('CABINET_BALANCE_OVERPAY_INVALID_OPTION', 'Invalid Overpay payment_option'),
                 )
             result = await payment_service.create_overpay_payment(
                 db=db,
@@ -867,14 +883,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Overpay payment',
+                    detail=texts.t('CABINET_BALANCE_OVERPAY_FAILED', 'Failed to create Overpay payment'),
                 )
 
         elif request.payment_method == 'aurapay':
             if not settings.is_aurapay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='AuraPay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_AURAPAY_UNAVAILABLE', 'AuraPay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -898,14 +914,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create AuraPay payment',
+                    detail=texts.t('CABINET_BALANCE_AURAPAY_FAILED', 'Failed to create AuraPay payment'),
                 )
 
         elif request.payment_method == 'jupiter':
             if not settings.is_jupiter_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Jupiter payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_JUPITER_UNAVAILABLE', 'Jupiter payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -929,14 +945,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Jupiter payment',
+                    detail=texts.t('CABINET_BALANCE_JUPITER_FAILED', 'Failed to create Jupiter payment'),
                 )
 
         elif request.payment_method == 'donut':
             if not settings.is_donut_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Donut payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_DONUT_UNAVAILABLE', 'Donut payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -960,14 +976,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Donut payment',
+                    detail=texts.t('CABINET_BALANCE_DONUT_FAILED', 'Failed to create Donut payment'),
                 )
 
         elif request.payment_method == 'lava':
             if not settings.is_lava_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Lava payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_LAVA_UNAVAILABLE', 'Lava payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -996,14 +1012,14 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create Lava payment',
+                    detail=texts.t('CABINET_BALANCE_LAVA_FAILED', 'Failed to create Lava payment'),
                 )
 
         elif request.payment_method == 'cispay':
             if not settings.is_cispay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='CisPay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_CISPAY_UNAVAILABLE', 'CisPay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -1035,7 +1051,7 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create CisPay payment',
+                    detail=texts.t('CABINET_BALANCE_CISPAY_FAILED', 'Failed to create CisPay payment'),
                 )
 
         elif request.payment_method == 'cashera':
@@ -1154,7 +1170,7 @@ async def create_topup(
             if not settings.is_tabpay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='TabPay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_TABPAY_UNAVAILABLE', 'TabPay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -1179,7 +1195,7 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create TabPay payment',
+                    detail=texts.t('CABINET_BALANCE_TABPAY_FAILED', 'Failed to create TabPay payment'),
                 )
 
         elif request.payment_method == 'antilopay':
@@ -1228,7 +1244,7 @@ async def create_topup(
             if not settings.is_paritypay_enabled():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='ParityPay payment method is unavailable',
+                    detail=texts.t('CABINET_BALANCE_PARITYPAY_UNAVAILABLE', 'ParityPay payment method is unavailable'),
                 )
 
             payment_service = PaymentService()
@@ -1253,14 +1269,115 @@ async def create_topup(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to create ParityPay payment',
+                    detail=texts.t('CABINET_BALANCE_PARITYPAY_FAILED', 'Failed to create ParityPay payment'),
+                )
+
+        elif request.payment_method == 'hooshpay':
+            if not settings.is_hooshpay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=texts.t('CABINET_BALANCE_HOOSHPAY_UNAVAILABLE', 'HooshPay payment method is unavailable'),
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_hooshpay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id,
+                    language=user.language,
+                ),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                return_url=cabinet_success_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=texts.t('CABINET_BALANCE_HOOSHPAY_FAILED', 'Failed to create HooshPay payment'),
+                )
+
+        elif request.payment_method == 'tonpays':
+            # TonPays Telegram platform mandates buyer_chat_id and the receipt
+            # UX lives in Telegram — creation is bot-only for now. History and
+            # manual check below still work for bot-created invoices.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t(
+                    'CABINET_BALANCE_METHOD_BOT_ONLY',
+                    'This payment method is only available through the Telegram bot.',
+                ),
+            )
+
+        elif request.payment_method == 'atlaspay':
+            if not settings.is_atlaspay_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=texts.t('CABINET_BALANCE_ATLASPAY_UNAVAILABLE', 'AtlasPay payment method is unavailable'),
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_atlaspay_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                customer_telegram_id=getattr(user, 'telegram_id', None),
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id,
+                    language=user.language,
+                ),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=texts.t('CABINET_BALANCE_ATLASPAY_FAILED', 'Failed to create AtlasPay payment'),
+                )
+
+        elif request.payment_method == 'nowpayments':
+            if not settings.is_nowpayments_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=texts.t('CABINET_BALANCE_NOWPAYMENTS_UNAVAILABLE', 'NOWPayments payment method is unavailable'),
+                )
+
+            payment_service = PaymentService()
+            result = await payment_service.create_nowpayments_payment(
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.PAYMENT_BALANCE_TEMPLATE.format(
+                    service_name=settings.PAYMENT_SERVICE_NAME,
+                    description=texts.t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'شارژ موجودی'),
+                ),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=texts.t('CABINET_BALANCE_NOWPAYMENTS_FAILED', 'Failed to create NOWPayments payment'),
                 )
 
         else:
             # For other payment methods, redirect to bot
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='This payment method is only available through the Telegram bot.',
+                detail=texts.t(
+                    'CABINET_BALANCE_METHOD_BOT_ONLY',
+                    'This payment method is only available through the Telegram bot.',
+                ),
             )
 
     except HTTPException:
@@ -1269,13 +1386,13 @@ async def create_topup(
         logger.error('Payment creation error', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to create payment. Please try again later.',
+            detail=texts.t('CABINET_BALANCE_TOPUP_FAILED', 'Failed to create payment. Please try again later.'),
         )
 
     if not payment_url:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Payment URL not received',
+            detail=texts.t('CABINET_BALANCE_TOPUP_NO_URL', 'Payment URL not received'),
         )
 
     return TopUpResponse(
@@ -1290,6 +1407,33 @@ async def create_topup(
 
 
 def _get_status_info(record: PendingPayment) -> tuple[str, str]:
+    emoji, label = _get_status_info_legacy(record)
+    language = getattr(record.user, 'language', None)
+    if language != 'fa' or record.method not in {
+        PaymentMethod.ATLASPAY, PaymentMethod.HOOSHPAY, PaymentMethod.TONPAYS, PaymentMethod.NOWPAYMENTS,
+    }:
+        return emoji, label
+    keys = {
+        'Ожидает оплаты': 'ADMIN_PAYMENT_STATUS_PENDING',
+        'Оплачено': 'ADMIN_PAYMENT_STATUS_PAID',
+        'Истёк': 'ADMIN_PAYMENT_STATUS_EXPIRED',
+        'Отменён': 'ADMIN_PAYMENT_STATUS_CANCELED',
+        'Ошибка оплаты': 'CABINET_PAYMENT_STATUS_FAILED',
+        'Ошибка': 'ADMIN_PAYMENT_STATUS_FAILED',
+        'Отклонено': 'CABINET_PAYMENT_STATUS_REJECTED',
+        'Несовпадение суммы': 'CABINET_PAYMENT_STATUS_AMOUNT_MISMATCH',
+        'Ожидает подтверждения': 'CABINET_PAYMENT_STATUS_CONFIRMING',
+        'Требуется действие': 'CABINET_PAYMENT_STATUS_ACTION_REQUIRED',
+        'Проверка недоплаты': 'CABINET_PAYMENT_STATUS_UNDERPAID_REVIEW',
+        'Требуется проверка': 'CABINET_PAYMENT_STATUS_REVIEW',
+        'Подтверждается сетью': 'CABINET_PAYMENT_STATUS_NETWORK_CONFIRMING',
+        'Возвращён': 'CABINET_PAYMENT_STATUS_REFUNDED',
+        'Неизвестно': 'ADMIN_PAYMENT_STATUS_UNKNOWN',
+    }
+    return emoji, get_texts(language).t(keys[label])
+
+
+def _get_status_info_legacy(record: PendingPayment) -> tuple[str, str]:
     """Get status emoji and text for a pending payment."""
     status = (record.status or '').lower()
 
@@ -1529,6 +1673,62 @@ def _get_status_info(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.HOOSHPAY:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'success': ('✅', 'Оплачено'),
+            'expired': ('⌛', 'Истёк'),
+            'cancelled': ('❌', 'Отменён'),
+            'failed': ('❌', 'Ошибка оплаты'),
+            'declined': ('❌', 'Отклонено'),
+            'error': ('❌', 'Ошибка'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
+    if record.method == PaymentMethod.TONPAYS:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Ожидает подтверждения'),
+            'need_action': ('⚠️', 'Требуется действие'),
+            'success': ('✅', 'Оплачено'),
+            'rejected': ('❌', 'Отклонено'),
+            'expired': ('⌛', 'Истёк'),
+            'cancelled': ('❌', 'Отменён'),
+            'failed': ('❌', 'Ошибка оплаты'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
+    if record.method == PaymentMethod.ATLASPAY:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Ожидает подтверждения'),
+            'underpaid_review': ('⚠️', 'Проверка недоплаты'),
+            'success': ('✅', 'Оплачено'),
+            'manual_review': ('⚠️', 'Требуется проверка'),
+            'rejected': ('❌', 'Отклонено'),
+            'expired': ('⌛', 'Истёк'),
+            'cancelled': ('❌', 'Отменён'),
+            'failed': ('❌', 'Ошибка оплаты'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
+    if record.method == PaymentMethod.NOWPAYMENTS:
+        mapping = {
+            'pending': ('⏳', 'Ожидает оплаты'),
+            'processing': ('⌛', 'Подтверждается сетью'),
+            'success': ('✅', 'Оплачено'),
+            'manual_review': ('⚠️', 'Требуется проверка'),
+            'failed': ('❌', 'Ошибка оплаты'),
+            'refunded': ('↩️', 'Возвращён'),
+            'expired': ('⌛', 'Истёк'),
+            'cancelled': ('❌', 'Отменён'),
+            'amount_mismatch': ('⚠️', 'Несовпадение суммы'),
+        }
+        return mapping.get(status, ('❓', 'Неизвестно'))
+
     return '❓', 'Неизвестно'
 
 
@@ -1577,6 +1777,14 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status in {'pending', 'processing'}
     if record.method == PaymentMethod.PARITYPAY:
         return status == 'pending'
+    if record.method == PaymentMethod.HOOSHPAY:
+        return status == 'pending'
+    if record.method == PaymentMethod.TONPAYS:
+        return status in {'pending', 'processing', 'need_action'}
+    if record.method == PaymentMethod.ATLASPAY:
+        return status in {'pending', 'processing', 'underpaid_review'}
+    if record.method == PaymentMethod.NOWPAYMENTS:
+        return status in {'pending', 'processing'}
     return False
 
 
@@ -1639,10 +1847,11 @@ def _record_to_response(record: PendingPayment) -> PendingPaymentResponse:
     )
 
 
-@router.get('/pending-payments', response_model=PendingPaymentListResponse)
+@router.get('/pending-payments', response_model=PendingPaymentListResponse,
+            summary='فهرست پرداخت‌های در انتظار', description='نمایش پرداخت‌های در انتظار کاربر برای بررسی وضعیت پرداخت.')
 async def get_pending_payments(
-    page: int = Query(1, ge=1, description='Page number'),
-    per_page: int = Query(10, ge=1, le=50, description='Items per page'),
+    page: int = Query(1, ge=1, description='شمارهٔ صفحه'),
+    per_page: int = Query(10, ge=1, le=50, description='تعداد پرداخت‌ها در هر صفحه'),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -1670,19 +1879,21 @@ async def get_pending_payments(
     )
 
 
-@router.get('/pending-payments/{method}/latest', response_model=PendingPaymentResponse)
+@router.get('/pending-payments/{method}/latest', response_model=PendingPaymentResponse,
+            summary='آخرین پرداخت', description='نمایش آخرین پرداخت کاربر در یک ساعت گذشته برای روش پرداخت پشتیبانی‌شده.')
 async def get_latest_payment_by_method(
     method: str,
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's most recent payment for a given method (any status, not just pending)."""
+    texts = get_texts(user.language)
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid payment method: {method}',
+            detail=texts.t('CABINET_PAYMENT_INVALID_METHOD', 'روش پرداخت نامعتبر است'),
         )
 
     from datetime import UTC, datetime, timedelta
@@ -1692,14 +1903,17 @@ async def get_latest_payment_by_method(
     from app.database.models import (
         AnorePayment,
         AntilopayPayment,
+        AtlasPayPayment,
         AuraPayPayment,
         CisPayPayment,
         CloudPaymentsPayment,
         CryptoBotPayment,
         FreekassaPayment,
         HeleketPayment,
+        HooshPayPayment,
         KassaAiPayment,
         MulenPayPayment,
+        NowPaymentsPayment,
         OverpayPayment,
         Pal24Payment,
         PayHotPayment,
@@ -1707,11 +1921,16 @@ async def get_latest_payment_by_method(
         RioPayPayment,
         RollyPayPayment,
         SeverPayPayment,
+        TonPaysPayment,
         WataPayment,
         YooKassaPayment,
     )
 
     model_map: dict[PaymentMethod, type] = {
+        PaymentMethod.ATLASPAY: AtlasPayPayment,
+        PaymentMethod.HOOSHPAY: HooshPayPayment,
+        PaymentMethod.TONPAYS: TonPaysPayment,
+        PaymentMethod.NOWPAYMENTS: NowPaymentsPayment,
         PaymentMethod.CISPAY: CisPayPayment,
         PaymentMethod.PAYHOT: PayHotPayment,
         PaymentMethod.ANORE: AnorePayment,
@@ -1737,7 +1956,7 @@ async def get_latest_payment_by_method(
     if not model:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Unsupported payment method: {method}',
+            detail=texts.t('CABINET_PAYMENT_LATEST_UNSUPPORTED', 'نمایش آخرین پرداخت برای این روش پشتیبانی نمی‌شود'),
         )
 
     cutoff = datetime.now(UTC) - timedelta(hours=1)
@@ -1745,7 +1964,7 @@ async def get_latest_payment_by_method(
         select(model)
         .options(selectinload(model.user))
         .where(model.user_id == user.id, model.created_at >= cutoff)
-        .order_by(desc(model.created_at))
+        .order_by(desc(model.created_at), desc(model.id))
         .limit(1)
     )
     result = await db.execute(stmt)
@@ -1754,13 +1973,19 @@ async def get_latest_payment_by_method(
     if not payment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No recent payments found',
+            detail=texts.t('CABINET_PAYMENT_NO_RECENT', 'پرداختی در یک ساعت گذشته یافت نشد'),
         )
 
     record = PendingPayment(
         local_id=payment.id,
         method=payment_method,
-        identifier=str(getattr(payment, 'correlation_id', None) or payment.id),
+        identifier=str(
+            payment.order_id
+            if payment_method in {
+                PaymentMethod.ATLASPAY, PaymentMethod.HOOSHPAY, PaymentMethod.TONPAYS, PaymentMethod.NOWPAYMENTS,
+            }
+            else getattr(payment, 'correlation_id', None) or payment.id
+        ),
         amount_kopeks=payment.amount_kopeks,
         status=payment.status or '',
         is_paid=bool(payment.is_paid),
@@ -1773,7 +1998,8 @@ async def get_latest_payment_by_method(
     return _record_to_response(record)
 
 
-@router.get('/pending-payments/{method}/{payment_id}', response_model=PendingPaymentResponse)
+@router.get('/pending-payments/{method}/{payment_id}', response_model=PendingPaymentResponse,
+            summary='جزئیات پرداخت', description='نمایش جزئیات پرداخت متعلق به حساب کاربر.')
 async def get_pending_payment_details(
     method: str,
     payment_id: int,
@@ -1781,12 +2007,13 @@ async def get_pending_payment_details(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get details of a specific pending payment."""
+    texts = get_texts(user.language)
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid payment method: {method}',
+            detail=texts.t('CABINET_PAYMENT_INVALID_METHOD', 'روش پرداخت نامعتبر است'),
         )
 
     record = await get_payment_record(db, payment_method, payment_id)
@@ -1794,20 +2021,21 @@ async def get_pending_payment_details(
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Payment not found',
+            detail=texts.t('CABINET_BALANCE_PAYMENT_NOT_FOUND', 'پرداخت یافت نشد'),
         )
 
     # Check that payment belongs to the current user
     if not record.user or record.user.id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Access denied',
+            detail=texts.t('CABINET_BALANCE_ACCESS_DENIED', 'دسترسی رد شد'),
         )
 
     return _record_to_response(record)
 
 
-@router.post('/pending-payments/{method}/{payment_id}/check', response_model=ManualCheckResponse)
+@router.post('/pending-payments/{method}/{payment_id}/check', response_model=ManualCheckResponse,
+             summary='استعلام وضعیت پرداخت', description='استعلام و به‌روزرسانی وضعیت پرداخت متعلق به حساب کاربر.')
 async def check_payment_status(
     method: str,
     payment_id: int,
@@ -1815,12 +2043,13 @@ async def check_payment_status(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Manually check and update payment status."""
+    texts = get_texts(user.language)
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Invalid payment method: {method}',
+            detail=texts.t('CABINET_PAYMENT_INVALID_METHOD', 'روش پرداخت نامعتبر است'),
         )
 
     # Get current record
@@ -1829,21 +2058,21 @@ async def check_payment_status(
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Payment not found',
+            detail=texts.t('CABINET_BALANCE_PAYMENT_NOT_FOUND', 'پرداخت یافت نشد'),
         )
 
     # Check that payment belongs to the current user
     if not record.user or record.user.id != user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Access denied',
+            detail=texts.t('CABINET_BALANCE_ACCESS_DENIED', 'دسترسی رد شد'),
         )
 
     # Check if manual check is available
     if not _is_checkable(record):
         return ManualCheckResponse(
             success=False,
-            message='Ручная проверка недоступна для этого платежа',
+            message=texts.t('CABINET_PAYMENT_CHECK_UNAVAILABLE', 'استعلام دستی برای این پرداخت در دسترس نیست'),
             payment=_record_to_response(record),
             status_changed=False,
         )
@@ -1862,7 +2091,7 @@ async def check_payment_status(
     if not updated:
         return ManualCheckResponse(
             success=False,
-            message='Не удалось проверить статус платежа',
+            message=texts.t('CABINET_PAYMENT_CHECK_FAILED', 'استعلام وضعیت پرداخت انجام نشد؛ دوباره تلاش کنید'),
             payment=_record_to_response(record),
             status_changed=False,
         )
@@ -1871,9 +2100,9 @@ async def check_payment_status(
 
     if status_changed:
         _, new_status_text = _get_status_info(updated)
-        message = f'Статус обновлён: {new_status_text}'
+        message = texts.t('CABINET_PAYMENT_STATUS_UPDATED', 'وضعیت به‌روزرسانی شد: {status}').format(status=new_status_text)
     else:
-        message = 'Статус не изменился'
+        message = texts.t('CABINET_PAYMENT_STATUS_UNCHANGED', 'وضعیت پرداخت تغییری نکرده است')
 
     return ManualCheckResponse(
         success=True,

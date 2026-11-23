@@ -24,6 +24,7 @@ from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.transaction import create_transaction
 from app.database.crud.user import subtract_user_balance
 from app.database.models import TransactionType, User
+from app.localization.texts import get_texts
 from app.services.panel_sync import should_create_panel_account
 from app.services.pricing_engine import pricing_engine
 from app.services.remnawave_service import RemnaWaveService
@@ -287,7 +288,10 @@ async def purchase_traffic(
         # ambiguous gateway outcome to a client deciding whether to retry.
         raise HTTPException(
             status_code=409,
-            detail='Traffic purchase was not applied. No funds were charged. Please try again.',
+            detail=get_texts(user.language).t(
+                'TRAFFIC_PURCHASE_NOT_APPLIED',
+                'Traffic purchase was not applied. No funds were charged. Please try again.',
+            ),
         ) from error
 
     user = await lock_user_for_pricing(db, user.id)

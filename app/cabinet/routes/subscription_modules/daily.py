@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 from app.services.traffic_reset_policy import lift_panel_traffic_limit, should_reset_traffic_on_daily_charge
 

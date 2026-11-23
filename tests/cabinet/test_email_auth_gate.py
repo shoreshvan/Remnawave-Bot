@@ -106,10 +106,10 @@ def _call(handler_name: str, db):
 
     handler = getattr(auth, handler_name)
     if handler_name == 'resend_verification':
-        return handler(user=object(), db=db)
-    kwargs = {'request': object(), 'raw_request': object(), 'db': db}
+        return handler(user=SimpleNamespace(language='fa'), db=db)
+    kwargs = {'request': object(), 'raw_request': SimpleNamespace(headers={}), 'db': db}
     if handler_name in {'register_email', 'verify_email_merge'}:
-        kwargs['user'] = object()
+        kwargs['user'] = SimpleNamespace(language='fa')
     return handler(**kwargs)
 
 
@@ -185,7 +185,8 @@ def test_every_email_and_password_route_is_gated():
     }
     assert len(subject) == len(GATED_HANDLERS), sorted(subject)
     for path, body in subject.items():
-        gate_at = body.find('await require_email_auth_enabled(db)')
+        gate_match = re.search(r'await require_email_auth_enabled\(db(?:\)|,)', body)
+        gate_at = gate_match.start() if gate_match else -1
         assert gate_at > 0, f'{path}: нет гейта email-входа'
         limiter_at = body.find('RateLimitCache')
         assert limiter_at < 0 or gate_at < limiter_at, f'{path}: гейт должен стоять до rate-limit'

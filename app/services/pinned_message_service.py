@@ -11,9 +11,11 @@ from aiogram.exceptions import (
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database.crud.user import get_users_list
 from app.database.database import AsyncSessionLocal
 from app.database.models import PinnedMessage, User, UserStatus
+from app.localization.texts import get_texts
 from app.utils.validators import sanitize_html, validate_html_tags
 
 
@@ -45,7 +47,11 @@ async def set_active_pinned_message(
         raise ValueError(error_message)
 
     if media_type not in {None, 'photo', 'video'}:
-        raise ValueError('Поддерживаются только фото или видео в закрепленном сообщении')
+        raise ValueError(
+            get_texts(settings.DEFAULT_LANGUAGE).t(
+                'PINNED_MSG_MEDIA_TYPE_INVALID', 'Поддерживаются только фото или видео в закрепленном сообщении'
+            )
+        )
 
     if created_by is not None:
         creator_id = await db.scalar(select(User.id).where(User.id == created_by))

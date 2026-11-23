@@ -10,6 +10,7 @@ from functools import partial
 from typing import Any
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.services.notification_types import NotificationType
 
 
@@ -2359,7 +2360,7 @@ class EmailNotificationTemplates:
             'en': 'Email change verification code',
             'zh': '邮箱更换验证码',
             'ua': 'Код підтвердження для зміни email',
-            'fa': 'کد تایید تغییر ایمیل',
+            'fa': 'کد تأیید نشانی ایمیل',
         }
 
         greeting = {
@@ -2410,10 +2411,10 @@ class EmailNotificationTemplates:
             """,
             'fa': f"""
                 <h2>{greeting.get('fa')}</h2>
-                <p>شما درخواست تغییر ایمیل داده‌اید. برای تایید از کد زیر استفاده کنید:</p>
+                <p>برای تأیید مالکیت این نشانی ایمیل، از کد زیر استفاده کنید:</p>
                 {code_box}
                 <p>این کد تا {expire_minutes} دقیقه معتبر است.</p>
-                <p style="color: #666;">اگر شما درخواست تغییر ایمیل نداده‌اید، این ایمیل را نادیده بگیرید.</p>
+                <p style="color: #666;">اگر این درخواست را ثبت نکرده‌اید، این ایمیل را نادیده بگیرید و کد را در اختیار دیگران نگذارید.</p>
             """,
         }
 

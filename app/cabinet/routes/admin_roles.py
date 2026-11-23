@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.rbac import SUPERADMIN_LEVEL, AdminRoleCRUD, UserRoleCRUD
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.permission_service import PERMISSION_REGISTRY, get_all_permissions
 
 from ..dependencies import get_cabinet_db, require_permission

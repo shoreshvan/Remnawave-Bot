@@ -1235,6 +1235,10 @@ class UserService:
                 CisPayPayment,
                 DonutPayment,
                 EtoplatezhiPayment,
+                HooshPayPayment,
+                TonPaysPayment,
+                AtlasPayPayment,
+                NowPaymentsPayment,
                 JupiterPayment,
                 LavaPayment,
                 OverpayPayment,
@@ -1262,6 +1266,10 @@ class UserService:
                 AnorePayment,
                 TabPayPayment,
                 ParityPayPayment,
+                HooshPayPayment,
+                TonPaysPayment,
+                AtlasPayPayment,
+                NowPaymentsPayment,
                 CasheraPayment,
             )
             for model in extra_payment_models:

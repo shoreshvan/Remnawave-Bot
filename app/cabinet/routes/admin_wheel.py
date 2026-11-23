@@ -32,6 +32,7 @@ from app.database.crud.wheel import (
     update_wheel_prize,
 )
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.wheel_service import wheel_service
 
 
@@ -102,7 +103,7 @@ async def update_admin_wheel_config(
     if not update_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No fields to update',
+            detail=get_texts().t('CABINET_WHEEL_NO_FIELDS_TO_UPDATE', 'No fields to update'),
         )
 
     config = await update_wheel_config(db, **update_data)
@@ -250,7 +251,7 @@ async def update_prize(
     if not update_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No fields to update',
+            detail=get_texts().t('CABINET_WHEEL_NO_FIELDS_TO_UPDATE', 'No fields to update'),
         )
 
     prize = await update_wheel_prize(db, prize_id, **update_data)
@@ -258,7 +259,7 @@ async def update_prize(
     if not prize:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Prize not found',
+            detail=get_texts().t('CABINET_WHEEL_PRIZE_NOT_FOUND', 'Prize not found'),
         )
 
     logger.info('🎁 Admin updated prize', telegram_id=admin.telegram_id, prize_id=prize_id, update_data=update_data)
@@ -295,7 +296,7 @@ async def delete_prize_endpoint(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Prize not found',
+            detail=get_texts().t('CABINET_WHEEL_PRIZE_NOT_FOUND', 'Prize not found'),
         )
 
     logger.info('🗑️ Admin deleted prize', telegram_id=admin.telegram_id, prize_id=prize_id)

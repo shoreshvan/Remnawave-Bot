@@ -11,6 +11,7 @@ from app.database.crud.subscription_event import (
     list_subscription_events,
 )
 from app.database.models import Subscription, SubscriptionEvent, Transaction, User
+from app.localization.texts import get_texts
 
 from ..dependencies import get_db_session, require_api_token
 from ..schemas.subscription_events import (

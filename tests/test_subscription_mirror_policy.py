@@ -76,7 +76,7 @@ async def test_cabinet_returns_mirrors_for_resolved_subscription(monkeypatch):
     sub = SimpleNamespace(id=42, subscription_url='https://sub.example/demo', subscription_crypto_link=None)
     resolver = AsyncMock(return_value=sub)
     monkeypatch.setattr(status, 'resolve_subscription', resolver)
-    user, db = SimpleNamespace(id=1), AsyncMock()
+    user, db = SimpleNamespace(id=1, language='fa'), AsyncMock()
     result = await status.get_connection_link(user=user, db=db, subscription_id=42)
     resolver.assert_awaited_once_with(db, user, 42)
     assert result['subscription_id'] == 42
@@ -153,7 +153,7 @@ async def test_cabinet_rejects_other_users_subscription(monkeypatch):
     monkeypatch.setattr(type(settings), 'is_multi_tariff_enabled', lambda self: True)
     lookup = AsyncMock(return_value=None)
     monkeypatch.setattr(crud, 'get_subscription_by_id_for_user', lookup)
-    user, db = SimpleNamespace(id=1), AsyncMock()
+    user, db = SimpleNamespace(id=1, language='fa'), AsyncMock()
     with pytest.raises(HTTPException) as caught:
         await status.get_connection_link(user=user, db=db, subscription_id=42)
     assert caught.value.status_code == 404
@@ -179,7 +179,7 @@ async def test_cabinet_does_not_offer_mirrors_in_protected_modes(monkeypatch, mo
             )
         ),
     )
-    result = await status.get_connection_link(user=SimpleNamespace(id=1), db=AsyncMock(), subscription_id=42)
+    result = await status.get_connection_link(user=SimpleNamespace(id=1, language='fa'), db=AsyncMock(), subscription_id=42)
     assert result['mirrors'] == []
     if hidden:
         assert result['subscription_url'] is None

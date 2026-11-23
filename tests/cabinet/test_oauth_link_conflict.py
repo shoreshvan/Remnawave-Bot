@@ -77,7 +77,7 @@ async def _run(
 @pytest.mark.asyncio
 async def test_identity_on_another_account_offers_merge_instead_of_dead_end() -> None:
     """Соцсеть на аккаунте #2 -> токен слияния #1 <- #2; сама привязка не делается."""
-    user = SimpleNamespace(id=1, google_id=None)
+    user = SimpleNamespace(id=1, google_id=None, language='en')
     other_account = SimpleNamespace(id=2, google_id='G2')
 
     result, set_id, db, create_token = await _run(
@@ -100,7 +100,7 @@ async def test_identity_on_another_account_offers_merge_instead_of_dead_end() ->
 @pytest.mark.asyncio
 async def test_relinking_over_occupied_slot_is_refused_not_overwritten() -> None:
     """User already has a *different* Google linked -> 409, old one preserved."""
-    user = SimpleNamespace(id=1, google_id='G1')
+    user = SimpleNamespace(id=1, google_id='G1', language='en')
 
     err, set_id, db, create_token = await _run(user, provider_id='G2', existing_owner=None)
 
@@ -114,7 +114,7 @@ async def test_relinking_over_occupied_slot_is_refused_not_overwritten() -> None
 @pytest.mark.asyncio
 async def test_same_identity_is_idempotent_no_op() -> None:
     """Re-linking the identity already on this account is a harmless no-op."""
-    user = SimpleNamespace(id=1, google_id='G1')
+    user = SimpleNamespace(id=1, google_id='G1', language='en')
     db = AsyncMock()
     with ExitStack() as s:
         s.enter_context(

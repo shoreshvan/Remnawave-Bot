@@ -29,6 +29,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
+from app.localization.texts import get_texts
 from app.services.admin_notification_service import AdminNotificationService
 from app.services.pricing_engine import RenewalPricing
 from app.services.remnawave_service import RemnaWaveConfigurationError
@@ -393,7 +394,9 @@ class SubscriptionRenewalService:
         else:
             consume_promo_offer = bool(pricing.promo_offer_discount)
 
-        description_text = description or f'Продление подписки на {period_days} дней'
+        description_text = description or get_texts(user.language).t(
+            'CABINET_RENEWAL_TRANSACTION_DESCRIPTION', 'Продление подписки на {days} дней'
+        ).format(days=period_days)
 
         from sqlalchemy import select as sa_select
 

@@ -72,6 +72,10 @@ from app.database.models import (
     NewsTag,
     OverpayPayment,
     Pal24Payment,
+    HooshPayPayment,
+    TonPaysPayment,
+    AtlasPayPayment,
+    NowPaymentsPayment,
     ParityPayPayment,
     PartnerApplication,
     PayHotPayment,
@@ -140,6 +144,7 @@ from app.database.models import (
     tariff_promo_groups,
 )
 from app.utils.timezone import format_local_datetime
+from app.localization.texts import get_texts
 
 
 logger = structlog.get_logger(__name__)
@@ -275,6 +280,10 @@ class BackupService:
             AnorePayment,
             TabPayPayment,
             ParityPayPayment,
+            HooshPayPayment,
+            TonPaysPayment,
+            AtlasPayPayment,
+            NowPaymentsPayment,
             AppleIAPAccount,
             AppleTransaction,
             AppleNotification,
@@ -1710,6 +1719,10 @@ class BackupService:
             'anore_payments',
             'tabpay_payments',
             'paritypay_payments',
+            'hooshpay_payments',
+            'tonpays_payments',
+            'atlaspay_payments',
+            'nowpayments_payments',
             'cispay_payments',
             'cashera_payments',
             'donut_payments',

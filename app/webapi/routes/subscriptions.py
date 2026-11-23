@@ -24,6 +24,7 @@ from app.database.crud.subscription import (
 )
 from app.database.crud.user import get_user_by_id
 from app.database.models import Subscription, SubscriptionStatus
+from app.localization.texts import get_texts
 from app.services.subscription_service import SubscriptionService
 from app.services.traffic_purchase_service import add_subscription_traffic
 

@@ -62,7 +62,6 @@ from app.services.traffic_reset_policy import (
     should_reset_traffic_on_tariff_purchase,
 )
 from app.services.user_cart_service import user_cart_service
-from app.utils.formatters import format_days_declension
 from app.utils.pricing_utils import format_period_description
 from app.utils.subscription_utils import resolve_tariff_cart_traffic, resolve_tariff_purchase_device_limit
 from app.utils.timezone import format_local_datetime
@@ -409,16 +408,21 @@ async def _prepare_auto_extend_context(
         return None
 
     # Формируем описание с учётом тарифа
+    texts = get_texts(user.language)
     if tariff_id:
         from app.database.crud.tariff import get_tariff_by_id
 
         tariff = await get_tariff_by_id(db, tariff_id)
-        tariff_name = tariff.name if tariff else 'тариф'
+        tariff_name = tariff.name if tariff else texts.t('MAIN_MENU_RICH_TABLE_TARIFF', 'Тариф')
         description = (
-            cart_data.get('description') or f'Продление тарифа {tariff_name} на {format_days_declension(period_days)}'
+            cart_data.get('description') or texts.t(
+                'AUTO_RENEWAL_TARIFF_DESCRIPTION', 'Продление тарифа «{tariff}» на {days} дней'
+            ).format(tariff=tariff_name, days=period_days)
         )
     else:
-        description = cart_data.get('description') or f'Продление подписки на {format_days_declension(period_days)}'
+        description = cart_data.get('description') or texts.t(
+            'CABINET_RENEWAL_TRANSACTION_DESCRIPTION', 'Продление подписки на {days} дней'
+        ).format(days=period_days)
 
     device_limit = cart_data.get('device_limit')
     if device_limit is not None:
@@ -1103,7 +1107,9 @@ async def _auto_purchase_tariff(
     )
     # Списываем баланс
     try:
-        description = f'Покупка тарифа {tariff.name} на {format_days_declension(period_days)}'
+        description = get_texts(user.language).t(
+            'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION', 'Покупка тарифа «{tariff}» на {days} дней'
+        ).format(tariff=tariff.name, days=period_days)
         success = await subtract_user_balance(
             db,
             user,
@@ -1197,7 +1203,9 @@ async def _auto_purchase_tariff(
             user = await get_user_by_id(db, purchase_user_id)
             if not await add_user_balance(db, user, final_price, create_transaction=False, commit=False):
                 raise RuntimeError('Compensating refund failed')
-            refund_description = 'Возврат: ошибка автопокупки тарифа'
+            refund_description = get_texts(user.language).t(
+                'AUTO_PURCHASE_TARIFF_REFUND_DESCRIPTION', 'Возврат: ошибка автопокупки тарифа'
+            )
             refund = await create_transaction(
                 db,
                 purchase_user_id,
@@ -1552,7 +1560,9 @@ async def _auto_purchase_daily_tariff(
         return False
 
     purchase_user_id = user.id
-    description = f'Активация суточного тарифа {tariff.name}'
+    description = get_texts(user.language).t(
+        'AUTO_PURCHASE_DAILY_ACTIVATION_DESCRIPTION', 'Активация суточного тарифа «{tariff}»'
+    ).format(tariff=tariff.name)
     try:
         if not await subtract_user_balance(
             db,
@@ -1909,7 +1919,9 @@ async def _auto_add_devices(
         return False
 
     # Списываем баланс
-    description = f'Покупка {devices_to_add} доп. устройств'
+    description = get_texts(user.language).t(
+        'CABINET_DEVICES_TX_DESCRIPTION', 'Покупка {devices} доп. устройств'
+    ).format(devices=devices_to_add)
     try:
         success = await subtract_user_balance(
             db,
@@ -2278,7 +2290,9 @@ async def _auto_add_traffic(
         return False
 
     # Deduct balance
-    description = f'Докупка {traffic_gb} ГБ трафика'
+    description = get_texts(user.language).t(
+        'MINIAPP_TRANSACTION_TRAFFIC_TOPUP', 'Докупка {gb} ГБ трафика'
+    ).format(gb=traffic_gb)
     try:
         success = await subtract_user_balance(
             db,
@@ -2640,7 +2654,9 @@ async def _try_auto_extend_expired_after_topup(
     consume_promo_offer = pricing.promo_offer_discount > 0
 
     user_id, subscription_id = user.id, subscription.id
-    description = f'Автопродление истёкшей подписки на {format_days_declension(period_days)}'
+    description = get_texts(user.language).t(
+        'AUTO_RENEWAL_EXPIRED_DESCRIPTION', 'Автопродление истёкшей подписки на {days} дней'
+    ).format(days=period_days)
     old_end_date = subscription.end_date
     try:
         deducted = await subtract_user_balance(
@@ -2970,7 +2986,10 @@ async def try_resume_disabled_daily_after_topup(
     # Charge, activate and record the paid day in one transaction. No committed
     # debit can escape on activation/ledger failure or expose a second callback.
     old_end_date = subscription.end_date
-    description = f'Суточная оплата тарифа «{tariff.name}» (авто-возобновление)'
+    description = get_texts(user.language).t(
+        'DAILY_AUTO_RESUME_TRANSACTION_DESCRIPTION',
+        'Суточная оплата тарифа «{tariff_name}» (авто-возобновление)',
+    ).format(tariff_name=tariff.name)
     try:
         deducted = await subtract_user_balance(
             db,

@@ -2651,19 +2651,37 @@ async def process_balance_edit(message: types.Message, db_user: User, state: FSM
         amount_rubles = float(message.text.replace(',', '.'))
         amount_kopeks = int(amount_rubles * 100)
 
-        if abs(amount_kopeks) > 10000000:
+        max_edit_kopeks = settings.ADMIN_BALANCE_EDIT_MAX_KOPEKS
+        if max_edit_kopeks and abs(amount_kopeks) > max_edit_kopeks:
             await message.answer(
-                texts.t('ADMIN_USERS_RESTRICTIONS_034', '❌ Слишком большая сумма (максимум 100,000 ₽)')
+                texts.t('ADMIN_BALANCE_EDIT_TOO_LARGE', '❌ Слишком большая сумма (максимум {max})').format(
+                    max=settings.format_price(max_edit_kopeks)
+                )
+            )
+            return
+
+        min_edit_kopeks = settings.ADMIN_BALANCE_EDIT_MIN_KOPEKS
+        if min_edit_kopeks and 0 < amount_kopeks < min_edit_kopeks:
+            await message.answer(
+                texts.t('ADMIN_BALANCE_EDIT_TOO_SMALL', '❌ Слишком маленькая сумма (минимум {min})').format(
+                    min=settings.format_price(min_edit_kopeks)
+                )
             )
             return
 
         user_service = UserService()
 
-        description = f'Изменение баланса администратором {db_user.full_name}'
+        description = texts.t(
+            'ADMIN_BALANCE_TX_DESC_CHANGE', 'Изменение баланса администратором {name}'
+        ).format(name=db_user.full_name)
         if amount_kopeks > 0:
-            description = f'Пополнение администратором: +{int(amount_rubles)} ₽'
+            description = texts.t(
+                'ADMIN_BALANCE_TX_DESC_TOPUP', 'Пополнение администратором: +{amount} تومان'
+            ).format(amount=int(amount_rubles))
         else:
-            description = f'Списание администратором: {int(amount_rubles)} ₽'
+            description = texts.t(
+                'ADMIN_BALANCE_TX_DESC_WITHDRAW', 'Списание администратором: {amount} تومان'
+            ).format(amount=int(amount_rubles))
 
         success = await user_service.update_user_balance(
             db, user_id, amount_kopeks, description, db_user.id, bot=message.bot, admin_name=db_user.full_name

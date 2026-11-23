@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.auth.email_auth_gate import require_email_auth_enabled
+from app.cabinet.utils.request_language import get_request_language
 from app.cabinet.auth.registration_access import (
     evaluate_public_registration,
     is_env_admin_recovery,
@@ -38,6 +39,7 @@ from app.database.crud.user import (
     verify_and_apply_email_change,
 )
 from app.database.models import CabinetRefreshToken, User, UserStatus
+from app.localization.texts import get_texts
 from app.services import legal_consent_service
 from app.services.campaign_service import AdvertisingCampaignService
 from app.services.disposable_email_service import disposable_email_service
@@ -123,11 +125,12 @@ from ..schemas.auth import (
 )
 from ..services.email_service import email_service
 from ..services.email_template_overrides import get_rendered_override
+from app.cabinet.utils.persian_auth_route import PersianAuthRoute
 
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix='/auth', tags=['Cabinet Auth'])
+router = APIRouter(prefix='/auth', tags=['Cabinet Auth'], route_class=PersianAuthRoute)
 
 
 async def _create_or_claim_telegram_user(
@@ -218,7 +221,7 @@ async def _gate_cabinet_identity(
         email_verified=email_verified,
         verified_admin=verified_admin,
     )
-    raise_for_registration_decision(decision)
+    raise_for_registration_decision(decision, language=user.language if user else None)
     return decision
 
 
@@ -250,7 +253,10 @@ async def _recover_cabinet_user_after_gate(
         user.status = UserStatus.ACTIVE.value
         user.updated_at = datetime.now(UTC)
         return
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='User account is not active')
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=get_texts(user.language).t('CABINET_AUTH_ACCOUNT_NOT_ACTIVE', 'User account is not active'),
+    )
 
 
 def _user_to_response(user: User) -> UserResponse:
@@ -368,7 +374,10 @@ async def _require_legal_consent(
             status_code=status.HTTP_428_PRECONDITION_REQUIRED,
             detail={
                 'code': 'legal_consent_required',
-                'message': 'Consent to the legal documents is required to create an account',
+                'message': get_texts(language).t(
+                    'CABINET_AUTH_LEGAL_CONSENT_REQUIRED',
+                    'Consent to the legal documents is required to create an account',
+                ),
                 'documents': requirement.documents,
                 'missing': missing,
                 'prechecked': requirement.prechecked,
@@ -378,7 +387,7 @@ async def _require_legal_consent(
     return requirement.documents
 
 
-async def _consume_widget_payload(widget_data: dict) -> None:
+async def _consume_widget_payload(widget_data: dict, *, language: str | None = None) -> None:
     """Погасить одноразовый payload Login Widget.
 
     SECURITY: one-time use. A widget payload can travel in the redirect URL
@@ -392,11 +401,14 @@ async def _consume_widget_payload(widget_data: dict) -> None:
     if await TokenReplayCache.is_token_replayed(widget_replay, ttl=86400):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='This Telegram authorization has already been used. Please log in again.',
+            detail=get_texts(language or settings.DEFAULT_LANGUAGE).t(
+                'CABINET_AUTH_TELEGRAM_REPLAYED',
+                'This Telegram authorization has already been used. Please log in again.',
+            ),
         )
 
 
-async def _consume_oidc_token(id_token: str, claims: dict) -> None:
+async def _consume_oidc_token(id_token: str, claims: dict, *, language: str | None = None) -> None:
     """Погасить одноразовый OIDC id_token (replay detection).
 
     Как и у виджета — только после гейта согласия, иначе повтор с галочками
@@ -407,7 +419,9 @@ async def _consume_oidc_token(id_token: str, claims: dict) -> None:
     if await TokenReplayCache.is_token_replayed(token_hash, ttl=min(token_ttl, 600)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired Telegram OIDC token',
+            detail=get_texts(language or settings.DEFAULT_LANGUAGE).t(
+                'CABINET_AUTH_OIDC_REPLAY_INVALID', 'Invalid or expired Telegram OIDC token',
+            ),
         )
 
 
@@ -726,11 +740,13 @@ async def auth_telegram(
     This endpoint validates the initData from Telegram WebApp and returns
     JWT tokens for authenticated access.
     """
+    interface_language = get_request_language(raw_request)
+    texts = get_texts(interface_language)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_initdata', limit=10, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
     # Telegram Desktop/iOS cache initData with stale auth_date (known Telegram bug:
@@ -742,14 +758,14 @@ async def auth_telegram(
     if not user_data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired Telegram authentication data',
+            detail=texts.t('CABINET_LOGIN_TELEGRAM_INVALID', 'Invalid or expired Telegram authentication data'),
         )
 
     telegram_id = user_data.get('id')
     if not telegram_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Missing Telegram user ID',
+            detail=texts.t('CABINET_LOGIN_OIDC_ID_MISSING', 'Missing Telegram user ID'),
         )
 
     user = await get_user_by_telegram_id(db, telegram_id)
@@ -765,7 +781,7 @@ async def auth_telegram(
     tg_username = user_data.get('username')
     tg_first_name = user_data.get('first_name')
     tg_last_name = user_data.get('last_name')
-    tg_language = user_data.get('language_code', 'ru')
+    tg_language = user_data.get('language_code') or interface_language
 
     # Resolve referral code to referrer ID for new users
     referrer_id = None
@@ -806,7 +822,7 @@ async def auth_telegram(
     if not user:
         # Согласие проверяем ДО создания: иначе аккаунт уже есть, а галочки нет.
         consent_documents = await _require_legal_consent(
-            db, accepted=request.accepted_legal_documents, language=tg_language or 'ru'
+            db, accepted=request.accepted_legal_documents, language=interface_language
         )
         # Новый пользователь из initData — либо фантом с лендинга под этим ником
         logger.info('Creating new user from cabinet (initData): telegram_id', telegram_id=telegram_id)
@@ -924,12 +940,14 @@ async def auth_telegram_widget(
     This endpoint validates data from Telegram Login Widget and returns
     JWT tokens for authenticated access.
     """
+    interface_language = get_request_language(raw_request)
+    texts = get_texts(interface_language)
     # Rate limit
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_widget', limit=10, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
 
@@ -939,7 +957,7 @@ async def auth_telegram_widget(
     if not validate_telegram_login_widget(widget_data, max_age_seconds=86400):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired Telegram authentication data',
+            detail=texts.t('CABINET_LOGIN_TELEGRAM_INVALID', 'Invalid or expired Telegram authentication data'),
         )
     # Одноразовость payload гасится ниже, после гейта согласия — см. _consume_widget_payload.
 
@@ -995,8 +1013,10 @@ async def auth_telegram_widget(
     consent_documents: list[str] = []
     if is_new_user:
         # Согласие проверяем ДО того, как погасить payload: 428 просит повторить запрос с ним же.
-        consent_documents = await _require_legal_consent(db, accepted=request.accepted_legal_documents, language='ru')
-    await _consume_widget_payload(widget_data)
+        consent_documents = await _require_legal_consent(
+            db, accepted=request.accepted_legal_documents, language=interface_language,
+        )
+    await _consume_widget_payload(widget_data, language=user.language if user else get_request_language(raw_request))
     if is_new_user:
         # Новый пользователь из виджета — либо фантом с лендинга под этим ником
         logger.info(
@@ -1008,7 +1028,7 @@ async def auth_telegram_widget(
             username=request.username,
             first_name=request.first_name,
             last_name=request.last_name,
-            language='ru',
+            language=interface_language,
             referred_by_id=referrer_id,
             source='cabinet_telegram_widget',
         )
@@ -1079,12 +1099,14 @@ async def auth_telegram_oidc(
     The frontend uses Telegram.Login.init() popup which returns an id_token.
     We validate it via JWKS and create/login the user.
     """
+    interface_language = get_request_language(raw_request)
+    texts = get_texts(interface_language)
     # Rate limit
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'telegram_oidc', limit=10, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
 
@@ -1099,7 +1121,7 @@ async def auth_telegram_oidc(
     if not oidc_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Telegram OIDC is not configured',
+            detail=texts.t('CABINET_LOGIN_OIDC_UNAVAILABLE', 'Telegram OIDC is not configured'),
         )
 
     claims = await validate_telegram_oidc_token(
@@ -1109,7 +1131,7 @@ async def auth_telegram_oidc(
     if not claims:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired Telegram OIDC token',
+            detail=texts.t('CABINET_AUTH_OIDC_REPLAY_INVALID', 'Invalid or expired Telegram OIDC token'),
         )
 
     # Replay detection гасит id_token ниже, после гейта согласия — см. _consume_oidc_token.
@@ -1120,18 +1142,18 @@ async def auth_telegram_oidc(
     except (ValueError, TypeError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid user ID in OIDC claims',
+            detail=texts.t('CABINET_LOGIN_OIDC_ID_INVALID', 'Invalid user ID in OIDC claims'),
         ) from e
     if not telegram_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Missing user ID in OIDC claims',
+            detail=texts.t('CABINET_LOGIN_OIDC_ID_MISSING', 'Missing user ID in OIDC claims'),
         )
 
     first_name = claims.get('name', claims.get('given_name', ''))
     username = claims.get('preferred_username')
     last_name = claims.get('family_name')
-    language = claims.get('locale', 'ru')[:2] if claims.get('locale') else 'ru'
+    language = claims.get('locale')[:2] if claims.get('locale') else interface_language
 
     user = await get_user_by_telegram_id(db, telegram_id)
     access_decision = await _gate_cabinet_identity(
@@ -1185,9 +1207,11 @@ async def auth_telegram_oidc(
     if is_new_user:
         # Согласие проверяем ДО того, как погасить id_token: 428 просит повторить запрос с ним же.
         consent_documents = await _require_legal_consent(
-            db, accepted=request.accepted_legal_documents, language=language or 'ru'
+            db, accepted=request.accepted_legal_documents, language=interface_language
         )
-    await _consume_oidc_token(request.id_token, claims)
+    await _consume_oidc_token(
+        request.id_token, claims, language=user.language if user else get_request_language(raw_request),
+    )
     if is_new_user:
         logger.info('Creating new user from cabinet OIDC', telegram_id=telegram_id, username=username)
         user = await _create_or_claim_telegram_user(
@@ -1268,13 +1292,14 @@ async def register_email(
     Sends verification email to the provided address.
     If the email belongs to another active user, offers account merge.
     """
-    await require_email_auth_enabled(db)
+    await require_email_auth_enabled(db, language=user.language)
+    texts = get_texts(user.language)
     # Rate limit
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_register', limit=5, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
 
@@ -1282,14 +1307,14 @@ async def register_email(
     if user.email and user.email_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='You already have a verified email',
+            detail=texts.t('CABINET_AUTH_ALREADY_HAVE_VERIFIED_EMAIL', 'You already have a verified email'),
         )
 
     # Check for disposable email
     if disposable_email_service.is_disposable(request.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Disposable email addresses are not allowed',
+            detail=texts.t('CABINET_AUTH_DISPOSABLE_EMAIL_NOT_ALLOWED', 'Disposable email addresses are not allowed'),
         )
 
     # SECURITY: never let registration/linking bind an ADMIN_EMAILS address. Admin
@@ -1300,7 +1325,7 @@ async def register_email(
     if email_lower and email_lower in {e.lower() for e in settings.get_admin_emails()}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='This email address cannot be linked to your account.',
+            detail=texts.t('CABINET_AUTH_EMAIL_CANNOT_BE_LINKED', 'This email address cannot be linked to your account.'),
         )
 
     # Check if email already exists (case-insensitive, exclude deleted users)
@@ -1315,7 +1340,7 @@ async def register_email(
         if existing_email_user.id == user.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='This email is already linked to your account',
+                detail=texts.t('CABINET_AUTH_EMAIL_ALREADY_LINKED', 'This email is already linked to your account'),
             )
         # SECURITY — account-takeover prevention. Merging absorbs the existing
         # account (its subscription, balance, email) into the caller's account
@@ -1330,11 +1355,11 @@ async def register_email(
         if not email_service.is_configured():
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail='Email service is not configured; cannot verify the existing account',
+                detail=texts.t('CABINET_AUTH_EMAIL_SERVICE_NOT_CONFIGURED_MERGE', 'Email service is not configured; cannot verify the existing account'),
             )
         merge_code = generate_email_change_code()
         await store_email_merge_otp(user.id, existing_email_user.id, email_lower, merge_code)
-        lang = user.language or 'ru'
+        lang = existing_email_user.language or get_request_language(raw_request)
         expire_minutes = settings.get_cabinet_email_change_code_expire_minutes()
         override = await get_rendered_override(
             'email_change_code',
@@ -1349,7 +1374,7 @@ async def register_email(
             required_vars=['code'],
         )
         custom_subject, custom_body = override or (None, None)
-        await asyncio.to_thread(
+        sent = await asyncio.to_thread(
             email_service.send_email_change_code,
             to_email=email_lower,
             code=merge_code,
@@ -1364,7 +1389,13 @@ async def register_email(
             existing_user_id=existing_email_user.id,
         )
         return {
-            'message': 'A confirmation code was sent to that email address.',
+            'message': (
+                texts.t('CABINET_AUTH_MERGE_CODE_SENT', 'A confirmation code was sent to that email address.')
+                if sent else texts.t(
+                    'CABINET_AUTH_MERGE_CODE_NOT_SENT',
+                    'The confirmation email could not be sent yet. Please wait and try again if it does not arrive.',
+                )
+            ),
             'merge_required': True,
             'merge_verification': 'email_code',
             'merge_token': None,
@@ -1393,7 +1424,7 @@ async def register_email(
         if email_service.is_configured():
             cabinet_url = settings.CABINET_URL
             verification_url = f'{cabinet_url}/verify-email'
-            lang = user.language or 'ru'
+            lang = user.language or get_request_language(raw_request)
             full_url = f'{verification_url}?token={verification_token}'
             expire_hours = settings.get_cabinet_email_verification_expire_hours()
 
@@ -1424,9 +1455,9 @@ async def register_email(
             )
 
     return {
-        'message': 'Email linked successfully'
+        'message': texts.t('CABINET_AUTH_EMAIL_LINKED_SUCCESS', 'Email linked successfully')
         if not settings.is_cabinet_email_verification_enabled()
-        else 'Verification email sent',
+        else texts.t('CABINET_AUTH_VERIFICATION_EMAIL_SENT', 'Verification email sent'),
         'email': request.email,
     }
 
@@ -1444,7 +1475,8 @@ async def verify_email_merge(
     Proves the caller controls that account's inbox, then mints the merge token
     (consumed at POST /cabinet/auth/merge/{token}).
     """
-    await require_email_auth_enabled(db)
+    await require_email_auth_enabled(db, language=user.language)
+    texts = get_texts(user.language)
     # Rate-limit like the other OTP-verify endpoints (IP + per-account); on the
     # per-account cap, burn the pending merge so a brute force can't grind the
     # live code — the caller must restart (re-emailing the existing owner).
@@ -1452,7 +1484,7 @@ async def verify_email_merge(
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_merge_verify', limit=5, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
     if await RateLimitCache.is_ip_rate_limited(
@@ -1461,19 +1493,19 @@ async def verify_email_merge(
         await clear_email_merge_otp(user.id)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many invalid attempts. Please start the merge again.',
+            detail=texts.t('CABINET_AUTH_MERGE_TOO_MANY_ATTEMPTS', 'Too many invalid attempts. Please start the merge again.'),
         )
 
     pending = await get_email_merge_otp(user.id)
     if not pending:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No pending account merge. Please start again.',
+            detail=texts.t('CABINET_AUTH_NO_PENDING_MERGE', 'No pending account merge. Please start again.'),
         )
     if not hmac.compare_digest(str(pending.get('code', '')), str(request.code)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid confirmation code',
+            detail=texts.t('CABINET_AUTH_INVALID_CONFIRMATION_CODE', 'Invalid confirmation code'),
         )
 
     # Re-validate the target still exists and still owns that email (it could have
@@ -1485,7 +1517,7 @@ async def verify_email_merge(
         await clear_email_merge_otp(user.id)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='That account is no longer available to merge.',
+            detail=texts.t('CABINET_AUTH_MERGE_TARGET_UNAVAILABLE', 'That account is no longer available to merge.'),
         )
 
     await clear_email_merge_otp(user.id)
@@ -1501,7 +1533,7 @@ async def verify_email_merge(
         existing_user_id=secondary_user_id,
     )
     return {
-        'message': 'Account merge confirmed',
+        'message': texts.t('CABINET_AUTH_MERGE_CONFIRMED', 'Account merge confirmed'),
         'merge_required': True,
         'merge_token': merge_token,
     }
@@ -1523,9 +1555,10 @@ async def register_email_standalone(
 
     If TEST_EMAIL is configured, test email accounts are auto-verified.
     """
-    await require_email_auth_enabled(db)
+    await require_email_auth_enabled(db, language=get_request_language(raw_request))
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
-    await enforce_email_registration_throttle(client_ip)
+    await enforce_email_registration_throttle(client_ip, language=get_request_language(raw_request))
     email_access = await evaluate_public_registration(
         db,
         channel=RegistrationChannel.CABINET_EMAIL,
@@ -1535,7 +1568,7 @@ async def register_email_standalone(
         verified_admin=False,
         start_parameter=request.referral_code or request.campaign_slug,
     )
-    raise_for_registration_decision(email_access)
+    raise_for_registration_decision(email_access, language=request.language or get_request_language(raw_request))
 
     # Check if this is a test email registration
     is_test_email = settings.is_test_email(request.email)
@@ -1545,7 +1578,7 @@ async def register_email_standalone(
         if not settings.validate_test_email_password(request.email, request.password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid test email password',
+                detail=texts.t('CABINET_AUTH_INVALID_TEST_EMAIL_PASSWORD', 'Invalid test email password'),
             )
         logger.info('Test email registration', email=request.email)
 
@@ -1553,7 +1586,7 @@ async def register_email_standalone(
     if disposable_email_service.is_disposable(request.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Disposable email addresses are not allowed',
+            detail=texts.t('CABINET_AUTH_DISPOSABLE_EMAIL_NOT_ALLOWED', 'Disposable email addresses are not allowed'),
         )
 
     # SECURITY: never let standalone registration claim an ADMIN_EMAILS address. With
@@ -1564,7 +1597,7 @@ async def register_email_standalone(
     if email_lower and email_lower in {e.lower() for e in settings.get_admin_emails()}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='This email address cannot be used for registration.',
+            detail=texts.t('CABINET_AUTH_EMAIL_CANNOT_BE_USED_FOR_REGISTRATION', 'This email address cannot be used for registration.'),
         )
 
     # Проверить что email не занят (без учёта регистра)
@@ -1572,7 +1605,7 @@ async def register_email_standalone(
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This email is already registered',
+            detail=texts.t('CABINET_AUTH_EMAIL_ALREADY_REGISTERED', 'This email is already registered'),
         )
 
     # ...и что это не другая запись того же ящика: «user+1@gmail.com» проходит
@@ -1586,7 +1619,7 @@ async def register_email_standalone(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This email is already registered',
+            detail=texts.t('CABINET_AUTH_EMAIL_ALREADY_REGISTERED', 'This email is already registered'),
         )
 
     # Хешировать пароль
@@ -1676,7 +1709,8 @@ async def register_email_standalone(
     # Для обычного email - требуется верификация (если включена)
     verification_required = not is_test_email and settings.is_cabinet_email_verification_enabled()
     return RegisterResponse(
-        message='Verification email sent. Please check your inbox.',
+        message=texts.t('CABINET_AUTH_VERIFICATION_EMAIL_SENT_INBOX', 'Verification email sent. Please check your inbox.')
+        if verification_required else texts.t('CABINET_EMAIL_REGISTRATION_COMPLETE', 'ثبت‌نام انجام شد؛ اکنون می‌توانید وارد شوید.'),
         email=request.email,
         requires_verification=verification_required,
     )
@@ -1689,12 +1723,13 @@ async def verify_email(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Verify email with token and return auth tokens."""
-    await require_email_auth_enabled(db)
+    await require_email_auth_enabled(db, language=get_request_language(raw_request))
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_verify', limit=10, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
     # Find user with this token
@@ -1704,13 +1739,13 @@ async def verify_email(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid verification token',
+            detail=texts.t('CABINET_EMAIL_INVALID_VERIFICATION_TOKEN', 'Invalid verification token'),
         )
 
     if is_token_expired(user.email_verification_expires):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Verification token has expired',
+            detail=texts.t('CABINET_AUTH_VERIFICATION_TOKEN_EXPIRED', 'Verification token has expired'),
         )
 
     # Mark email as verified through cabinet OTP — trusted source for admin
@@ -1749,17 +1784,18 @@ async def resend_verification(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Resend verification email."""
-    await require_email_auth_enabled(db)
+    await require_email_auth_enabled(db, language=user.language)
+    texts = get_texts(user.language)
     if not user.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No email address to verify',
+            detail=texts.t('CABINET_AUTH_NO_EMAIL_TO_VERIFY', 'No email address to verify'),
         )
 
     if user.email_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Email is already verified',
+            detail=texts.t('CABINET_AUTH_EMAIL_ALREADY_VERIFIED', 'Email is already verified'),
         )
 
     sent = await _issue_verification_email(db, user, language=user.language or 'ru', username=user.first_name)
@@ -1767,14 +1803,14 @@ async def resend_verification(
         if not settings.is_cabinet_email_verification_enabled():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Email verification is disabled',
+                detail=texts.t('CABINET_AUTH_EMAIL_VERIFICATION_DISABLED', 'Email verification is disabled'),
             )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Email service is not configured',
+            detail=texts.t('CABINET_AUTH_EMAIL_SERVICE_NOT_CONFIGURED', 'Email service is not configured'),
         )
 
-    return {'message': 'Verification email sent'}
+    return {'message': texts.t('CABINET_AUTH_VERIFICATION_EMAIL_SENT', 'Verification email sent')}
 
 
 @router.post('/email/register/resend')
@@ -1797,7 +1833,9 @@ async def resend_verification_public(
     """
     await require_email_auth_enabled(db)
     client_ip = get_client_ip(raw_request)
-    await enforce_verification_resend_throttle(client_ip, request.email)
+    await enforce_verification_resend_throttle(
+        client_ip, request.email, language=get_request_language(raw_request),
+    )
 
     email_lower = (request.email or '').strip().lower()
     result = await db.execute(select(User).where(func.lower(User.email) == email_lower))
@@ -1806,7 +1844,10 @@ async def resend_verification_public(
     if user and not user.email_verified:
         await _issue_verification_email(db, user, language=user.language or 'ru', username=user.first_name)
 
-    return {'message': 'If the email is awaiting confirmation, the verification link has been sent'}
+    return {'message': get_texts(get_request_language(raw_request)).t(
+        'CABINET_EMAIL_RESEND_PUBLIC_RESULT',
+        'If the email is awaiting confirmation, the verification link has been sent',
+    )}
 
 
 @router.post('/email/login', response_model=AuthResponse)
@@ -1819,12 +1860,13 @@ async def login_email(
 
     Test email accounts (configured via TEST_EMAIL) bypass email verification.
     """
-    await require_email_auth_enabled(db)
+    await require_email_auth_enabled(db, language=get_request_language(raw_request))
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_login', limit=10, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
 
@@ -1850,7 +1892,7 @@ async def login_email(
             if not access.allowed:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail='Invalid email or password',
+                    detail=texts.t('CABINET_EMAIL_INVALID_CREDENTIALS', 'Invalid email or password'),
                 )
             logger.info('Test email login creating new user', email=request.email)
             password_hash = hash_password(request.password)
@@ -1867,19 +1909,19 @@ async def login_email(
         else:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='Invalid email or password',
+                detail=texts.t('CABINET_EMAIL_INVALID_CREDENTIALS', 'Invalid email or password'),
             )
 
     if not user.password_hash:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Password login not configured for this account',
+            detail=texts.t('CABINET_AUTH_PASSWORD_LOGIN_NOT_CONFIGURED', 'Password login not configured for this account'),
         )
 
     if not verify_password(request.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid email or password',
+            detail=texts.t('CABINET_EMAIL_INVALID_CREDENTIALS', 'Invalid email or password'),
         )
 
     # Status check BEFORE email-verification gate:
@@ -1897,14 +1939,14 @@ async def login_email(
     if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid email or password',
+            detail=texts.t('CABINET_EMAIL_INVALID_CREDENTIALS', 'Invalid email or password'),
         )
 
     # Test email and disabled verification bypass the check
     if not user.email_verified and not is_test_email and settings.is_cabinet_email_verification_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Please verify your email first',
+            detail=texts.t('CABINET_AUTH_VERIFY_EMAIL_FIRST', 'Please verify your email first'),
         )
 
     user.cabinet_last_login = datetime.now(UTC)
@@ -1924,15 +1966,17 @@ async def login_email(
 @router.post('/refresh', response_model=TokenResponse)
 async def refresh_token(
     request: RefreshTokenRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Refresh access token using refresh token."""
+    texts = get_texts(get_request_language(raw_request))
     payload = get_token_payload(request.refresh_token, expected_type='refresh')
 
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired refresh token',
+            detail=texts.t('CABINET_REFRESH_INVALID', 'Invalid or expired refresh token'),
         )
 
     try:
@@ -1940,7 +1984,7 @@ async def refresh_token(
     except (TypeError, ValueError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid token payload',
+            detail=texts.t('CABINET_AUTH_INVALID_TOKEN_PAYLOAD', 'Invalid token payload'),
         ) from e
 
     # Verify token exists in database and is not revoked
@@ -1956,13 +2000,13 @@ async def refresh_token(
     if not token_record:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Refresh token not found or revoked',
+            detail=texts.t('CABINET_REFRESH_REVOKED', 'Refresh token not found or revoked'),
         )
 
     if not token_record.is_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Refresh token is no longer valid',
+            detail=texts.t('CABINET_REFRESH_EXPIRED', 'Refresh token is no longer valid'),
         )
 
     user = await get_user_by_id(db, user_id)
@@ -1970,7 +2014,7 @@ async def refresh_token(
     if not user or user.status != 'active':
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='User not found or inactive',
+            detail=texts.t('CABINET_REFRESH_USER_UNAVAILABLE', 'User not found or inactive'),
         )
 
     user_permissions, user_role_names, user_role_level = await UserRoleCRUD.get_user_permissions(db, user.id)
@@ -1994,6 +2038,7 @@ async def refresh_token(
 @router.post('/logout')
 async def logout(
     request: RefreshTokenRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Logout and revoke refresh token."""
@@ -2010,7 +2055,7 @@ async def logout(
         token_record.revoked_at = datetime.now(UTC)
         await db.commit()
 
-    return {'message': 'Logged out successfully'}
+    return {'message': get_texts(get_request_language(raw_request)).t('CABINET_LOGOUT_SUCCESS', 'Logged out successfully')}
 
 
 @router.post('/login/auto', response_model=AuthResponse)
@@ -2020,11 +2065,12 @@ async def auto_login(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Auto-login using a short-lived JWT from guest purchase success page."""
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'auto_login', limit=5, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
 
@@ -2032,7 +2078,7 @@ async def auto_login(
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired auto-login token',
+            detail=texts.t('CABINET_AUTO_LOGIN_INVALID', 'Invalid or expired auto-login token'),
         )
 
     try:
@@ -2040,20 +2086,20 @@ async def auto_login(
     except (KeyError, ValueError, TypeError) as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid token payload',
+            detail=texts.t('CABINET_AUTH_INVALID_TOKEN_PAYLOAD', 'Invalid token payload'),
         ) from e
 
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='User not found',
+            detail=texts.t('CABINET_AUTH_USER_NOT_FOUND', 'User not found'),
         )
 
     if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Account is deactivated',
+            detail=texts.t('CABINET_AUTH_ACCOUNT_NOT_ACTIVE', 'Account is deactivated'),
         )
 
     # SECURITY: auto-login токены создаются по результатам guest purchase, где
@@ -2071,7 +2117,7 @@ async def auto_login(
         )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Administrator accounts cannot use auto-login. Please sign in via Telegram.',
+            detail=texts.t('CABINET_AUTO_LOGIN_ADMIN_DENIED', 'Administrator accounts cannot use auto-login. Please sign in via Telegram.'),
         )
 
     response = await _create_auth_response(user, db)
@@ -2089,12 +2135,13 @@ async def forgot_password(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Request password reset."""
-    await require_email_auth_enabled(db)
+    await require_email_auth_enabled(db, language=get_request_language(raw_request))
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'password_forgot', limit=3, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
     email_lower = (request.email or '').strip().lower()
@@ -2103,7 +2150,7 @@ async def forgot_password(
 
     # Always return success to prevent email enumeration
     if not user:
-        return {'message': 'If the email exists, a password reset link has been sent'}
+        return {'message': texts.t('CABINET_PASSWORD_RESET_REQUESTED', 'If the email exists, a password reset link has been sent')}
 
     # Auto-fix guest-created email users who have a password but weren't verified
     if not user.email_verified and user.password_hash and user.auth_type == 'email':
@@ -2112,7 +2159,7 @@ async def forgot_password(
         await db.commit()
 
     if not user.email_verified:
-        return {'message': 'If the email exists, a password reset link has been sent'}
+        return {'message': texts.t('CABINET_PASSWORD_RESET_REQUESTED', 'If the email exists, a password reset link has been sent')}
 
     # Generate reset token
     reset_token = generate_password_reset_token()
@@ -2127,7 +2174,7 @@ async def forgot_password(
     if email_service.is_configured():
         cabinet_url = settings.CABINET_URL
         reset_url = f'{cabinet_url}/reset-password'
-        lang = user.language or 'ru'
+        lang = user.language or get_request_language(raw_request)
         full_url = f'{reset_url}?token={reset_token}'
         expire_hours = settings.get_cabinet_password_reset_expire_hours()
 
@@ -2156,7 +2203,7 @@ async def forgot_password(
             custom_body_html=custom_body,
         )
 
-    return {'message': 'If the email exists, a password reset link has been sent'}
+    return {'message': texts.t('CABINET_PASSWORD_RESET_REQUESTED', 'If the email exists, a password reset link has been sent')}
 
 
 @router.post('/password/reset')
@@ -2166,12 +2213,13 @@ async def reset_password(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Reset password with token."""
-    await require_email_auth_enabled(db)
+    await require_email_auth_enabled(db, language=get_request_language(raw_request))
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'password_reset', limit=5, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_LOGIN_RATE_LIMIT', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
     result = await db.execute(select(User).where(User.password_reset_token == request.token))
@@ -2180,13 +2228,13 @@ async def reset_password(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid reset token',
+            detail=texts.t('CABINET_PASSWORD_RESET_TOKEN_INVALID', 'Invalid reset token'),
         )
 
     if is_token_expired(user.password_reset_expires):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Reset token has expired',
+            detail=texts.t('CABINET_AUTH_RESET_TOKEN_EXPIRED', 'Reset token has expired'),
         )
 
     # Update password
@@ -2196,7 +2244,7 @@ async def reset_password(
 
     await db.commit()
 
-    return {'message': 'Password reset successfully'}
+    return {'message': texts.t('CABINET_AUTH_PASSWORD_RESET_SUCCESS', 'Password reset successfully')}
 
 
 @router.get('/me', response_model=UserResponse)
@@ -2262,7 +2310,11 @@ async def check_is_admin(
     return {'is_admin': is_admin}
 
 
-@router.post('/email/change', response_model=EmailChangeResponse)
+@router.post(
+    '/email/change', response_model=EmailChangeResponse,
+    summary='درخواست تغییر ایمیل',
+    description='برای ایمیل تأییدشده، کد به نشانی جدید ارسال می‌شود. ایمیل تأییدنشده مستقیماً جایگزین می‌شود.',
+)
 async def request_email_change(
     request: EmailChangeRequest,
     raw_request: Request,
@@ -2277,6 +2329,8 @@ async def request_email_change(
     """
     # Rate-limit: each request mails an OTP to an arbitrary address, so throttle
     # by IP and by account to prevent code-flooding and brute-force restarts.
+    language = user.language or get_request_language(raw_request)
+    texts = get_texts(language)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(
         client_ip, 'email_change_request', limit=5, window=300, fail_closed=True
@@ -2285,21 +2339,21 @@ async def request_email_change(
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': '300'},
         )
 
     if not user.email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No email address to change',
+            detail=texts.t('CABINET_AUTH_NO_EMAIL_TO_CHANGE', 'No email address to change'),
         )
 
     # Check if new email is the same as current
     if request.new_email.lower() == user.email.lower():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='New email is the same as current email',
+            detail=texts.t('CABINET_AUTH_NEW_EMAIL_SAME_AS_CURRENT', 'New email is the same as current email'),
         )
 
     # SECURITY: never let the change flow bind an ADMIN_EMAILS address the user
@@ -2309,21 +2363,21 @@ async def request_email_change(
     if new_email_lower in settings.get_admin_emails() and user.email.lower() != new_email_lower:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='This email address cannot be linked to your account.',
+            detail=texts.t('CABINET_AUTH_EMAIL_CANNOT_BE_LINKED', 'This email address cannot be linked to your account.'),
         )
 
     # Check for disposable email
     if disposable_email_service.is_disposable(request.new_email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Disposable email addresses are not allowed',
+            detail=texts.t('CABINET_AUTH_DISPOSABLE_EMAIL_NOT_ALLOWED', 'Disposable email addresses are not allowed'),
         )
 
     # Check if new email is already taken
     if await is_email_taken(db, request.new_email, exclude_user_id=user.id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This email is already registered',
+            detail=texts.t('CABINET_AUTH_EMAIL_ALREADY_REGISTERED', 'This email is already registered'),
         )
 
     # Unverified email: replace directly and send verification to new address
@@ -2343,13 +2397,15 @@ async def request_email_change(
             await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='This email is already registered',
+                detail=texts.t('CABINET_AUTH_EMAIL_ALREADY_REGISTERED', 'This email is already registered'),
             )
 
-        if settings.is_cabinet_email_verification_enabled() and email_service.is_configured():
+        sent = False
+        verification_enabled = settings.is_cabinet_email_verification_enabled()
+        if verification_enabled and email_service.is_configured():
             cabinet_url = settings.CABINET_URL
             verification_url = f'{cabinet_url}/verify-email'
-            lang = user.language or 'ru'
+            lang = language
             full_url = f'{verification_url}?token={verification_token}'
             expire_hours = settings.get_cabinet_email_verification_expire_hours()
 
@@ -2368,7 +2424,7 @@ async def request_email_change(
             custom_subject, custom_body = override or (None, None)
 
             try:
-                await asyncio.to_thread(
+                sent = await asyncio.to_thread(
                     email_service.send_verification_email,
                     to_email=request.new_email,
                     verification_token=verification_token,
@@ -2391,7 +2447,11 @@ async def request_email_change(
         )
 
         return EmailChangeResponse(
-            message='Email replaced, verification sent to new address',
+            message=(
+                texts.t('CABINET_AUTH_EMAIL_REPLACED_VERIFICATION_SENT', 'Email replaced, verification sent to new address')
+                if sent else texts.t('CABINET_EMAIL_REPLACED_NOT_SENT', 'Email replaced, but the verification email has not been sent yet.')
+                if verification_enabled else texts.t('CABINET_EMAIL_REPLACED', 'Email replaced')
+            ),
             new_email=request.new_email,
             expires_in_minutes=0,
         )
@@ -2407,7 +2467,7 @@ async def request_email_change(
 
     # Send verification email to new address
     if email_service.is_configured():
-        lang = user.language or 'ru'
+        lang = language
 
         # Check for admin template override
         override = await get_rendered_override(
@@ -2424,33 +2484,40 @@ async def request_email_change(
         )
         custom_subject, custom_body = override or (None, None)
 
-        await asyncio.to_thread(
-            email_service.send_email_change_code,
-            to_email=request.new_email,
-            code=code,
-            username=user.first_name,
-            language=lang,
-            custom_subject=custom_subject,
-            custom_body_html=custom_body,
-        )
+        try:
+            sent = await asyncio.to_thread(
+                email_service.send_email_change_code,
+                to_email=request.new_email,
+                code=code,
+                username=user.first_name,
+                language=lang,
+                custom_subject=custom_subject,
+                custom_body_html=custom_body,
+            )
+        except Exception:
+            logger.exception('Failed to send email change code', user_id=user.id)
+            sent = False
     else:
         # Clear pending change if email service is not configured
         await clear_email_change_pending(db, user)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Email service is not configured',
+            detail=texts.t('CABINET_AUTH_EMAIL_SERVICE_NOT_CONFIGURED', 'Email service is not configured'),
         )
 
     logger.info('Email change requested for user', user_id=user.id, email=user.email, new_email=request.new_email)
 
     return EmailChangeResponse(
-        message='Verification code sent to new email',
+        message=(
+            texts.t('CABINET_AUTH_EMAIL_CHANGE_CODE_SENT', 'Verification code sent to new email')
+            if sent else texts.t('CABINET_AUTH_MERGE_CODE_NOT_SENT', 'The confirmation email has not been sent yet. Please wait and try again if it does not arrive.')
+        ),
         new_email=request.new_email,
         expires_in_minutes=expire_minutes,
     )
 
 
-@router.post('/email/change/verify')
+@router.post('/email/change/verify', summary='تأیید تغییر ایمیل', description='بررسی کد ارسالی و ثبت نشانی ایمیل جدید')
 async def verify_email_change(
     request: EmailChangeVerifyRequest,
     raw_request: Request,
@@ -2467,11 +2534,12 @@ async def verify_email_change(
     # its TTL. Rate-limit by IP AND by account; once the per-account cap is hit,
     # burn the pending change so the attacker must restart (re-emailing the
     # victim, who would notice) instead of grinding the same live code.
+    texts = get_texts(user.language)
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'email_change_verify', limit=5, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
     if await RateLimitCache.is_ip_rate_limited(
@@ -2480,7 +2548,7 @@ async def verify_email_change(
         await clear_email_change_pending(db, user)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many invalid attempts. Please request a new code.',
+            detail=texts.t('CABINET_AUTH_CHANGE_TOO_MANY_ATTEMPTS', 'Too many invalid attempts. Please request a new code.'),
         )
 
     success, message = await verify_and_apply_email_change(db, user, request.code)
@@ -2497,7 +2565,7 @@ async def verify_email_change(
     }
 
 
-@router.post('/email/change/cancel')
+@router.post('/email/change/cancel', summary='لغو تغییر ایمیل', description='لغو درخواست در انتظار و باطل‌کردن کد تغییر ایمیل')
 async def cancel_email_change(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -2505,18 +2573,19 @@ async def cancel_email_change(
     """
     Cancel pending email change.
     """
+    texts = get_texts(user.language)
     if not user.email_change_new:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No pending email change',
+            detail=texts.t('CABINET_AUTH_NO_PENDING_EMAIL_CHANGE', 'No pending email change'),
         )
 
     await clear_email_change_pending(db, user)
 
-    return {'message': 'Email change cancelled'}
+    return {'message': texts.t('CABINET_AUTH_EMAIL_CHANGE_CANCELLED', 'Email change cancelled')}
 
 
-@router.get('/email/change/status')
+@router.get('/email/change/status', summary='وضعیت تغییر ایمیل', description='نمایش نشانی جدید و زمان انقضای درخواست در انتظار')
 async def get_email_change_status(
     user: User = Depends(get_current_cabinet_user),
 ):
@@ -2540,7 +2609,8 @@ async def get_email_change_status(
 # --- Deep link auth (fallback when oauth.telegram.org is blocked) ---
 
 
-@router.post('/deeplink/request', response_model=DeepLinkTokenResponse)
+@router.post('/deeplink/request', response_model=DeepLinkTokenResponse,
+             summary='ساخت لینک ورود تلگرام', description='ساخت توکن یک‌بارمصرف برای تأیید ورود در ربات تلگرام')
 async def request_deep_link_token(
     raw_request: Request,
 ):
@@ -2549,11 +2619,12 @@ async def request_deep_link_token(
     Frontend shows t.me/{bot}?start=webauth_{token} to the user.
     No auth required (user is not logged in yet).
     """
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'deeplink_request', limit=10, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
 
@@ -2562,14 +2633,14 @@ async def request_deep_link_token(
     except RuntimeError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Service temporarily unavailable',
+            detail=texts.t('CABINET_DEEPLINK_UNAVAILABLE', 'Service temporarily unavailable'),
         )
 
     bot_username = settings.get_bot_username()
     if not bot_username:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Bot not configured',
+            detail=texts.t('CABINET_DEEPLINK_BOT_UNCONFIGURED', 'Bot not configured'),
         )
 
     return DeepLinkTokenResponse(
@@ -2579,7 +2650,8 @@ async def request_deep_link_token(
     )
 
 
-@router.post('/deeplink/poll', response_model=AuthResponse)
+@router.post('/deeplink/poll', response_model=AuthResponse,
+             summary='پیگیری ورود با لینک تلگرام', description='بررسی تأیید ورود؛ پاسخ ۲۰۲ برای انتظار و ۴۱۰ برای لینک نامعتبر یا منقضی‌شده است.')
 async def poll_deep_link_token(
     request: DeepLinkPollRequest,
     raw_request: Request,
@@ -2589,11 +2661,12 @@ async def poll_deep_link_token(
 
     Returns 202 if still pending, AuthResponse if completed, 410 if expired.
     """
+    texts = get_texts(get_request_language(raw_request))
     client_ip = get_client_ip(raw_request)
     if await RateLimitCache.is_ip_rate_limited(client_ip, 'deeplink_poll', limit=60, window=60, fail_closed=True):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail='Too many requests',
+            detail=texts.t('CABINET_TOO_MANY_REQUESTS', 'Too many requests'),
             headers={'Retry-After': '60'},
         )
 
@@ -2602,19 +2675,19 @@ async def poll_deep_link_token(
     if data is None:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
-            detail='Token expired or not found',
+            detail=texts.t('CABINET_DEEPLINK_EXPIRED', 'Token expired or not found'),
         )
 
     if data.get('status') == 'pending':
         raise HTTPException(
             status_code=status.HTTP_202_ACCEPTED,
-            detail='Waiting for confirmation',
+            detail=texts.t('CABINET_DEEPLINK_PENDING', 'Waiting for confirmation'),
         )
 
     if data.get('status') != 'linked':
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
-            detail='Invalid token state',
+            detail=texts.t('CABINET_DEEPLINK_INVALID_STATE', 'Invalid token state'),
         )
 
     # Token is linked - consume it atomically
@@ -2622,27 +2695,27 @@ async def poll_deep_link_token(
     if not consumed:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
-            detail='Token already consumed',
+            detail=texts.t('CABINET_DEEPLINK_CONSUMED', 'Token already consumed'),
         )
 
     user_id = consumed.get('user_id')
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Invalid token data',
+            detail=texts.t('CABINET_DEEPLINK_INVALID_DATA', 'Invalid token data'),
         )
 
     user = await get_user_by_id(db, int(user_id))
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='User not found',
+            detail=texts.t('CABINET_AUTH_USER_NOT_FOUND', 'User not found'),
         )
 
     if user.status != UserStatus.ACTIVE.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Account is deactivated',
+            detail=texts.t('CABINET_DEEPLINK_INACTIVE', 'Account is deactivated'),
         )
 
     user.cabinet_last_login = datetime.now(UTC)

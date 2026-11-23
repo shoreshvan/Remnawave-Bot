@@ -28,6 +28,7 @@ from app.database.crud.recurrent_payments import (
 )
 from app.database.crud.rules import clear_all_rules, create_or_update_rules, get_rules_by_language
 from app.database.models import FaqPage, User
+from app.localization.texts import get_texts
 from app.services.system_settings_service import bot_configuration_service
 from app.utils.display_mode import normalize_display_mode
 
@@ -305,6 +306,7 @@ async def update_privacy_policy_admin(
     admin: User = Depends(require_permission('info_pages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> LegalDocumentResponse:
+    texts = get_texts(admin.language)
     items = request.items or []
     languages = [_require_language(item.language) for item in items]
     _check_display_mode_writable('privacy-policy', request.display_mode)
@@ -314,7 +316,10 @@ async def update_privacy_policy_admin(
         except IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f'Privacy policy for language {lang} already exists',
+                detail=texts.t(
+                    'CABINET_LEGAL_PAGES_PRIVACY_EXISTS',
+                    'Privacy policy for language {lang} already exists',
+                ).format(lang=lang),
             )
     if request.display_mode:
         await _set_display_mode(db, 'privacy-policy', request.display_mode)
@@ -336,6 +341,7 @@ async def update_public_offer_admin(
     admin: User = Depends(require_permission('info_pages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> LegalDocumentResponse:
+    texts = get_texts(admin.language)
     items = request.items or []
     languages = [_require_language(item.language) for item in items]
     _check_display_mode_writable('public-offer', request.display_mode)
@@ -345,7 +351,10 @@ async def update_public_offer_admin(
         except IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f'Public offer for language {lang} already exists',
+                detail=texts.t(
+                    'CABINET_LEGAL_PAGES_OFFER_EXISTS',
+                    'Public offer for language {lang} already exists',
+                ).format(lang=lang),
             )
     if request.display_mode:
         await _set_display_mode(db, 'public-offer', request.display_mode)
@@ -367,6 +376,7 @@ async def update_recurrent_payments_admin(
     admin: User = Depends(require_permission('info_pages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> LegalDocumentResponse:
+    texts = get_texts(admin.language)
     items = request.items or []
     languages = [_require_language(item.language) for item in items]
     _check_display_mode_writable('recurrent-payments', request.display_mode)
@@ -376,7 +386,10 @@ async def update_recurrent_payments_admin(
         except IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f'Recurring-payments document for language {lang} already exists',
+                detail=texts.t(
+                    'CABINET_LEGAL_PAGES_RECURRENT_EXISTS',
+                    'Recurring-payments document for language {lang} already exists',
+                ).format(lang=lang),
             )
     if request.display_mode:
         await _set_display_mode(db, 'recurrent-payments', request.display_mode)
@@ -426,6 +439,7 @@ async def update_faq_admin(
     admin: User = Depends(require_permission('info_pages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> FaqResponse:
+    texts = get_texts(admin.language)
     items = request.settings or []
     languages = [_require_language(item.language) for item in items]
     _check_display_mode_writable('faq', request.display_mode)
@@ -435,7 +449,10 @@ async def update_faq_admin(
         except IntegrityError:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f'FAQ setting for language {lang} already exists',
+                detail=texts.t(
+                    'CABINET_LEGAL_PAGES_FAQ_SETTING_EXISTS',
+                    'FAQ setting for language {lang} already exists',
+                ).format(lang=lang),
             )
     if request.display_mode:
         await _set_display_mode(db, 'faq', request.display_mode)
@@ -468,11 +485,12 @@ async def update_faq_page_admin(
     admin: User = Depends(require_permission('info_pages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> FaqPageItem:
+    texts = get_texts(admin.language)
     page = await get_faq_page_by_id(db, page_id)
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='FAQ page not found',
+            detail=texts.t('CABINET_LEGAL_PAGES_FAQ_PAGE_NOT_FOUND', 'FAQ page not found'),
         )
     updated = await update_faq_page(
         db,
@@ -492,11 +510,12 @@ async def delete_faq_page_admin(
     admin: User = Depends(require_permission('info_pages:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
 ) -> None:
+    texts = get_texts(admin.language)
     page = await get_faq_page_by_id(db, page_id)
     if not page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='FAQ page not found',
+            detail=texts.t('CABINET_LEGAL_PAGES_FAQ_PAGE_NOT_FOUND', 'FAQ page not found'),
         )
     await delete_faq_page(db, page_id)
     logger.info('Admin deleted FAQ page via cabinet', admin_id=admin.id, page_id=page_id)

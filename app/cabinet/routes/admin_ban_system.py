@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.config import settings
 from app.database.models import User
 from app.external.ban_system_api import BanSystemAPI, BanSystemAPIError
+from app.localization.texts import get_texts
 
 from ..dependencies import require_permission
 from ..schemas.ban_system import (
@@ -62,13 +63,13 @@ def _get_ban_api() -> BanSystemAPI:
     if not settings.is_ban_system_enabled():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Ban System integration is disabled',
+            detail=get_texts().t('BAN_SYSTEM_INTEGRATION_DISABLED', 'Ban System integration is disabled'),
         )
 
     if not settings.is_ban_system_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail='Ban System is not configured',
+            detail=get_texts().t('BAN_SYSTEM_NOT_CONFIGURED', 'Ban System is not configured'),
         )
 
     return BanSystemAPI(
@@ -88,13 +89,13 @@ async def _api_request(api: BanSystemAPI, method: str, *args, **kwargs) -> Any:
         logger.error('Ban System API error', error=e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f'Ban System API error: {e.message}',
+            detail=get_texts().t('BAN_SYSTEM_API_ERROR', 'Ban System API error: {message}').format(message=e.message),
         )
     except Exception as e:
         logger.error('Ban System unexpected error', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Internal error: {e!s}',
+            detail=get_texts().t('BAN_SYSTEM_INTERNAL_ERROR', 'Internal error: {error}').format(error=str(e)),
         )
 
 
@@ -180,7 +181,9 @@ async def get_stats(
 async def get_users(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    status: str | None = Query(None, description='Filter: over_limit, with_limit, unlimited'),
+    status: str | None = Query(
+        None, description=get_texts().t('BAN_SYSTEM_USERS_STATUS_FILTER', 'Filter: over_limit, with_limit, unlimited')
+    ),
     admin: User = Depends(require_permission('ban_system:read')),
 ) -> BanUsersListResponse:
     """Get list of users from Ban System."""
@@ -367,7 +370,9 @@ async def unban_user(
     try:
         await _api_request(api, 'enable_user', user_id=user_id)
         logger.info('Admin unbanned user in Ban System', admin_id=admin.id, user_id=user_id)
-        return UnbanResponse(success=True, message='User unbanned successfully')
+        return UnbanResponse(
+            success=True, message=get_texts().t('BAN_SYSTEM_USER_UNBANNED', 'User unbanned successfully')
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -390,7 +395,7 @@ async def ban_user(
             reason=request.reason,
         )
         logger.info('Admin banned user', admin_id=admin.id, username=request.username, reason=request.reason)
-        return UnbanResponse(success=True, message='User banned successfully')
+        return UnbanResponse(success=True, message=get_texts().t('BAN_SYSTEM_USER_BANNED', 'User banned successfully'))
     except HTTPException:
         raise
     except Exception as e:
@@ -478,8 +483,12 @@ async def get_nodes(
 @router.get('/agents', response_model=BanAgentsListResponse)
 async def get_agents(
     search: str | None = Query(None),
-    health: str | None = Query(None, description='healthy, warning, critical'),
-    agent_status: str | None = Query(None, alias='status', description='online, offline'),
+    health: str | None = Query(
+        None, description=get_texts().t('BAN_SYSTEM_AGENTS_HEALTH_FILTER', 'healthy, warning, critical')
+    ),
+    agent_status: str | None = Query(
+        None, alias='status', description=get_texts().t('BAN_SYSTEM_AGENTS_STATUS_FILTER', 'online, offline')
+    ),
     admin: User = Depends(require_permission('ban_system:read')),
 ) -> BanAgentsListResponse:
     """Get list of monitoring agents."""
@@ -853,7 +862,12 @@ async def whitelist_add(
     try:
         await _api_request(api, 'whitelist_add', username=request.username)
         logger.info('Admin added to Ban System whitelist', admin_id=admin.id, username=request.username)
-        return UnbanResponse(success=True, message=f'User {request.username} added to whitelist')
+        return UnbanResponse(
+            success=True,
+            message=get_texts()
+            .t('BAN_SYSTEM_WHITELIST_ADDED', 'User {username} added to whitelist')
+            .format(username=request.username),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -870,7 +884,12 @@ async def whitelist_remove(
     try:
         await _api_request(api, 'whitelist_remove', username=request.username)
         logger.info('Admin removed from Ban System whitelist', admin_id=admin.id, username=request.username)
-        return UnbanResponse(success=True, message=f'User {request.username} removed from whitelist')
+        return UnbanResponse(
+            success=True,
+            message=get_texts()
+            .t('BAN_SYSTEM_WHITELIST_REMOVED', 'User {username} removed from whitelist')
+            .format(username=request.username),
+        )
     except HTTPException:
         raise
     except Exception as e:

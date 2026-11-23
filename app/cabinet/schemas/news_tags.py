@@ -4,6 +4,8 @@ import re
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.localization.texts import get_texts
+
 
 _HEX_COLOR_RE: re.Pattern[str] = re.compile(r'^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$')
 
@@ -18,7 +20,7 @@ class NewsTagCreate(BaseModel):
     @classmethod
     def validate_color(cls, v: str) -> str:
         if not _HEX_COLOR_RE.match(v):
-            msg = 'Invalid hex color'
+            msg = get_texts().t('CABINET_NEWS_TAG_INVALID_HEX_COLOR', 'Invalid hex color')
             raise ValueError(msg)
         return v
 
@@ -33,7 +35,7 @@ class NewsTagUpdate(BaseModel):
     @classmethod
     def validate_color(cls, v: str | None) -> str | None:
         if v is not None and not _HEX_COLOR_RE.match(v):
-            msg = 'Invalid hex color'
+            msg = get_texts().t('CABINET_NEWS_TAG_INVALID_HEX_COLOR', 'Invalid hex color')
             raise ValueError(msg)
         return v
 

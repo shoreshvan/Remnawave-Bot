@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.crud.info_pages import get_all_info_pages, get_info_page_by_slug, get_tab_replacements
+from app.localization.texts import get_texts
 from app.utils.display_mode import is_visible_in_web
 
 from ..dependencies import get_cabinet_db
@@ -29,7 +30,7 @@ async def list_active_info_pages(
         logger.exception('Failed to list active info pages')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load info pages',
+            detail=get_texts().t('CABINET_INFO_PAGES_LOAD_FAILED', 'Failed to load info pages'),
         )
 
 
@@ -48,7 +49,7 @@ async def get_info_page_tab_replacements(
         logger.exception('Failed to get tab replacements')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load tab replacements',
+            detail=get_texts().t('CABINET_INFO_PAGES_TAB_REPLACEMENTS_LOAD_FAILED', 'Failed to load tab replacements'),
         )
 
 
@@ -63,7 +64,7 @@ async def get_info_page_by_slug_public(
     if not page or not page.is_active or not is_visible_in_web(page.display_mode):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Info page not found',
+            detail=get_texts().t('CABINET_INFO_PAGES_NOT_FOUND', 'Info page not found'),
         )
 
     return InfoPageResponse.model_validate(page)

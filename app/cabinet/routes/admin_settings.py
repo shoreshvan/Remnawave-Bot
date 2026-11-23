@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.system_settings_service import (
     ReadOnlySettingError,
     bot_configuration_service,

@@ -20,6 +20,7 @@ from app.keyboards.inline import (
 )
 from app.localization.loader import DEFAULT_LANGUAGE
 from app.localization.texts import get_texts
+from app.utils.transaction_description import localize_transaction_description
 from app.states import BalanceStates
 from app.utils.decorators import error_handler
 from app.utils.timezone import format_local_datetime
@@ -265,6 +266,34 @@ async def route_payment_by_method(
             await process_riopay_payment_amount(message, db_user, db, amount_kopeks, state)
         return True
 
+    if payment_method == 'hooshpay':
+        from .hooshpay import process_hooshpay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_hooshpay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
+    if payment_method == 'tonpays':
+        from .tonpays import process_tonpays_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_tonpays_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
+    if payment_method == 'nowpayments':
+        from .nowpayments import process_nowpayments_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_nowpayments_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
+    if payment_method == 'atlaspay':
+        from .atlaspay import process_atlaspay_payment_amount
+
+        async with AsyncSessionLocal() as db:
+            await process_atlaspay_payment_amount(message, db_user, db, amount_kopeks, state)
+        return True
+
     return False
 
 
@@ -347,7 +376,7 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
         )
 
         text += f'{emoji} {amount_text}\n'
-        text += f'📝 {html.escape(transaction.description or "")}\n'
+        text += f'📝 {html.escape(localize_transaction_description(transaction.description, db_user.language) or "")}\n'
         text += f'📅 {format_local_datetime(transaction.created_at, "%d.%m.%Y %H:%M")}\n\n'
 
     keyboard = []
@@ -1016,6 +1045,32 @@ def register_balance_handlers(dp: Dispatcher):
     dp.callback_query.register(start_paritypay_topup, F.data == 'topup_paritypay')
     dp.callback_query.register(start_paritypay_card_topup, F.data == 'topup_paritypay_card')
     dp.callback_query.register(start_paritypay_sbp_topup, F.data == 'topup_paritypay_sbp')
+
+    from .hooshpay import start_hooshpay_topup
+
+    dp.callback_query.register(start_hooshpay_topup, F.data == 'topup_hooshpay')
+
+    from .tonpays import (
+        handle_tonpays_check,
+        handle_tonpays_new_card,
+        process_tonpays_receipt,
+        start_tonpays_topup,
+    )
+
+    dp.callback_query.register(start_tonpays_topup, F.data == 'topup_tonpays')
+    dp.callback_query.register(handle_tonpays_check, F.data.startswith('tonpays_check|'))
+    dp.callback_query.register(handle_tonpays_new_card, F.data.startswith('tonpays_card|'))
+    dp.message.register(process_tonpays_receipt, BalanceStates.waiting_for_tonpays_receipt)
+
+    from .atlaspay import handle_atlaspay_check, start_atlaspay_topup
+
+    dp.callback_query.register(start_atlaspay_topup, F.data == 'topup_atlaspay')
+    dp.callback_query.register(handle_atlaspay_check, F.data.startswith('atlaspay_check|'))
+
+    from .nowpayments import handle_nowpayments_check, start_nowpayments_topup
+
+    dp.callback_query.register(start_nowpayments_topup, F.data == 'topup_nowpayments')
+    dp.callback_query.register(handle_nowpayments_check, F.data.startswith('nowpay_check|'))
 
     from .mulenpay import check_mulenpay_payment_status
 

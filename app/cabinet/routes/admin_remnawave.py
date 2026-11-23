@@ -15,6 +15,7 @@ from app.database.crud.server_squad import (
     sync_with_remnawave,
 )
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.utils.cache import cache
 from app.utils.panel_node_usage import normalize_node_usage
 

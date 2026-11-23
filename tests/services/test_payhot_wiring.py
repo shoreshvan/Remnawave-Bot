@@ -74,7 +74,7 @@ async def test_telegram_payhot_amount_route_uses_its_database_session(monkeypatc
     from app.database import database
 
     monkeypatch.setattr(database, 'AsyncSessionLocal', factory)
-    message, user, state = object(), SimpleNamespace(id=1), object()
+    message, user, state = object(), SimpleNamespace(id=1, language='fa'), object()
     assert await main.route_payment_by_method(message, user, 10000, state, 'payhot_sbp') is True
     handler.assert_awaited_once_with(message, user, session, 10000, state)
 
@@ -111,7 +111,7 @@ async def test_cabinet_payhot_rejects_hidden_option_before_provider(monkeypatch)
     with pytest.raises(HTTPException) as exc:
         await balance.create_topup(
             TopUpRequest(amount_kopeks=10000, payment_method='payhot', payment_option='card'),
-            SimpleNamespace(id=1, telegram_id=None, restriction_topup=False),
+            SimpleNamespace(id=1, telegram_id=None, restriction_topup=False, language='fa'),
             AsyncMock(),
         )
     assert exc.value.status_code == 400
@@ -131,7 +131,7 @@ async def test_miniapp_status_checks_ownership_before_provider(monkeypatch):
     result = await miniapp._resolve_payhot_payment_status(
         service,
         AsyncMock(),
-        SimpleNamespace(id=1),
+        SimpleNamespace(id=1, language='fa'),
         MiniAppPaymentStatusQuery(method='payhot', localPaymentId=7),
     )
     assert not result.is_paid
@@ -270,7 +270,7 @@ async def test_miniapp_paid_invoice_displays_paid(monkeypatch):
     result = await miniapp._resolve_payhot_payment_status(
         service,
         AsyncMock(),
-        SimpleNamespace(id=1),
+        SimpleNamespace(id=1, language='fa'),
         MiniAppPaymentStatusQuery(method='payhot', localPaymentId=7),
     )
     assert result.is_paid
@@ -292,7 +292,7 @@ async def test_cabinet_latest_payhot_queries_owner_scoped_model():
     db = AsyncMock()
     db.execute.return_value = result
     with pytest.raises(HTTPException) as exc:
-        await get_latest_payment_by_method('payhot', SimpleNamespace(id=42), db)
+        await get_latest_payment_by_method('payhot', SimpleNamespace(id=42, language='fa'), db)
     assert exc.value.status_code == 404
     sql = str(
         db.execute.await_args.args[0].compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True})

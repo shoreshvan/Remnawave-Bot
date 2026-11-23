@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.system_settings_service import bot_configuration_service
 
@@ -76,7 +77,7 @@ async def set_remnawave_config_uuid(
     if uuid_value and not _UUID_PATTERN.match(uuid_value):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Invalid UUID format',
+            detail=get_texts().t('CABINET_ADMIN_APPS_INVALID_UUID', 'Invalid UUID format'),
         )
 
     try:
@@ -91,7 +92,7 @@ async def set_remnawave_config_uuid(
         logger.error('Error saving RemnaWave config UUID', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to save configuration',
+            detail=get_texts().t('CABINET_ADMIN_APPS_SAVE_FAILED', 'Failed to save configuration'),
         )
 
     return RemnaWaveConfigStatus(
@@ -109,7 +110,10 @@ async def get_remnawave_subscription_config(
     if not config_uuid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='RemnaWave subscription config is not configured',
+            detail=get_texts().t(
+                'CABINET_ADMIN_APPS_CONFIG_NOT_CONFIGURED',
+                'RemnaWave subscription config is not configured',
+            ),
         )
 
     try:
@@ -119,7 +123,7 @@ async def get_remnawave_subscription_config(
             if not config:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail='Subscription config not found',
+                    detail=get_texts().t('CABINET_ADMIN_APPS_CONFIG_NOT_FOUND', 'Subscription config not found'),
                 )
 
             return {
@@ -134,7 +138,7 @@ async def get_remnawave_subscription_config(
         logger.error('Error fetching RemnaWave config', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to fetch config from RemnaWave',
+            detail=get_texts().t('CABINET_ADMIN_APPS_FETCH_CONFIG_FAILED', 'Failed to fetch config from RemnaWave'),
         )
 
 
@@ -159,5 +163,5 @@ async def list_remnawave_subscription_configs(
         logger.error('Error listing RemnaWave configs', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to fetch configs from RemnaWave',
+            detail=get_texts().t('CABINET_ADMIN_APPS_FETCH_CONFIGS_FAILED', 'Failed to fetch configs from RemnaWave'),
         )

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
+from app.localization.texts import get_texts
 from app.services.payment_method_config_service import (
     DEFAULT_QUICK_AMOUNTS,
     _get_method_defaults,
@@ -66,7 +67,10 @@ class PaymentMethodConfigResponse(BaseModel):
 
 class PaymentMethodConfigUpdateRequest(BaseModel):
     is_enabled: bool | None = None
-    display_name: str | None = Field(default=None, description='Null to reset to default')
+    display_name: str | None = Field(
+        default=None,
+        description=get_texts().t('CABINET_PAYMENT_METHOD_NULL_RESET_DESCRIPTION', 'Null to reset to default'),
+    )
     sub_options: dict[str, bool] | None = None
     min_amount_kopeks: int | None = Field(default=None, ge=0)
     max_amount_kopeks: int | None = Field(default=None, ge=0)
@@ -96,7 +100,10 @@ class PaymentMethodConfigUpdateRequest(BaseModel):
     promo_group_filter_mode: str | None = Field(default=None, pattern='^(all|selected)$')
     allowed_promo_group_ids: list[int] | None = None
     open_url_direct: bool | None = None
-    description: str | None = Field(default=None, description='Null to reset to default')
+    description: str | None = Field(
+        default=None,
+        description=get_texts().t('CABINET_PAYMENT_METHOD_NULL_RESET_DESCRIPTION', 'Null to reset to default'),
+    )
     # Allow explicitly resetting display_name to null
     reset_display_name: bool = False
     reset_description: bool = False

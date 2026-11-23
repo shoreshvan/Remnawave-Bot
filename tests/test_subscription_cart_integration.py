@@ -79,7 +79,7 @@ async def test_save_cart_and_redirect_to_topup(mock_callback_query, mock_state, 
 
         # Подготовим тексты
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f'{x / 100:.0f} ₽'
+        mock_texts.format_price = lambda x: f'{x / 100:.0f} تومان'
         mock_get_texts.return_value = mock_texts
 
         missing_amount = 40000  # 50000 - 10000 = 40000
@@ -146,7 +146,7 @@ async def test_return_to_saved_cart_success(mock_callback_query, mock_state, moc
 
         # Подготовим тексты
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f'{x / 100:.0f} ₽'
+        mock_texts.format_price = lambda x: f'{x / 100:.0f} تومان'
         mock_get_texts.return_value = mock_texts
 
         # Увеличиваем баланс пользователя, чтобы его хватило
@@ -206,7 +206,7 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
         mock_keyboard_func.return_value = confirm_keyboard
 
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f'{x / 100:.0f} ₽'
+        mock_texts.format_price = lambda x: f'{x / 100:.0f} تومان'
         mock_get_texts.return_value = mock_texts
 
         mock_settings.is_devices_selection_enabled.return_value = True
@@ -220,7 +220,7 @@ async def test_return_to_saved_cart_skips_edit_when_message_matches(
             '📊 Трафик: 40 ГБ\n'
             '🌍 Страны: Russia, USA\n'
             '📱 Устройства: 3\n\n'
-            '💎 Общая стоимость: 440 ₽\n\n'
+            '💎 Общая стоимость: 440 تومان\n\n'
             'Подтверждаете покупку?'
         )
 
@@ -284,7 +284,7 @@ async def test_return_to_saved_cart_normalizes_devices_when_disabled(
         mock_keyboard_func.return_value = mock_keyboard
 
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f'{x / 100:.0f} ₽'
+        mock_texts.format_price = lambda x: f'{x / 100:.0f} تومان'
         mock_texts.t = lambda key, default=None: default or ''
         mock_get_texts.return_value = mock_texts
 
@@ -346,7 +346,7 @@ async def test_return_to_saved_cart_insufficient_funds(mock_callback_query, mock
 
         # Подготовим тексты
         mock_texts = AsyncMock()
-        mock_texts.format_price = lambda x: f'{x / 100:.0f} ₽'
+        mock_texts.format_price = lambda x: f'{x / 100:.0f} تومان'
         mock_texts.t = lambda key, default: default
         mock_get_texts.return_value = mock_texts
 

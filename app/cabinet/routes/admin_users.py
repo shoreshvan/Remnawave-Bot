@@ -64,6 +64,7 @@ from app.services.panel_sync import (
     read_panel_user,
 )
 from app.services.panel_sync.fields import narrow_push_fields
+from app.localization.texts import get_texts
 from app.services.permission_service import PermissionService
 from app.services.user_activity_service import UnknownActivityTypes, UserActivityResponse, collect_user_activity
 from app.utils.subscription_time import local_days_until

@@ -13,6 +13,7 @@ from sqlalchemy.exc import InterfaceError, OperationalError
 from app.config import settings
 from app.database.crud.user import get_user_by_telegram_id
 from app.database.database import AsyncSessionLocal
+from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.states import RegistrationStates
 from app.utils.check_reg_process import is_registration_process

@@ -17,6 +17,7 @@ from app.database.crud.subscription import (
     get_subscription_by_id_for_user,
 )
 from app.database.models import SubscriptionStatus, User
+from app.localization.texts import get_texts
 from app.utils.legacy_subscription import is_legacy_subscription
 
 from ...dependencies import get_cabinet_db, get_current_cabinet_user

@@ -18,6 +18,7 @@ from app.cabinet.auth.email_auth_gate import EMAIL_AUTH_ENABLED_KEY, is_email_au
 from app.config import settings
 from app.database.crud.system_setting import get_setting_value
 from app.database.models import SystemSetting, User
+from app.localization.texts import get_texts
 from app.services.gift_purchase_service import GIFT_ENABLED_KEY, is_gift_enabled
 
 from ..dependencies import get_cabinet_db, get_current_cabinet_user, require_permission
@@ -739,19 +740,28 @@ async def upload_bot_start_video(
     меню уходит по нему мгновенно и без повторной загрузки (тот же приём, что
     в ``/cabinet/media/upload``). Сам файл у нас не хранится.
     """
+    texts = get_texts(admin.language)
     content_type = (file.content_type or '').lower()
     if not content_type.startswith('video/'):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid file type. Expected a video')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_BRANDING_VIDEO_INVALID_TYPE', 'Invalid file type. Expected a video'),
+        )
 
     max_bytes = settings.MEDIA_MAX_VIDEO_SIZE_MB * 1024 * 1024
     # Читаем на байт больше лимита — чтобы отличить «ровно лимит» от «больше».
     content = await file.read(max_bytes + 1)
     if not content:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Empty file')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_BRANDING_VIDEO_EMPTY_FILE', 'Empty file'),
+        )
     if len(content) > max_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'File too large. Maximum size: {settings.MEDIA_MAX_VIDEO_SIZE_MB} MB',
+            detail=texts.t('CABINET_BRANDING_VIDEO_TOO_LARGE', 'File too large. Maximum size: {size} MB').format(
+                size=settings.MEDIA_MAX_VIDEO_SIZE_MB
+            ),
         )
 
     from aiogram.types import BufferedInputFile
@@ -786,13 +796,16 @@ async def upload_bot_start_video(
         logger.error('Не удалось загрузить видео стартового меню в Telegram', error=str(error))
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Telegram rejected the video',
+            detail=texts.t('CABINET_BRANDING_VIDEO_TELEGRAM_REJECTED', 'Telegram rejected the video'),
         ) from error
     finally:
         await bot.session.close()
 
     if not file_id:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Telegram returned no file_id')
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=texts.t('CABINET_BRANDING_VIDEO_NO_FILE_ID', 'Telegram returned no file_id'),
+        )
 
     await set_start_video_file_id(db, file_id)
     logger.info('Видео стартового меню обновлено', admin_id=admin.id)
@@ -819,10 +832,14 @@ async def update_branding_name(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update the project name. Admin only. Empty name allowed (logo only mode)."""
+    texts = get_texts(admin.language)
     name = payload.name.strip() if payload.name else ''
 
     if len(name) > 50:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Name too long (max 50 characters)')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_BRANDING_NAME_TOO_LONG', 'Name too long (max 50 characters)'),
+        )
 
     await set_setting_value(db, BRANDING_NAME_KEY, name)
 
@@ -847,10 +864,12 @@ async def upload_logo(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Upload a custom logo. Admin only."""
+    texts = get_texts(admin.language)
     # Validate content type
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid file type. Allowed: PNG, JPEG, WebP, SVG'
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_BRANDING_LOGO_INVALID_TYPE', 'Invalid file type. Allowed: PNG, JPEG, WebP, SVG'),
         )
 
     # Read file content
@@ -860,7 +879,9 @@ async def upload_logo(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'File too large. Maximum size: {MAX_FILE_SIZE // 1024 // 1024}MB',
+            detail=texts.t('CABINET_BRANDING_LOGO_TOO_LARGE', 'File too large. Maximum size: {size}MB').format(
+                size=MAX_FILE_SIZE // 1024 // 1024
+            ),
         )
 
     # Ensure directory exists
@@ -982,6 +1003,7 @@ async def update_theme_colors(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update theme colors. Admin only. Partial update supported."""
+    texts = get_texts(admin.language)
     # Get current colors
     colors_json = await get_setting_value(db, THEME_COLORS_KEY)
     current_colors = DEFAULT_THEME_COLORS.copy()
@@ -998,7 +1020,12 @@ async def update_theme_colors(
     # Validate hex colors
     for key, value in update_data.items():
         if not validate_hex_color(value):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Invalid hex color for {key}: {value}')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=texts.t('CABINET_BRANDING_INVALID_HEX_COLOR', 'Invalid hex color for {key}: {value}').format(
+                    key=key, value=value
+                ),
+            )
 
     current_colors.update(update_data)
 
@@ -1056,6 +1083,7 @@ async def update_enabled_themes(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update which themes are enabled. Admin only. At least one theme must be enabled."""
+    texts = get_texts(admin.language)
     # Get current settings
     themes_json = await get_setting_value(db, ENABLED_THEMES_KEY)
     current_themes = DEFAULT_ENABLED_THEMES.copy()
@@ -1072,7 +1100,10 @@ async def update_enabled_themes(
 
     # Ensure at least one theme is enabled
     if not current_themes.get('dark') and not current_themes.get('light'):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='At least one theme must be enabled')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=texts.t('CABINET_BRANDING_THEME_MIN_ONE', 'At least one theme must be enabled'),
+        )
 
     # Save to database
     await set_setting_value(db, ENABLED_THEMES_KEY, json.dumps(current_themes))
@@ -1337,12 +1368,13 @@ async def update_analytics_counters(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update analytics counter settings. Admin only. Partial update supported."""
+    texts = get_texts(admin.language)
     if payload.yandex_metrika_id is not None:
         value = payload.yandex_metrika_id.strip()
         if value and not value.isdigit():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Yandex Metrika counter ID must be numeric',
+                detail=texts.t('CABINET_BRANDING_YANDEX_ID_NUMERIC', 'Yandex Metrika counter ID must be numeric'),
             )
         await set_setting_value(db, YANDEX_METRIKA_ID_KEY, value)
 
@@ -1351,7 +1383,7 @@ async def update_analytics_counters(
         if value and not value.startswith('AW-'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Google Ads conversion ID must start with AW-',
+                detail=texts.t('CABINET_BRANDING_GOOGLE_ADS_ID_PREFIX', 'Google Ads conversion ID must start with AW-'),
             )
         await set_setting_value(db, GOOGLE_ADS_ID_KEY, value)
 

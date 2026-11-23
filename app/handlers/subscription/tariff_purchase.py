@@ -2453,7 +2453,10 @@ async def confirm_daily_tariff_purchase(
         pass
 
     purchase_user_id = db_user.id
-    description = f'Покупка суточного тарифа {tariff.name} (первый день)'
+    description = texts.t(
+        'TRANSACTION_DAILY_PLAN_PURCHASE',
+        'Покупка суточного тарифа {tariff} (первый день)',
+    ).format(tariff=tariff.name)
     try:
         if not await subtract_user_balance(
             db,
@@ -4422,7 +4425,10 @@ async def confirm_daily_tariff_switch(
             db,
             db_user,
             final_daily_price,
-            f'Смена на суточный тариф {tariff.name} (первый день)',
+            texts.t(
+                'TRANSACTION_SWITCH_DAILY_FIRST_DAY',
+                'Смена на суточный тариф {tariff} (первый день)',
+            ).format(tariff=tariff.name),
             consume_promo_offer=consume_promo,
             mark_as_paid_subscription=True,
             commit=False,
@@ -4486,7 +4492,10 @@ async def confirm_daily_tariff_switch(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_daily_price,
-            description=f'Смена на суточный тариф {tariff.name} (первый день)',
+            description=texts.t(
+                'TRANSACTION_SWITCH_DAILY_FIRST_DAY',
+                'Смена на суточный тариф {tariff} (первый день)',
+            ).format(tariff=tariff.name),
             commit=False,
         )
         await db.commit()
@@ -4499,7 +4508,10 @@ async def confirm_daily_tariff_switch(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_daily_price,
-            description=f'Смена на суточный тариф {tariff.name} (первый день)',
+            description=texts.t(
+                'TRANSACTION_SWITCH_DAILY_FIRST_DAY',
+                'Смена на суточный тариф {tariff} (первый день)',
+            ).format(tariff=tariff.name),
         )
 
         # Обновляем пользователя в Remnawave (сброс трафика по админ-настройке)

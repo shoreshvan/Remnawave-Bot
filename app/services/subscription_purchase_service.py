@@ -1068,7 +1068,9 @@ class MiniAppSubscriptionPurchaseService:
                 if subscription is not None:
                     context.subscription = subscription
 
-            description = f'Покупка подписки на {pricing.selection.period.days} дней'
+            description = texts.t(
+                'SUBSCRIPTION_PURCHASE_DAYS_DESCRIPTION', 'Покупка подписки на {days} дней'
+            ).format(days=pricing.selection.period.days)
             success = await subtract_user_balance(
                 db,
                 user,
@@ -1172,7 +1174,9 @@ class MiniAppSubscriptionPurchaseService:
                 user_id=user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=pricing.final_total,
-                description=f'Подписка на {pricing.selection.period.days} дней ({pricing.months} мес)',
+                description=texts.t(
+                    'SUBSCRIPTION_PURCHASE_PERIOD_DESCRIPTION', 'Подписка на {days} дней ({months} мес)'
+                ).format(days=pricing.selection.period.days, months=pricing.months),
                 payment_method=PaymentMethod.BALANCE,
                 commit=False,
             )
@@ -1301,7 +1305,9 @@ class MiniAppSubscriptionPurchaseService:
                 user_id=user_id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=pricing.final_total,
-                description=f'Подписка на {pricing.selection.period.days} дней ({pricing.months} мес)',
+                description=texts.t(
+                    'SUBSCRIPTION_PURCHASE_PERIOD_DESCRIPTION', 'Подписка на {days} дней ({months} мес)'
+                ).format(days=pricing.selection.period.days, months=pricing.months),
                 payment_method=PaymentMethod.BALANCE,
             )
         except Exception as event_error:

@@ -59,7 +59,7 @@ async def _run_link(user, *, email, email_verified, email_owner=None):
 
 @pytest.mark.asyncio
 async def test_backfills_verified_email_when_user_has_none() -> None:
-    user = SimpleNamespace(id=1, google_id=None, email=None, email_verified=False)
+    user = SimpleNamespace(id=1, google_id=None, email=None, email_verified=False, language='fa')
 
     result, set_id, db = await _run_link(user, email='Foo.Bar@Gmail.com', email_verified=True)
 
@@ -73,7 +73,7 @@ async def test_backfills_verified_email_when_user_has_none() -> None:
 
 @pytest.mark.asyncio
 async def test_does_not_overwrite_existing_email() -> None:
-    user = SimpleNamespace(id=1, google_id=None, email='mine@example.com', email_verified=True)
+    user = SimpleNamespace(id=1, google_id=None, email='mine@example.com', email_verified=True, language='fa')
 
     result, set_id, _ = await _run_link(user, email='other@gmail.com', email_verified=True)
 
@@ -84,7 +84,7 @@ async def test_does_not_overwrite_existing_email() -> None:
 
 @pytest.mark.asyncio
 async def test_skips_backfill_when_email_owned_by_another_account_but_still_links() -> None:
-    user = SimpleNamespace(id=1, google_id=None, email=None, email_verified=False)
+    user = SimpleNamespace(id=1, google_id=None, email=None, email_verified=False, language='fa')
     other = SimpleNamespace(id=2)
 
     result, set_id, db = await _run_link(user, email='taken@gmail.com', email_verified=True, email_owner=other)
@@ -97,7 +97,7 @@ async def test_skips_backfill_when_email_owned_by_another_account_but_still_link
 
 @pytest.mark.asyncio
 async def test_does_not_backfill_unverified_provider_email() -> None:
-    user = SimpleNamespace(id=1, google_id=None, email=None, email_verified=False)
+    user = SimpleNamespace(id=1, google_id=None, email=None, email_verified=False, language='fa')
 
     result, _set_id, _ = await _run_link(user, email='unverified@gmail.com', email_verified=False)
 

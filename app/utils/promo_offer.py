@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.utils.progress_bar import colored_progress_bar
 import html
 import math
 from collections.abc import Sequence
@@ -11,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database.crud.discount_offer import get_latest_claimed_offer_for_user
 from app.database.models import ServerSquad, SubscriptionTemporaryAccess, User
+from app.localization.texts import get_texts
 
 
 def _escape_format_braces(text: str) -> str:
@@ -79,10 +81,15 @@ def _format_time_left(seconds_left: int, language: str) -> str:
     hours, minutes = divmod(remainder_minutes, 60)
 
     language_code = (language or 'ru').split('-')[0].lower()
+    texts = get_texts(language_code)
     if language_code == 'en':
-        day_label, hour_label, minute_label = 'd', 'h', 'm'
+        day_label = texts.t('TIME_LEFT_UNIT_DAYS', 'd')
+        hour_label = texts.t('TIME_LEFT_UNIT_HOURS', 'h')
+        minute_label = texts.t('TIME_LEFT_UNIT_MINUTES', 'm')
     else:
-        day_label, hour_label, minute_label = 'д', 'ч', 'м'
+        day_label = texts.t('TIME_LEFT_UNIT_DAYS', 'д')
+        hour_label = texts.t('TIME_LEFT_UNIT_HOURS', 'ч')
+        minute_label = texts.t('TIME_LEFT_UNIT_MINUTES', 'м')
 
     parts: list[str] = []
     if days:
@@ -93,18 +100,12 @@ def _format_time_left(seconds_left: int, language: str) -> str:
     return ' '.join(parts)
 
 
-def _build_progress_bar(seconds_left: int, total_seconds: int) -> str:
+def _build_progress_bar(seconds_left: int, total_seconds: int, color: str = 'green') -> str:
     if total_seconds <= 0:
         total_seconds = seconds_left or 1
 
     ratio = max(0.0, min(1.0, seconds_left / total_seconds))
-    bar_length = 10
-    filled_segments = int(round(ratio * bar_length))
-    filled_segments = max(0, min(bar_length, filled_segments))
-    if filled_segments == 0 and seconds_left > 0:
-        filled_segments = 1
-
-    return f'[{"█" * filled_segments}{"░" * (bar_length - filled_segments)}]'
+    return colored_progress_bar(ratio * 100, color=color, remaining=True)
 
 
 async def build_promo_offer_timer_line(
@@ -157,7 +158,7 @@ async def build_promo_offer_timer_line(
 
     template = texts.t(
         'SUBSCRIPTION_PROMO_DISCOUNT_TIMER',
-        '⏳ Discount active for {time_left}\n<code>{bar}</code>',
+        '⏳ Discount active for {time_left}\n{bar}',
     )
     return template.format(bar=bar, time_left=time_left_text)
 
@@ -234,7 +235,7 @@ async def build_test_access_hint(
     if total_seconds is None or total_seconds <= 0:
         total_seconds = seconds_left
 
-    bar = _build_progress_bar(seconds_left, total_seconds)
+    bar = _build_progress_bar(seconds_left, total_seconds, color='purple')
     time_left_text = _format_time_left(seconds_left, getattr(texts, 'language', 'ru'))
 
     unique_squad_uuids: list[str] = []
@@ -274,7 +275,7 @@ async def build_test_access_hint(
     )
     timer_template = texts.t(
         'MAIN_MENU_TEST_ACCESS_TIMER',
-        '⏳ Access active for {time_left}\n<code>{bar}</code>',
+        '⏳ Access active for {time_left}\n{bar}',
     )
 
     header = header_template.format(servers=_escape_format_braces(servers_display))

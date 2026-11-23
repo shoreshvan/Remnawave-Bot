@@ -25,6 +25,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
+from app.localization.texts import get_texts
 from app.services.remnawave_service import RemnaWaveService
 from app.services.version_service import version_service
 from app.utils.timezone import local_day_start, local_month_start
@@ -330,7 +331,7 @@ async def get_dashboard_stats(
         logger.error('Failed to get dashboard stats', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load dashboard statistics',
+            detail=get_texts().t('CABINET_STATS_DASHBOARD_LOAD_FAILED', 'Failed to load dashboard statistics'),
         )
 
 
@@ -362,7 +363,7 @@ async def get_system_info(
         logger.error('Failed to get system info', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load system information',
+            detail=get_texts().t('CABINET_STATS_SYSTEM_INFO_LOAD_FAILED', 'Failed to load system information'),
         )
 
 
@@ -377,7 +378,7 @@ async def get_nodes_status(
         logger.error('Failed to get nodes status', error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load nodes status',
+            detail=get_texts().t('CABINET_STATS_NODES_LOAD_FAILED', 'Failed to load nodes status'),
         )
 
 
@@ -393,10 +394,16 @@ async def restart_node(
 
         if success:
             logger.info('Admin restarted node', admin_id=admin.id, node_uuid=node_uuid)
-            return {'success': True, 'message': 'Node restart initiated'}
+            return {
+                'success': True,
+                'message': get_texts().t(
+                    'CABINET_STATS_NODE_RESTART_INITIATED',
+                    'Node restart initiated',
+                ),
+            }
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Failed to restart node',
+            detail=get_texts().t('CABINET_STATS_NODE_RESTART_FAILED', 'Failed to restart node'),
         )
     except HTTPException:
         raise
@@ -404,7 +411,7 @@ async def restart_node(
         logger.error('Failed to restart node', node_uuid=node_uuid, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to restart node',
+            detail=get_texts().t('CABINET_STATS_NODE_RESTART_FAILED', 'Failed to restart node'),
         )
 
 
@@ -422,7 +429,7 @@ async def toggle_node(
         if not node:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Node not found',
+                detail=get_texts().t('CABINET_STATS_NODE_NOT_FOUND', 'Node not found'),
             )
 
         is_disabled = node.get('is_disabled', False)
@@ -431,10 +438,14 @@ async def toggle_node(
 
         if success:
             logger.info('Admin d node', admin_id=admin.id, action=action, node_uuid=node_uuid)
-            return {'success': True, 'message': f'Node {action}d', 'is_disabled': not is_disabled}
+            return {
+                'success': True,
+                'message': get_texts().t('CABINET_STATS_NODE_TOGGLED', 'Node {action}d').format(action=action),
+                'is_disabled': not is_disabled,
+            }
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Failed to {action} node',
+            detail=get_texts().t('CABINET_STATS_NODE_TOGGLE_FAILED', 'Failed to {action} node').format(action=action),
         )
     except HTTPException:
         raise
@@ -442,7 +453,7 @@ async def toggle_node(
         logger.error('Failed to toggle node', node_uuid=node_uuid, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to toggle node',
+            detail=get_texts().t('CABINET_STATS_NODE_TOGGLE_ERROR', 'Failed to toggle node'),
         )
 
 
@@ -779,7 +790,7 @@ async def get_top_referrers(
         logger.error('Failed to get top referrers', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load referrers statistics',
+            detail=get_texts().t('CABINET_STATS_REFERRERS_LOAD_FAILED', 'Failed to load referrers statistics'),
         )
 
 
@@ -836,7 +847,7 @@ async def get_top_campaigns(
         logger.error('Failed to get top campaigns', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load campaigns statistics',
+            detail=get_texts().t('CABINET_STATS_CAMPAIGNS_LOAD_FAILED', 'Failed to load campaigns statistics'),
         )
 
 
@@ -882,12 +893,16 @@ async def get_recent_payments(
 
         # Type display names
         type_display = {
-            TransactionType.DEPOSIT.value: 'Пополнение',
-            TransactionType.SUBSCRIPTION_PAYMENT.value: 'Оплата подписки',
-            TransactionType.WITHDRAWAL.value: 'Вывод',
-            TransactionType.REFUND.value: 'Возврат',
-            TransactionType.REFERRAL_REWARD.value: 'Реферальный бонус',
-            TransactionType.POLL_REWARD.value: 'Награда за опрос',
+            TransactionType.DEPOSIT.value: get_texts().t('CABINET_STATS_TX_TYPE_DEPOSIT', 'Пополнение'),
+            TransactionType.SUBSCRIPTION_PAYMENT.value: get_texts().t(
+                'CABINET_STATS_TX_TYPE_SUBSCRIPTION_PAYMENT', 'Оплата подписки',
+            ),
+            TransactionType.WITHDRAWAL.value: get_texts().t('CABINET_STATS_TX_TYPE_WITHDRAWAL', 'Вывод'),
+            TransactionType.REFUND.value: get_texts().t('CABINET_STATS_TX_TYPE_REFUND', 'Возврат'),
+            TransactionType.REFERRAL_REWARD.value: get_texts().t(
+                'CABINET_STATS_TX_TYPE_REFERRAL_REWARD', 'Реферальный бонус',
+            ),
+            TransactionType.POLL_REWARD.value: get_texts().t('CABINET_STATS_TX_TYPE_POLL_REWARD', 'Награда за опрос'),
         }
 
         payment_items = []
@@ -977,5 +992,5 @@ async def get_recent_payments(
         logger.error('Failed to get recent payments', error=e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load recent payments',
+            detail=get_texts().t('CABINET_STATS_PAYMENTS_LOAD_FAILED', 'Failed to load recent payments'),
         )

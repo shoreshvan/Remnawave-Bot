@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.services.overpay_service import overpay_service
 from app.services.system_settings_service import bot_configuration_service
 
@@ -37,17 +38,20 @@ def _env_locked_flags() -> tuple[bool, bool]:
 
 
 def validate_p12(p12_bytes: bytes, passphrase: str | None) -> dict[str, Any]:
+    texts = get_texts(settings.DEFAULT_LANGUAGE)
     if len(p12_bytes) > MAX_P12_SIZE:
-        raise ValueError('Файл сертификата больше 1 МБ')
+        raise ValueError(texts.t('OVERPAY_CERT_TOO_LARGE', 'Файл сертификата больше 1 МБ'))
 
     passphrase_bytes = passphrase.encode('utf-8') if passphrase else None
     try:
         private_key, certificate, additional_certs = pkcs12.load_key_and_certificates(p12_bytes, passphrase_bytes)
     except Exception as error:
-        raise ValueError('Не удалось прочитать P12: неверный пароль или повреждённый файл') from error
+        raise ValueError(
+            texts.t('OVERPAY_CERT_READ_FAILED', 'Не удалось прочитать P12: неверный пароль или повреждённый файл')
+        ) from error
 
     if private_key is None or certificate is None:
-        raise ValueError('P12 не содержит приватный ключ и сертификат')
+        raise ValueError(texts.t('OVERPAY_CERT_NO_KEY', 'P12 не содержит приватный ключ и сертификат'))
 
     not_valid_after = getattr(certificate, 'not_valid_after_utc', None) or certificate.not_valid_after
     return {
@@ -84,7 +88,11 @@ async def store_certificate(db: AsyncSession, p12_bytes: bytes, passphrase: str 
     metadata['path'] = str(path)
     metadata['env_locked_path'] = env_locked_path
     metadata['env_locked_passphrase'] = env_locked_passphrase
-    metadata['warning'] = ENV_LOCK_WARNING.format(path=path) if env_locked_path or env_locked_passphrase else None
+    metadata['warning'] = (
+        get_texts(settings.DEFAULT_LANGUAGE).t('OVERPAY_CERT_ENV_LOCK_WARNING', ENV_LOCK_WARNING).format(path=path)
+        if env_locked_path or env_locked_passphrase
+        else None
+    )
 
     logger.info(
         'Overpay: сертификат сохранён',

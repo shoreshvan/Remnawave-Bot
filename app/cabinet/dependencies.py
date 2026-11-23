@@ -8,10 +8,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.auth.registration_access import evaluate_public_registration
+from app.cabinet.utils.request_language import get_request_language
 from app.config import settings
 from app.database.crud.user import get_user_by_id
 from app.database.database import AsyncSessionLocal
 from app.database.models import User, UserStatus
+from app.localization.texts import get_texts
 from app.services.blacklist_service import blacklist_service
 from app.services.maintenance_service import maintenance_service
 from app.services.rbac_bootstrap_service import is_user_admin_by_env
@@ -61,6 +63,7 @@ async def get_current_cabinet_user(
     Raises:
         HTTPException: If token is invalid, expired, or user not found
     """
+    texts = get_texts(get_request_language(request))
     # Check maintenance mode first (except for admins - checked later)
     if maintenance_service.is_maintenance_active():
         # We need to check token first to see if user is admin
@@ -69,7 +72,7 @@ async def get_current_cabinet_user(
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Authentication required',
+            detail=texts.t('CABINET_AUTH_REQUIRED', 'Authentication required'),
             headers={'WWW-Authenticate': 'Bearer'},
         )
 
@@ -79,7 +82,7 @@ async def get_current_cabinet_user(
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid or expired token',
+            detail=texts.t('CABINET_AUTH_INVALID_OR_EXPIRED_TOKEN', 'Invalid or expired token'),
             headers={'WWW-Authenticate': 'Bearer'},
         )
 
@@ -88,7 +91,7 @@ async def get_current_cabinet_user(
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='Invalid token payload',
+            detail=texts.t('CABINET_AUTH_INVALID_TOKEN_PAYLOAD', 'Invalid token payload'),
             headers={'WWW-Authenticate': 'Bearer'},
         )
 
@@ -97,8 +100,10 @@ async def get_current_cabinet_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_AUTH_USER_NOT_FOUND', 'User not found'),
         )
+
+    texts = get_texts(user.language)
 
     # Validate Telegram initData first — we need its outcome both for the
     # cross-account guard (existing) and for the DELETED auto-revival
@@ -133,7 +138,10 @@ async def get_current_cabinet_user(
                 )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail='Session belongs to a different Telegram account. Please restart the app.',
+                    detail=texts.t(
+                        'CABINET_AUTH_TELEGRAM_ACCOUNT_MISMATCH',
+                        'Session belongs to a different Telegram account. Please restart the app.',
+                    ),
                     headers={'WWW-Authenticate': 'Bearer'},
                 )
 
@@ -149,7 +157,7 @@ async def get_current_cabinet_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={
                     'code': 'blacklisted',
-                    'message': blacklist_reason or 'Доступ запрещен',
+                    'message': blacklist_reason or texts.t('CABINET_AUTH_ACCESS_DENIED', 'Доступ запрещен'),
                 },
             )
 
@@ -212,7 +220,10 @@ async def get_current_cabinet_user(
             bot_username = settings.get_bot_username()
             detail: dict[str, str | None] = {
                 'code': 'account_deleted',
-                'message': 'Account was deactivated for inactivity. Open the bot and press /start to restore access.',
+                'message': texts.t(
+                    'CABINET_AUTH_ACCOUNT_DEACTIVATED',
+                    'Account was deactivated for inactivity. Open the bot and press /start to restore access.',
+                ),
             }
             if bot_username:
                 detail['bot_username'] = bot_username
@@ -226,7 +237,7 @@ async def get_current_cabinet_user(
             # message — these are admin actions, not user-recoverable.
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail='User account is not active',
+                detail=texts.t('CABINET_AUTH_ACCOUNT_NOT_ACTIVE', 'User account is not active'),
             )
 
     # Blacklist check was hoisted ABOVE the status-branching block (see
@@ -245,7 +256,7 @@ async def get_current_cabinet_user(
                 detail={
                     'code': 'maintenance',
                     'message': maintenance_service.get_maintenance_message(user.language)
-                    or 'Service is under maintenance',
+                    or texts.t('CABINET_AUTH_SERVICE_UNDER_MAINTENANCE', 'Service is under maintenance'),
                     'reason': status_info.get('reason'),
                 },
             )
@@ -271,7 +282,10 @@ async def get_current_cabinet_user(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail={
                             'code': 'channel_subscription_required',
-                            'message': 'Please subscribe to the required channels to continue',
+                            'message': texts.t(
+                                'CABINET_AUTH_CHANNEL_SUBSCRIPTION_REQUIRED',
+                                'Please subscribe to the required channels to continue',
+                            ),
                             'channels': channels_with_status,
                         },
                     )
@@ -382,8 +396,24 @@ async def get_current_admin_user(
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail='Admin access required',
+        detail=get_texts(user.language).t('CABINET_AUTH_ADMIN_ACCESS_REQUIRED', 'Admin access required'),
     )
+
+
+def _permission_denied_message(language: str, reason: str) -> str:
+    if language != 'fa':
+        return f'Permission denied: {reason}'
+    texts = get_texts(language)
+    if reason == 'No active roles assigned':
+        return texts.t('CABINET_PERMISSION_NO_ACTIVE_ROLE', 'هیچ نقش فعالی برای حساب شما تعیین نشده است')
+    if reason == 'Permission not granted by any role':
+        return texts.t('CABINET_PERMISSION_ROLE_DENIED', 'نقش‌های حساب شما اجازهٔ انجام این عملیات را ندارند')
+    prefix = 'Denied by policy: '
+    if reason.startswith(prefix):
+        return texts.t('CABINET_PERMISSION_POLICY_DENIED', 'دسترسی طبق قانون «{policy}» رد شد').format(
+            policy=reason[len(prefix):],
+        )
+    return texts.t('CABINET_PERMISSION_DENIED_UNKNOWN', 'اجازهٔ انجام این عملیات را ندارید؛ با مدیر سامانه تماس بگیرید')
 
 
 def require_permission(*permissions: str):
@@ -446,7 +476,7 @@ def require_permission(*permissions: str):
                 await db.commit()
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f'Permission denied: {reason}',
+                    detail=_permission_denied_message(user.language, reason),
                 )
 
         # Capture request details

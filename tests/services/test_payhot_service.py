@@ -138,7 +138,10 @@ async def test_errors_never_follow_redirect_or_expose_private_response(wire, sta
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize('body', [b'x' * 65537, b'{', b'[]', b'{"payment":null}', b'{"payment":NaN}'])
+@pytest.mark.parametrize(
+    'body', [b'x' * 65537, b'{', b'[]', b'{"payment":null}', b'{"payment":NaN}'],
+    ids=['oversized', 'broken-json', 'array', 'null-payment', 'nan-payment'],
+)
 @pytest.mark.asyncio
 async def test_invalid_response_is_bounded_and_sanitized(wire, body):
     service, config, _, reply = wire

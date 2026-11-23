@@ -124,7 +124,7 @@ def _number(value: int | None) -> str:
 
 def _rubles(kopeks: int | None) -> str:
     """Рубли целиком: «24.0K RUB» читался хуже, чем «24 012 ₽»."""
-    return NO_VALUE if kopeks is None else f'{_number(kopeks // KOPEKS_IN_RUBLE)} ₽'
+    return NO_VALUE if kopeks is None else f'{_number(kopeks // KOPEKS_IN_RUBLE)} تومان'
 
 
 def _panel_line(stats: _StartupStats, texts: Texts | None = None) -> str:
@@ -411,6 +411,7 @@ class StartupNotificationService:
         except Exception as e:
             logger.error('Ошибка проверки соединения с Remnawave', e=e)
             return False, 'ошибка подключения', None
+
 
     async def send_startup_notification(self) -> bool:
         """

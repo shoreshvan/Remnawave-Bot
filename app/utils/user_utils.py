@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database.crud.referral import not_referee_directed
 from app.database.models import ReferralEarning, Subscription, SubscriptionStatus, Transaction, TransactionType, User
+from app.localization.texts import Texts, get_texts
 from app.utils.formatters import format_username_link
 from app.utils.timezone import local_day_start
 
@@ -17,13 +18,14 @@ from app.utils.timezone import local_day_start
 logger = structlog.get_logger(__name__)
 
 
-def format_referrer_info(user: User) -> str:
+def format_referrer_info(user: User, texts: Texts | None = None) -> str:
     """Return formatted referrer info for admin notifications."""
 
+    texts = texts or get_texts('ru')
     referred_by_id = getattr(user, 'referred_by_id', None)
 
     if not referred_by_id:
-        return 'Нет'
+        return texts.t('ADMIN_BACKUP_UI_035', 'Нет')
 
     try:
         # Проверяем, является ли referrer обычным объектом или InstrumentedList
@@ -33,7 +35,7 @@ def format_referrer_info(user: User) -> str:
 
         # Если referrer это InstrumentedList или None, то возвращаем информацию по ID
         if referrer is None:
-            return f'ID {referred_by_id} (не найден)'
+            return texts.t('ADMIN_NOTIFY_042', 'ID {v0} (не найден)').format(v0=referred_by_id)
 
         # Пытаемся получить атрибуты referrer, если они доступны
         referrer_username = getattr(referrer, 'username', None)
@@ -42,14 +44,20 @@ def format_referrer_info(user: User) -> str:
         if referrer_username:
             # Тот же вид, что и у близнеца AdminNotificationService._get_referrer_info:
             # иначе в одном уведомлении о пополнении плательщик кликабелен, а реферер нет.
-            return f'{format_username_link(referrer_username)} (ID: {referred_by_id})'
+            return texts.t('ADMIN_NOTIFY_REFERRER_WITH_ID', '{username} (ID: {user_id})').format(
+                username=format_username_link(referrer_username), user_id=referred_by_id
+            )
 
-        return f'ID {referrer_telegram_id or referred_by_id}'
+        return texts.t('ADMIN_NOTIFY_REFERRER_ID', 'ID {user_id}').format(
+            user_id=referrer_telegram_id or referred_by_id
+        )
 
     except Exception:
         # MissingGreenlet is not a subclass of AttributeError/TypeError,
         # so we must catch broadly to handle lazy-load failures in async context.
-        return f'ID {referred_by_id} (ошибка загрузки)'
+        return texts.t('ADMIN_NOTIFY_REFERRER_LOAD_FAILED', 'ID {user_id} (ошибка загрузки)').format(
+            user_id=referred_by_id
+        )
 
 
 async def generate_unique_referral_code(db: AsyncSession, telegram_id: int) -> str:

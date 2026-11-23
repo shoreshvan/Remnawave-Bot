@@ -132,7 +132,7 @@ async def test_admin_permissions_and_owner_dispatch(monkeypatch, method, suffix,
     app.include_router(admin_users.router)
     db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
     app.dependency_overrides[get_cabinet_db] = lambda: db
-    app.dependency_overrides[get_current_cabinet_user] = lambda: SimpleNamespace(id=99)
+    app.dependency_overrides[get_current_cabinet_user] = lambda: SimpleNamespace(id=99, language='fa')
     check = AsyncMock(return_value=(allowed, 'test'))
     audit = AsyncMock()
     monkeypatch.setattr(PermissionService, 'check_permission', check)

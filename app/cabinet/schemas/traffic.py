@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from app.localization.texts import get_texts
+
 
 class TrafficNodeInfo(BaseModel):
     node_uuid: str
@@ -78,8 +80,22 @@ class ExportCsvRequest(BaseModel):
     tariffs: str | None = None
     statuses: str | None = None
     nodes: str | None = None
-    total_threshold_gb: float | None = Field(None, ge=0, description='Total GB/day threshold for risk column')
-    node_threshold_gb: float | None = Field(None, ge=0, description='Per-node GB/day threshold for risk column')
+    total_threshold_gb: float | None = Field(
+        None,
+        ge=0,
+        description=get_texts().t(
+            'CABINET_TRAFFIC_EXPORT_TOTAL_THRESHOLD_DESCRIPTION',
+            'Total GB/day threshold for risk column',
+        ),
+    )
+    node_threshold_gb: float | None = Field(
+        None,
+        ge=0,
+        description=get_texts().t(
+            'CABINET_TRAFFIC_EXPORT_NODE_THRESHOLD_DESCRIPTION',
+            'Per-node GB/day threshold for risk column',
+        ),
+    )
 
 
 class ExportCsvResponse(BaseModel):

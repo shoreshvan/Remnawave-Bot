@@ -16,11 +16,13 @@ from app.cabinet.auth.registration_access import (
 from app.cabinet.dependencies import get_cabinet_db
 from app.cabinet.ip_utils import get_client_ip
 from app.cabinet.utils.locale import DEFAULT_LOCALE, resolve_locale_text
+from app.cabinet.utils.request_language import get_request_language
 from app.config import settings
 from app.database.crud.landing import get_active_landing_by_slug, get_purchase_by_token
 from app.database.crud.tariff import get_tariff_by_id
 from app.database.crud.user import get_user_by_email
 from app.database.models import GuestPurchase, GuestPurchaseStatus, LandingPage, Tariff
+from app.localization.texts import get_texts
 from app.services.gift_claim_service import (
     GiftClaimAlreadyOwnedError,
     GiftClaimNotActivatableError,
@@ -688,7 +690,9 @@ async def claim_gift(
         verified_admin=False,
         start_parameter=f'GIFT_{token}',
     )
-    raise_for_registration_decision(decision)
+    raise_for_registration_decision(
+        decision, language=existing_user.language if existing_user else get_request_language(raw_request),
+    )
 
     # Guards passed — now create/finalize the account the gift binds to.
     user, _is_new = await _find_or_create_user(db, 'email', body.email, purchase=purchase, tariff_id=purchase.tariff_id)
@@ -918,7 +922,7 @@ async def create_landing_purchase(
             contact_type=body.contact_type,
             contact_value=body.contact_value,
         )
-        raise_for_registration_decision(decision)
+        raise_for_registration_decision(decision, language=get_request_language(raw_request))
 
     # Create purchase record (no commit yet — wait for payment creation)
     purchase = await create_purchase(
