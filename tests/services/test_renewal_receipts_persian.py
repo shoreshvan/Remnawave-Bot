@@ -56,7 +56,7 @@ async def test_shared_renewal_receipt_reaches_debit_transaction_and_notification
     from app.services.payment import lava
 
     user = SimpleNamespace(id=1, language='fa', remnawave_id='panel', balance_kopeks=50000)
-    subscription = SimpleNamespace(id=7, user_id=1, end_date=datetime.now(UTC))
+    subscription = SimpleNamespace(id=7, user_id=1, end_date=datetime.now(UTC), is_trial=False)
     pricing = SimpleNamespace(final_total=25000, period_days=30, promo_offer_discount=0, breakdown={})
     result = MagicMock()
     result.scalar_one.return_value = subscription

@@ -1130,6 +1130,42 @@ async def create_topup(
                     detail='Failed to create Anore payment',
                 )
 
+        elif request.payment_method == 'payhot':
+            if not settings.is_payhot_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='PayHot payment method is unavailable',
+                )
+
+            payment_service = PaymentService()
+            payment_method_type = request.payment_option or None
+            allowed_options = {option['id'] for option in method.options or []}
+            if payment_method_type and payment_method_type not in allowed_options:
+                raise HTTPException(status_code=400, detail='Unavailable PayHot payment option')
+            result = await payment_service.create_payhot_payment(
+                payment_phone=request.payment_phone,
+                db=db,
+                user_id=user.id,
+                amount_kopeks=request.amount_kopeks,
+                description=settings.get_balance_payment_description(
+                    request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id
+                ),
+                email=getattr(user, 'email', None),
+                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                payment_method_type=payment_method_type,
+                return_url=cabinet_success_url,
+                fail_url=cabinet_failed_url,
+            )
+
+            if result and result.get('payment_url'):
+                payment_url = result.get('payment_url')
+                payment_id = str(result.get('local_payment_id') or result.get('order_id') or 'pending')
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail='Failed to create PayHot payment',
+                )
+
         elif request.payment_method == 'tabpay':
             if not settings.is_tabpay_enabled():
                 raise HTTPException(
@@ -1610,6 +1646,14 @@ def _get_status_info_legacy(record: PendingPayment) -> tuple[str, str]:
         }
         return mapping.get(status, ('❓', 'Неизвестно'))
 
+    if record.method == PaymentMethod.PAYHOT:
+        return {
+            'succeeded': ('✅', 'Оплачено'),
+            'failed': ('❌', 'Ошибка оплаты'),
+            'cancelled': ('❌', 'Отменено'),
+            'refunded': ('↩️', 'Возвращено'),
+        }.get(status, ('⏳', 'Ожидает проверки'))
+
     if record.method == PaymentMethod.ANORE:
         return {'new': ('⏳', 'Ожидает оплаты'), 'paid': ('✅', 'Оплачено'), 'expired': ('⌛', 'Истёк')}.get(
             status, ('⏳', 'Ожидает проверки')
@@ -1721,6 +1765,11 @@ def _is_checkable(record: PendingPayment) -> bool:
         return status == 'pending'
     if record.method == PaymentMethod.CASHERA:
         return status == 'pending'
+    if record.method == PaymentMethod.PAYHOT:
+        from app.services.payhot_service import CHECKABLE_STATUSES
+
+        return not record.is_paid and status in CHECKABLE_STATUSES
+
     if record.method == PaymentMethod.ANORE:
         return status in {'new', 'creating', 'create_unknown'}
     if record.method == PaymentMethod.TABPAY:
@@ -1786,6 +1835,7 @@ def _record_to_response(record: PendingPayment) -> PendingPaymentResponse:
         status='test_paid' if sandbox and record.is_paid else record.status or '',
         status_emoji=status_emoji,
         status_text=status_text,
+        is_test=sandbox,
         is_paid=record.is_paid and not sandbox,
         is_checkable=_is_checkable(record) and not sandbox,
         created_at=record.created_at,
@@ -1866,6 +1916,7 @@ async def get_latest_payment_by_method(
         NowPaymentsPayment,
         OverpayPayment,
         Pal24Payment,
+        PayHotPayment,
         PlategaPayment,
         RioPayPayment,
         RollyPayPayment,
@@ -1881,6 +1932,7 @@ async def get_latest_payment_by_method(
         PaymentMethod.TONPAYS: TonPaysPayment,
         PaymentMethod.NOWPAYMENTS: NowPaymentsPayment,
         PaymentMethod.CISPAY: CisPayPayment,
+        PaymentMethod.PAYHOT: PayHotPayment,
         PaymentMethod.ANORE: AnorePayment,
         PaymentMethod.ANTILOPAY: AntilopayPayment,
         PaymentMethod.YOOKASSA: YooKassaPayment,

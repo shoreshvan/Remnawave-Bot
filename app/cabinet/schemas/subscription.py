@@ -6,7 +6,7 @@ from uuid import UUID
 
 from app.localization.texts import get_texts
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 
 class ServerInfo(BaseModel):
@@ -105,6 +105,9 @@ class RenewalOptionResponse(BaseModel):
 
 class RenewalRequest(BaseModel):
     """Request to renew subscription."""
+
+    operation_id: UUID
+    expected_end_date: AwareDatetime
 
     period_days: int = Field(
         ..., ge=1, le=3650, description=get_texts().t('CABINET_RENEWAL_PERIOD_DAYS_DESC', 'Renewal period in days')
