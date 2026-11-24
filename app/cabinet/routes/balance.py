@@ -117,7 +117,7 @@ async def get_transactions(
                 type=t.type,
                 amount_kopeks=amount_kopeks,
                 amount_rubles=amount_kopeks / 100,
-                description=localize_transaction_description(t.description, user.language),
+                description=localize_transaction_description(t.description, user.language, t.payment_method),
                 payment_method=t.payment_method,
                 is_completed=t.is_completed,
                 created_at=t.created_at,

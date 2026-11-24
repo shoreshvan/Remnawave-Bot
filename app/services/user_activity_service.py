@@ -32,6 +32,7 @@ from app.database.models import (
     WithdrawalRequest,
 )
 from app.services.user_action_log_service import CLICK_PREFIX, SCREEN_PREFIX
+from app.utils.transaction_description import localize_transaction_description
 
 
 class UserActivityItem(BaseModel):
@@ -71,7 +72,7 @@ class UnknownActivityTypes(ValueError):
         super().__init__(f'Unknown activity types: {", ".join(self.unknown)}')
 
 
-def activity_sources(user_id: int) -> dict[str, tuple]:
+def activity_sources(user_id: int, language: str = 'fa') -> dict[str, tuple]:
     """Источники таймлайна активности: type -> (select, count_select, mapper).
 
     Дедупликация пересечений:
@@ -103,7 +104,7 @@ def activity_sources(user_id: int) -> dict[str, tuple]:
         return UserActivityItem(
             type='transaction',
             subtype=t.type,
-            title=t.description,
+            title=localize_transaction_description(t.description, language, t.payment_method),
             amount_kopeks=t.amount_kopeks,
             timestamp=t.created_at,
             meta={'payment_method': t.payment_method, 'is_completed': t.is_completed},
@@ -351,6 +352,7 @@ async def collect_user_activity(
     offset: int = 0,
     limit: int = 50,
     types: str | None = None,
+    language: str = 'fa',
 ) -> UserActivityResponse:
     """Собрать страницу таймлайна.
 
@@ -359,7 +361,7 @@ async def collect_user_activity(
     ограничен, а таймлайн листают сверху. ``types`` — CSV-фильтр по ``type``;
     неизвестный тип приводит к :class:`UnknownActivityTypes`.
     """
-    sources = activity_sources(user_id)
+    sources = activity_sources(user_id, language)
     if types:
         requested = {t.strip() for t in types.split(',') if t.strip()}
         unknown = requested - sources.keys()

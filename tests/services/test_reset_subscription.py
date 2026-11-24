@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from tests.fixtures.persian import persian  # noqa: F401
 
 import app.services.subscription_service as ss
 from app.cabinet.routes import admin_users
@@ -210,7 +211,7 @@ async def test_user_modified_still_syncs_end_date_for_active():
     assert abs((sub.end_date - new_expiry).total_seconds()) < 2  # synced from panel
 
 
-async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypatch):
+async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypatch, persian):
     """The user reset remains one user-scoped operation, not a selected-sub reset."""
     subscriptions = [_sub(id=sub_id, remnawave_id=7000 + sub_id) for sub_id in (7, 8, 9)]
     user = SimpleNamespace(id=1, subscriptions=subscriptions, updated_at=None, remnawave_id=None)
@@ -240,6 +241,7 @@ async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypa
     )
 
     assert result.subscription_deleted is True
+    assert result.message == persian.t('CABINET_USERS_SUB_RESET_SUCCESS')
     assert grace_checks == [(7, 8, 9), (7, 8, 9)]
     # Отменяются оба рекуррента (Platega и Lava) по каждой подписке — иначе живая
     # привязка спишет деньги и воскресит только что сброшенную подписку.
@@ -259,7 +261,7 @@ async def test_user_level_reset_deletes_all_three_current_subscriptions(monkeypa
     [(True, False), (RuntimeError('panel down'),)],
     ids=['mixed-false-result', 'exception'],
 )
-async def test_user_level_reset_panel_failure_preserves_all_subscription_retry_identities(monkeypatch, outcomes):
+async def test_user_level_reset_panel_failure_preserves_all_subscription_retry_identities(monkeypatch, outcomes, persian):
     subscriptions = [_sub(id=sub_id, remnawave_id=7000 + sub_id) for sub_id in (7, 8)]
     user = SimpleNamespace(id=1, subscriptions=subscriptions, updated_at=None, remnawave_id=9001)
     db = AsyncMock()
@@ -298,6 +300,10 @@ async def test_user_level_reset_panel_failure_preserves_all_subscription_retry_i
     )
 
     assert result.success is False
+    assert result.message == persian.t('CABINET_USERS_SUB_RESET_PANEL_INCOMPLETE')
+    assert result.panel_error == persian.t(
+        'CABINET_USERS_PANEL_PROCESS_ERROR' if isinstance(outcomes[0], Exception) else 'CABINET_USERS_PANEL_DISABLE_ALL_FAILED'
+    )
     assert result.subscription_deleted is False
     assert result.panel_deactivated is False
     assert panel_calls == ([7007, 7008] if len(outcomes) == 2 else [7007])

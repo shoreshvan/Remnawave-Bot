@@ -240,6 +240,7 @@ async def test_cabinet_dependency_touches_last_activity():
     user = SimpleNamespace(
         id=100,
         telegram_id=555,
+        language='fa',
         username='u',
         email=None,
         email_verified=False,
@@ -254,7 +255,7 @@ async def test_cabinet_dependency_touches_last_activity():
     )
     db = AsyncMock()
     request = MagicMock()
-    request.headers.get = MagicMock(return_value=None)
+    request.headers = {}
     request.method = 'GET'
     request.url.path = '/cabinet/subscription'
 

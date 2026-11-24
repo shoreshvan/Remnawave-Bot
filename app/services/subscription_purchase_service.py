@@ -447,7 +447,7 @@ class MiniAppSubscriptionPurchaseService:
             period_map[period_id] = period_config
 
         if not periods:
-            raise PurchaseValidationError('No subscription periods configured', code='configuration')
+            raise PurchaseValidationError(texts.t('PURCHASE_NO_PERIODS', 'No subscription periods configured'), code='configuration')
 
         default_period = period_map.get(f'days:{default_period_days}') or periods[0]
 
@@ -631,6 +631,7 @@ class MiniAppSubscriptionPurchaseService:
         context: PurchaseOptionsContext,
         selection_payload: dict[str, Any],
     ) -> PurchaseSelection:
+        texts = get_texts(getattr(context.user, 'language', None))
         period_id = (
             selection_payload.get('period_id')
             or selection_payload.get('periodId')
@@ -643,7 +644,7 @@ class MiniAppSubscriptionPurchaseService:
                 period_id = f'days:{int(period_days)}'
 
         if not period_id or period_id not in context.period_map:
-            raise PurchaseValidationError('Invalid or missing subscription period', code='invalid_period')
+            raise PurchaseValidationError(texts.t('PURCHASE_SELECT_PERIOD', 'Invalid or missing subscription period'), code='invalid_period')
 
         period = context.period_map[period_id]
 
@@ -662,7 +663,7 @@ class MiniAppSubscriptionPurchaseService:
             else:
                 traffic_value = int(traffic_value)
                 if available_values and traffic_value not in available_values:
-                    raise PurchaseValidationError('Selected traffic option is not available', code='invalid_traffic')
+                    raise PurchaseValidationError(texts.t('PURCHASE_TRAFFIC_UNAVAILABLE', 'Selected traffic option is not available'), code='invalid_traffic')
         else:
             traffic_value = period.traffic.current_value or period.traffic.default_value or 0
 
@@ -687,7 +688,7 @@ class MiniAppSubscriptionPurchaseService:
             servers = list(period.servers.default_selection)
 
         if period.servers.min_selectable and len(servers) < period.servers.min_selectable:
-            raise PurchaseValidationError('Select at least one server', code='invalid_servers')
+            raise PurchaseValidationError(texts.t('PURCHASE_SERVER_REQUIRED', 'Select at least one server'), code='invalid_servers')
 
         if period.servers.max_selectable and len(servers) > period.servers.max_selectable:
             servers = servers[: period.servers.max_selectable]
@@ -702,7 +703,7 @@ class MiniAppSubscriptionPurchaseService:
         try:
             devices = int(devices)
         except (TypeError, ValueError):
-            raise PurchaseValidationError('Invalid devices selection', code='invalid_devices')
+            raise PurchaseValidationError(texts.t('PURCHASE_DEVICES_INVALID', 'Invalid devices selection'), code='invalid_devices')
 
         devices = max(devices, period.devices.minimum)
         if period.devices.maximum and devices > period.devices.maximum:
@@ -721,7 +722,7 @@ class MiniAppSubscriptionPurchaseService:
         context: PurchaseOptionsContext,
         selection: PurchaseSelection,
     ) -> PurchasePricingResult:
-        get_texts(getattr(context.user, 'language', None))
+        texts = get_texts(getattr(context.user, 'language', None))
         months = selection.period.months
 
         # PricingEngine — single source of truth (includes promo-offer internally).
@@ -740,7 +741,7 @@ class MiniAppSubscriptionPurchaseService:
         # Validate all requested servers were found
         server_ids = pricing.breakdown.get('server_ids', [])
         if len(server_ids) != len(selection.servers):
-            raise PurchaseValidationError('Some selected servers are not available', code='invalid_servers')
+            raise PurchaseValidationError(texts.t('PURCHASE_SERVERS_UNAVAILABLE', 'Some selected servers are not available'), code='invalid_servers')
 
         details = PricingEngine.classic_pricing_to_purchase_details(pricing)
 
@@ -759,7 +760,7 @@ class MiniAppSubscriptionPurchaseService:
         )
 
         if not is_valid:
-            raise PurchaseValidationError('Failed to validate pricing', code='calculation_error')
+            raise PurchaseValidationError(texts.t('PURCHASE_PRICE_VALIDATION_FAILED', 'Failed to validate pricing'), code='calculation_error')
 
         return PurchasePricingResult(
             selection=selection,
@@ -1012,7 +1013,7 @@ class MiniAppSubscriptionPurchaseService:
             # Block only if pricing is genuinely invalid (no base price configured).
             # final_total == 0 with base_original_total > 0 means a valid 100% discount.
             if pricing.final_total <= 0 and pricing.base_original_total <= 0:
-                raise PurchaseValidationError('Invalid total amount', code='calculation_error')
+                raise PurchaseValidationError(texts.t('PURCHASE_TOTAL_INVALID', 'Invalid total amount'), code='calculation_error')
 
             if pricing.final_total > 0 and user.balance_kopeks < pricing.final_total:
                 raise PurchaseBalanceError(

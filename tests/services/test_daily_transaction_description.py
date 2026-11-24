@@ -1,5 +1,13 @@
+import pytest
+
 from app.localization.texts import get_texts
 from app.utils.transaction_description import localize_transaction_description
+from tests.fixtures.persian import persian  # noqa: F401
+
+
+@pytest.mark.parametrize('method', ['atlaspay', 'hooshpay', 'tonpays', 'nowpayments'])
+def test_gateway_deposit_preserves_merchant_label(method, persian):
+    assert localize_transaction_description('Пополнение через فروشگاه من', 'fa', method) == 'شارژ از طریق فروشگاه من'
 
 
 def test_legacy_daily_purchase_preserves_tariff_name():

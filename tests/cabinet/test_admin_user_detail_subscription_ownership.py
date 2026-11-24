@@ -75,7 +75,7 @@ def ownership_boundary(monkeypatch, owned_subscription, foreign_subscription):
     user = _user(owned_subscription, foreign_subscription, remnawave_id=LEGACY_USER_PANEL_ID)
     monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
 
-    async def get_owned_subscription(_db, subscription_id, user_id):
+    async def get_owned_subscription(_db, subscription_id, user_id, language='fa'):
         if (subscription_id, user_id) == (OWNED_ID, OWNER_ID):
             return owned_subscription
         raise HTTPException(status_code=404, detail='Subscription not found for this user')
@@ -201,7 +201,7 @@ async def test_authoritative_subscription_lookup_constrains_id_and_user_id(owned
         ('get_user_panel_info', {}, 'owned-panel-marker'),
         ('get_user_devices', {}, 'owned-hwid'),
         ('get_subscription_request_history', {}, '192.0.2.1'),
-        ('delete_user_device', {'hwid': 'owned-hwid'}, 'Device deleted'),
+        ('delete_user_device', {'hwid': 'owned-hwid'}, 'دستگاه حذف شد'),
     ],
     ids=['panel-info', 'devices', 'request-history', 'delete-device'],
 )
@@ -298,7 +298,7 @@ async def test_panel_info_does_not_fall_back_to_user_panel_id_for_selected_unlin
     user = _user(selected, remnawave_id=LEGACY_USER_PANEL_ID)
     monkeypatch.setattr(admin_users, 'get_user_by_id', AsyncMock(return_value=user))
 
-    async def get_selected(_db, subscription_id, user_id):
+    async def get_selected(_db, subscription_id, user_id, language='fa'):
         assert (subscription_id, user_id) == (OWNED_ID, OWNER_ID)
         return selected
 
@@ -353,6 +353,12 @@ async def test_subscription_actions_accept_an_owned_subscription(
     result = await admin_users.update_user_subscription(OWNER_ID, request, admin=SimpleNamespace(id=1), db=db)
 
     assert result.success is True
+    assert result.message == {
+        'set_end_date': f'تاریخ پایان اشتراک روی {request.end_date.isoformat() if request.end_date else ""} تنظیم شد',
+        'set_traffic': 'تنظیمات ترافیک به‌روزرسانی شد',
+        'set_device_limit': 'محدودیت دستگاه روی 99 تنظیم شد',
+        'reset': 'اشتراک بازنشانی شد',
+    }[action]
     if action == 'reset':
         panel_disable.assert_awaited_once_with(owned_subscription.remnawave_id)
         reset_subscription.assert_awaited_once_with(db, owned_subscription)

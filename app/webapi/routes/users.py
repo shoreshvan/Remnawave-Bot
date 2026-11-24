@@ -883,14 +883,18 @@ async def delete_user_subscription(
     return _serialize_user(user)
 
 
-@router.get('/{user_id}/activity', response_model=UserActivityResponse)
+@router.get(
+    '/{user_id}/activity', response_model=UserActivityResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_ACTIVITY'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_ACTIVITY_DESCRIPTION'),
+)
 async def get_user_activity(
     user_id: int,
     _: Any = Security(require_api_token),
     db: AsyncSession = Depends(get_db_session),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    types: str | None = Query(None, description='CSV filter by record type, see UserActivityItem.type'),
+    types: str | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_ACTIVITY_TYPE_FILTER')),
 ) -> UserActivityResponse:
     """Таймлайн активности пользователя: бот, кабинет и мини-апп одной лентой.
 
@@ -901,9 +905,10 @@ async def get_user_activity(
     """
     user = await get_user_by_telegram_id(db, user_id) or await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, 'User not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, get_texts('fa').t('API_USER_NOT_FOUND'))
 
     try:
         return await collect_user_activity(db, user.id, offset=offset, limit=limit, types=types)
     except UnknownActivityTypes as error:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(error)) from error
+        detail = get_texts('fa').t('CABINET_USERS_UNKNOWN_ACTIVITY_TYPES').format(types=', '.join(error.unknown))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail) from error

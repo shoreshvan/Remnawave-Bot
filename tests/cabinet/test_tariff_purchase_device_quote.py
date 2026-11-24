@@ -16,7 +16,7 @@ def context(monkeypatch):
     monkeypatch.setattr(settings, 'MULTI_TARIFF_ENABLED', True)
     tariff = make_tariff(is_active=True)
     user = SimpleNamespace(
-        id=1, balance_kopeks=40000, restriction_subscription=False, get_primary_promo_group=lambda: None
+        id=1, language='fa', balance_kopeks=40000, restriction_subscription=False, get_primary_promo_group=lambda: None
     )
     db = AsyncMock()
     monkeypatch.setattr(purchase, 'get_tariff_by_id', AsyncMock(return_value=tariff))

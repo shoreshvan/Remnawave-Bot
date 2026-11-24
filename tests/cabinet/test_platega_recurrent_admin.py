@@ -209,5 +209,5 @@ async def test_cancel_sbp_recurring_missing_subscription_404(monkeypatch):
         await admin_users.cancel_user_sbp_recurring(user_id=1, sub_id=999999, admin=admin, db=db)
 
     assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
-    assert exc_info.value.detail == 'Subscription not found'
+    assert exc_info.value.detail == 'اشتراک یافت نشد'
     mock_cancel.assert_not_awaited()

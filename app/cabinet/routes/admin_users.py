@@ -70,6 +70,7 @@ from app.services.user_activity_service import UnknownActivityTypes, UserActivit
 from app.utils.subscription_time import local_days_until
 from app.utils.subscription_utils import coerce_panel_device_limit
 from app.utils.timezone import local_day_start, panel_datetime_to_utc
+from app.utils.transaction_description import localize_transaction_description
 
 from ..dependencies import get_cabinet_db, require_permission
 from ..schemas.users import (
@@ -143,7 +144,7 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix='/admin/users', tags=['Cabinet Admin Users'])
 
 
-async def _get_owned_subscription_or_404(db: AsyncSession, subscription_id: int, user_id: int) -> Subscription:
+async def _get_owned_subscription_or_404(db: AsyncSession, subscription_id: int, user_id: int, language: str = 'fa') -> Subscription:
     """Load a subscription only when it belongs to the route's user.
 
     Subscription ids are not authorization credentials: every admin
@@ -159,7 +160,7 @@ async def _get_owned_subscription_or_404(db: AsyncSession, subscription_id: int,
     )
     subscription = result.scalar_one_or_none()
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found for this user')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_texts(language).t('CABINET_USERS_SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this user'))
     return subscription
 
 
@@ -800,7 +801,7 @@ async def get_user_detail(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     # Get spending stats
@@ -946,7 +947,7 @@ async def get_user_by_telegram(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
     return await get_user_detail(user.id, admin, db)
 
@@ -966,12 +967,12 @@ async def get_user_panel_info(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     panel_user_id = None
     if subscription_id is not None:
-        panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
+        panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id, getattr(admin, 'language', None) or 'fa')).remnawave_id
         if panel_user_id is None:
             return UserPanelInfoResponse(found=False)
 
@@ -1062,11 +1063,11 @@ async def get_subscription_request_history(
 
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'))
 
     panel_user_id = None
     if subscription_id is not None:
-        panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
+        panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id, getattr(admin, 'language', None) or 'fa')).remnawave_id
     else:
         panel_user_id = getattr(user, 'remnawave_id', None)
 
@@ -1103,7 +1104,7 @@ async def get_user_node_usage(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     # Resolve panel user id
@@ -1207,7 +1208,7 @@ async def update_user_balance(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     old_balance = user.balance_kopeks
@@ -1229,7 +1230,12 @@ async def update_user_balance(
         if user.balance_kopeks < amount_to_subtract:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Insufficient balance. Current: {user.balance_kopeks}, requested: {amount_to_subtract}',
+                detail=get_texts(admin.language or 'fa').t(
+                    'CABINET_USERS_INSUFFICIENT_BALANCE', 'Insufficient balance. Current: {current}, requested: {requested}'
+                ).format(
+                    current=settings.format_price(user.balance_kopeks, round_kopeks=False),
+                    requested=settings.format_price(amount_to_subtract, round_kopeks=False),
+                ),
             )
         success = await subtract_user_balance(
             db=db,
@@ -1243,7 +1249,7 @@ async def update_user_balance(
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to update balance',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_BALANCE_UPDATE_FAILED', 'Failed to update balance'),
         )
 
     # Refresh user
@@ -1262,7 +1268,12 @@ async def update_user_balance(
         success=True,
         old_balance_kopeks=old_balance,
         new_balance_kopeks=user.balance_kopeks,
-        message=f'Balance updated: {old_balance / 100:.2f}₽ -> {user.balance_kopeks / 100:.2f}₽',
+        message=get_texts(admin.language or 'fa').t(
+            'CABINET_USERS_BALANCE_UPDATED', 'Balance updated from {old} to {new}'
+        ).format(
+            old=settings.format_price(old_balance, round_kopeks=False),
+            new=settings.format_price(user.balance_kopeks, round_kopeks=False),
+        ),
     )
 
 
@@ -1289,11 +1300,13 @@ async def update_user_subscription(
     - **activate**: Activate subscription
     - **create**: Create new subscription if not exists
     """
+    language = getattr(admin, 'language', None) or 'fa'
+    texts = get_texts(language)
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     subs = getattr(user, 'subscriptions', None) or []
@@ -1301,7 +1314,7 @@ async def update_user_subscription(
 
     # Select target subscription
     if request.subscription_id is not None and request.action != 'create':
-        subscription = await _get_owned_subscription_or_404(db, request.subscription_id, user_id)
+        subscription = await _get_owned_subscription_or_404(db, request.subscription_id, user_id, language)
     else:
         subscription = next((s for s in subs if s.is_active), subs[0] if subs else None)
 
@@ -1312,14 +1325,14 @@ async def update_user_subscription(
             await require_no_cispay(db, user_id=user_id, subscription_id=subscription.id)
         except ValueError as error:
             await db.rollback()
-            raise HTTPException(status_code=409, detail=str(error)) from None
+            raise HTTPException(status_code=409, detail=texts.t('PURCHASE_AUTOPAY_CONFLICT', str(error))) from None
 
     if request.action == 'create':
         # In multi-tariff mode, allow creating additional subscriptions
         if subscription and not is_multi_tariff:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='User already has a subscription. Enable multi-tariff mode to add more.',
+                detail=texts.t('CABINET_USERS_SUB_EXISTS_ENABLE_MULTITARIFF', 'User already has a subscription. Enable multi-tariff mode to add more.'),
             )
 
         # Проверка: нельзя создать вторую активную подписку с тем же тарифом
@@ -1330,7 +1343,7 @@ async def update_user_subscription(
             if existing:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail='User already has an active subscription for this tariff. Extend it instead.',
+                    detail=texts.t('CABINET_USERS_SUB_TARIFF_EXISTS_EXTEND', 'User already has an active subscription for this tariff. Extend it instead.'),
                 )
 
         from app.database.crud.subscription import create_paid_subscription
@@ -1369,7 +1382,7 @@ async def update_user_subscription(
             await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail='User already has an active subscription for this tariff. Extend it instead.',
+                detail=texts.t('CABINET_USERS_SUB_TARIFF_EXISTS_EXTEND', 'User already has an active subscription for this tariff. Extend it instead.'),
             )
 
         # Sync to Remnawave panel
@@ -1379,21 +1392,21 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Subscription created for {days} days',
+            message=texts.t('CABINET_USERS_SUB_CREATED', 'Subscription created for {days} days').format(days=days),
             subscription=await _build_subscription_info_async(db, new_sub),
         )
 
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User has no subscription',
+            detail=texts.t('CABINET_USERS_NO_SUBSCRIPTION', 'User has no subscription'),
         )
 
     if request.action == 'extend':
         if not request.days or request.days <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Days must be a positive integer',
+                detail=texts.t('CABINET_USERS_DAYS_POSITIVE_INT', 'Days must be a positive integer'),
             )
 
         await extend_subscription(db, subscription, request.days)
@@ -1410,7 +1423,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Subscription extended by {request.days} days',
+            message=texts.t('CABINET_USERS_SUB_EXTENDED', 'Subscription extended by {days} days').format(days=request.days),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1418,7 +1431,7 @@ async def update_user_subscription(
         if not request.days or request.days <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Days must be a positive integer',
+                detail=texts.t('CABINET_USERS_DAYS_POSITIVE_INT', 'Days must be a positive integer'),
             )
 
         # Сокращение через отрицательный аргумент: extend_subscription(-N) уменьшает end_date
@@ -1447,7 +1460,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Subscription shortened by {request.days} days',
+            message=texts.t('CABINET_USERS_SUB_SHORTENED', 'Subscription shortened by {days} days').format(days=request.days),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1455,7 +1468,7 @@ async def update_user_subscription(
         if not request.end_date:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='end_date parameter is required',
+                detail=texts.t('CABINET_USERS_END_DATE_REQUIRED', 'end_date parameter is required'),
             )
 
         subscription.end_date = request.end_date
@@ -1477,7 +1490,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Subscription end date set to {request.end_date.isoformat()}',
+            message=texts.t('CABINET_USERS_SUB_END_DATE_SET', 'Subscription end date set to {end_date}').format(end_date=request.end_date.isoformat()),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1485,14 +1498,14 @@ async def update_user_subscription(
         if request.tariff_id is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='tariff_id parameter is required',
+                detail=texts.t('CABINET_USERS_TARIFF_ID_REQUIRED', 'tariff_id parameter is required'),
             )
 
         tariff = await get_tariff_by_id(db, request.tariff_id)
         if not tariff:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Tariff not found',
+                detail=texts.t('CABINET_USERS_TARIFF_NOT_FOUND', 'Tariff not found'),
             )
 
         # Проверка: нельзя сменить тариф, если у пользователя уже есть
@@ -1504,7 +1517,7 @@ async def update_user_subscription(
             if existing and existing.id != subscription.id:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail='User already has an active subscription for the target tariff',
+                    detail=texts.t('CABINET_USERS_SUB_TARGET_TARIFF_EXISTS', 'User already has an active subscription for the target tariff'),
                 )
 
         # Preserve extra purchased devices above the old tariff's base limit
@@ -1514,7 +1527,7 @@ async def update_user_subscription(
 
         subscription, managed_panel = await prepare_admin_tariff_accounting(db, subscription)
         if managed_panel is not None and subscription.tariff_id == tariff.id:
-            return UpdateSubscriptionResponse(success=True, message='Tariff already selected')
+            return UpdateSubscriptionResponse(success=True, message=texts.t('CABINET_USERS_TARIFF_SELECTED', 'Tariff already selected'))
         tariff_changed = subscription.tariff_id != tariff.id
 
         old_tariff = await get_tariff_by_id(db, subscription.tariff_id) if subscription.tariff_id else None
@@ -1606,7 +1619,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Tariff changed to {tariff.name}',
+            message=texts.t('CABINET_USERS_TARIFF_CHANGED', 'Tariff changed to {tariff}').format(tariff=tariff.name),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1622,7 +1635,7 @@ async def update_user_subscription(
         if managed and request.traffic_used_gb is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail='Managed traffic usage is measured by the panel and cannot be edited. Use reset_traffic to renew the base allowance.',
+                detail=texts.t('CABINET_USERS_MANAGED_TRAFFIC_READ_ONLY', 'Managed traffic usage is measured by the panel and cannot be edited. Use reset_traffic to renew the base allowance.'),
             )
         subscription, _ = await prepare_admin_tariff_accounting(db, subscription)
         if request.traffic_limit_gb is not None:
@@ -1647,7 +1660,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message='Traffic settings updated',
+            message=texts.t('CABINET_USERS_TRAFFIC_SETTINGS_UPDATED', 'Traffic settings updated'),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1655,7 +1668,7 @@ async def update_user_subscription(
         if request.autopay_enabled is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='autopay_enabled parameter is required',
+                detail=texts.t('CABINET_USERS_AUTOPAY_ENABLED_REQUIRED', 'autopay_enabled parameter is required'),
             )
 
         subscription.autopay_enabled = request.autopay_enabled
@@ -1678,7 +1691,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Autopay {state}',
+            message=texts.t('CABINET_USERS_AUTOPAY_ON', 'Autopay enabled') if request.autopay_enabled else texts.t('CABINET_USERS_AUTOPAY_OFF', 'Autopay disabled'),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1712,7 +1725,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message='Subscription cancelled',
+            message=texts.t('CABINET_USERS_SUB_CANCELLED', 'Subscription cancelled'),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1750,7 +1763,7 @@ async def update_user_subscription(
                 if not panel_disabled:
                     return UpdateSubscriptionResponse(
                         success=False,
-                        message='Subscription reset failed: panel deactivation was not completed',
+                        message=texts.t('CABINET_USERS_SUB_RESET_PANEL_FAILED', 'Subscription reset failed: panel deactivation was not completed'),
                         subscription=await _build_subscription_info_async(db, subscription),
                     )
 
@@ -1775,7 +1788,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message='Subscription reset',
+            message=texts.t('CABINET_USERS_SUB_RESET', 'Subscription reset'),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1792,7 +1805,7 @@ async def update_user_subscription(
             if existing and existing.id != subscription.id:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail='Cannot activate: user already has an active subscription for this tariff',
+                    detail=texts.t('CABINET_USERS_CANNOT_ACTIVATE_TARIFF_EXISTS', 'Cannot activate: user already has an active subscription for this tariff'),
                 )
 
         subscription.status = SubscriptionStatus.ACTIVE.value
@@ -1812,7 +1825,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message='Subscription activated',
+            message=texts.t('CABINET_USERS_SUB_ACTIVATED', 'Subscription activated'),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1820,7 +1833,7 @@ async def update_user_subscription(
         if not request.traffic_gb:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='traffic_gb parameter is required for add_traffic action',
+                detail=texts.t('CABINET_USERS_TRAFFIC_GB_REQUIRED', 'traffic_gb parameter is required for add_traffic action'),
             )
 
         from app.database.crud.subscription import reactivate_subscription
@@ -1853,7 +1866,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Added {request.traffic_gb} GB traffic (30 days)',
+            message=texts.t('CABINET_USERS_TRAFFIC_ADDED', 'Added {traffic_gb} GB traffic (30 days)').format(traffic_gb=request.traffic_gb),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1861,7 +1874,7 @@ async def update_user_subscription(
         if not request.traffic_purchase_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='traffic_purchase_id parameter is required for remove_traffic action',
+                detail=texts.t('CABINET_USERS_TRAFFIC_PURCHASE_ID_REQUIRED', 'traffic_purchase_id parameter is required for remove_traffic action'),
             )
 
         from app.services.paid_traffic_reset_service import prepare_admin_tariff_accounting
@@ -1878,7 +1891,7 @@ async def update_user_subscription(
         if not traffic_purchase:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Traffic purchase not found',
+                detail=texts.t('CABINET_USERS_TRAFFIC_PURCHASE_NOT_FOUND', 'Traffic purchase not found'),
             )
 
         removed_gb = traffic_purchase.traffic_gb
@@ -1927,7 +1940,7 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Removed {removed_gb} GB traffic package',
+            message=texts.t('CABINET_USERS_TRAFFIC_REMOVED', 'Removed {removed_gb} GB traffic package').format(removed_gb=removed_gb),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
@@ -1935,7 +1948,7 @@ async def update_user_subscription(
         if request.device_limit is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='device_limit parameter is required for set_device_limit action',
+                detail=texts.t('CABINET_USERS_DEVICE_LIMIT_REQUIRED', 'device_limit parameter is required for set_device_limit action'),
             )
 
         subscription.device_limit = request.device_limit
@@ -1953,17 +1966,20 @@ async def update_user_subscription(
 
         return UpdateSubscriptionResponse(
             success=True,
-            message=f'Device limit set to {request.device_limit}',
+            message=texts.t('CABINET_USERS_DEVICE_LIMIT_SET', 'Device limit set to {device_limit}').format(device_limit=request.device_limit),
             subscription=await _build_subscription_info_async(db, subscription),
         )
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f'Unknown action: {request.action}',
+        detail=texts.t('CABINET_USERS_UNKNOWN_ACTION', 'Unknown action: {action}').format(action=request.action),
     )
 
 
-@router.get('/{user_id}/subscriptions/{sub_id}/cispay-recurrent')
+@router.get(
+    '/{user_id}/subscriptions/{sub_id}/cispay-recurrent',
+    summary=get_texts('fa').t('CABINET_USERS_DOC_CISPAY_STATE'),
+)
 async def get_user_cispay_recurring(
     user_id: int,
     sub_id: int,
@@ -1975,10 +1991,16 @@ async def get_user_cispay_recurring(
     try:
         return await get_cispay_agreement_state(db, user_id=user_id, subscription_id=sub_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail='Subscription not found') from None
+        raise HTTPException(
+            status_code=404,
+            detail=get_texts(getattr(admin, 'language', None) or 'fa').t('CABINET_USERS_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+        ) from None
 
 
-@router.post('/{user_id}/subscriptions/{sub_id}/cispay-recurrent/cancel')
+@router.post(
+    '/{user_id}/subscriptions/{sub_id}/cispay-recurrent/cancel',
+    summary=get_texts('fa').t('CABINET_USERS_DOC_CISPAY_CANCEL'),
+)
 async def cancel_user_cispay_recurring(
     user_id: int,
     sub_id: int,
@@ -1990,7 +2012,10 @@ async def cancel_user_cispay_recurring(
     try:
         result = await cancel_cispay_agreement(db, user_id=user_id, subscription_id=sub_id, reason='admin')
     except ValueError:
-        raise HTTPException(status_code=404, detail='Subscription not found') from None
+        raise HTTPException(
+            status_code=404,
+            detail=get_texts(getattr(admin, 'language', None) or 'fa').t('CABINET_USERS_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+        ) from None
     logger.info(
         'Admin requested CisPay cancellation',
         admin_id=admin.id,
@@ -2001,7 +2026,10 @@ async def cancel_user_cispay_recurring(
     return result
 
 
-@router.get('/{user_id}/subscriptions/{sub_id}/payhot-recurring')
+@router.get(
+    '/{user_id}/subscriptions/{sub_id}/payhot-recurring',
+    summary=get_texts('fa').t('CABINET_USERS_DOC_PAYHOT_STATE'),
+)
 async def get_user_payhot_recurring(
     user_id: int,
     sub_id: int,
@@ -2018,7 +2046,10 @@ async def get_user_payhot_recurring(
         raise payhot_error(error) from None
 
 
-@router.post('/{user_id}/subscriptions/{sub_id}/payhot-recurring/cancel')
+@router.post(
+    '/{user_id}/subscriptions/{sub_id}/payhot-recurring/cancel',
+    summary=get_texts('fa').t('CABINET_USERS_DOC_PAYHOT_CANCEL'),
+)
 async def cancel_user_payhot_recurring(
     user_id: int,
     sub_id: int,
@@ -2044,7 +2075,11 @@ async def cancel_user_payhot_recurring(
     return result
 
 
-@router.post('/{user_id}/subscriptions/{sub_id}/cancel-sbp-recurring')
+@router.post(
+    '/{user_id}/subscriptions/{sub_id}/cancel-sbp-recurring',
+    summary=get_texts('fa').t('CABINET_USERS_DOC_SBP_CANCEL'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_SBP_CANCEL_DESCRIPTION'),
+)
 async def cancel_user_sbp_recurring(
     user_id: int,
     sub_id: int,
@@ -2062,7 +2097,10 @@ async def cancel_user_sbp_recurring(
 
     subscription = await get_subscription_by_id_for_user(db, sub_id, user_id)
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_texts(getattr(admin, 'language', None) or 'fa').t('CABINET_USERS_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+        )
 
     # Эндпоинт отменяет именно СБП-автопродление Platega — привязку Lava он
     # трогать не должен (у неё своя поверхность отмены).
@@ -2079,11 +2117,15 @@ async def cancel_user_sbp_recurring(
     return {'status': 'cancelled'}
 
 
-@router.delete('/{user_id}/subscriptions/{sub_id}')
+@router.delete(
+    '/{user_id}/subscriptions/{sub_id}',
+    summary=get_texts('fa').t('CABINET_USERS_DOC_DELETE'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_DELETE_DESCRIPTION'),
+)
 async def delete_user_subscription(
     user_id: int,
     sub_id: int,
-    force: bool = Query(False, description='Allow deleting an active paid subscription'),
+    force: bool = Query(False, description=get_texts('fa').t('CABINET_USERS_QUERY_ALLOW_DELETE_ACTIVE_PAID')),
     admin: User = Depends(require_permission('users:subscription')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -2104,12 +2146,17 @@ async def delete_user_subscription(
 
     subscription = await get_subscription_by_id_for_user(db, sub_id, user_id)
     if not subscription:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Subscription not found')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_texts(getattr(admin, 'language', None) or 'fa').t('CABINET_USERS_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
+        )
 
     if subscription.is_active and not subscription.is_trial and not force:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Subscription is active and paid; pass force=true to delete it anyway',
+            detail=get_texts(getattr(admin, 'language', None) or 'fa').t(
+                'CABINET_USERS_SUB_ACTIVE_PAID_FORCE', 'Subscription is active and paid; pass force=true to delete it anyway'
+            ),
         )
 
     try:
@@ -2117,7 +2164,9 @@ async def delete_user_subscription(
     except GraceAccessDeletionBlocked as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Temporary renewal access is still active. Finish or restore grace access before deletion.',
+            detail=get_texts(getattr(admin, 'language', None) or 'fa').t(
+                'CABINET_USERS_GRACE_ACCESS_ACTIVE', 'Temporary renewal access is still active. Finish or restore grace access before deletion.'
+            ),
         ) from error
 
     logger.info(
@@ -2150,7 +2199,7 @@ async def get_user_available_tariffs(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     # Get all tariffs
@@ -2233,7 +2282,11 @@ async def get_user_available_tariffs(
 # === Status Management ===
 
 
-@router.post('/{user_id}/status', response_model=UpdateUserStatusResponse)
+@router.post(
+    '/{user_id}/status', response_model=UpdateUserStatusResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_STATUS'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_STATUS_DESCRIPTION'),
+)
 async def update_user_status(
     user_id: int,
     request: UpdateUserStatusRequest,
@@ -2241,11 +2294,12 @@ async def update_user_status(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user status (active, blocked, deleted)."""
+    texts = get_texts(admin.language or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     old_status = user.status
@@ -2256,7 +2310,7 @@ async def update_user_status(
             success=True,
             old_status=old_status,
             new_status=new_status,
-            message='Status unchanged',
+            message=texts.t('CABINET_USERS_STATUS_UNCHANGED', 'Status unchanged'),
         )
 
     user.status = new_status
@@ -2270,15 +2324,27 @@ async def update_user_status(
 
     logger.info('Admin changed status for user', admin_id=admin.id, user_id=user_id, action=action)
 
+    status_labels = {
+        'active': texts.ADMIN_USER_STATUS_ACTIVE,
+        'blocked': texts.ADMIN_USER_STATUS_BLOCKED,
+        'deleted': texts.ADMIN_USER_STATUS_DELETED,
+    }
     return UpdateUserStatusResponse(
         success=True,
         old_status=old_status,
         new_status=new_status,
-        message=f'Status changed from {old_status} to {new_status}',
+        message=texts.t('CABINET_USERS_STATUS_CHANGED', 'Status changed from {old_status} to {new_status}').format(
+            old_status=status_labels.get(old_status, texts.ADMIN_USER_STATUS_UNKNOWN),
+            new_status=status_labels[new_status],
+        ),
     )
 
 
-@router.post('/{user_id}/block', response_model=UpdateUserStatusResponse)
+@router.post(
+    '/{user_id}/block', response_model=UpdateUserStatusResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_BLOCK'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_BLOCK_DESCRIPTION'),
+)
 async def block_user(
     user_id: int,
     reason: str | None = None,
@@ -2288,6 +2354,7 @@ async def block_user(
     """Block a user — sets DB status AND disables panel user in RemnaWave."""
     from app.services.user_service import UserService
 
+    texts = get_texts(admin.language or 'fa')
     user_service = UserService()
     success = await user_service.block_user(
         db,
@@ -2296,17 +2363,24 @@ async def block_user(
         reason=reason or 'Заблокирован администратором',
     )
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found or block failed')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=texts.t('CABINET_USERS_NOT_FOUND_OR_BLOCK_FAILED', 'User not found or block failed'),
+        )
 
     return UpdateUserStatusResponse(
         success=True,
         old_status='active',
         new_status='blocked',
-        message='User blocked',
+        message=texts.t('CABINET_USERS_USER_BLOCKED', 'User blocked'),
     )
 
 
-@router.post('/{user_id}/unblock', response_model=UpdateUserStatusResponse)
+@router.post(
+    '/{user_id}/unblock', response_model=UpdateUserStatusResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_UNBLOCK'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_UNBLOCK_DESCRIPTION'),
+)
 async def unblock_user(
     user_id: int,
     admin: User = Depends(require_permission('users:block')),
@@ -2315,23 +2389,32 @@ async def unblock_user(
     """Unblock a user — sets DB status AND re-enables panel user in RemnaWave."""
     from app.services.user_service import UserService
 
+    texts = get_texts(admin.language or 'fa')
     user_service = UserService()
     success = await user_service.unblock_user(db, user_id, admin.id)
     if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found or unblock failed')
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=texts.t('CABINET_USERS_NOT_FOUND_OR_UNBLOCK_FAILED', 'User not found or unblock failed'),
+        )
 
     return UpdateUserStatusResponse(
         success=True,
         old_status='blocked',
         new_status='active',
-        message='User unblocked',
+        message=texts.t('CABINET_USERS_USER_UNBLOCKED', 'User unblocked'),
     )
 
 
 # === Direct Message ===
 
 
-@router.post('/{user_id}/send-message', response_model=SendUserMessageResponse)
+@router.post(
+    '/{user_id}/send-message',
+    response_model=SendUserMessageResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_SEND_MESSAGE'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_SEND_MESSAGE_DESCRIPTION'),
+)
 async def send_user_message(
     user_id: int,
     request: SendUserMessageRequest,
@@ -2348,30 +2431,31 @@ async def send_user_message(
 
     from app.bot_factory import create_bot
 
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     target_user = await get_user_by_id(db, user_id)
     if not target_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'))
 
     if not target_user.telegram_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'no_telegram_id',
-                'message': 'User is registered by email only and cannot receive Telegram messages',
+                'message': texts.t('CABINET_USERS_MSG_EMAIL_ONLY', 'User is registered by email only and cannot receive Telegram messages'),
             },
         )
 
     if not settings.BOT_TOKEN:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={'code': 'bot_not_configured', 'message': 'Bot token is not configured'},
+            detail={'code': 'bot_not_configured', 'message': texts.t('CABINET_USERS_MSG_BOT_NOT_CONFIGURED', 'Bot token is not configured')},
         )
 
     text = request.text.strip()
     if not text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'empty_message', 'message': 'Message text is empty'},
+            detail={'code': 'empty_message', 'message': texts.t('CABINET_USERS_MSG_EMPTY', 'Message text is empty')},
         )
 
     bot = create_bot()
@@ -2382,7 +2466,7 @@ async def send_user_message(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'forbidden',
-                'message': 'User has blocked the bot or cannot receive messages',
+                'message': texts.t('CABINET_USERS_MSG_FORBIDDEN', 'User has blocked the bot or cannot receive messages'),
             },
         )
     except TelegramBadRequest as err:
@@ -2396,7 +2480,7 @@ async def send_user_message(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'bad_request',
-                'message': 'Telegram rejected the message — check the text (HTML markup) and try again',
+                'message': texts.t('CABINET_USERS_MSG_BAD_REQUEST', 'Telegram rejected the message — check the text (HTML markup) and try again'),
             },
         )
     except Exception as err:
@@ -2408,7 +2492,7 @@ async def send_user_message(
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={'code': 'send_failed', 'message': 'Failed to send the message, try again later'},
+            detail={'code': 'send_failed', 'message': texts.t('CABINET_USERS_MSG_SEND_FAILED', 'Failed to send the message, try again later')},
         )
     finally:
         await bot.session.close()
@@ -2420,13 +2504,17 @@ async def send_user_message(
         telegram_id=target_user.telegram_id,
         text_length=len(text),
     )
-    return SendUserMessageResponse(success=True, message='Message sent')
+    return SendUserMessageResponse(success=True, message=texts.t('CABINET_USERS_MSG_SENT', 'Message sent'))
 
 
 # === Restrictions Management ===
 
 
-@router.post('/{user_id}/restrictions', response_model=UpdateRestrictionsResponse)
+@router.post(
+    '/{user_id}/restrictions', response_model=UpdateRestrictionsResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_RESTRICTIONS'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_RESTRICTIONS_DESCRIPTION'),
+)
 async def update_user_restrictions(
     user_id: int,
     request: UpdateRestrictionsRequest,
@@ -2434,11 +2522,12 @@ async def update_user_restrictions(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user restrictions (topup, subscription)."""
+    texts = get_texts(admin.language or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     if request.restriction_topup is not None:
@@ -2467,14 +2556,18 @@ async def update_user_restrictions(
         restriction_topup=user.restriction_topup,
         restriction_subscription=user.restriction_subscription,
         restriction_reason=user.restriction_reason,
-        message='Restrictions updated',
+        message=texts.t('CABINET_USERS_RESTRICTIONS_UPDATED', 'Restrictions updated'),
     )
 
 
 # === Promo Group Management ===
 
 
-@router.post('/{user_id}/promo-group', response_model=UpdatePromoGroupResponse)
+@router.post(
+    '/{user_id}/promo-group', response_model=UpdatePromoGroupResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_PROMO_GROUP'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_PROMO_GROUP_DESCRIPTION'),
+)
 async def update_user_promo_group(
     user_id: int,
     request: UpdatePromoGroupRequest,
@@ -2482,11 +2575,12 @@ async def update_user_promo_group(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user promo group."""
+    texts = get_texts(admin.language or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     old_promo_group_id = user.promo_group_id
@@ -2500,7 +2594,7 @@ async def update_user_promo_group(
         if not promo_group:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Promo group not found',
+                detail=texts.t('CABINET_USERS_PROMO_GROUP_NOT_FOUND', 'Promo group not found'),
             )
         promo_group_name = promo_group.name
 
@@ -2536,14 +2630,18 @@ async def update_user_promo_group(
         old_promo_group_id=old_promo_group_id,
         new_promo_group_id=new_promo_group_id,
         promo_group_name=promo_group_name,
-        message='Promo group updated',
+        message=texts.t('CABINET_USERS_PROMO_GROUP_UPDATED', 'Promo group updated'),
     )
 
 
 # === Referral Commission ===
 
 
-@router.post('/{user_id}/referral-commission', response_model=UpdateReferralCommissionResponse)
+@router.post(
+    '/{user_id}/referral-commission', response_model=UpdateReferralCommissionResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_COMMISSION'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_COMMISSION_DESCRIPTION'),
+)
 async def update_user_referral_commission(
     user_id: int,
     request: UpdateReferralCommissionRequest,
@@ -2551,18 +2649,19 @@ async def update_user_referral_commission(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update user's individual referral commission percentage."""
+    texts = get_texts(admin.language or 'fa')
     # Prevent admin from modifying their own commission
     if user_id == admin.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Admin cannot modify their own referral commission',
+            detail=texts.t('CABINET_USERS_ADMIN_CANNOT_MODIFY_OWN_COMMISSION', 'Admin cannot modify their own referral commission'),
         )
 
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     old_commission = user.referral_commission_percent
@@ -2590,14 +2689,18 @@ async def update_user_referral_commission(
         success=True,
         old_commission_percent=old_commission,
         new_commission_percent=request.commission_percent,
-        message='Referral commission updated',
+        message=texts.t('CABINET_USERS_REFERRAL_COMMISSION_UPDATED', 'Referral commission updated'),
     )
 
 
 # === Assign Referrer ===
 
 
-@router.post('/{user_id}/assign-referrer', response_model=AssignReferrerResponse)
+@router.post(
+    '/{user_id}/assign-referrer', response_model=AssignReferrerResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_ASSIGN_REFERRER'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_ASSIGN_REFERRER_DESCRIPTION'),
+)
 async def assign_user_referrer(
     user_id: int,
     request: AssignReferrerRequest,
@@ -2608,38 +2711,39 @@ async def assign_user_referrer(
 
     Bonuses are NOT triggered immediately — they will apply on the user's next topup.
     """
+    texts = get_texts(admin.language or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     if user_id == request.referrer_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='User cannot be their own referrer',
+            detail=texts.t('CABINET_USERS_CANNOT_BE_OWN_REFERRER', 'User cannot be their own referrer'),
         )
 
     # Prevent admin self-enrichment
     if request.referrer_id == admin.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Admin cannot assign themselves as referrer',
+            detail=texts.t('CABINET_USERS_ADMIN_CANNOT_SELF_REFERRER', 'Admin cannot assign themselves as referrer'),
         )
 
     referrer = await get_user_by_id(db, request.referrer_id)
     if not referrer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Referrer user not found',
+            detail=texts.t('CABINET_USERS_REFERRER_NOT_FOUND', 'Referrer user not found'),
         )
 
     # Prevent circular referral chains of any depth via recursive CTE
     if await _would_create_referral_cycle(db, user_id, request.referrer_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Circular referral: assigning this referrer would create a cycle in the referral chain',
+            detail=texts.t('CABINET_USERS_CIRCULAR_REFERRAL', 'Circular referral: assigning this referrer would create a cycle in the referral chain'),
         )
 
     old_referrer_id = user.referred_by_id
@@ -2667,31 +2771,36 @@ async def assign_user_referrer(
         success=True,
         old_referrer_id=old_referrer_id,
         new_referrer_id=request.referrer_id,
-        message='Referrer assigned successfully. Bonuses will apply on next user topup.',
+        message=texts.t('CABINET_USERS_REFERRER_ASSIGNED', 'Referrer assigned successfully. Bonuses will apply on next user topup.'),
     )
 
 
 # === Remove Referrer ===
 
 
-@router.delete('/{user_id}/referrer', response_model=RemoveReferrerResponse)
+@router.delete(
+    '/{user_id}/referrer', response_model=RemoveReferrerResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_REMOVE_REFERRER'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_REMOVE_REFERRER_DESCRIPTION'),
+)
 async def remove_user_referrer(
     user_id: int,
     admin: User = Depends(require_permission('users:referral')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Remove who referred this user (set referred_by_id to None)."""
+    texts = get_texts(admin.language or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     if user.referred_by_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='User does not have a referrer',
+            detail=texts.t('CABINET_USERS_NO_REFERRER', 'User does not have a referrer'),
         )
 
     old_referrer_id = user.referred_by_id
@@ -2717,14 +2826,18 @@ async def remove_user_referrer(
     return RemoveReferrerResponse(
         success=True,
         old_referrer_id=old_referrer_id,
-        message='Referrer removed successfully',
+        message=texts.t('CABINET_USERS_REFERRER_REMOVED', 'Referrer removed successfully'),
     )
 
 
 # === Remove Referral ===
 
 
-@router.delete('/{user_id}/referrals/{referral_user_id}', response_model=RemoveReferralResponse)
+@router.delete(
+    '/{user_id}/referrals/{referral_user_id}', response_model=RemoveReferralResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_REMOVE_REFERRAL'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_REMOVE_REFERRAL_DESCRIPTION'),
+)
 async def remove_user_referral(
     user_id: int,
     referral_user_id: int,
@@ -2732,25 +2845,26 @@ async def remove_user_referral(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Remove a specific referral from a user (unbind referral_user from this referrer)."""
+    texts = get_texts(admin.language or 'fa')
     # Verify the referrer user exists
     referrer = await get_user_by_id(db, user_id)
     if not referrer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Referrer user not found',
+            detail=texts.t('CABINET_USERS_REFERRER_NOT_FOUND', 'Referrer user not found'),
         )
 
     referral_user = await get_user_by_id(db, referral_user_id)
     if not referral_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Referral user not found',
+            detail=texts.t('CABINET_USERS_REFERRAL_NOT_FOUND', 'Referral user not found'),
         )
 
     if referral_user.referred_by_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This user is not a referral of the specified referrer',
+            detail=texts.t('CABINET_USERS_NOT_A_REFERRAL', 'This user is not a referral of the specified referrer'),
         )
 
     referral_user.referred_by_id = None
@@ -2775,7 +2889,7 @@ async def remove_user_referral(
     return RemoveReferralResponse(
         success=True,
         removed_user_id=referral_user_id,
-        message='Referral removed successfully',
+        message=texts.t('CABINET_USERS_REFERRAL_REMOVED', 'Referral removed successfully'),
     )
 
 
@@ -2802,23 +2916,28 @@ async def _would_create_referral_cycle(db: AsyncSession, user_id: int, referrer_
 # === Devices ===
 
 
-@router.get('/{user_id}/devices', response_model=UserDevicesResponse)
+@router.get(
+    '/{user_id}/devices', response_model=UserDevicesResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_DEVICE_LIST'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_DEVICE_LIST_DESCRIPTION'),
+)
 async def get_user_devices(
     user_id: int,
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_MULTITARIFF')),
 ):
     """Get user devices from Remnawave panel."""
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'))
 
     # Resolve panel user id
     selected_subscription = None
     _dev_panel_user_id = None
     if subscription_id is not None:
-        selected_subscription = await _get_owned_subscription_or_404(db, subscription_id, user_id)
+        selected_subscription = await _get_owned_subscription_or_404(db, subscription_id, user_id, getattr(admin, 'language', None) or 'fa')
         _dev_panel_user_id = selected_subscription.remnawave_id
     else:
         _dev_panel_user_id = user.remnawave_id
@@ -2881,27 +3000,32 @@ async def get_user_devices(
         return UserDevicesResponse()
 
 
-@router.delete('/{user_id}/devices/{hwid}', response_model=DeleteDeviceResponse)
+@router.delete(
+    '/{user_id}/devices/{hwid}', response_model=DeleteDeviceResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_DEVICE_DELETE'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_DEVICE_DELETE_DESCRIPTION'),
+)
 async def delete_user_device(
     user_id: int,
     hwid: str,
     admin: User = Depends(require_permission('users:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_MULTITARIFF')),
 ):
     """Delete a single device for user."""
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'))
 
     _panel_user_id = None
     if subscription_id is not None:
-        _panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id)).remnawave_id
+        _panel_user_id = (await _get_owned_subscription_or_404(db, subscription_id, user_id, getattr(admin, 'language', None) or 'fa')).remnawave_id
     else:
         _panel_user_id = user.remnawave_id
 
     if not _panel_user_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User has no panel account')
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texts.t('CABINET_USERS_NO_PANEL_ACCOUNT', 'User has no panel account'))
 
     try:
         from app.services.remnawave_service import RemnaWaveService
@@ -2912,15 +3036,19 @@ async def delete_user_device(
 
         if success:
             logger.info('Admin deleted device for user', admin_id=admin.id, hwid=hwid, user_id=user_id)
-            return DeleteDeviceResponse(success=True, message='Device deleted', deleted_hwid=hwid)
-        return DeleteDeviceResponse(success=False, message='Failed to delete device')
+            return DeleteDeviceResponse(success=True, message=texts.t('CABINET_USERS_DEVICE_DELETED', 'Device deleted'), deleted_hwid=hwid)
+        return DeleteDeviceResponse(success=False, message=texts.t('CABINET_USERS_DEVICE_DELETE_FAILED', 'Failed to delete device'))
 
     except Exception as e:
         logger.error('Error deleting device for user', hwid=hwid, user_id=user_id, error=e)
-        return DeleteDeviceResponse(success=False, message='Ошибка удаления устройства')
+        return DeleteDeviceResponse(success=False, message=texts.t('CABINET_USERS_DEVICE_DELETE_ERROR', 'Ошибка удаления устройства'))
 
 
-@router.patch('/{user_id}/devices/{hwid}/name', response_model=RenameDeviceResponse)
+@router.patch(
+    '/{user_id}/devices/{hwid}/name', response_model=RenameDeviceResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_DEVICE_RENAME'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_DEVICE_RENAME_DESCRIPTION'),
+)
 async def rename_user_device(
     user_id: int,
     hwid: str,
@@ -2934,20 +3062,21 @@ async def rename_user_device(
     same value would appear in the user's own bot/cabinet view. Empty or
     null `name` clears the alias.
     """
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'))
 
     hwid = (hwid or '').strip()
     if not hwid:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='hwid is required')
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texts.t('CABINET_USERS_HWID_REQUIRED', 'hwid is required'))
 
     # Best-effort hwid validation across ALL the user's panel accounts (multi-tariff
     # aware). Shared with the user-facing endpoint via cabinet.utils.device_ownership.
     if not await verify_hwid_belongs_to_user(user, hwid):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Device not found on user account',
+            detail=texts.t('CABINET_USERS_DEVICE_NOT_ON_ACCOUNT', 'Device not found on user account'),
         )
 
     normalized = normalize_alias(request.name)
@@ -2967,17 +3096,22 @@ async def rename_user_device(
     return RenameDeviceResponse(hwid=hwid, local_name=None)
 
 
-@router.delete('/{user_id}/devices', response_model=ResetDevicesResponse)
+@router.delete(
+    '/{user_id}/devices', response_model=ResetDevicesResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_DEVICE_RESET'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_DEVICE_RESET_DESCRIPTION'),
+)
 async def reset_user_devices(
     user_id: int,
     admin: User = Depends(require_permission('users:edit')),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_MULTITARIFF')),
 ):
     """Reset all devices for user."""
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'))
 
     _rst_panel_user_id = None
     if settings.is_multi_tariff_enabled() and subscription_id:
@@ -2990,7 +3124,7 @@ async def reset_user_devices(
         _rst_panel_user_id = user.remnawave_id
 
     if not _rst_panel_user_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User has no panel account')
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texts.t('CABINET_USERS_NO_PANEL_ACCOUNT', 'User has no panel account'))
 
     try:
         from app.services.remnawave_service import RemnaWaveService
@@ -3002,7 +3136,7 @@ async def reset_user_devices(
             total = len(devices)
 
             if total == 0:
-                return ResetDevicesResponse(success=True, message='No devices to reset', deleted_count=0)
+                return ResetDevicesResponse(success=True, message=texts.t('CABINET_USERS_NO_DEVICES_TO_RESET', 'No devices to reset'), deleted_count=0)
 
             deleted = 0
             for d in devices:
@@ -3020,19 +3154,23 @@ async def reset_user_devices(
             logger.error('Часть устройств не удалось удалить', user_id=user_id, deleted=deleted, total=total)
         return ResetDevicesResponse(
             success=deleted == total,
-            message=f'Deleted {deleted}/{total} devices',
+            message=texts.t('CABINET_USERS_DEVICES_DELETED_COUNT', 'Deleted {deleted}/{total} devices').format(deleted=deleted, total=total),
             deleted_count=deleted,
         )
 
     except Exception as e:
         logger.error('Error resetting devices for user', user_id=user_id, error=e)
-        return ResetDevicesResponse(success=False, message='Ошибка сброса устройств')
+        return ResetDevicesResponse(success=False, message=texts.t('CABINET_USERS_DEVICES_RESET_ERROR', 'Ошибка сброса устройств'))
 
 
 # === Delete User ===
 
 
-@router.delete('/{user_id}', response_model=DeleteUserResponse)
+@router.delete(
+    '/{user_id}', response_model=DeleteUserResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_DELETE_ACCOUNT'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_DELETE_ACCOUNT_DESCRIPTION'),
+)
 async def delete_user(
     user_id: int,
     request: DeleteUserRequest = DeleteUserRequest(),
@@ -3045,16 +3183,18 @@ async def delete_user(
     - **soft_delete=True**: Mark user as deleted (default)
     - **soft_delete=False**: Permanently delete from database
     """
+    texts = get_texts(admin.language or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     if request.soft_delete:
         await soft_delete_user(db, user)
         action = 'soft deleted'
+        message = texts.t('CABINET_USERS_SOFT_DELETED', 'User marked as deleted')
     else:
         from app.services.grace_access_runtime import (
             GraceAccessDeletionBlocked,
@@ -3066,23 +3206,28 @@ async def delete_user(
         except GraceAccessDeletionBlocked as error:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail='Open grace access must be drained or restored before permanent deletion.',
+                detail=texts.t('CABINET_USERS_GRACE_MUST_DRAIN', 'Open grace access must be drained or restored before permanent deletion.'),
             ) from error
         # Hard delete
         await db.delete(user)
         await db.commit()
         action = 'permanently deleted'
+        message = texts.t('CABINET_USERS_PERMANENTLY_DELETED', 'User permanently deleted')
 
     reason_text = f' (reason: {request.reason})' if request.reason else ''
     logger.info('Admin user', admin_id=admin.id, action=action, user_id=user_id, reason_text=reason_text)
 
     return DeleteUserResponse(
         success=True,
-        message=f'User {action} successfully',
+        message=message,
     )
 
 
-@router.delete('/{user_id}/full', response_model=FullDeleteUserResponse)
+@router.delete(
+    '/{user_id}/full', response_model=FullDeleteUserResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_FULL_DELETE_ACCOUNT'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_FULL_DELETE_ACCOUNT_DESCRIPTION'),
+)
 async def full_delete_user(
     user_id: int,
     request: FullDeleteUserRequest = FullDeleteUserRequest(),
@@ -3099,11 +3244,12 @@ async def full_delete_user(
     """
     from app.services.user_service import UserService
 
+    texts = get_texts(admin.language or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     # Pre-fetch admin.id to avoid MissingGreenlet after transaction rollback
@@ -3120,7 +3266,7 @@ async def full_delete_user(
         # конфликт состояния, а не «успешный» ответ с success=false.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Open grace access must be drained or restored before permanent deletion.',
+            detail=texts.t('CABINET_USERS_GRACE_MUST_DRAIN', 'Open grace access must be drained or restored before permanent deletion.'),
         )
 
     reason_text = f' (reason: {request.reason})' if request.reason else ''
@@ -3136,14 +3282,24 @@ async def full_delete_user(
 
     return FullDeleteUserResponse(
         success=delete_result.bot_deleted,
-        message='User fully deleted from bot and panel' if delete_result.bot_deleted else 'Failed to delete user',
+        message=(
+            texts.t('CABINET_USERS_PERMANENTLY_DELETED', 'User permanently deleted from bot')
+            if delete_result.bot_deleted else texts.t('CABINET_USERS_DELETE_FAILED', 'Failed to delete user')
+        ),
         deleted_from_bot=delete_result.bot_deleted,
         deleted_from_panel=delete_result.panel_deleted,
-        panel_error=delete_result.panel_error,
+        panel_error=(
+            texts.t(delete_result.panel_error_key or 'CABINET_USERS_PANEL_PROCESS_ERROR', delete_result.panel_error)
+            if delete_result.panel_error else None
+        ),
     )
 
 
-@router.post('/{user_id}/reset-trial', response_model=ResetTrialResponse)
+@router.post(
+    '/{user_id}/reset-trial', response_model=ResetTrialResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_RESET_TRIAL'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_RESET_TRIAL_DESCRIPTION'),
+)
 async def reset_user_trial(
     user_id: int,
     request: ResetTrialRequest = ResetTrialRequest(),
@@ -3157,11 +3313,12 @@ async def reset_user_trial(
     - Delete current subscription if exists
     - User can now activate a new trial
     """
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     subscription_deleted = False
@@ -3215,9 +3372,9 @@ async def reset_user_trial(
     return ResetTrialResponse(
         success=trial_available,
         message=(
-            'Trial reset successfully. User can now activate a new trial.'
+            texts.t('CABINET_USERS_TRIAL_RESET', 'Trial reset successfully. User can now activate a new trial.')
             if trial_available
-            else 'Trial is still unavailable: the user has another subscription. Remove it first.'
+            else texts.t('CABINET_USERS_TRIAL_RESET_UNAVAILABLE', 'Trial is still unavailable: the user has another subscription. Remove it first.')
         ),
         subscription_deleted=subscription_deleted,
         has_used_trial_reset=True,
@@ -3225,7 +3382,11 @@ async def reset_user_trial(
     )
 
 
-@router.post('/{user_id}/reset-subscription', response_model=ResetSubscriptionResponse)
+@router.post(
+    '/{user_id}/reset-subscription', response_model=ResetSubscriptionResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_RESET_SUBSCRIPTIONS'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_RESET_SUBSCRIPTIONS_DESCRIPTION'),
+)
 async def reset_user_subscription(
     user_id: int,
     request: ResetSubscriptionRequest = ResetSubscriptionRequest(),
@@ -3240,11 +3401,12 @@ async def reset_user_subscription(
     - Optionally deactivate in Remnawave panel
     - User will have no active subscription
     """
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     subscription_deleted = False
@@ -3255,7 +3417,7 @@ async def reset_user_subscription(
     if not subs:
         return ResetSubscriptionResponse(
             success=True,
-            message='User has no subscription to reset',
+            message=texts.t('CABINET_USERS_NO_SUBSCRIPTION_TO_RESET', 'User has no subscription to reset'),
             subscription_deleted=False,
             panel_deactivated=False,
         )
@@ -3270,7 +3432,7 @@ async def reset_user_subscription(
     except GraceAccessDeletionBlocked as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Open grace access must be drained or restored before resetting subscriptions.',
+            detail=texts.t('CABINET_USERS_GRACE_MUST_DRAIN_RESET', 'Open grace access must be drained or restored before resetting subscriptions.'),
         ) from error
 
     # Best-effort: stop Platega SBP autopay before any irreversible panel/DB
@@ -3293,7 +3455,7 @@ async def reset_user_subscription(
     except GraceAccessDeletionBlocked as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Open grace access must be drained or restored before resetting subscriptions.',
+            detail=texts.t('CABINET_USERS_GRACE_MUST_DRAIN_RESET', 'Open grace access must be drained or restored before resetting subscriptions.'),
         ) from error
 
     # Deactivate in Remnawave panel if requested
@@ -3315,10 +3477,10 @@ async def reset_user_subscription(
             if panel_targets and not panel_deactivated:
                 return ResetSubscriptionResponse(
                     success=False,
-                    message='Subscription reset failed: panel deactivation was not completed',
+                    message=texts.t('CABINET_USERS_SUB_RESET_PANEL_INCOMPLETE', 'Subscription reset failed: panel deactivation was not completed'),
                     subscription_deleted=False,
                     panel_deactivated=False,
-                    panel_error='Не удалось отключить всех пользователей в Remnawave',
+                    panel_error=texts.t('CABINET_USERS_PANEL_DISABLE_ALL_FAILED', 'Не удалось отключить всех пользователей в Remnawave'),
                 )
             if panel_deactivated:
                 logger.info('Disabled Remnawave users for subscription reset', user_id=user_id)
@@ -3326,10 +3488,10 @@ async def reset_user_subscription(
             logger.warning('Failed to disable Remnawave user during subscription reset', error=e)
             return ResetSubscriptionResponse(
                 success=False,
-                message='Subscription reset failed: panel deactivation was not completed',
+                message=texts.t('CABINET_USERS_SUB_RESET_PANEL_INCOMPLETE', 'Subscription reset failed: panel deactivation was not completed'),
                 subscription_deleted=False,
                 panel_deactivated=False,
-                panel_error='Ошибка обработки пользователя в Remnawave',
+                panel_error=texts.t('CABINET_USERS_PANEL_PROCESS_ERROR', 'Ошибка обработки пользователя в Remnawave'),
             )
 
     # Delete all subscriptions from database
@@ -3348,14 +3510,19 @@ async def reset_user_subscription(
 
     return ResetSubscriptionResponse(
         success=True,
-        message='Subscription reset successfully',
+        message=texts.t('CABINET_USERS_SUB_RESET_SUCCESS', 'Subscription reset successfully'),
         subscription_deleted=subscription_deleted,
         panel_deactivated=panel_deactivated,
         panel_error=panel_error,
     )
 
 
-@router.post('/{user_id}/disable', response_model=DisableUserResponse)
+@router.post(
+    '/{user_id}/disable',
+    response_model=DisableUserResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_DISABLE'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_DISABLE_DESCRIPTION'),
+)
 async def disable_user(
     user_id: int,
     request: DisableUserRequest = DisableUserRequest(),
@@ -3370,11 +3537,12 @@ async def disable_user(
     - Deactivate in Remnawave panel
     - Block user account
     """
+    texts = get_texts(admin.language or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     from app.services.rbac_bootstrap_service import is_protected_from_blocking
@@ -3383,7 +3551,10 @@ async def disable_user(
         logger.warning('Refused to block an env-configured admin', admin_id=admin.id, user_id=user_id)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='This account is listed in ADMIN_IDS/ADMIN_EMAILS and cannot be blocked',
+            detail=texts.t(
+                'CABINET_USERS_ACCOUNT_PROTECTED_FROM_BLOCK',
+                'This account is listed in ADMIN_IDS/ADMIN_EMAILS and cannot be blocked',
+            ),
         )
 
     subscription_deactivated = False
@@ -3424,7 +3595,7 @@ async def disable_user(
             if panel_deactivated:
                 logger.info('Disabled Remnawave user(s)', user_id=user_id)
         except Exception as e:
-            panel_error = 'Ошибка обработки пользователя в Remnawave'
+            panel_error = texts.t('CABINET_USERS_PANEL_DISABLE_FAILED', 'Failed to disable the account in the panel')
             logger.warning('Failed to disable Remnawave user', error=e)
 
     # Deactivate all subscriptions in bot database (skip active paid ones)
@@ -3450,7 +3621,7 @@ async def disable_user(
 
     return DisableUserResponse(
         success=True,
-        message='User disabled successfully',
+        message=texts.t('CABINET_USERS_USER_DISABLED', 'User disabled successfully'),
         subscription_deactivated=subscription_deactivated,
         panel_deactivated=panel_deactivated,
         user_blocked=True,
@@ -3474,7 +3645,7 @@ async def get_user_referrals(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     referrals = await get_referrals(db, user.id)
@@ -3500,7 +3671,11 @@ async def get_user_referrals(
 # === User Transactions ===
 
 
-@router.get('/{user_id}/transactions')
+@router.get(
+    '/{user_id}/transactions',
+    summary=get_texts('fa').t('CABINET_USERS_DOC_TRANSACTIONS'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_TRANSACTIONS_DESCRIPTION'),
+)
 async def get_user_transactions(
     user_id: int,
     offset: int = Query(0, ge=0),
@@ -3510,11 +3685,12 @@ async def get_user_transactions(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user transactions."""
+    language = getattr(admin, 'language', None) or 'fa'
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(language).t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     query = select(Transaction).where(Transaction.user_id == user.id)
@@ -3545,7 +3721,7 @@ async def get_user_transactions(
             type=t.type,
             amount_kopeks=-abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
             amount_rubles=-abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
-            description=t.description,
+            description=localize_transaction_description(t.description, language, t.payment_method),
             payment_method=t.payment_method,
             is_completed=t.is_completed,
             created_at=t.created_at,
@@ -3561,12 +3737,16 @@ async def get_user_transactions(
     }
 
 
-@router.get('/{user_id}/activity', response_model=UserActivityResponse)
+@router.get(
+    '/{user_id}/activity', response_model=UserActivityResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_ACTIVITY'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_ACTIVITY_DESCRIPTION'),
+)
 async def get_user_activity(
     user_id: int,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    types: str | None = Query(None, description='CSV фильтр по типам записей (см. UserActivityItem.type)'),
+    types: str | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_ACTIVITY_TYPE_FILTER')),
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -3576,19 +3756,20 @@ async def get_user_activity(
     offset+limit записей по времени, сливаются и сортируются — глубокая
     пагинация дороже, но limit ограничен и таймлайн листают сверху.
     """
+    language = getattr(admin, 'language', None) or 'fa'
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(language).t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     try:
-        return await collect_user_activity(db, user.id, offset=offset, limit=limit, types=types)
+        return await collect_user_activity(db, user.id, offset=offset, limit=limit, types=types, language=language)
     except UnknownActivityTypes as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            detail=get_texts(language).t('CABINET_USERS_UNKNOWN_ACTIVITY_TYPES', 'Unknown activity types: {types}').format(types=', '.join(error.unknown)),
         ) from error
 
 
@@ -3612,7 +3793,7 @@ async def get_user_sync_status(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     # Bot data
@@ -3821,7 +4002,7 @@ async def sync_user_from_panel(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     try:
@@ -4106,7 +4287,7 @@ async def sync_user_to_panel(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
+            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     push_subs = getattr(user, 'subscriptions', None) or []
@@ -4252,7 +4433,7 @@ async def get_user_gifts(
     # Lightweight existence check (avoids eager-loading all User relationships)
     user_exists = await db.execute(select(User.id).where(User.id == user_id))
     if not user_exists.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'))
 
     # True totals via COUNT queries
     sent_total = (

@@ -92,7 +92,7 @@ async def test_activity_unknown_type_400() -> None:
                 user_id=1, offset=0, limit=50, types='transaction,nonsense', admin=SimpleNamespace(id=1), db=db
             )
     assert exc.value.status_code == 400
-    assert 'nonsense' in exc.value.detail
+    assert exc.value.detail == 'انواع فعالیت ناشناخته: nonsense'
 
 
 async def test_activity_merges_and_sorts_desc() -> None:
@@ -101,10 +101,10 @@ async def test_activity_merges_and_sorts_desc() -> None:
 
     transaction = SimpleNamespace(
         type='deposit',
-        description='Пополнение',
+        description='Пополнение через اطلس‌پی',
         amount_kopeks=10000,
         created_at=NOW - timedelta(hours=1),
-        payment_method='stars',
+        payment_method='atlaspay',
         is_completed=True,
     )
     ticket = SimpleNamespace(id=9, status='open', title='Помогите', created_at=NOW - timedelta(minutes=5))
@@ -139,7 +139,8 @@ async def test_activity_merges_and_sorts_desc() -> None:
     assert [item.type for item in response.items] == ['ticket', 'transaction']
     assert response.items[0].title == 'Помогите'
     assert response.items[1].amount_kopeks == 10000
-    assert response.items[1].meta == {'payment_method': 'stars', 'is_completed': True}
+    assert response.items[1].title == 'شارژ از طریق اطلس‌پی'
+    assert response.items[1].meta == {'payment_method': 'atlaspay', 'is_completed': True}
 
 
 async def test_activity_types_filter_limits_sources() -> None:

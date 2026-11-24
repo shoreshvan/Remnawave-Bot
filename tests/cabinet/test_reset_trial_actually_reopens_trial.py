@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from tests.fixtures.persian import persian  # noqa: F401
 
 from app.cabinet.routes import admin_users
 from app.database.models import (
@@ -81,15 +82,17 @@ def _subscription(user: User, *, is_trial: bool, status: str, days: int) -> Subs
 
 
 async def _reset(db, user_id: int):
+    admin = _user()
+    admin.language = 'fa'
     return await admin_users.reset_user_trial(
         user_id=user_id,
         request=admin_users.ResetTrialRequest(),
-        admin=_user(),
+        admin=admin,
         db=db,
     )
 
 
-async def test_paid_once_but_nothing_left_gets_the_trial_back(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_paid_once_but_nothing_left_gets_the_trial_back(monkeypatch: pytest.MonkeyPatch, persian) -> None:
     async with memory_session(monkeypatch, TABLES) as db:
         user = _user(has_had_paid_subscription=True)
         db.add(user)
@@ -100,6 +103,7 @@ async def test_paid_once_but_nothing_left_gets_the_trial_back(monkeypatch: pytes
         response = await _reset(db, user.id)
 
         assert response.success is True
+        assert response.message == persian.t('CABINET_USERS_TRIAL_RESET')
         await db.refresh(user, ['subscriptions'])
         assert user.is_trial_already_used() is False
 
@@ -135,7 +139,7 @@ async def test_new_trial_after_the_reset_closes_it_again(monkeypatch: pytest.Mon
         assert user.is_trial_already_used() is True
 
 
-async def test_live_paid_subscription_gets_an_honest_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_live_paid_subscription_gets_an_honest_refusal(monkeypatch: pytest.MonkeyPatch, persian) -> None:
     """Живая платная подписка сама закрывает триал — кнопка обязана сказать это, а не врать."""
     async with memory_session(monkeypatch, TABLES) as db:
         user = _user(has_had_paid_subscription=True)
@@ -147,6 +151,7 @@ async def test_live_paid_subscription_gets_an_honest_refusal(monkeypatch: pytest
         response = await _reset(db, user.id)
 
         assert response.success is False
+        assert response.message == persian.t('CABINET_USERS_TRIAL_RESET_UNAVAILABLE')
         await db.refresh(user, ['subscriptions'])
         assert user.is_trial_already_used() is True
         assert len(user.subscriptions) == 1, 'платную подписку сброс триала сносить не должен'

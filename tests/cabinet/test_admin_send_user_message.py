@@ -9,6 +9,7 @@ no_telegram_id — фронт объясняет, а не показывает g
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from tests.fixtures.persian import persian  # noqa: F401
 from fastapi import HTTPException
 
 from app.cabinet.routes import admin_users as m
@@ -23,7 +24,7 @@ def _bot() -> MagicMock:
     return bot
 
 
-async def test_send_message_success(monkeypatch):
+async def test_send_message_success(monkeypatch, persian):
     target = MagicMock(telegram_id=111)
     monkeypatch.setattr(m, 'get_user_by_id', AsyncMock(return_value=target))
     monkeypatch.setattr(type(m.settings), 'BOT_TOKEN', 'token', raising=False)
@@ -33,16 +34,17 @@ async def test_send_message_success(monkeypatch):
     result = await m.send_user_message(
         user_id=1,
         request=SendUserMessageRequest(text='  привет  '),
-        admin=MagicMock(id=7),
+        admin=MagicMock(id=7, language='fa'),
         db=AsyncMock(),
     )
 
     assert result.success is True
+    assert result.message == 'پیام ارسال شد'
     bot.send_message.assert_awaited_once_with(111, 'привет', parse_mode='HTML')
     bot.session.close.assert_awaited_once()  # сессия закрыта
 
 
-async def test_send_message_email_only_user_rejected(monkeypatch):
+async def test_send_message_email_only_user_rejected(monkeypatch, persian):
     """Email-only юзер → 400 с кодом no_telegram_id, бот не создаётся."""
     target = MagicMock(telegram_id=None)
     monkeypatch.setattr(m, 'get_user_by_id', AsyncMock(return_value=target))
@@ -51,15 +53,16 @@ async def test_send_message_email_only_user_rejected(monkeypatch):
         await m.send_user_message(
             user_id=1,
             request=SendUserMessageRequest(text='hi'),
-            admin=MagicMock(id=7),
+            admin=MagicMock(id=7, language=None),
             db=AsyncMock(),
         )
 
     assert exc.value.status_code == 400
     assert exc.value.detail['code'] == 'no_telegram_id'
+    assert exc.value.detail['message'] == persian.t('CABINET_USERS_MSG_EMAIL_ONLY')
 
 
-async def test_send_message_forbidden_maps_to_400_and_closes_session(monkeypatch):
+async def test_send_message_forbidden_maps_to_400_and_closes_session(monkeypatch, persian):
     """Юзер заблокировал бота → 400 с кодом forbidden, сессия бота закрыта."""
     from aiogram.exceptions import TelegramForbiddenError
 
@@ -74,12 +77,13 @@ async def test_send_message_forbidden_maps_to_400_and_closes_session(monkeypatch
         await m.send_user_message(
             user_id=1,
             request=SendUserMessageRequest(text='hi'),
-            admin=MagicMock(id=7),
+            admin=MagicMock(id=7, language='fa'),
             db=AsyncMock(),
         )
 
     assert exc.value.status_code == 400
     assert exc.value.detail['code'] == 'forbidden'
+    assert exc.value.detail['message'] == persian.t('CABINET_USERS_MSG_FORBIDDEN')
     bot.session.close.assert_awaited_once()
 
 
@@ -90,7 +94,7 @@ async def test_send_message_user_not_found(monkeypatch):
         await m.send_user_message(
             user_id=404,
             request=SendUserMessageRequest(text='hi'),
-            admin=MagicMock(id=7),
+            admin=MagicMock(id=7, language=None),
             db=AsyncMock(),
         )
 

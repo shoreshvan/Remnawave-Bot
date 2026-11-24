@@ -20,6 +20,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.cabinet.routes import admin_users
+from tests.fixtures.persian import persian  # noqa: F401
 
 
 USER_ID = 10
@@ -84,16 +85,17 @@ async def test_deletes_expired_trial():
 
 
 @pytest.mark.asyncio
-async def test_foreign_subscription_not_found():
+async def test_foreign_subscription_not_found(persian):
     """Подписка чужого пользователя не удаляется по одному лишь sub_id."""
     with patch('app.database.crud.subscription.get_subscription_by_id_for_user', AsyncMock(return_value=None)):
         with pytest.raises(HTTPException) as exc:
             await admin_users.delete_user_subscription(USER_ID, SUB_ID, force=False, admin=_admin(), db=MagicMock())
     assert exc.value.status_code == 404
+    assert exc.value.detail == 'اشتراک یافت نشد'
 
 
 @pytest.mark.asyncio
-async def test_active_paid_needs_force():
+async def test_active_paid_needs_force(persian):
     """Оплаченный активный доступ не сносится одним промахом."""
     sub = _subscription(is_active=True, is_trial=False)
     deleter = AsyncMock()
@@ -105,6 +107,7 @@ async def test_active_paid_needs_force():
         with pytest.raises(HTTPException) as exc:
             await admin_users.delete_user_subscription(USER_ID, SUB_ID, force=False, admin=_admin(), db=MagicMock())
         assert exc.value.status_code == 409
+        assert exc.value.detail == persian.t('CABINET_USERS_SUB_ACTIVE_PAID_FORCE')
         deleter.assert_not_awaited()
 
         # С явным force та же подписка удаляется
@@ -114,7 +117,7 @@ async def test_active_paid_needs_force():
 
 
 @pytest.mark.asyncio
-async def test_open_grace_blocks_deletion():
+async def test_open_grace_blocks_deletion(persian):
     """Пока открыт временный доступ, подписку из-под него не вырывают."""
     from app.services.grace_access_runtime import GraceAccessDeletionBlocked
 
@@ -130,4 +133,4 @@ async def test_open_grace_blocks_deletion():
         with pytest.raises(HTTPException) as exc:
             await admin_users.delete_user_subscription(USER_ID, SUB_ID, force=False, admin=_admin(), db=MagicMock())
     assert exc.value.status_code == 409
-    assert 'grace' in exc.value.detail.lower()
+    assert exc.value.detail == persian.t('CABINET_USERS_GRACE_ACCESS_ACTIVE')

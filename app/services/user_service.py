@@ -72,6 +72,7 @@ class DeleteUserResult:
     panel_error: str | None = None
     # Удаление отклонено guard'ом открытого grace-доступа (HTTP-слой мапит в 409)
     grace_blocked: bool = False
+    panel_error_key: str | None = None
 
 
 class UserService:
@@ -923,6 +924,7 @@ class UserService:
                                     )
                                 else:
                                     result.panel_error = 'disable_remnawave_user вернул False'
+                                    result.panel_error_key = 'CABINET_USERS_PANEL_DISABLE_FAILED'
                                     logger.warning(
                                         '⚠️ Не удалось деактивировать пользователя в RemnaWave',
                                         remnawave_id=panel_user_id,
@@ -947,6 +949,7 @@ class UserService:
                                 continue
 
                             result.panel_error = 'Ошибка обработки пользователя в Remnawave'
+                            result.panel_error_key = 'CABINET_USERS_PANEL_PROCESS_ERROR'
                             logger.warning(
                                 '⚠️ Ошибка обработки пользователя в Remnawave',
                                 delete_mode=delete_mode,
@@ -962,6 +965,7 @@ class UserService:
                                     if disabled:
                                         result.panel_deleted = True
                                         result.panel_error = 'Удаление не удалось, пользователь деактивирован'
+                                        result.panel_error_key = 'CABINET_USERS_PANEL_DISABLED_INSTEAD'
                                         logger.info(
                                             '✅ RemnaWave пользователь деактивирован как fallback',
                                             remnawave_id=panel_user_id,

@@ -127,7 +127,7 @@ async def _persist_failed_refund(user_id: int, amount_kopeks: int, reason: str, 
 purchase_service = MiniAppSubscriptionPurchaseService()
 
 
-async def _ensure_tariff_not_already_active(db: AsyncSession, user_id: int, tariff_id: int) -> None:
+async def _ensure_tariff_not_already_active(db: AsyncSession, user_id: int, tariff_id: int, *, language: str | None = None) -> None:
     """Отказ, если у человека уже есть живая подписка этого тарифа.
 
     Нужен там, где покупка переводит на тариф другую строку (старую подписку без
@@ -139,7 +139,7 @@ async def _ensure_tariff_not_already_active(db: AsyncSession, user_id: int, tari
     if await get_subscription_by_user_and_tariff(db, user_id, tariff_id) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='You already have an active subscription for this tariff',
+            detail=get_texts(language).t('CABINET_PURCHASE_TARIFF_ALREADY_ACTIVE', 'You already have an active subscription for this tariff'),
         )
 
 
@@ -516,7 +516,7 @@ async def get_purchase_options(
         logger.error('Failed to build purchase options for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to load purchase options',
+            detail=get_texts(user.language).t('CABINET_PURCHASE_OPTIONS_LOAD_FAILED', 'Failed to load purchase options'),
         )
 
 
@@ -531,7 +531,7 @@ async def preview_purchase(
     if settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
+            detail=get_texts(user.language).t('CABINET_PURCHASE_ENDPOINT_TARIFFS_MODE', 'This endpoint is not available in tariffs mode. Use /purchase-tariff instead.'),
         )
 
     try:
@@ -561,7 +561,7 @@ async def preview_purchase(
         logger.error('Failed to calculate purchase preview for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to calculate price',
+            detail=get_texts(user.language).t('CABINET_PURCHASE_PRICE_CALC_FAILED', 'Failed to calculate price'),
         )
 
 
@@ -575,14 +575,14 @@ async def submit_purchase(
     if getattr(user, 'restriction_subscription', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Subscription purchases are restricted for this account',
+            detail=get_texts(user.language).t('CABINET_PURCHASE_RESTRICTED', 'Subscription purchases are restricted for this account'),
         )
 
     # This endpoint is for classic mode only, tariffs mode uses /purchase-tariff
     if settings.is_tariffs_mode():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='This endpoint is not available in tariffs mode. Use /purchase-tariff instead.',
+            detail=get_texts(user.language).t('CABINET_PURCHASE_ENDPOINT_TARIFFS_MODE', 'This endpoint is not available in tariffs mode. Use /purchase-tariff instead.'),
         )
 
     try:
@@ -721,7 +721,7 @@ async def submit_purchase(
         logger.error('Failed to submit purchase for user', user_id=user.id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to process purchase',
+            detail=get_texts(user.language).t('CABINET_PURCHASE_PROCESS_FAILED', 'Failed to process purchase'),
         )
 
 
@@ -737,14 +737,14 @@ async def _resolve_tariff_purchase_target(
         if request.subscription_id is not None:
             existing_subscription = await get_subscription_by_id_for_user(db, request.subscription_id, user.id)
             if existing_subscription is None:
-                raise HTTPException(status_code=404, detail='Subscription not found')
+                raise HTTPException(status_code=404, detail=get_texts(user.language).t('CABINET_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'))
             if existing_subscription is not None and existing_subscription.tariff_id is None:
                 # Старая подписка (куплена в классике, тариф не задан): тариф
                 # надевается на неё же — та же строка и тот же аккаунт панели,
                 # у человека остаётся прежняя ссылка. Живая подписка этого
                 # тарифа уже есть → отказ до списания, а не падение на
                 # частичном уникальном индексе после.
-                await _ensure_tariff_not_already_active(db, user.id, tariff.id)
+                await _ensure_tariff_not_already_active(db, user.id, tariff.id, language=user.language)
             elif existing_subscription and existing_subscription.tariff_id != tariff.id:
                 # A paid switch must use the switch endpoint and its quote.
                 # Discarding the explicit source would charge for a new
@@ -762,8 +762,7 @@ async def _resolve_tariff_purchase_target(
                             status_code=status.HTTP_409_CONFLICT,
                             detail={
                                 'code': 'subscription_tariff_mismatch',
-                                'message': 'Для выбранной подписки требуется смена тарифа. '
-                                'Обновите страницу и выберите «Сменить тариф».',
+                                'message': get_texts(user.language).t('PURCHASE_SWITCH_NEEDED', 'Refresh the page and select Change tariff for this subscription.'),
                             },
                         )
                 # Trial/expired/free-source purchases retain their existing
@@ -789,7 +788,7 @@ async def _resolve_tariff_purchase_target(
     elif request.subscription_id is not None:
         existing_subscription = await get_subscription_by_id_for_user(db, request.subscription_id, user.id)
         if existing_subscription is None:
-            raise HTTPException(status_code=404, detail='Subscription not found')
+            raise HTTPException(status_code=404, detail=get_texts(user.language).t('CABINET_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'))
     else:
         existing_subscription = await get_subscription_by_user_id(db, user.id)
     if (
@@ -809,7 +808,7 @@ async def _resolve_tariff_purchase_target(
         try:
             await require_no_cispay(db, user_id=user.id, subscription_id=existing_subscription.id)
         except ValueError as error:
-            raise HTTPException(status_code=409, detail=str(error)) from error
+            raise HTTPException(status_code=409, detail=get_texts(user.language).t('PURCHASE_AUTOPAY_CONFLICT', 'Disable automatic payments and wait for cancellation confirmation first.')) from error
     return existing_subscription
 
 
@@ -828,15 +827,15 @@ async def preview_tariff_purchase(
     )
 
     if getattr(user, 'restriction_subscription', False):
-        raise HTTPException(status_code=403, detail='Subscription purchases are restricted for this account')
+        raise HTTPException(status_code=403, detail=get_texts(user.language).t('CABINET_PURCHASE_RESTRICTED', 'Subscription purchases are restricted for this account'))
     if not settings.is_tariffs_mode():
-        raise HTTPException(status_code=400, detail='Tariffs mode is not enabled')
+        raise HTTPException(status_code=400, detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'))
     tariff = await get_tariff_by_id(db, request.tariff_id)
     if tariff is None or not tariff.is_active:
-        raise HTTPException(status_code=404, detail='Tariff not found or inactive')
+        raise HTTPException(status_code=404, detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFF_NOT_FOUND', 'Tariff not found or inactive'))
     group = user.get_primary_promo_group()
     if not tariff.is_available_for_promo_group(group.id if group else None):
-        raise HTTPException(status_code=403, detail='This tariff is not available for your promo group')
+        raise HTTPException(status_code=403, detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFF_NOT_FOR_PROMO_GROUP', 'This tariff is not available for your promo group'))
     target = await _resolve_tariff_purchase_target(db, user, tariff, request)
     try:
         quote = await calculate_purchase_quote(
@@ -918,14 +917,14 @@ async def purchase_tariff(
         if getattr(user, 'restriction_subscription', False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail='Subscription purchases are restricted for this account',
+                detail=get_texts(user.language).t('CABINET_PURCHASE_RESTRICTED', 'Subscription purchases are restricted for this account'),
             )
 
         # Check tariffs mode
         if not settings.is_tariffs_mode():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Tariffs mode is not enabled',
+                detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFFS_MODE_DISABLED', 'Tariffs mode is not enabled'),
             )
 
         # Get tariff
@@ -933,7 +932,7 @@ async def purchase_tariff(
         if not tariff or not tariff.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Tariff not found or inactive',
+                detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFF_NOT_FOUND', 'Tariff not found or inactive'),
             )
 
         # Lock user BEFORE price computation to prevent TOCTOU on promo offer
@@ -962,7 +961,7 @@ async def purchase_tariff(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
                         'code': 'checkout_already_processed',
-                        'message': 'Эта покупка уже принята. Проверьте список подписок перед новой покупкой.',
+                        'message': get_texts(user.language).t('PURCHASE_ACCEPTED', 'Эта покупка уже принята. Проверьте список подписок перед новой покупкой.'),
                     },
                 )
 
@@ -972,7 +971,7 @@ async def purchase_tariff(
         if not tariff.is_available_for_promo_group(promo_group_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail='This tariff is not available for your promo group',
+                detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFF_NOT_FOR_PROMO_GROUP', 'This tariff is not available for your promo group'),
             )
 
         # Handle daily tariffs specially
@@ -999,7 +998,7 @@ async def purchase_tariff(
             if period_days not in available_periods and not custom_days_allowed:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Selected period is not available for this tariff',
+                    detail=get_texts(user.language).t('CABINET_PURCHASE_PERIOD_UNAVAILABLE', 'Selected period is not available for this tariff'),
                 )
 
         # Determine traffic limit (custom traffic support)
@@ -1013,10 +1012,10 @@ async def purchase_tariff(
             if request.traffic_gb < tariff.min_traffic_gb or request.traffic_gb > tariff.max_traffic_gb:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f'Traffic must be between {tariff.min_traffic_gb} and '
-                        f'{tariff.max_traffic_gb} GB for this tariff'
-                    ),
+                    detail=get_texts(user.language).t(
+                        'CABINET_PURCHASE_TRAFFIC_OUT_OF_RANGE',
+                        'Traffic must be between {min_traffic} and {max_traffic} GB for this tariff',
+                    ).format(min_traffic=tariff.min_traffic_gb, max_traffic=tariff.max_traffic_gb),
                 )
             custom_traffic_gb = request.traffic_gb
             traffic_limit_gb = request.traffic_gb
@@ -1042,7 +1041,7 @@ async def purchase_tariff(
             and existing_subscription.is_active
             and not existing_subscription.is_daily_paused
         ):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Daily tariff is already active')
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_texts(user.language).t('PURCHASE_DAILY_ACTIVE', 'Daily tariff is already active'))
         from app.services.tariff_purchase_quote import PurchaseQuoteError, validate_purchase_duration
 
         try:
@@ -1118,7 +1117,7 @@ async def purchase_tariff(
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail='Invalid tariff period or pricing configuration',
+                detail=get_texts(user.language).t('CABINET_PURCHASE_INVALID_PRICING', 'Invalid tariff period or pricing configuration'),
             )
 
         # Check balance
@@ -1187,7 +1186,7 @@ async def purchase_tariff(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_funds',
-                    'message': f'Недостаточно средств. Не хватает {settings.format_price(missing, round_kopeks=False)}',
+                    'message': get_texts(user.language).t('CABINET_PURCHASE_INSUFFICIENT_FUNDS', 'Недостаточно средств. Не хватает {amount}').format(amount=settings.format_price(missing, round_kopeks=False)),
                     'missing_amount': missing,
                     'cart_saved': cart_saved,
                     'cart_mode': cart_data['cart_mode'],
@@ -1211,7 +1210,7 @@ async def purchase_tariff(
         try:
             await validate_checkout_squads(squads)
         except CheckoutSquadsUnavailableError as error:
-            raise HTTPException(status_code=409, detail={'code': error.code, 'message': error.message}) from error
+            raise HTTPException(status_code=409, detail={'code': error.code, 'message': get_texts(user.language).t('CABINET_TARIFF_SWITCH_SERVERS_UNAVAILABLE', error.message)}) from error
 
         # Charge balance
         if is_daily_tariff:
@@ -1240,7 +1239,7 @@ async def purchase_tariff(
                 **({'commit': False} if atomic_charge else {}),
             )
             if not success:
-                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Failed to charge balance')
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=get_texts(user.language).t('CABINET_PURCHASE_CHARGE_FAILED', 'Failed to charge balance'))
             transaction = await create_transaction(
                 db=db,
                 user_id=purchase_user_id,
@@ -1455,7 +1454,7 @@ async def purchase_tariff(
                     await _refund_charge(f"Возврат: тариф '{refund_tariff_name}' уже активен")
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
-                        detail='You already have an active subscription for this tariff',
+                        detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFF_ALREADY_ACTIVE', 'You already have an active subscription for this tariff'),
                     )
             if is_daily_tariff:
                 subscription.last_daily_charge_at = datetime.now(UTC)
@@ -1483,7 +1482,7 @@ async def purchase_tariff(
             await _refund_charge(f"Возврат: ошибка активации тарифа '{refund_tariff_name}'")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='Failed to process tariff purchase',
+                detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFF_PROCESS_FAILED', 'Failed to process tariff purchase'),
             )
 
         if device_checkout:
@@ -1639,7 +1638,7 @@ async def purchase_tariff(
 
         response: dict[str, Any] = {
             'success': True,
-            'message': f"Тариф '{tariff.name}' успешно активирован",
+            'message': get_texts(user.language).t('CABINET_PURCHASE_TARIFF_ACTIVATED', "Тариф '{name}' успешно активирован").format(name=tariff.name),
             'subscription': _subscription_to_response(subscription, user=user),
             'tariff_id': tariff.id,
             'tariff_name': tariff.name,
@@ -1733,7 +1732,7 @@ async def purchase_tariff(
         logger.error('Failed to purchase tariff for user', user_id=purchase_user_id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Failed to process tariff purchase',
+            detail=get_texts(user.language).t('CABINET_PURCHASE_TARIFF_PROCESS_FAILED', 'Failed to process tariff purchase'),
         )
 
 
@@ -1844,7 +1843,7 @@ async def activate_trial(
     if settings.is_trial_disabled_for_user(getattr(user, 'auth_type', 'telegram')):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Trial is not available for your account type',
+            detail=get_texts(user.language).t('CABINET_TRIAL_UNAVAILABLE_ACCOUNT_TYPE', 'Trial is not available for your account type'),
         )
 
     # Check if user already has an active subscription
@@ -1853,14 +1852,14 @@ async def activate_trial(
     if has_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='You already have an active subscription',
+            detail=get_texts(user.language).t('CABINET_TRIAL_HAVE_ACTIVE_SUBSCRIPTION', 'You already have an active subscription'),
         )
 
     # Check if user already used trial
     if user.is_trial_already_used():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Trial already used',
+            detail=get_texts(user.language).t('CABINET_TRIAL_ALREADY_USED', 'Trial already used'),
         )
 
     from app.services.checkout_squad_validation import CheckoutSquadsUnavailableError, validate_trial_checkout_squads
@@ -1868,7 +1867,7 @@ async def activate_trial(
     try:
         await validate_trial_checkout_squads(db)
     except CheckoutSquadsUnavailableError as error:
-        raise HTTPException(status_code=409, detail={'code': error.code, 'message': error.message}) from error
+        raise HTTPException(status_code=409, detail={'code': error.code, 'message': get_texts(user.language).t('CABINET_TARIFF_SWITCH_SERVERS_UNAVAILABLE', error.message)}) from error
 
     # Check if trial requires payment
     requires_payment = bool(settings.TRIAL_PAYMENT_ENABLED)
@@ -1879,9 +1878,9 @@ async def activate_trial(
         if price_kopeks > 0 and user.balance_kopeks < price_kopeks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Insufficient balance. Need {price_kopeks / 100:.2f} RUB',
+                detail=get_texts(user.language).t('CABINET_TRAFFIC_SWITCH_REQUIRED_AMOUNT', 'Insufficient balance. Need {amount}').format(amount=settings.format_price(price_kopeks, round_kopeks=False)),
             )
-        trial_description = 'Активация триальной подписки'
+        trial_description = get_texts(user.language).t('CABINET_TRIAL_FEE_DESCRIPTION', 'Активация триальной подписки')
         success = await subtract_user_balance(
             db,
             user,
@@ -1892,7 +1891,7 @@ async def activate_trial(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail='Failed to charge trial activation fee',
+                detail=get_texts(user.language).t('CABINET_TRIAL_CHARGE_FAILED', 'Failed to charge trial activation fee'),
             )
 
         # Persist the request-body CID BEFORE create_transaction. The

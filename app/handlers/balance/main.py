@@ -376,7 +376,8 @@ async def show_balance_history(callback: types.CallbackQuery, db_user: User, db:
         )
 
         text += f'{emoji} {amount_text}\n'
-        text += f'📝 {html.escape(localize_transaction_description(transaction.description, db_user.language) or "")}\n'
+        description = localize_transaction_description(transaction.description, db_user.language, transaction.payment_method)
+        text += f'📝 {html.escape(description or "")}\n'
         text += f'📅 {format_local_datetime(transaction.created_at, "%d.%m.%Y %H:%M")}\n\n'
 
     keyboard = []
