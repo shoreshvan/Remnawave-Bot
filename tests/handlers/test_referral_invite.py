@@ -9,10 +9,13 @@ wraps both links in <code>.
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 import app.handlers.referral as ref
+from tests.fixtures.persian import persian  # noqa: F401
 
 
-async def test_create_invite_message_wraps_links_in_code(monkeypatch):
+@pytest.mark.parametrize('language', ['fa', None])
+async def test_create_invite_message_wraps_links_in_code(monkeypatch, persian, language):
     captured = {}
 
     async def fake_edit(callback, text, keyboard):
@@ -28,7 +31,7 @@ async def test_create_invite_message_wraps_links_in_code(monkeypatch):
     )
     monkeypatch.setattr(ref.settings, 'REFERRAL_FIRST_TOPUP_BONUS_KOPEKS', 0)
 
-    db_user = SimpleNamespace(referral_code='X', language='ru')
+    db_user = SimpleNamespace(referral_code='X', language=language)
     bot = MagicMock()
     bot.get_me = AsyncMock(return_value=SimpleNamespace(username='bot'))
     callback = MagicMock()
@@ -38,6 +41,8 @@ async def test_create_invite_message_wraps_links_in_code(monkeypatch):
     await ref.create_invite_message(callback, db_user, None)
 
     html = captured['text']
+    assert 'به سرویس VPN بپیوند' in html
+    assert 'دعوت‌نامه ایجاد شد' in html
     # Both links are wrapped in <code> so tap-to-copy captures them whole.
     assert '<code>https://t.me/bot?start=ref_X</code>' in html
     # `&` in the cabinet URL is HTML-escaped, but the <code> tags are NOT escaped.

@@ -69,12 +69,16 @@ async def test_renewal_cart_receipt_and_refund(persian, subscription, monkeypatc
 
     user = SimpleNamespace(id=1, telegram_id=1, language='fa', balance_kopeks=0 if outcome == 'insufficient' else 50000)
     callback = SimpleNamespace(answer=AsyncMock(), message=SimpleNamespace(edit_text=AsyncMock()), bot=None)
-    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock(), refresh=AsyncMock())
+    rows = MagicMock()
+    rows.scalar_one.return_value = subscription
+    db = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock(), refresh=AsyncMock(), execute=AsyncMock(return_value=rows))
     debit, refund, transaction, cart = AsyncMock(return_value=True), AsyncMock(), AsyncMock(), AsyncMock()
     monkeypatch.setattr(user_crud, 'lock_user_for_pricing', AsyncMock(return_value=user))
     monkeypatch.setattr(user_crud, 'subtract_user_balance', debit)
     monkeypatch.setattr(user_crud, 'add_user_balance', refund)
     monkeypatch.setattr(transaction_crud, 'create_transaction', transaction)
+    monkeypatch.setattr(transaction_crud, 'emit_transaction_side_effects', AsyncMock())
+    monkeypatch.setattr('app.database.crud.subscription.extend_subscription', AsyncMock(return_value=subscription))
     monkeypatch.setattr(purchase, '_calculate_simple_subscription_price', AsyncMock(return_value=(25000, {})))
     monkeypatch.setattr(promo_offer, 'get_user_active_promo_discount_percent', lambda user: 0)
     monkeypatch.setattr(purchase.user_cart_service, 'save_user_cart', cart)
@@ -93,8 +97,9 @@ async def test_renewal_cart_receipt_and_refund(persian, subscription, monkeypatc
     else:
         assert debit.await_args.args[2:4] == (25000, description)
         if outcome == 'refund':
-            assert refund.await_args.args[2:4] == (25000, 'بازگشت وجه به‌دلیل خطا در تمدید اشتراک')
-            transaction.assert_not_awaited()
+            db.rollback.assert_awaited_once()
+            refund.assert_not_awaited()
+            assert callback.answer.await_args.args[0] == persian.t('SUBSCRIPTION_UI_RENEW_FAILED')
         else:
             assert transaction.await_args.kwargs['description'] == description
             assert transaction.await_args.kwargs['amount_kopeks'] == 25000

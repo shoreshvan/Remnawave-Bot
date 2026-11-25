@@ -408,7 +408,7 @@ async def _prepare_auto_extend_context(
         return None
 
     # Формируем описание с учётом тарифа
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     if tariff_id:
         from app.database.crud.tariff import get_tariff_by_id
 
@@ -535,7 +535,7 @@ async def _reject_unavailable_saved_squads(user: User, squads, bot: Bot | None) 
             try:
                 await bot.send_message(
                     chat_id=user.telegram_id,
-                    text=get_texts(user.language).t('TARIFF_SERVERS_UNAVAILABLE', error.message),
+                    text=get_texts(user.language or 'fa').t('TARIFF_SERVERS_UNAVAILABLE', error.message),
                 )
             except Exception as notification_error:
                 logger.warning(
@@ -708,10 +708,10 @@ async def _auto_extend_subscription(
     await _delete_cart_for_subscription(user.id, cart_data)
     await clear_subscription_checkout_draft(user.id)
 
-    texts = get_texts(getattr(user, 'language', 'ru'))
+    texts = get_texts(getattr(user, 'language', None) or 'fa')
     period_label = format_period_description(
         prepared.period_days,
-        getattr(user, 'language', 'ru'),
+        (getattr(user, 'language', None) or 'fa'),
     )
     new_end_date = updated_subscription.end_date
     end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
@@ -748,7 +748,7 @@ async def _auto_extend_subscription(
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and prepared.tariff_name:
                 auto_message += (
-                    get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                    get_texts(getattr(user, 'language', None) or 'fa')
                     .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
                     .format(v0=prepared.tariff_name)
                 )
@@ -1107,7 +1107,7 @@ async def _auto_purchase_tariff(
     )
     # Списываем баланс
     try:
-        description = get_texts(user.language).t(
+        description = get_texts(user.language or 'fa').t(
             'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION', 'Покупка тарифа «{tariff}» на {days} дней'
         ).format(tariff=tariff.name, days=period_days)
         success = await subtract_user_balance(
@@ -1203,7 +1203,7 @@ async def _auto_purchase_tariff(
             user = await get_user_by_id(db, purchase_user_id)
             if not await add_user_balance(db, user, final_price, create_transaction=False, commit=False):
                 raise RuntimeError('Compensating refund failed')
-            refund_description = get_texts(user.language).t(
+            refund_description = get_texts(user.language or 'fa').t(
                 'AUTO_PURCHASE_TARIFF_REFUND_DESCRIPTION', 'Возврат: ошибка автопокупки тарифа'
             )
             refund = await create_transaction(
@@ -1326,16 +1326,19 @@ async def _auto_purchase_tariff(
     # Send user notification only for Telegram users
     if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
-            texts = get_texts(getattr(user, 'language', 'ru'))
-            period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
+            texts = get_texts(getattr(user, 'language', None) or 'fa')
+            period_label = format_period_description(period_days, texts.language)
 
             message = texts.t(
                 'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
                 '✅ Подписка на {period} автоматически оформлена после пополнения баланса.',
             ).format(period=period_label)
+            message += '\n' + texts.t('SUBSCRIPTION_UI_CHARGED_AMOUNT', '💰 Списано: {amount}').format(
+                amount=texts.format_price(final_price, round_kopeks=False)
+            )
             if settings.is_multi_tariff_enabled() and tariff_name_for_label:
                 message += (
-                    get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                    get_texts(getattr(user, 'language', None) or 'fa')
                     .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
                     .format(v0=tariff_name_for_label)
                 )
@@ -1560,7 +1563,7 @@ async def _auto_purchase_daily_tariff(
         return False
 
     purchase_user_id = user.id
-    description = get_texts(user.language).t(
+    description = get_texts(user.language or 'fa').t(
         'AUTO_PURCHASE_DAILY_ACTIVATION_DESCRIPTION', 'Активация суточного тарифа «{tariff}»'
     ).format(tariff=tariff.name)
     try:
@@ -1694,16 +1697,12 @@ async def _auto_purchase_daily_tariff(
     # Send user notification only for Telegram users
     if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
-            texts = get_texts(getattr(user, 'language', 'ru'))
+            texts = get_texts(getattr(user, 'language', None) or 'fa')
 
-            message = (
-                get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
-                .t(
-                    'DAILY_NOTICE_006',
-                    '✅ <b>Суточный тариф «{v0}» активирован!</b>\n\n💰 Списано: {v1:.0f} ₽ за первый день\n🔄 Средства будут списываться автоматически раз в сутки.\n\nℹ️ Вы можете приостановить подписку в любой момент.',
-                )
-                .format(v0=html.escape(tariff.name), v1=final_price / 100)
-            )
+            message = texts.t(
+                'DAILY_NOTICE_006',
+                '✅ <b>Суточный тариф «{v0}» активирован!</b>\n\n💰 Списано: {amount} за первый день\n🔄 Средства будут списываться автоматически раз в сутки.\n\nℹ️ Вы можете приостановить подписку в любой момент.',
+            ).format(v0=html.escape(tariff.name), v1=final_price / 100, amount=texts.format_price(final_price, round_kopeks=False))
 
             keyboard = InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -1919,7 +1918,7 @@ async def _auto_add_devices(
         return False
 
     # Списываем баланс
-    description = get_texts(user.language).t(
+    description = get_texts(user.language or 'fa').t(
         'CABINET_DEVICES_TX_DESCRIPTION', 'Покупка {devices} доп. устройств'
     ).format(devices=devices_to_add)
     try:
@@ -2060,7 +2059,7 @@ async def _auto_add_devices(
 
     # Уведомление пользователю
     if bot and user.telegram_id and settings.is_notifications_enabled():
-        texts = get_texts(getattr(user, 'language', 'ru'))
+        texts = get_texts(getattr(user, 'language', None) or 'fa')
         try:
             message = texts.t(
                 'ADDON_PURCHASE_DEVICES_SUCCESS' if manual else 'AUTO_PURCHASE_DEVICES_SUCCESS',
@@ -2290,7 +2289,7 @@ async def _auto_add_traffic(
         return False
 
     # Deduct balance
-    description = get_texts(user.language).t(
+    description = get_texts(user.language or 'fa').t(
         'MINIAPP_TRANSACTION_TRAFFIC_TOPUP', 'Докупка {gb} ГБ трафика'
     ).format(gb=traffic_gb)
     try:
@@ -2407,7 +2406,7 @@ async def _auto_add_traffic(
 
     # User notification
     if bot and user.telegram_id and settings.is_notifications_enabled():
-        texts = get_texts(getattr(user, 'language', 'ru'))
+        texts = get_texts(getattr(user, 'language', None) or 'fa')
         try:
             message = texts.t(
                 'ADDON_PURCHASE_TRAFFIC_SUCCESS' if manual else 'AUTO_PURCHASE_TRAFFIC_SUCCESS',
@@ -2654,7 +2653,7 @@ async def _try_auto_extend_expired_after_topup(
     consume_promo_offer = pricing.promo_offer_discount > 0
 
     user_id, subscription_id = user.id, subscription.id
-    description = get_texts(user.language).t(
+    description = get_texts(user.language or 'fa').t(
         'AUTO_RENEWAL_EXPIRED_DESCRIPTION', 'Автопродление истёкшей подписки на {days} дней'
     ).format(days=period_days)
     old_end_date = subscription.end_date
@@ -2738,8 +2737,8 @@ async def _try_auto_extend_expired_after_topup(
             reset_reason='автопродление истёкшей подписки',
         )
 
-    texts = get_texts(getattr(user, 'language', 'ru'))
-    period_label = format_period_description(period_days, getattr(user, 'language', 'ru'))
+    texts = get_texts(getattr(user, 'language', None) or 'fa')
+    period_label = format_period_description(period_days, texts.language)
     new_end_date = updated_subscription.end_date
     end_date_label = format_local_datetime(new_end_date, '%d.%m.%Y %H:%M')
 
@@ -2775,7 +2774,7 @@ async def _try_auto_extend_expired_after_topup(
             ).format(period=period_label)
             if settings.is_multi_tariff_enabled() and tariff_name_for_label:
                 auto_message += (
-                    get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                    get_texts(getattr(user, 'language', None) or 'fa')
                     .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
                     .format(v0=tariff_name_for_label)
                 )
@@ -2986,7 +2985,7 @@ async def try_resume_disabled_daily_after_topup(
     # Charge, activate and record the paid day in one transaction. No committed
     # debit can escape on activation/ledger failure or expose a second callback.
     old_end_date = subscription.end_date
-    description = get_texts(user.language).t(
+    description = get_texts(user.language or 'fa').t(
         'DAILY_AUTO_RESUME_TRANSACTION_DESCRIPTION',
         'Суточная оплата тарифа «{tariff_name}» (авто-возобновление)',
     ).format(tariff_name=tariff.name)
@@ -3171,7 +3170,7 @@ async def try_resume_disabled_daily_after_topup(
     # User notification
     if bot and user.telegram_id and settings.is_notifications_enabled():
         try:
-            texts = get_texts(getattr(user, 'language', 'ru'))
+            texts = get_texts(getattr(user, 'language', None) or 'fa')
 
             message = texts.t(
                 'DAILY_SUBSCRIPTION_RESUMED_AFTER_TOPUP',
@@ -3541,7 +3540,7 @@ async def _auto_purchase_gift(
             )
         return delivered
 
-    texts = get_texts(getattr(user, 'language', 'ru'))
+    texts = get_texts(getattr(user, 'language', None) or 'fa')
 
     # Requote to ensure current availability and pricing
     try:
@@ -3883,7 +3882,7 @@ async def _process_legacy_generic_cart(
     subscription = purchase_result.get('subscription')
     transaction = purchase_result.get('transaction')
     was_trial_conversion = purchase_result.get('was_trial_conversion', False)
-    texts = get_texts(getattr(user, 'language', 'ru'))
+    texts = get_texts(getattr(user, 'language', None) or 'fa')
 
     if bot:
         try:
@@ -3909,7 +3908,7 @@ async def _process_legacy_generic_cart(
             try:
                 period_label = format_period_description(
                     selection.period.days,
-                    getattr(user, 'language', 'ru'),
+                    (getattr(user, 'language', None) or 'fa'),
                 )
                 auto_message = texts.t(
                     'AUTO_PURCHASE_SUBSCRIPTION_SUCCESS',
@@ -3922,7 +3921,7 @@ async def _process_legacy_generic_cart(
                         _t = await _get_tariff_label(db, subscription.tariff_id)
                         if _t:
                             auto_message += (
-                                get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                                get_texts(getattr(user, 'language', None) or 'fa')
                                 .t('PAYMENT_NOTICE_010', '\n📦 Тариф: «{v0}»')
                                 .format(v0=_t.name)
                             )

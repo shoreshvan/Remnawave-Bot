@@ -26,5 +26,22 @@ def test_russian_daily_purchase_unchanged():
     assert localize_transaction_description(value, 'ru') == value
 
 
+def test_old_cabinet_charge_shows_plan_and_both_discounts(persian):
+    stored = "Покупка тарифа 'ویژه' на 30 дней (скидка 10%) (промо -5%)"
+    assert localize_transaction_description(stored, 'fa') == (
+        'خرید تعرفهٔ «ویژه» به مدت 30 روز'
+        + persian.t('TARIFF_PURCHASE_DISCOUNT_SUFFIX').format(percent=10)
+        + persian.t('TARIFF_PURCHASE_PROMO_SUFFIX').format(percent=5)
+    )
+
+
+@pytest.mark.parametrize(('stored', 'expected'), [
+    ("Смена тарифа администратором на 'طرح O'Brien'", "تغییر تعرفه توسط مدیر به «طرح O'Brien»"),
+    ('Покупка тарифа طرح на 10 на 30 дней (администратор)', 'خرید تعرفهٔ «طرح на 10» به مدت 30 روز (توسط مدیر)'),
+])
+def test_admin_tariff_history_preserves_plan_name(stored, expected, persian):
+    assert localize_transaction_description(stored, 'fa') == expected
+
+
 def test_daily_price_has_grouping_without_decimal_zeros():
     assert get_texts('fa').t('SUBSCRIPTION_UI_DAILY_PRICE').format(price=20000.0) == 'قیمت: 20,000 تومان/روز'

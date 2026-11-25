@@ -141,7 +141,7 @@ async def _resolve_switch_subscription_target(callback, db_user, db, state=None)
         )
         if not sub or sub.is_pending_trial:
             await callback.answer(
-                get_texts(db_user.language).t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True
+                get_texts(db_user.language or 'fa').t('SUBSCRIPTION_NOT_FOUND', '❌ Подписка не найдена'), show_alert=True
             )
             return None, None
         return sub, sub.id
@@ -166,7 +166,7 @@ async def _resolve_switch_subscription_target(callback, db_user, db, state=None)
         return active_subs[0], active_subs[0].id
 
     await callback.answer(
-        get_texts(db_user.language).t('TARIFF_PURCHASE_SELECT_SUBSCRIPTION', 'Выберите подписку'), show_alert=True
+        get_texts(db_user.language or 'fa').t('TARIFF_PURCHASE_SELECT_SUBSCRIPTION', 'Выберите подписку'), show_alert=True
     )
     return None, None
 
@@ -233,7 +233,7 @@ def format_tariffs_list_text(
     purchased_tariff_ids: set[int] | None = None,
 ) -> str:
     """Форматирует текст со списком тарифов для отображения."""
-    texts = get_texts(db_user.language if db_user else 'ru')
+    texts = get_texts(getattr(db_user, 'language', None) or 'fa')
     lines = [texts.t('TARIFF_PURCHASE_LIST_TITLE', '📦 <b>Выберите тариф</b>')]
     if purchased_tariff_ids is None:
         purchased_tariff_ids = set()
@@ -954,7 +954,7 @@ async def _bind_tariff_purchase_keyboard(
                 -1,
                 [
                     InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('CISREC_TITLE', 'Автоплатёж CisPay'),
+                        text=get_texts(db_user.language or 'fa').t('CISREC_TITLE', 'Автоплатёж CisPay'),
                         callback_data=f'tariff_cispay:{tariff.id}',
                     )
                 ],
@@ -968,7 +968,7 @@ async def _bind_tariff_purchase_keyboard(
                 -1,
                 [
                     InlineKeyboardButton(
-                        text=get_texts(db_user.language).t('HOTREC_TITLE', 'Автоплатёж HOT Pay'),
+                        text=get_texts(db_user.language or 'fa').t('HOTREC_TITLE', 'Автоплатёж HOT Pay'),
                         callback_data=f'tariff_payhot:{tariff.id}',
                     )
                 ],
@@ -1013,7 +1013,7 @@ async def handle_tariff_devices_change(callback, db_user, db, state):
     from app.services.tariff_purchase_devices import DeviceSelectionError, resolve_purchase_device_selection
     from app.services.tariff_purchase_quote import PurchaseQuoteError, calculate_purchase_quote
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     data = await state.get_data()
     checkout = data.get('restored_tariff_checkout')
     parts = callback.data.split(':')
@@ -1075,7 +1075,7 @@ async def prompt_tariff_device_limit(callback, db_user, db, state):
     from app.services.subscription_auto_purchase_service import _saved_tariff_checkout_external_id
     from app.states import SubscriptionStates
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     data = await state.get_data()
     checkout = data.get('restored_tariff_checkout')
     parts = callback.data.split(':')
@@ -1109,7 +1109,7 @@ async def prompt_tariff_device_limit(callback, db_user, db, state):
 async def receive_tariff_device_limit(message, db_user, db, state):
     from types import SimpleNamespace
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     data = await state.get_data()
     checkout = data.get('restored_tariff_checkout')
     value = (message.text or '').strip()
@@ -1181,7 +1181,7 @@ async def format_custom_tariff_preview(
         if has_discount:
             total_price = _apply_promo_discount(total_price, group_pct, offer_pct)
 
-    texts = get_texts(db_user.language if db_user else 'ru')
+    texts = get_texts(getattr(db_user, 'language', None) or 'fa')
     traffic_display = (
         texts.t('TARIFF_PURCHASE_TRAFFIC_GB', '{traffic} ГБ').format(traffic=traffic_gb)
         if traffic_gb > 0
@@ -1247,7 +1247,7 @@ async def show_tariffs_list(
     state: FSMContext,
 ):
     """Показывает список тарифов для покупки."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     await state.clear()
 
     # Получаем доступные тарифы
@@ -1348,7 +1348,7 @@ async def _proceed_with_selected_tariff(
     if await state.get_state() == SubscriptionStates.entering_tariff_device_limit.state:
         await state.set_state(None)
     await state.update_data(restored_tariff_checkout=None)
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     back_callback = 'back_to_menu' if skip_selection else 'menu_buy'
     # Признак нужен последующим перерисовкам в других хендлерах.
     await state.update_data(tariff_selection_skipped=skip_selection)
@@ -1474,7 +1474,9 @@ async def _proceed_with_selected_tariff(
                 'saved_cart': True,
                 'missing_amount': missing,
                 'return_to_cart': True,
-                'description': f'Покупка суточного тарифа {tariff.name}',
+                'description': texts.t(
+                    'AUTO_PURCHASE_DAILY_ACTIVATION_DESCRIPTION', 'Покупка суточного тарифа {tariff}'
+                ).format(tariff=tariff.name),
                 'traffic_limit_gb': tariff.traffic_limit_gb,
                 'device_limit': effective_device_limit,
                 'allowed_squads': tariff.allowed_squads or [],
@@ -1636,7 +1638,7 @@ async def handle_custom_days_change(
     if await state.get_state() == SubscriptionStates.entering_tariff_device_limit.state:
         await state.set_state(None)
     await state.update_data(restored_tariff_checkout=None)
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     delta = int(parts[2])
@@ -1721,7 +1723,7 @@ async def handle_custom_traffic_change(
     if await state.get_state() == SubscriptionStates.entering_tariff_device_limit.state:
         await state.set_state(None)
     await state.update_data(restored_tariff_checkout=None)
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     delta = int(parts[2])
@@ -1787,7 +1789,7 @@ async def _confirm_tariff_checkout(callback, state, db_user, db, tariff, period)
     """Confirm a bound period attempt through the shared durable payment reservation."""
     data = await state.get_data() if state else {}
     checkout = data.get('restored_tariff_checkout')
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     callback_parts = callback.data.split(':')
     base_parts = 3 if callback_parts[0] == 'tariff_confirm' else 2
     if not checkout:
@@ -1949,7 +1951,7 @@ async def handle_custom_confirm(
     state: FSMContext,
 ):
     """Подтверждает покупку тарифа с кастомными параметрами."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     tariff_id = int(callback.data.split(':')[1])
 
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -1983,7 +1985,7 @@ async def select_tariff_period_with_traffic(
     # и при перерисовке, иначе он вернёт на этот же экран.
     back_callback = await _tariff_back_callback(state)
     await state.update_data(restored_tariff_checkout=None)
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     period = int(parts[2])
@@ -2068,7 +2070,7 @@ async def select_tariff_period(
     if await state.get_state() == SubscriptionStates.entering_tariff_device_limit.state:
         await state.set_state(None)
     await state.update_data(restored_tariff_checkout=None)
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     period = int(parts[2])
@@ -2189,7 +2191,7 @@ async def select_tariff_period(
             'saved_cart': True,
             'missing_amount': missing,
             'return_to_cart': True,
-            'description': f'Покупка тарифа {tariff.name} на {period} дней',
+            'description': texts.t('TARIFF_PURCHASE_TRANSACTION_DESCRIPTION', 'Покупка тарифа «{tariff}» на {days} дней').format(tariff=tariff.name, days=period),
             'traffic_limit_gb': tariff.traffic_limit_gb,
             'device_limit': shown_device_limit,
             'allowed_squads': tariff.allowed_squads or [],
@@ -2282,7 +2284,7 @@ async def confirm_tariff_purchase(
     state: FSMContext,
 ):
     """Подтверждает покупку тарифа и создает подписку."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     period = int(parts[2])
@@ -2317,7 +2319,7 @@ async def confirm_daily_tariff_purchase(
     state: FSMContext,
 ):
     """Подтверждает покупку суточного тарифа."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -2761,7 +2763,7 @@ async def show_tariff_extend(
     это tariff_id, а не id подписки). Если не задан — берём из ``se:{id}`` (хвост
     = реальный id подписки).
     """
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     if settings.is_multi_tariff_enabled():
         sub_id = subscription_id
@@ -2951,7 +2953,7 @@ async def select_tariff_extend_period(
     state: FSMContext,
 ):
     """Обрабатывает выбор периода для продления."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     # tariff_extend:{sub_id}:{tariff_id}[:{period}]
     parts = callback.data.split(':')
     sub_id = int(parts[1])
@@ -3049,7 +3051,7 @@ async def select_tariff_extend_period(
             'saved_cart': True,
             'missing_amount': missing,
             'return_to_cart': True,
-            'description': f'Продление тарифа {tariff.name} на {period} дней',
+            'description': texts.t('AUTO_RENEWAL_TARIFF_DESCRIPTION', 'Продление тарифа «{tariff}» на {days} дней').format(tariff=tariff.name, days=period),
             'traffic_limit_gb': tariff.traffic_limit_gb,
             'device_limit': actual_device_limit,
             'allowed_squads': tariff.allowed_squads or [],
@@ -3104,7 +3106,7 @@ async def confirm_tariff_extend(
     state: FSMContext,
 ):
     """Подтверждает продление по тарифу."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # tariff_ext_confirm:{sub_id}:{tariff_id}:{period}
     parts = callback.data.split(':')
@@ -3217,7 +3219,7 @@ async def confirm_tariff_extend(
                 db,
                 db_user,
                 final_price,
-                f'Продление тарифа {tariff.name} на {period} дней',
+                texts.t('AUTO_RENEWAL_TARIFF_DESCRIPTION', 'Продление тарифа «{tariff}» на {days} дней').format(tariff=tariff.name, days=period),
                 consume_promo_offer=consume_promo,
                 mark_as_paid_subscription=True,
                 commit=False,
@@ -3253,7 +3255,7 @@ async def confirm_tariff_extend(
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=final_price,
-                description=f'Продление тарифа {tariff.name} на {period} дней',
+                description=texts.t('AUTO_RENEWAL_TARIFF_DESCRIPTION', 'Продление тарифа «{tariff}» на {days} дней').format(tariff=tariff.name, days=period),
                 commit=False,
             )
             await db.commit()
@@ -3278,7 +3280,7 @@ async def confirm_tariff_extend(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
-            description=f'Продление тарифа {tariff.name} на {period} дней',
+            description=texts.t('AUTO_RENEWAL_TARIFF_DESCRIPTION', 'Продление тарифа «{tariff}» на {days} дней').format(tariff=tariff.name, days=period),
             payment_method=PaymentMethod.BALANCE,
         )
 
@@ -3394,7 +3396,7 @@ def format_tariff_switch_list_text(
     has_period_discounts: bool = False,
 ) -> str:
     """Форматирует текст со списком тарифов для переключения."""
-    texts = get_texts(db_user.language if db_user else 'ru')
+    texts = get_texts(getattr(db_user, 'language', None) or 'fa')
     lines = [
         texts.t('TARIFF_SWITCH_LIST_TITLE', '📦 <b>Смена тарифа</b>'),
         texts.t('TARIFF_SWITCH_CURRENT_LINE', '📌 Текущий: <b>{name}</b>').format(name=current_tariff_name),
@@ -3560,7 +3562,7 @@ async def show_tariff_switch_list(
     state: FSMContext,
 ):
     """Показывает список тарифов для переключения."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # Проверяем наличие активной подписки
     subscription, _sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
@@ -3696,7 +3698,7 @@ async def select_tariff_switch(
     state: FSMContext,
 ):
     """Обрабатывает выбор тарифа для переключения."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
 
@@ -3856,7 +3858,7 @@ async def select_tariff_switch_period(
     state: FSMContext,
 ):
     """Обрабатывает выбор периода для переключения тарифа."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
@@ -3978,7 +3980,7 @@ async def confirm_tariff_switch(
     state: FSMContext,
 ):
     """Подтверждает переключение тарифа."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     parts = callback.data.split(':')
     tariff_id = int(parts[1])
     period = int(parts[2])
@@ -4311,7 +4313,7 @@ async def confirm_daily_tariff_switch(
     state: FSMContext,
 ):
     """Подтверждает смену на суточный тариф."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     tariff_id = int(callback.data.split(':')[1])
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -4702,7 +4704,7 @@ def format_instant_switch_list_text(
     upgrade_ok = settings.TARIFF_SWITCH_UPGRADE_ENABLED
     downgrade_ok = settings.TARIFF_SWITCH_DOWNGRADE_ENABLED
 
-    texts = get_texts(db_user.language if db_user else 'ru')
+    texts = get_texts(getattr(db_user, 'language', None) or 'fa')
     lines = [
         texts.t('TARIFF_SWITCH_INSTANT_TITLE', '📦 <b>Мгновенная смена тарифа</b>'),
         texts.t('TARIFF_SWITCH_CURRENT_LINE', '📌 Текущий: <b>{name}</b>').format(
@@ -4823,7 +4825,7 @@ async def show_instant_switch_list(
 ):
     """Показывает список тарифов для мгновенного переключения."""
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # Проверяем наличие активной подписки
     subscription, _sub_id = await _resolve_switch_subscription(callback, db_user, db, state)
@@ -4951,7 +4953,7 @@ async def preview_instant_switch(
     state: FSMContext,
 ):
     """Показывает превью мгновенного переключения тарифа."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     tariff_id = int(callback.data.split(':')[1])
     new_tariff = await get_tariff_by_id(db, tariff_id)
@@ -5248,7 +5250,7 @@ async def _prepare_telegram_recurrent_devices(callback, db_user, db, state, tari
     from app.services.recurrent_purchase_selection import preview_recurrent_purchase
     from app.services.subscription_auto_purchase_service import _saved_tariff_checkout_external_id
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     data = await state.get_data()
     choice = data.get('tariff_device_selection') or {}
     if choice.get('tariff_id') != tariff.id:
@@ -5350,7 +5352,7 @@ async def purchase_tariff_with_lava(
     ссылке Lava и оживляет подписку (для нового тарифа создаётся заготовка).
     Выбранный период игнорируется — каденс задан продуктом в кабинете Lava.
     """
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     tariff_id = int(callback.data.split(':')[1])
 
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -5409,7 +5411,7 @@ async def purchase_tariff_with_cashera(
     Cashera, первое списание оживляет подписку (для нового тарифа — заготовка).
     Каденс — по периоду тарифа, как у Platega.
     """
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     tariff_id = int(callback.data.split(':')[1])
 
     tariff = await get_tariff_by_id(db, tariff_id)
@@ -5462,7 +5464,7 @@ async def confirm_instant_switch(
     state: FSMContext,
 ):
     """Подтверждает мгновенное переключение тарифа."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     tariff_id = int(callback.data.split(':')[1])
     new_tariff = await get_tariff_by_id(db, tariff_id)
@@ -5887,7 +5889,7 @@ async def _add_payhot_restored_purchase_button(keyboard, db_user, db, state, car
         -1,
         [
             InlineKeyboardButton(
-                text=get_texts(db_user.language).t('HOTREC_TITLE', 'Автоплатёж HOT Pay'),
+                text=get_texts(db_user.language or 'fa').t('HOTREC_TITLE', 'Автоплатёж HOT Pay'),
                 callback_data=f'tariff_payhot:{cart["tariff_id"]}:{token}',
             )
         ],
@@ -5902,7 +5904,7 @@ async def return_to_saved_tariff_cart(
     cart_data: dict,
 ):
     """Восстанавливает сохраненную корзину тарифа после пополнения баланса."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     cart_mode = cart_data.get('cart_mode')
     checkout_identity = dict(cart_data)
     try:
@@ -6305,7 +6307,7 @@ async def purchase_tariff_with_sbp(
     ``purchase_tariff_with_sbp_recurring``). Выбранный период игнорируется:
     списания идут по каденс-правилу тарифа.
     """
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     tariff_id = int(callback.data.split(':')[1])
 
     tariff = await get_tariff_by_id(db, tariff_id)

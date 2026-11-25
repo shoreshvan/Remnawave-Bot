@@ -743,8 +743,8 @@ async def process_referral_registration(db: AsyncSession, new_user_id: int, refe
                 logger.error('Ошибка выдачи наград за регистрацию реферала', error=str(error))
 
         if bot:
-            texts = get_texts(getattr(referrer, 'language', None))
-            referee_texts = get_texts(getattr(new_user, 'language', None))
+            texts = get_texts(getattr(referrer, 'language', None) or 'fa')
+            referee_texts = get_texts(getattr(new_user, 'language', None) or 'fa')
             commission_percent = get_effective_referral_commission_percent(referrer)
             referral_notification = referee_texts.t(
                 'REFERRAL_GIFT_UI_007',
@@ -1043,7 +1043,7 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
             )
             return False
 
-        texts = get_texts(getattr(referrer, 'language', None))
+        texts = get_texts(getattr(referrer, 'language', None) or 'fa')
         referee_texts = get_texts(getattr(user, 'language', None))
 
         if settings.is_referral_levels_scheme():
@@ -1087,7 +1087,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         db,
                         referrer,
                         commission_amount,
-                        f'Комиссия {commission_percent}% с пополнения {user.full_name}',
+                        get_texts(getattr(referrer, 'language', None) or 'fa').t(
+                            'REFERRAL_TRANSACTION_COMMISSION_TOPUP', 'Комиссия {percent}% с пополнения {name}'
+                        ).format(percent=commission_percent, name=user.full_name),
                         transaction_type=TransactionType.REFERRAL_REWARD,
                         bot=bot,
                     )
@@ -1103,7 +1105,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                         )
 
                         logger.info(
-                            '💰 Комиссия с пополнения: получил ₽ (до первого бонуса)',
+                            get_texts(getattr(referrer, 'language', None) or 'fa').t(
+                                'REFERRAL_TRANSACTION_COMMISSION_TOPUP', '💰 Комиссия с пополнения: получил ₽ (до первого бонуса)'
+                            ),
                             telegram_id=referrer.telegram_id,
                             commission_amount=commission_amount / 100,
                         )
@@ -1156,7 +1160,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     db,
                     user,
                     settings.REFERRAL_FIRST_TOPUP_BONUS_KOPEKS,
-                    'Бонус за первое пополнение по реферальной программе',
+                    get_texts(getattr(user, 'language', None) or 'fa').t(
+                        'REFERRAL_TRANSACTION_FIRST_TOPUP_BONUS_REFEREE', 'Бонус за первое пополнение по реферальной программе'
+                    ),
                     transaction_type=TransactionType.REFERRAL_REWARD,
                     bot=bot,
                 )
@@ -1194,7 +1200,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                     db,
                     referrer,
                     inviter_bonus,
-                    f'Бонус за первое пополнение реферала {user.full_name}',
+                    get_texts(getattr(referrer, 'language', None) or 'fa').t(
+                        'REFERRAL_TRANSACTION_FIRST_TOPUP_BONUS_REFERRER', 'Бонус за первое пополнение реферала {name}'
+                    ).format(name=user.full_name),
                     transaction_type=TransactionType.REFERRAL_REWARD,
                     bot=bot,
                 )
@@ -1266,7 +1274,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
                 db,
                 referrer,
                 commission_amount,
-                f'Комиссия {commission_percent}% с пополнения {user.full_name}',
+                get_texts(getattr(referrer, 'language', None) or 'fa').t(
+                    'REFERRAL_TRANSACTION_COMMISSION_TOPUP', 'Комиссия {percent}% с пополнения {name}'
+                ).format(percent=commission_percent, name=user.full_name),
                 transaction_type=TransactionType.REFERRAL_REWARD,
                 bot=bot,
             )
@@ -1283,7 +1293,9 @@ async def process_referral_topup(db: AsyncSession, user_id: int, topup_amount_ko
 
                 referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
                 logger.info(
-                    '💰 Комиссия с пополнения: получил ₽',
+                    get_texts(getattr(referrer, 'language', None) or 'fa').t(
+                        'REFERRAL_TRANSACTION_COMMISSION_TOPUP', '💰 Комиссия с пополнения: получил ₽'
+                    ),
                     referrer_id=referrer_id,
                     commission_amount=commission_amount / 100,
                 )
@@ -1351,7 +1363,9 @@ async def process_referral_purchase(
 
         if commission_amount > 0:
             await add_user_balance(
-                db, referrer, commission_amount, f'Комиссия {commission_percent}% с покупки {user.full_name}', bot=bot
+                db, referrer, commission_amount, get_texts(getattr(referrer, 'language', None) or 'fa').t(
+                    'REFERRAL_TRANSACTION_COMMISSION_PURCHASE', 'Комиссия {percent}% с покупки {name}'
+                ).format(percent=commission_percent, name=user.full_name), bot=bot
             )
 
             campaign_id = await get_user_campaign_id(db, user.id)
@@ -1367,14 +1381,18 @@ async def process_referral_purchase(
 
             referrer_id = referrer.telegram_id or referrer.email or f'user#{referrer.id}'
             logger.info(
-                '💰 Комиссия с покупки: получил ₽', referrer_id=referrer_id, commission_amount=commission_amount / 100
+                get_texts(getattr(referrer, 'language', None) or 'fa').t(
+                    'REFERRAL_TRANSACTION_COMMISSION_PURCHASE', '💰 Комиссия с покупки: получил ₽'
+                ), referrer_id=referrer_id, commission_amount=commission_amount / 100
             )
 
             if bot:
-                texts = get_texts(getattr(referrer, 'language', None))
+                texts = get_texts(getattr(referrer, 'language', None) or 'fa')
                 purchase_commission_notification = texts.t(
                     'REFERRAL_GIFT_UI_035',
-                    '💰 <b>Комиссия с покупки!</b>\n\nВаш реферал <b>{value1}</b> совершил покупку на {value2}\n\n🎁 Ваша комиссия ({value3}%): {value4}\n\n💎 Средства зачислены на ваш баланс.',
+                    get_texts(getattr(referrer, 'language', None) or 'fa').t(
+                        'REFERRAL_TRANSACTION_COMMISSION_PURCHASE', '💰 <b>Комиссия с покупки!</b>\n\nВаш реферал <b>{value1}</b> совершил покупку на {value2}\n\n🎁 Ваша комиссия ({value3}%): {value4}\n\n💎 Средства зачислены на ваш баланс.'
+                    ),
                 ).format(
                     value1=html.escape(user.full_name),
                     value2=settings.format_price(purchase_amount_kopeks),

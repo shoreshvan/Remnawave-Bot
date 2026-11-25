@@ -326,7 +326,7 @@ class MiniAppSubscriptionPurchaseService:
             subscription = await get_subscription_by_user_id(db, user.id)
         balance_kopeks = int(getattr(user, 'balance_kopeks', 0) or 0)
         currency = (getattr(user, 'balance_currency', None) or 'RUB').upper()
-        texts = get_texts(getattr(user, 'language', None))
+        texts = get_texts(getattr(user, 'language', None) or 'fa')
 
         available_servers = await get_available_server_squads(
             db,
@@ -390,7 +390,7 @@ class MiniAppSubscriptionPurchaseService:
         for period_days in available_periods:
             months = calculate_months_from_days(period_days)
             period_id = f'days:{period_days}'
-            label = format_period_description(period_days, getattr(user, 'language', 'ru'))
+            label = format_period_description(period_days, texts.language)
 
             base_price_original = PERIOD_PRICES.get(period_days, 0)
             period_discount_percent = user.get_promo_discount('period', period_days)
@@ -1008,7 +1008,7 @@ class MiniAppSubscriptionPurchaseService:
         try:
             user = await lock_user_for_pricing(db, context.user.id)
             context.user = user
-            texts = get_texts(getattr(user, 'language', None))
+            texts = get_texts(getattr(user, 'language', None) or 'fa')
 
             # Block only if pricing is genuinely invalid (no base price configured).
             # final_total == 0 with base_original_total > 0 means a valid 100% discount.

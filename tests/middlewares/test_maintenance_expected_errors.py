@@ -14,6 +14,22 @@ from aiogram.types import CallbackQuery
 
 import app.middlewares.maintenance as mw
 from app.config import settings
+from tests.fixtures.persian import persian  # noqa: F401
+
+
+async def test_manual_notice_before_auth_uses_account_language(monkeypatch, persian):
+    callback = _mk_callback(None)
+    callback.from_user.language_code = 'ru'
+    session = MagicMock()
+    session.return_value.__aenter__.return_value.scalar = AsyncMock(return_value='fa')
+    monkeypatch.setattr(mw, 'AsyncSessionLocal', session)
+    monkeypatch.setattr(mw.maintenance_service, 'is_maintenance_active', lambda: True)
+    monkeypatch.setattr(mw.maintenance_service._status, 'auto_enabled', False)
+    monkeypatch.setattr(settings, 'MAINTENANCE_MESSAGE', type(settings).model_fields['MAINTENANCE_MESSAGE'].default.removeprefix('🔧 '))
+    monkeypatch.setattr(type(settings), 'is_admin', lambda self, uid: False)
+    monkeypatch.setattr('app.services.support_settings_service.SupportSettingsService.is_moderator', lambda uid: False)
+    await mw.MaintenanceMiddleware()(AsyncMock(), callback, {})
+    callback.answer.assert_awaited_once_with(persian.t('MAINT_DEFAULT_MESSAGE'), show_alert=True)
 
 
 def _mk_callback(answer_error) -> MagicMock:
@@ -39,7 +55,7 @@ async def _run(monkeypatch, answer_error):
 
     middleware = mw.MaintenanceMiddleware()
     handler = AsyncMock()
-    result = await middleware(handler, _mk_callback(answer_error), {})
+    result = await middleware(handler, _mk_callback(answer_error), {'db_user': SimpleNamespace(language='fa')})
 
     handler.assert_not_awaited()  # апдейт блокируется в любом случае
     assert result is None

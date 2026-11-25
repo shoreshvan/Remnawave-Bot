@@ -1137,7 +1137,9 @@ async def purchase_tariff(
                     'saved_cart': True,
                     'missing_amount': missing,
                     'return_to_cart': True,
-                    'description': f'Покупка суточного тарифа {tariff.name}',
+                    'description': get_texts(user.language or 'fa').t(
+                        'AUTO_PURCHASE_DAILY_ACTIVATION_DESCRIPTION', 'Покупка суточного тарифа {tariff}'
+                    ).format(tariff=tariff.name),
                     'traffic_limit_gb': tariff.traffic_limit_gb,
                     'device_limit': effective_device_limit,
                     'allowed_squads': tariff.allowed_squads or [],
@@ -1155,7 +1157,9 @@ async def purchase_tariff(
                     'saved_cart': True,
                     'missing_amount': missing,
                     'return_to_cart': True,
-                    'description': f'Покупка тарифа {tariff.name} на {period_days} дней',
+                    'description': get_texts(user.language or 'fa').t(
+                        'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION', 'Покупка тарифа {tariff} на {days} дней'
+                    ).format(tariff=tariff.name, days=period_days),
                     'traffic_limit_gb': traffic_limit_gb,
                     'custom_traffic_gb': custom_traffic_gb,
                     'device_limit': effective_device_limit,
@@ -1213,14 +1217,19 @@ async def purchase_tariff(
             raise HTTPException(status_code=409, detail={'code': error.code, 'message': get_texts(user.language).t('CABINET_TARIFF_SWITCH_SERVERS_UNAVAILABLE', error.message)}) from error
 
         # Charge balance
+        texts = get_texts(user.language or 'fa')
         if is_daily_tariff:
-            description = f"Активация суточного тарифа '{tariff.name}'"
+            description = texts.t(
+                'AUTO_PURCHASE_DAILY_ACTIVATION_DESCRIPTION', "Активация суточного тарифа '{tariff}'"
+            ).format(tariff=tariff.name)
         else:
-            description = f"Покупка тарифа '{tariff.name}' на {period_days} дней"
+            description = texts.t(
+                'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION', "Покупка тарифа '{tariff}' на {days} дней"
+            ).format(tariff=tariff.name, days=period_days)
         if discount_percent > 0:
-            description += f' (скидка {discount_percent}%)'
+            description += texts.t('TARIFF_PURCHASE_DISCOUNT_SUFFIX', ' (скидка {percent}%)').format(percent=discount_percent)
         if promo_offer_discount_value > 0:
-            description += f' (промо -{promo_offer_discount_percent}%)'
+            description += texts.t('TARIFF_PURCHASE_PROMO_SUFFIX', ' (промо -{percent}%)').format(percent=promo_offer_discount_percent)
         managed_purchase = getattr(subscription, 'traffic_accounting_mode', None) in ('managed', 'migrating')
         atomic_charge = bool(checkout_external_id) or is_daily_tariff or managed_purchase
         saved_promo = (
@@ -1608,7 +1617,9 @@ async def purchase_tariff(
                     'period_days': period_days,
                     'total_price': price_kopeks,
                     'tariff_id': tariff.id,
-                    'description': f'Продление тарифа {tariff.name} на {period_days} дней',
+                    'description': texts.t(
+                        'AUTO_RENEWAL_TARIFF_DESCRIPTION', 'Продление тарифа «{tariff}» на {days} дней'
+                    ).format(tariff=tariff.name, days=period_days),
                 }
                 await user_cart_service.save_user_cart(user.id, cart_data)
                 logger.info('Tariff cart saved for auto-renewal (cabinet) user', user_id=user.id)
@@ -1638,7 +1649,7 @@ async def purchase_tariff(
 
         response: dict[str, Any] = {
             'success': True,
-            'message': get_texts(user.language).t('CABINET_PURCHASE_TARIFF_ACTIVATED', "Тариф '{name}' успешно активирован").format(name=tariff.name),
+            'message': texts.t('CABINET_PURCHASE_TARIFF_ACTIVATED', "Тариф '{name}' успешно активирован").format(name=tariff.name),
             'subscription': _subscription_to_response(subscription, user=user),
             'tariff_id': tariff.id,
             'tariff_name': tariff.name,

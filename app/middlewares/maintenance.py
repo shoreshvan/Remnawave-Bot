@@ -5,8 +5,11 @@ import structlog
 from aiogram import BaseMiddleware
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 from aiogram.types import CallbackQuery, Message, TelegramObject, User as TgUser
+from sqlalchemy import select
 
 from app.config import settings
+from app.database.database import AsyncSessionLocal
+from app.database.models import User
 from app.services.maintenance_service import maintenance_service
 from app.utils.support_access import is_support_handler
 from app.utils.telegram_delivery import is_user_unreachable
@@ -56,13 +59,15 @@ class MaintenanceMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         db_user = data.get('db_user')
-        language = (
-            getattr(db_user, 'language', None) or getattr(user, 'language_code', None) or settings.DEFAULT_LANGUAGE
-        )
-        language = language.lower().split('-')[0]
-        if language == 'uk':
-            language = 'ua'
-        maintenance_message = maintenance_service.get_maintenance_message(language)
+        language = getattr(db_user, 'language', None)
+        if db_user is None:
+            # Maintenance runs before authentication, so a returning user's chosen language is not in data yet.
+            try:
+                async with AsyncSessionLocal() as db:
+                    language = await db.scalar(select(User.language).where(User.telegram_id == user.id))
+            except Exception as error:
+                logger.warning('Maintenance language lookup failed', user_id=user.id, error=str(error))
+        maintenance_message = maintenance_service.get_maintenance_message(language or 'fa')
 
         try:
             if isinstance(event, Message):

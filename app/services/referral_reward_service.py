@@ -1120,10 +1120,13 @@ async def _grant_one(
             )
 
     if component.money_kopeks > 0:
+        from app.localization.texts import get_texts
+
+        texts = get_texts(getattr(recipient, 'language', None) or 'fa')
         description = (
-            f'Реферальная награда, уровень {component.level}'
+            texts.t('REFERRAL_TRANSACTION_LEVEL_REWARD_REFERRER', 'Реферальная награда, уровень {level}').format(level=component.level)
             if component.is_referrer
-            else 'Бонус по реферальной программе'
+            else texts.t('REFERRAL_TRANSACTION_REFEREE_BONUS', 'Бонус по реферальной программе')
         )
         credited = await add_user_balance(
             db,

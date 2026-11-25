@@ -329,6 +329,7 @@ async def test_route_refuses_online_filter_without_panel(monkeypatch: pytest.Mon
         with pytest.raises(HTTPException) as refused:
             await _list(db, online=True)
         assert refused.value.status_code == 503
+        assert refused.value.detail == 'پنل پاسخ نداد. فهرست کاربران متصل در دسترس نیست. دوباره تلاش کنید.'
 
         everyone = await _list(db)
         assert len(everyone.users) == 4

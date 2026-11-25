@@ -56,11 +56,11 @@ async def _reward_tariff_names(db) -> dict[int, str]:
 async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
     # Проверяем, включена ли реферальная программа
     if not settings.is_referral_program_enabled():
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         await callback.answer(texts.t('REFERRAL_PROGRAM_DISABLED', 'Реферальная программа отключена'), show_alert=True)
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     if not db_user.referral_code:
         await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
@@ -102,7 +102,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             '• Заработано всего: <b>{amount}</b>',
         ).format(
             amount=format_reward_total(
-                summary['total_earned_kopeks'], summary.get('total_earned_days', 0), db_user.language
+                summary['total_earned_kopeks'], summary.get('total_earned_days', 0), texts.language
             )
         )
         + '\n'
@@ -111,7 +111,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
             '• За последний месяц: <b>{amount}</b>',
         ).format(
             amount=format_reward_total(
-                summary['month_earned_kopeks'], summary.get('month_earned_days', 0), db_user.language
+                summary['month_earned_kopeks'], summary.get('month_earned_days', 0), texts.language
             )
         )
         + '\n\n'
@@ -133,13 +133,13 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
         tariff_names = await _reward_tariff_names(db)
         for line in await describe_active_levels(
-            db, tariff_names=tariff_names, language=db_user.language, viewer=db_user
+            db, tariff_names=tariff_names, language=texts.language, viewer=db_user
         ):
             referral_text += f'\n• {line}'
         # «Новый пользователь получает» на экране партнёра — это обещание тем,
         # кого пригласит ИМЕННО ЭТОТ партнёр, поэтому берётся его ранг.
         referee_bonus = await describe_referee_bonus(
-            db, tariff_names=tariff_names, language=db_user.language, referrer=db_user
+            db, tariff_names=tariff_names, language=texts.language, referrer=db_user
         )
         if referee_bonus:
             referral_text += '\n' + texts.t(
@@ -149,7 +149,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
 
         # В режиме рангов лестница без отметки «вы здесь» не отвечает на главный
         # вопрос пользователя: какой ранг у НЕГО и сколько до следующего.
-        progress_lines = format_tier_progress(await resolve_tier_progress(db, db_user), db_user.language)
+        progress_lines = format_tier_progress(await resolve_tier_progress(db, db_user), texts.language)
         if progress_lines:
             referral_text += '\n\n' + '\n'.join(progress_lines)
 
@@ -272,7 +272,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                     ).format(
                         reason=reason_text,
                         amount=format_reward_total(
-                            earning['amount_kopeks'], earning.get('days_granted', 0), db_user.language
+                            earning['amount_kopeks'], earning.get('days_granted', 0), texts.language
                         ),
                         referral_name=html_escape(str(earning['referral_name'] or '')),
                     )
@@ -299,7 +299,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                     ).format(
                         count=data['count'],
                         amount=format_reward_total(
-                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                            data['total_amount_kopeks'], data.get('total_days', 0), texts.language
                         ),
                     )
                     + '\n'
@@ -315,7 +315,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                     ).format(
                         count=data['count'],
                         amount=format_reward_total(
-                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                            data['total_amount_kopeks'], data.get('total_days', 0), texts.language
                         ),
                     )
                     + '\n'
@@ -331,7 +331,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
                     ).format(
                         count=data['count'],
                         amount=format_reward_total(
-                            data['total_amount_kopeks'], data.get('total_days', 0), db_user.language
+                            data['total_amount_kopeks'], data.get('total_days', 0), texts.language
                         ),
                     )
                     + '\n'
@@ -347,7 +347,7 @@ async def show_referral_info(callback: types.CallbackQuery, db_user: User, db: A
     await edit_or_answer_photo(
         callback,
         referral_text,
-        get_referral_keyboard(db_user.language),
+        get_referral_keyboard(texts.language),
     )
     await callback.answer()
 
@@ -356,7 +356,7 @@ async def show_referral_qr(
     callback: types.CallbackQuery,
     db_user: User,
 ):
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     if not db_user.referral_code:
         await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
@@ -409,7 +409,7 @@ async def show_referral_qr(
 
 
 async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: User, db: AsyncSession, page: int = 1):
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     referrals_data = await get_detailed_referral_list(db, db_user.id, limit=10, offset=(page - 1) * 10)
 
@@ -464,7 +464,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
                 '   💎 Заработано с него: {amount}',
             ).format(
                 amount=format_reward_total(
-                    referral['total_earned_kopeks'], referral.get('days_earned', 0), db_user.language
+                    referral['total_earned_kopeks'], referral.get('days_earned', 0), texts.language
                 )
             )
             + '\n'
@@ -527,7 +527,7 @@ async def show_detailed_referral_list(callback: types.CallbackQuery, db_user: Us
 
 
 async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     analytics = await get_referral_analytics(db, db_user.id)
 
@@ -610,7 +610,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
                     index=i,
                     name=html_escape(str(ref['referral_name'] or '')),
                     amount=format_reward_total(
-                        ref['total_earned_kopeks'], ref.get('total_earned_days', 0), db_user.language
+                        ref['total_earned_kopeks'], ref.get('total_earned_days', 0), texts.language
                     ),
                     count=ref['earnings_count'],
                 )
@@ -634,7 +634,7 @@ async def show_referral_analytics(callback: types.CallbackQuery, db_user: User, 
 
 
 async def create_invite_message(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     if not db_user.referral_code:
         await callback.answer(texts.t('REFERRAL_CODE_NOT_ASSIGNED', 'Реферальный код не назначен'), show_alert=True)
@@ -654,7 +654,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
         # Текст пересылают другу, и обещание в нём — про бонус ЭТОГО приглашающего:
         # в режиме рангов сумма зависит от его ранга, а не от стартового.
         referee_bonus = await describe_referee_bonus(
-            db, tariff_names=await _reward_tariff_names(db), language=db_user.language, referrer=db_user
+            db, tariff_names=await _reward_tariff_names(db), language=texts.language, referrer=db_user
         )
         if referee_bonus:
             bonus_block = '\n\n' + texts.t(
@@ -719,7 +719,7 @@ async def create_invite_message(callback: types.CallbackQuery, db_user: User, db
 
 async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Показывает информацию о выводе реферального баланса."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     if not settings.is_referral_withdrawal_enabled():
         await callback.answer(texts.t('REFERRAL_WITHDRAWAL_DISABLED', 'Функция вывода отключена'), show_alert=True)
@@ -773,7 +773,7 @@ async def show_withdrawal_info(callback: types.CallbackQuery, db_user: User, db:
 
 async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Начинает процесс оформления заявки на вывод."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # Повторная проверка
     can_request, reason, wd_stats = await referral_withdrawal_service.can_request_withdrawal(db, db_user.id)
@@ -814,7 +814,7 @@ async def start_withdrawal_request(callback: types.CallbackQuery, db_user: User,
 
 async def process_withdrawal_amount(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
     """Обрабатывает ввод суммы для вывода."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     data = await state.get_data()
     available = int(data.get('available_balance', 0) or 0)
 
@@ -874,7 +874,7 @@ async def process_withdrawal_amount_callback(
     callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext
 ):
     """Обрабатывает выбор суммы для вывода через кнопку."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # Получаем сумму из callback_data
     amount_kopeks = int(callback.data.split('_')[-1])
@@ -904,7 +904,7 @@ async def process_withdrawal_amount_callback(
 
 async def process_payment_details(message: types.Message, db_user: User, db: AsyncSession, state: FSMContext):
     """Обрабатывает ввод реквизитов и показывает подтверждение."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     data = await state.get_data()
     amount_kopeks = int(data.get('withdrawal_amount', 0) or 0)
     payment_details = message.text.strip()
@@ -953,7 +953,7 @@ async def process_payment_details(message: types.Message, db_user: User, db: Asy
 
 async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: User, db: AsyncSession, state: FSMContext):
     """Подтверждает и создаёт заявку на вывод."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     data = await state.get_data()
     amount_kopeks = int(data.get('withdrawal_amount', 0) or 0)
     payment_details = str(data.get('payment_details') or '')
@@ -1077,7 +1077,7 @@ async def confirm_withdrawal_request(callback: types.CallbackQuery, db_user: Use
 async def cancel_withdrawal_request(callback: types.CallbackQuery, db_user: User, state: FSMContext):
     """Отменяет процесс создания заявки на вывод."""
     await state.clear()
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     await callback.answer(texts.t('CANCELLED', 'Отменено'))
 
     # Возвращаем в меню партнёрки

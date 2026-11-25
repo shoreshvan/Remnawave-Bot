@@ -491,7 +491,11 @@ async def _sync_subscription_to_panel(
         return {'error': str(e)}
 
 
-@router.get('', response_model=UsersListResponse)
+@router.get(
+    '', response_model=UsersListResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_LIST'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_LIST_DESCRIPTION'),
+)
 async def list_users(
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -567,7 +571,10 @@ async def list_users(
     if online and snapshot is None:
         raise HTTPException(
             status_code=503,
-            detail='Панель не ответила — не удалось узнать, кто сейчас подключён. Попробуйте ещё раз.',
+            detail=get_texts(getattr(admin, 'language', None) or 'fa').t(
+                'CABINET_USERS_ONLINE_UNAVAILABLE',
+                'The panel did not respond. Unable to identify connected users. Try again.',
+            ),
         )
     connected = snapshot.connected_now() if snapshot is not None else None
     online_filter = connected if online else None
@@ -654,7 +661,11 @@ async def list_users(
     )
 
 
-@router.get('/stats', response_model=UsersStatsResponse)
+@router.get(
+    '/stats', response_model=UsersStatsResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_STATS'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_STATS_DESCRIPTION'),
+)
 async def get_users_stats(
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -736,7 +747,11 @@ async def get_users_stats(
 # === User Detail ===
 
 
-@router.get('/by-remnawave/{remnawave_identifier}', response_model=UserByRemnawaveResponse)
+@router.get(
+    '/by-remnawave/{remnawave_identifier}', response_model=UserByRemnawaveResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_RESOLVE'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_RESOLVE_DESCRIPTION'),
+)
 async def get_user_by_remnawave_identifier(
     remnawave_identifier: str,
     admin: User = Depends(require_permission('users:read')),
@@ -750,28 +765,30 @@ async def get_user_by_remnawave_identifier(
     которую видно в панели (и единственной у подписок без числового id).
     """
     identifier = (remnawave_identifier or '').strip()
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     # Та же граница, что и в клиенте: `isdigit()` истинен для '²'/'٥', на
     # которых int() либо падает, либо молча даёт ЧУЖОЙ id.
     if identifier.isascii() and identifier.isdigit():
         panel_user_id = int(identifier)
         # BigInteger: значение вне диапазона — не «не найдено», а мусор на входе.
         if not 0 < panel_user_id < 2**63:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Remnawave identifier')
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texts.t('CABINET_USERS_INVALID_REMNAWAVE_ID', 'Invalid Remnawave identifier'))
         condition = Subscription.remnawave_id == panel_user_id
     elif identifier:
         condition = Subscription.remnawave_short_uuid == identifier
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid Remnawave identifier')
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=texts.t('CABINET_USERS_INVALID_REMNAWAVE_ID', 'Invalid Remnawave identifier'))
 
     matches = (await db.execute(select(Subscription).where(condition).limit(2))).scalars().all()
     if not matches:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail='Remnawave identifier is not linked to a subscription'
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=texts.t('CABINET_USERS_REMNAWAVE_NOT_LINKED', 'Remnawave identifier is not linked to a subscription'),
         )
     if len(matches) > 1:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail='Remnawave identifier is linked to multiple subscriptions',
+            detail=texts.t('CABINET_USERS_REMNAWAVE_MULTIPLE', 'Remnawave identifier is linked to multiple subscriptions'),
         )
 
     subscription = matches[0]
@@ -790,18 +807,23 @@ def _sales_mode_fields() -> dict:
     }
 
 
-@router.get('/{user_id}', response_model=UserDetailResponse)
+@router.get(
+    '/{user_id}', response_model=UserDetailResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_DETAIL'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_DETAIL_DESCRIPTION'),
+)
 async def get_user_detail(
     user_id: int,
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed user information by ID."""
+    language = getattr(admin, 'language', None) or 'fa'
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
+            detail=get_texts(language).t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     # Get spending stats
@@ -876,7 +898,7 @@ async def get_user_detail(
             type=t.type,
             amount_kopeks=-abs(t.amount_kopeks) if t.type in _EXPENSE_TYPES else t.amount_kopeks,
             amount_rubles=-abs(t.amount_kopeks) / 100 if t.type in _EXPENSE_TYPES else t.amount_kopeks / 100,
-            description=t.description,
+            description=localize_transaction_description(t.description, language, t.payment_method),
             payment_method=t.payment_method,
             is_completed=t.is_completed,
             created_at=t.created_at,
@@ -936,7 +958,11 @@ async def get_user_detail(
     )
 
 
-@router.get('/by-telegram/{telegram_id}', response_model=UserDetailResponse)
+@router.get(
+    '/by-telegram/{telegram_id}', response_model=UserDetailResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_TELEGRAM'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_TELEGRAM_DESCRIPTION'),
+)
 async def get_user_by_telegram(
     telegram_id: int,
     admin: User = Depends(require_permission('users:read')),
@@ -955,12 +981,16 @@ async def get_user_by_telegram(
 # === Panel Info ===
 
 
-@router.get('/{user_id}/panel-info', response_model=UserPanelInfoResponse)
+@router.get(
+    '/{user_id}/panel-info', response_model=UserPanelInfoResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_PANEL_INFO'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_PANEL_INFO_DESCRIPTION'),
+)
 async def get_user_panel_info(
     user_id: int,
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff panel lookup'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_PANEL_LOOKUP')),
 ):
     """Get user panel info from Remnawave (config links, traffic, connection data)."""
     user = await get_user_by_id(db, user_id)
@@ -1049,12 +1079,16 @@ async def get_user_panel_info(
         return UserPanelInfoResponse(found=False)
 
 
-@router.get('/{user_id}/subscription-request-history')
+@router.get(
+    '/{user_id}/subscription-request-history',
+    summary=get_texts('fa').t('CABINET_USERS_DOC_REQUEST_HISTORY'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_REQUEST_HISTORY_DESCRIPTION'),
+)
 async def get_subscription_request_history(
     user_id: int,
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_MULTITARIFF')),
     offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ):
@@ -1092,12 +1126,16 @@ async def get_subscription_request_history(
         return {'total': 0, 'records': []}
 
 
-@router.get('/{user_id}/node-usage', response_model=UserNodeUsageResponse)
+@router.get(
+    '/{user_id}/node-usage', response_model=UserNodeUsageResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_NODE_USAGE'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_NODE_USAGE_DESCRIPTION'),
+)
 async def get_user_node_usage(
     user_id: int,
     admin: User = Depends(require_permission('users:read')),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_MULTITARIFF')),
 ):
     """Get user per-node traffic usage (always 30 days with daily breakdown)."""
     user = await get_user_by_id(db, user_id)
@@ -1573,7 +1611,9 @@ async def update_user_subscription(
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=0,
-            description=f"Смена тарифа администратором на '{tariff.name}'",
+            description=get_texts(getattr(user, 'language', None) or 'fa').t(
+                'TARIFF_SWITCH_ADMIN_TRANSACTION_DESCRIPTION', "Смена тарифа администратором на '{tariff}'"
+            ).format(tariff=tariff.name),
             commit=False,
         )
 
@@ -3776,10 +3816,14 @@ async def get_user_activity(
 # === Panel Sync ===
 
 
-@router.get('/{user_id}/sync/status', response_model=PanelSyncStatusResponse)
+@router.get(
+    '/{user_id}/sync/status', response_model=PanelSyncStatusResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_SYNC_STATUS'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_SYNC_STATUS_DESCRIPTION'),
+)
 async def get_user_sync_status(
     user_id: int,
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff sync'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_SYNC')),
     admin: User = Depends(require_permission('users:sync')),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
@@ -3789,11 +3833,12 @@ async def get_user_sync_status(
     Shows differences between bot data and panel data.
     When subscription_id is provided, checks that specific subscription instead of first-active.
     """
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     # Bot data
@@ -3810,7 +3855,7 @@ async def get_user_sync_status(
         if not active_sub:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Subscription not found',
+                detail=texts.t('CABINET_USERS_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
             )
     else:
         active_sub = next((s for s in subs if s.is_active), subs[0] if subs else None)
@@ -3895,7 +3940,18 @@ async def get_user_sync_status(
                         bot_active = bot_sub_status in ('active', 'trial')
                         panel_active = panel_status.upper() == 'ACTIVE'
                         if bot_active != panel_active:
-                            differences.append(f'Status: bot={bot_sub_status}, panel={panel_status}')
+                            status_keys = {
+                                'active': 'ADMIN_PROMO_STATUS_ACTIVE',
+                                'trial': 'FORMAT_STATUS_TRIAL',
+                                'disabled': 'TRAFFIC_STATUS_DISABLED',
+                                'expired': 'SUBSCRIPTION_UI_STATUS_EXPIRED',
+                                'limited': 'CABINET_USERS_SYNC_LIMITED',
+                                'pending': 'CABINET_USERS_SYNC_PENDING',
+                            }
+                            differences.append(texts.t('CABINET_USERS_SYNC_DIFF_STATUS', 'Status: bot={bot}, panel={panel}').format(
+                                bot=texts.t(status_keys.get(bot_sub_status.lower(), 'SUBSCRIPTION_UI_STATUS_UNKNOWN'), bot_sub_status),
+                                panel=texts.t(status_keys.get(panel_status.lower(), 'SUBSCRIPTION_UI_STATUS_UNKNOWN'), panel_status),
+                            ))
 
                     if bot_sub_end_date and panel_expire_at and not grace_open:
                         bot_end_utc = bot_sub_end_date if bot_sub_end_date.tzinfo else bot_sub_end_date
@@ -3906,21 +3962,21 @@ async def get_user_sync_status(
                         # If diff is ~3 hours (10800 sec) +/- 5 min, assume it's timezone issue
                         is_timezone_diff = abs(diff_seconds - 10800) < 300  # 3 hours +/- 5 min
                         if diff_seconds > 3600 and not is_timezone_diff:  # More than 1 hour and not timezone
-                            differences.append(f'End date differs by {diff_seconds / 3600:.1f} hours')
+                            differences.append(texts.t('CABINET_USERS_SYNC_DIFF_END_DATE', 'End date differs by {hours:.1f} hours').format(hours=diff_seconds / 3600))
 
                     if not grace_open and abs(bot_traffic_limit - panel_traffic_limit) > 1:
                         differences.append(
-                            f'Traffic limit: bot={bot_traffic_limit}GB, panel={panel_traffic_limit:.1f}GB'
+                            texts.t('CABINET_USERS_SYNC_DIFF_TRAFFIC_LIMIT', 'Traffic limit: bot={bot} GB, panel={panel:.1f} GB').format(bot=bot_traffic_limit, panel=panel_traffic_limit)
                         )
 
                     if abs(bot_traffic_used - panel_traffic_used) > 0.5:
                         differences.append(
-                            f'Traffic used: bot={bot_traffic_used:.2f}GB, panel={panel_traffic_used:.2f}GB'
+                            texts.t('CABINET_USERS_SYNC_DIFF_TRAFFIC_USED', 'Traffic used: bot={bot:.2f} GB, panel={panel:.2f} GB').format(bot=bot_traffic_used, panel=panel_traffic_used)
                         )
 
                     # Compare device limits
                     if bot_device_limit != panel_device_limit:
-                        differences.append(f'Device limit: bot={bot_device_limit}, panel={panel_device_limit}')
+                        differences.append(texts.t('CABINET_USERS_SYNC_DIFF_DEVICE_LIMIT', 'Device limit: bot={bot}, panel={panel}').format(bot=bot_device_limit, panel=panel_device_limit))
 
                     # Compare squads
                     bot_squads_set = set(bot_squads) if bot_squads else set()
@@ -3930,22 +3986,22 @@ async def get_user_sync_status(
                         only_in_panel = panel_squads_set - bot_squads_set
                         squad_diff_parts = []
                         if only_in_bot:
-                            squad_diff_parts.append(f'only in bot: {len(only_in_bot)}')
+                            squad_diff_parts.append(texts.t('CABINET_USERS_SYNC_DIFF_ONLY_IN_BOT', 'Only in bot: {count}').format(count=len(only_in_bot)))
                         if only_in_panel:
-                            squad_diff_parts.append(f'only in panel: {len(only_in_panel)}')
-                        differences.append(f'Squads mismatch ({", ".join(squad_diff_parts)})')
+                            squad_diff_parts.append(texts.t('CABINET_USERS_SYNC_DIFF_ONLY_IN_PANEL', 'Only in panel: {count}').format(count=len(only_in_panel)))
+                        differences.append(texts.t('CABINET_USERS_SYNC_DIFF_SQUADS', 'Squads mismatch ({parts})').format(parts='، '.join(squad_diff_parts)))
 
             panel_read_ok = True
 
     except Exception as e:
         logger.warning('Failed to get panel data for user', user_id=user_id, error=e)
-        differences.append(f'Error fetching panel data: {e!s}')
+        differences.append(texts.t('CABINET_USERS_SYNC_READ_FAILED', 'Failed to read the panel account'))
 
     # Подписка есть, а аккаунта в панели нет — это расхождение, и самое
     # серьёзное: у человека нет доступа. Без этой строки карточка с пустой
     # панельной стороной показывалась «синхронизированной» (issue #3277).
     if active_sub is not None and panel_read_ok and not panel_found:
-        differences.append('В панели аккаунт не найден')
+        differences.append(texts.t('CABINET_USERS_USER_NOT_FOUND_IN_PANEL', 'User not found in panel'))
 
     # Resolve tariff name for context
     sub_tariff_name: str | None = None
@@ -3984,10 +4040,14 @@ async def get_user_sync_status(
     )
 
 
-@router.post('/{user_id}/sync/from-panel', response_model=SyncFromPanelResponse)
+@router.post(
+    '/{user_id}/sync/from-panel', response_model=SyncFromPanelResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_SYNC_PULL'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_SYNC_PULL_DESCRIPTION'),
+)
 async def sync_user_from_panel(
     user_id: int,
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff sync'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_SYNC')),
     request: SyncFromPanelRequest = SyncFromPanelRequest(),
     admin: User = Depends(require_permission('users:sync')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -3998,11 +4058,12 @@ async def sync_user_from_panel(
     Fetches user data from Remnawave panel and updates local database.
     When subscription_id is provided, syncs that specific subscription instead of first-active.
     """
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     try:
@@ -4012,7 +4073,7 @@ async def sync_user_from_panel(
         if not service.is_configured:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=service.configuration_error or 'Remnawave API not configured',
+                detail=texts.t('CABINET_USERS_SYNC_CONFIG', 'Check the Remnawave API configuration'),
             )
 
         changes = {}
@@ -4026,7 +4087,7 @@ async def sync_user_from_panel(
             if not selected_sub:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail='Subscription not found',
+                    detail=texts.t('CABINET_USERS_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
                 )
         else:
             selected_sub = None
@@ -4062,14 +4123,13 @@ async def sync_user_from_panel(
                         raise HTTPException(
                             status_code=status.HTTP_409_CONFLICT,
                             detail=(
-                                'Multiple panel users match this account; cannot safely re-link '
-                                'this subscription. Resolve manually.'
+                                texts.t('CABINET_USERS_MULTIPLE_PANEL_USERS_RELINK', 'Multiple panel accounts match this user. Resolve manually.')
                             ),
                         )
                     else:
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail='This subscription is not linked to the panel and no matching panel user was found.',
+                            detail=texts.t('CABINET_USERS_SUB_NOT_LINKED_NO_MATCH', 'Subscription is not linked and no matching panel user was found'),
                         )
                 else:
                     # No specific subscription — iterate all subscription panel ids
@@ -4094,8 +4154,8 @@ async def sync_user_from_panel(
             if not panel_user:
                 return SyncFromPanelResponse(
                     success=False,
-                    message='User not found in panel',
-                    errors=['No user found in Remnawave panel by panel id, telegram_id, or email'],
+                    message=texts.t('CABINET_USERS_USER_NOT_FOUND_IN_PANEL', 'User not found in panel'),
+                    errors=[texts.t('CABINET_USERS_NO_PANEL_USER_MATCH', 'No matching panel account found')],
                 )
 
             # По почте/Telegram находится и аккаунт второй записи того же человека
@@ -4112,8 +4172,7 @@ async def sync_user_from_panel(
                     owner_user_id=owner.user_id,
                 )
                 message = (
-                    f'Аккаунт в панели принадлежит другому пользователю бота (ID {owner.user_id}). '
-                    'Похоже, у человека две записи в боте — объедините их или удалите лишнюю.'
+                    texts.t('CABINET_USERS_SYNC_WRONG_OWNER', 'Panel account belongs to another bot user (ID {owner}). Review duplicate accounts.').format(owner=owner.user_id)
                 )
                 return SyncFromPanelResponse(success=False, message=message, errors=[message])
 
@@ -4184,9 +4243,9 @@ async def sync_user_from_panel(
                     # Локальная дата новее панельной: возможно, автопокупка уже
                     # продлила подписку, а админ откатывает её к панели.
                     errors.append(
-                        f'Warning: local end_date ({before["end_date"].isoformat()}) is newer than '
-                        f'panel expire_at ({snapshot.expire_at.isoformat()}). '
-                        f'Panel value applied — check if auto-purchase extended subscription.'
+                        texts.t('CABINET_USERS_SYNC_WARN_LOCAL_NEWER', 'Local end date ({local_end}) was later than the panel date ({panel_expire}). Panel date applied.').format(
+                            local_end=before['end_date'].isoformat(), panel_expire=snapshot.expire_at.isoformat(),
+                        )
                     )
 
                 # Подписка загружена до запроса в панель: грейс мог открыться между
@@ -4253,7 +4312,7 @@ async def sync_user_from_panel(
 
         return SyncFromPanelResponse(
             success=True,
-            message=f'Synced {len(changes)} changes from panel' if changes else 'No changes needed',
+            message=texts.t('CABINET_USERS_SYNCED_CHANGES', 'Synced {count} changes from panel').format(count=len(changes)) if changes else texts.t('CABINET_USERS_NO_CHANGES_NEEDED', 'No changes needed'),
             panel_user=panel_info,
             changes=changes,
             errors=errors,
@@ -4265,14 +4324,18 @@ async def sync_user_from_panel(
         logger.error('Error syncing user from panel', user_id=user_id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Sync error: {e!s}',
+            detail=texts.t('CABINET_USERS_SYNC_FAILED', 'Panel sync failed'),
         )
 
 
-@router.post('/{user_id}/sync/to-panel', response_model=SyncToPanelResponse)
+@router.post(
+    '/{user_id}/sync/to-panel', response_model=SyncToPanelResponse,
+    summary=get_texts('fa').t('CABINET_USERS_DOC_SYNC_PUSH'),
+    description=get_texts('fa').t('CABINET_USERS_DOC_SYNC_PUSH_DESCRIPTION'),
+)
 async def sync_user_to_panel(
     user_id: int,
-    subscription_id: int | None = Query(None, description='Subscription ID for multi-tariff sync'),
+    subscription_id: int | None = Query(None, description=get_texts('fa').t('CABINET_USERS_QUERY_SUB_ID_SYNC')),
     request: SyncToPanelRequest = SyncToPanelRequest(),
     admin: User = Depends(require_permission('users:sync')),
     db: AsyncSession = Depends(get_cabinet_db),
@@ -4283,11 +4346,12 @@ async def sync_user_to_panel(
     в панель не отправляет. Сборка запроса, поиск аккаунта и запись связи —
     в ``app/services/panel_sync``.
     """
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_texts(admin.language or 'fa').t('CABINET_USERS_NOT_FOUND', 'User not found'),
+            detail=texts.t('CABINET_USERS_NOT_FOUND', 'User not found'),
         )
 
     push_subs = getattr(user, 'subscriptions', None) or []
@@ -4296,14 +4360,14 @@ async def sync_user_to_panel(
         if not push_sub:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail='Subscription not found',
+                detail=texts.t('CABINET_USERS_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'),
             )
     else:
         push_sub = next((s for s in push_subs if s.is_active), push_subs[0] if push_subs else None)
     if not push_sub:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='User has no subscription to sync',
+            detail=texts.t('CABINET_USERS_NO_SUBSCRIPTION_TO_SYNC', 'User has no subscription to sync'),
         )
 
     try:
@@ -4318,7 +4382,7 @@ async def sync_user_to_panel(
         if not service.is_configured:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=service.configuration_error or 'Remnawave API not configured',
+                detail=texts.t('CABINET_USERS_SYNC_CONFIG', 'Check the Remnawave API configuration'),
             )
 
         # Что именно админ разрешил отправить; поля аккаунта (описание, лимит
@@ -4377,7 +4441,7 @@ async def sync_user_to_panel(
                 user.updated_at = datetime.now(UTC)
             else:
                 errors.append(
-                    f'Панельный аккаунт {panel_user_id} не записан подписке {push_sub.id}: адрес занят другой подпиской'
+                    texts.t('CABINET_USERS_SYNC_LINK_BUSY', 'Panel account {panel} could not be linked to subscription {sub}: another subscription uses it.').format(panel=panel_user_id, sub=push_sub.id)
                 )
                 logger.warning(
                     'Синхронизация в панель прошла, но связь не обновилась',
@@ -4392,7 +4456,12 @@ async def sync_user_to_panel(
 
         return SyncToPanelResponse(
             success=True,
-            message=f'User {action} in panel' if action != 'no_changes' else 'No changes needed',
+            message=texts.t({
+                'created': 'CABINET_USERS_SYNC_CREATED',
+                'updated': 'CABINET_USERS_SYNC_UPDATED',
+                'no_changes': 'CABINET_USERS_NO_CHANGES_NEEDED',
+                'queued': 'CABINET_USERS_SYNC_QUEUED',
+            }[action], action.replace('_', ' ')),
             action=action,
             panel_user_id=panel_user_id,
             changes=changes,
@@ -4406,15 +4475,14 @@ async def sync_user_to_panel(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f'Аккаунт в панели принадлежит другому пользователю бота (ID {e.owner_user_id}). '
-                'Похоже, у человека две записи в боте — объедините их или удалите лишнюю.'
+                texts.t('CABINET_USERS_SYNC_WRONG_OWNER', 'Panel account belongs to another bot user (ID {owner}). Review duplicate accounts.').format(owner=e.owner_user_id)
             ),
         )
     except Exception as e:
         logger.error('Error syncing user to panel', user_id=user_id, error=e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f'Sync error: {e!s}',
+            detail=texts.t('CABINET_USERS_SYNC_FAILED', 'Panel sync failed'),
         )
 
 

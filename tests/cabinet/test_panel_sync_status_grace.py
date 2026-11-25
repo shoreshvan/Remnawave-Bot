@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from tests.fixtures.persian import persian  # noqa: F401
 
 from app.cabinet.routes import admin_users
 from app.database.models import SubscriptionStatus
@@ -116,7 +117,7 @@ async def test_open_grace_is_not_a_difference(monkeypatch: pytest.MonkeyPatch) -
     assert response.has_differences is False
 
 
-async def test_without_grace_the_same_panel_data_is_a_difference(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_without_grace_the_same_panel_data_is_a_difference(monkeypatch: pytest.MonkeyPatch, persian) -> None:
     """Те же данные панели без грейса обязаны остаться расхождением."""
     response = await _status(monkeypatch, _subscription())
 
@@ -134,4 +135,4 @@ async def test_traffic_used_is_still_compared_during_grace(monkeypatch: pytest.M
     )
 
     assert response.grace_open is True
-    assert any('Traffic used' in item for item in response.differences)
+    assert any('ترافیک مصرف‌شده' in item for item in response.differences)

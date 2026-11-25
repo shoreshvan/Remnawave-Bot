@@ -228,7 +228,7 @@ async def test_missing_panel_account_is_not_reported_as_synced(monkeypatch) -> N
 
     assert status.panel_found is False
     assert status.has_differences is True, 'карточка без панельной стороны показывалась синхронизированной'
-    assert any('панел' in line.lower() for line in status.differences)
+    assert 'کاربر در پنل یافت نشد' in status.differences
 
 
 @pytest.mark.asyncio
@@ -246,7 +246,8 @@ async def test_unreadable_panel_is_not_reported_as_missing(monkeypatch) -> None:
         status = await _call_status(monkeypatch, db, api)
 
     assert status.has_differences is True
-    assert not any('не найден' in line.lower() for line in status.differences)
+    assert 'دریافت اطلاعات حساب از پنل ناموفق بود.' in status.differences
+    assert 'کاربر در پنل یافت نشد' not in status.differences
 
 
 @pytest.mark.asyncio

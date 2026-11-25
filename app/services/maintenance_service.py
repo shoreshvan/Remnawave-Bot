@@ -66,7 +66,7 @@ class MaintenanceService:
         return self._status.is_active
 
     def get_maintenance_message(self, language: str | None = None) -> str:
-        texts = get_texts(language or settings.DEFAULT_LANGUAGE)
+        texts = get_texts(language or 'fa')
         if self._status.auto_enabled:
             last_check_display = format_local_datetime(
                 self._status.last_check, '%H:%M:%S', texts.t('MAINT_UNKNOWN_TIME', 'неизвестно')
@@ -77,7 +77,7 @@ class MaintenanceService:
             ).format(time=last_check_display)
         message = settings.get_maintenance_message()
         default_message = type(settings).model_fields['MAINTENANCE_MESSAGE'].default
-        if message == default_message:
+        if message.strip() in {default_message, default_message.removeprefix('🔧 '), ''}:
             return texts.t('MAINT_DEFAULT_MESSAGE', default_message)
         return message
 

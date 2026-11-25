@@ -14,6 +14,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.cabinet.routes import admin_users
+from tests.fixtures.persian import persian  # noqa: F401
 
 
 PANEL_USER_ID = 4242
@@ -118,7 +119,7 @@ async def test_resolver_accepts_a_short_uuid_for_subscriptions_without_a_panel_i
     ],
     ids=['null', 'empty', 'blank', 'zero', 'out-of-range'],
 )
-async def test_resolver_rejects_unusable_identifiers_without_any_lookup(path_value) -> None:
+async def test_resolver_rejects_unusable_identifiers_without_any_lookup(path_value, persian) -> None:
     """Would fail if garbage input were guessed from user data or hit the database."""
     db = _db_with_matches()
 
@@ -126,10 +127,11 @@ async def test_resolver_rejects_unusable_identifiers_without_any_lookup(path_val
         await _resolver()(path_value, admin=SimpleNamespace(id=1), db=db)
 
     assert exc.value.status_code == 400
+    assert exc.value.detail == 'شناسه Remnawave نامعتبر است'
     db.execute.assert_not_awaited()
 
 
-async def test_resolver_rejects_an_identifier_present_only_on_the_legacy_user_field() -> None:
+async def test_resolver_rejects_an_identifier_present_only_on_the_legacy_user_field(persian) -> None:
     """Would fail if the route reused legacy user-level resolution."""
     db = _db_with_matches()
 
@@ -137,6 +139,7 @@ async def test_resolver_rejects_an_identifier_present_only_on_the_legacy_user_fi
         await _resolver()(str(PANEL_USER_ID), admin=SimpleNamespace(id=1), db=db)
 
     assert exc.value.status_code == 404
+    assert exc.value.detail == 'شناسه Remnawave به هیچ اشتراکی متصل نیست'
     query = str(db.execute.await_args.args[0])
     assert 'subscriptions.remnawave_id' in query
     assert 'users.remnawave_id' not in query
@@ -172,7 +175,7 @@ async def test_resolver_treats_a_physically_absent_deleted_subscription_as_not_f
     ],
     ids=['panel-id', 'short-uuid'],
 )
-async def test_resolver_rejects_duplicate_subscription_mappings_as_a_conflict(identifier, matches) -> None:
+async def test_resolver_rejects_duplicate_subscription_mappings_as_a_conflict(identifier, matches, persian) -> None:
     """Would fail if corrupted mappings silently selected one subscription."""
     db = _db_with_matches(*matches)
 
@@ -180,3 +183,4 @@ async def test_resolver_rejects_duplicate_subscription_mappings_as_a_conflict(id
         await _resolver()(identifier, admin=SimpleNamespace(id=1), db=db)
 
     assert exc.value.status_code == 409
+    assert exc.value.detail == 'شناسه Remnawave به چند اشتراک متصل است'

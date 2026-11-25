@@ -1,6 +1,7 @@
 """Render production receipt expressions and verify the device debit boundary."""
 
 import ast
+import html
 import inspect
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -10,6 +11,19 @@ import pytest
 
 from app.services import subscription_auto_purchase_service as auto
 from tests.fixtures.persian import persian  # noqa: F401
+
+
+def test_daily_receipt_shows_exact_amount_charged(persian):
+    tree = ast.parse(inspect.getsource(auto._auto_purchase_daily_tariff))
+    receipt = next(
+        node.value for node in ast.walk(tree)
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == 'message' and 'DAILY_NOTICE_006' in ast.unparse(node.value)
+    )
+    message = eval(compile(ast.Expression(receipt), '<receipt>', 'eval'), {
+        'texts': persian, 'html': html, 'tariff': SimpleNamespace(name='ویژه'), 'final_price': 1234567,
+    })
+    assert 'مبلغ کسرشده برای روز اول: 12,345.67 تومان' in message
 
 
 @pytest.mark.parametrize('count', [1, 30, 100])

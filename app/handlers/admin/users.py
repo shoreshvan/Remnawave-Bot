@@ -6577,12 +6577,15 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
         from app.services.subscription_service import SubscriptionService
 
         managed_purchase = getattr(existing_subscription, 'traffic_accounting_mode', None) in ('managed', 'migrating')
+        purchase_description = get_texts(getattr(target_user, 'language', None) or 'fa').t(
+            'TARIFF_PURCHASE_ADMIN_TRANSACTION_DESCRIPTION', 'Покупка тарифа {tariff} на {days} дней (администратор)'
+        ).format(tariff=tariff.name, days=period)
         # Списываем баланс
         success = await subtract_user_balance(
             db,
             target_user,
             price_kopeks,
-            f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
+            purchase_description,
             mark_as_paid_subscription=True,
             commit=not managed_purchase,
         )
@@ -6635,7 +6638,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
             user_id=target_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=price_kopeks,
-            description=f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
+            description=purchase_description,
             commit=not managed_purchase,
         )
 
@@ -6649,7 +6652,7 @@ async def admin_buy_tariff_execute(callback: types.CallbackQuery, db_user: User,
                 amount_kopeks=price_kopeks,
                 user_id=target_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
-                description=f'Покупка тарифа {tariff.name} на {period} дней (администратор)',
+                description=purchase_description,
             )
 
         # Обновляем в Remnawave
@@ -7180,7 +7183,9 @@ async def confirm_admin_tariff_change(callback: types.CallbackQuery, db_user: Us
             user_id=user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=0,
-            description=f"Смена тарифа администратором на '{tariff.name}'",
+            description=get_texts(getattr(user, 'language', None) or 'fa').t(
+                'TARIFF_SWITCH_ADMIN_TRANSACTION_DESCRIPTION', "Смена тарифа администратором на '{tariff}'"
+            ).format(tariff=tariff.name),
             external_id=confirmation_key,
             commit=False,
         )

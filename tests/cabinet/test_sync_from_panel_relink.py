@@ -90,7 +90,7 @@ async def _call(user, sub_id, api):
         patch('app.services.remnawave_service.RemnaWaveService', return_value=_service(api)),
     ):
         return await au.sync_user_from_panel(
-            user_id=user.id, subscription_id=sub_id, request=SyncFromPanelRequest(), admin=MagicMock(), db=db
+            user_id=user.id, subscription_id=sub_id, request=SyncFromPanelRequest(), admin=MagicMock(language='fa'), db=db
         )
 
 
