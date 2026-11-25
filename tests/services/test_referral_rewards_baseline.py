@@ -48,7 +48,7 @@ def wired(monkeypatch):
         return users.get(uid)
 
     async def fake_add_user_balance(_db, user, amount, description, **kwargs):
-        balance_credits.append({'user_id': user.id, 'amount': amount, 'type': kwargs.get('transaction_type')})
+        balance_credits.append({'user_id': user.id, 'amount': amount, 'type': kwargs.get('transaction_type'), 'description': description})
         return True
 
     async def fake_create_referral_earning(**kwargs):

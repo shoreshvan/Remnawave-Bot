@@ -190,7 +190,7 @@ async def get_referral_earnings(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get referral earnings history."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     # Base query
     query = select(ReferralEarning).where(ReferralEarning.user_id == user.id, not_referee_directed())
 
@@ -325,7 +325,7 @@ async def update_reward_choice(
     настроено правилом» и «подбирать автоматически», — и от «не присылали» он
     иначе неотличим.
     """
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     if request.set_reward_preference:
         if not settings.is_referral_reward_kind_choice_enabled():
             raise HTTPException(
@@ -406,7 +406,7 @@ async def get_referral_terms(
             tariffs_result = await db.execute(select(Tariff.id, Tariff.name).where(Tariff.id.in_(tariff_ids)))
             tariff_names = {row.id: row.name for row in tariffs_result.all()}
 
-        language = user.language if user else None
+        language = getattr(user, 'language', None) or 'fa'
         level_descriptions = await describe_active_levels(db, tariff_names=tariff_names, language=language, viewer=user)
         # Пользователь известен — он и есть потенциальный пригласивший, и в
         # режиме рангов бонус его приглашённых задаётся его рангом. Аноним

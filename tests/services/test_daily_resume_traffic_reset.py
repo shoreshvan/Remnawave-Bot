@@ -19,6 +19,7 @@ import pytest
 
 from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, User
+from tests.fixtures.persian import persian  # noqa: F401
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -255,3 +256,24 @@ async def test_cabinet_overdue_active_resumes_instead_of_pausing(monkeypatch):
         assert subscription.is_daily_paused is False
         assert subscription.actual_status == 'active'
         assert panel.calls
+
+
+@pytest.mark.asyncio
+async def test_daily_toggle_missing_subscription_is_persian_in_both_apis(monkeypatch, persian):
+    from unittest.mock import AsyncMock
+
+    from fastapi import HTTPException
+
+    from app.cabinet.routes.subscription_modules import daily
+    from app.webapi.routes import miniapp
+
+    user = SimpleNamespace(language=None, subscriptions=[])
+    monkeypatch.setattr(daily, 'resolve_subscription', AsyncMock(return_value=None))
+    monkeypatch.setattr(miniapp, '_authorize_miniapp_user', AsyncMock(return_value=user))
+    with pytest.raises(HTTPException) as cabinet:
+        await daily.toggle_subscription_pause(user=user, db=None, subscription_id=None)
+    with pytest.raises(HTTPException) as mini:
+        await miniapp.toggle_daily_subscription_pause_endpoint(SimpleNamespace(init_data='', subscription_id=None), None)
+    assert cabinet.value.status_code == mini.value.status_code == 404
+    assert cabinet.value.detail == 'هیچ اشتراکی یافت نشد'
+    assert mini.value.detail == {'code': 'no_subscription', 'message': cabinet.value.detail}

@@ -1143,14 +1143,14 @@ async def handle_potential_referral_code(message: types.Message, state: FSMConte
 
 
 def _registration_language(data: dict, telegram_user, user=None) -> str:
-    language = (
-        getattr(user, 'language', None)
-        or data.get('language')
-        or getattr(telegram_user, 'language_code', None)
-        or settings.DEFAULT_LANGUAGE
-        or DEFAULT_LANGUAGE
-    )
-    return language.strip().lower().replace('_', '-').split('-')[0]
+    for candidate in (getattr(user, 'language', None), data.get('language'), getattr(telegram_user, 'language_code', None)):
+        if isinstance(candidate, str):
+            code = candidate.strip().lower().replace('_', '-').split('-')[0]
+            if code == 'uk':
+                code = 'ua'
+            if code in {'fa', 'ru', 'en', 'ua', 'zh'}:
+                return code
+    return 'fa'
 
 
 def _get_language_prompt_text(language: str = DEFAULT_LANGUAGE) -> str:
@@ -2046,7 +2046,7 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext,
         await callback.answer()
 
         data = await state.get_data() or {}
-        language = data.get('language', language)
+        language = _registration_language(data, callback.from_user)
         texts = get_texts(language)
 
         if callback.data == 'rules_accept':
@@ -2086,7 +2086,7 @@ async def process_rules_accept(callback: types.CallbackQuery, state: FSMContext,
 
         try:
             data = await state.get_data() or {}
-            language = data.get('language', language)
+            language = _registration_language(data, callback.from_user)
             texts = get_texts(language)
             await callback.message.answer(
                 texts.t(
@@ -2115,7 +2115,7 @@ async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FS
         await callback.answer()
 
         data = await state.get_data() or {}
-        language = data.get('language', language)
+        language = _registration_language(data, callback.from_user)
         texts = get_texts(language)
 
         if callback.data == 'privacy_policy_accept':
@@ -2197,7 +2197,7 @@ async def process_privacy_policy_accept(callback: types.CallbackQuery, state: FS
 
         try:
             data = await state.get_data() or {}
-            language = data.get('language', language)
+            language = _registration_language(data, callback.from_user)
             texts = get_texts(language)
             await callback.message.answer(
                 texts.t(
@@ -2215,7 +2215,7 @@ async def process_referral_code_input(message: types.Message, state: FSMContext,
     logger.info('🎫 REFERRAL/PROMO: Обработка кода', message_text=message.text)
 
     data = await state.get_data() or {}
-    language = data.get('language', DEFAULT_LANGUAGE)
+    language = _registration_language(data, message.from_user)
     texts = get_texts(language)
 
     if not message.text:
@@ -2285,7 +2285,7 @@ async def process_referral_code_skip(callback: types.CallbackQuery, state: FSMCo
     await callback.answer()
 
     data = await state.get_data() or {}
-    language = data.get('language', DEFAULT_LANGUAGE)
+    language = _registration_language(data, callback.from_user)
     texts = get_texts(language)
 
     try:
@@ -2310,9 +2310,8 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
 
     if existing_user and existing_user.status == UserStatus.ACTIVE.value:
         logger.warning('⚠️ Пользователь уже активен! Показываем главное меню.', from_user_id=callback.from_user.id)
-        texts = get_texts(existing_user.language)
-
         data = await state.get_data() or {}
+        texts = get_texts(_registration_language(data, callback.from_user, existing_user))
         if data.get('referral_code') and not existing_user.referred_by_id:
             await callback.message.answer(
                 texts.t(
@@ -2346,7 +2345,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
                 user=existing_user,
-                language=existing_user.language,
+                language=texts.language,
                 is_admin=is_admin,
                 has_had_paid_subscription=existing_user.has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
@@ -2376,7 +2375,7 @@ async def complete_registration_from_callback(callback: types.CallbackQuery, sta
         return
 
     data = await state.get_data() or {}
-    language = data.get('language', DEFAULT_LANGUAGE)
+    language = _registration_language(data, callback.from_user, existing_user)
     texts = get_texts(language)
 
     access_decision, phantom = await _prepare_telegram_completion_access(
@@ -2668,9 +2667,8 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
 
     if existing_user and existing_user.status == UserStatus.ACTIVE.value:
         logger.warning('⚠️ Пользователь уже активен! Показываем главное меню.', from_user_id=message.from_user.id)
-        texts = get_texts(existing_user.language)
-
         data = await state.get_data() or {}
+        texts = get_texts(_registration_language(data, message.from_user, existing_user))
         if data.get('referral_code') and not existing_user.referred_by_id:
             await message.answer(
                 texts.t(
@@ -2704,7 +2702,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
             keyboard = await get_main_menu_keyboard_async(
                 db=db,
                 user=existing_user,
-                language=existing_user.language,
+                language=texts.language,
                 is_admin=is_admin,
                 has_had_paid_subscription=existing_user.has_had_paid_subscription,
                 has_active_subscription=has_active_subscription,
@@ -2734,7 +2732,7 @@ async def complete_registration(message: types.Message, state: FSMContext, db: A
         return
 
     data = await state.get_data() or {}
-    language = data.get('language', DEFAULT_LANGUAGE)
+    language = _registration_language(data, message.from_user, existing_user)
     texts = get_texts(language)
 
     access_decision, phantom = await _prepare_telegram_completion_access(

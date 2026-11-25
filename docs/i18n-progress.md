@@ -832,3 +832,13 @@ NOWPayments، HooshPay و TonPays (تون‌پی، طبق پاسخ بعدی کا
 ### جزئیات حساب و تراکنش‌های تعرفه
 - کارت کاربر همان ترجمهٔ شرح تراکنش را نشان می‌دهد که در تاریخچهٔ کامل استفاده می‌شود. خرید و تغییر تعرفه به‌دست مدیر در رکوردهای جدید و دو قالب قدیمی پشتیبانی می‌شود.
 - عنوان و توضیح پنج مسیر جزئیات حساب فارسی شد. ۶۹ تست مرتبط موفق بودند، شامل دو تست سخت‌گیرانه برای نام تعرفه در تراکنش‌های قدیمی.
+
+### ورود و ثبت‌نام از لینک دعوت
+- ورودی کد دعوت، رد کردن کد، قوانین و پایان ثبت‌نام از زبان حساب یا انتخاب کاربر استفاده می‌کنند. در نبود این اطلاعات، زبان پشتیبانی‌شدهٔ تلگرام و سپس فارسی استفاده می‌شود.
+- شرایط عمومی پاداش و پیام تنظیمات سطح‌های معرفی برای حساب بدون زبان فارسی شدند. ۱۰۷ تست مرتبط موفق بودند.
+
+- Daily activation receipt: verified the Persian amount placeholder against the actual debit. Explicit Persian-only lookups are checked against fa.json.
+- Daily debit, insufficient balance and traffic reset notices now use Persian for accounts without a language and escape tariff names in Telegram HTML. Daily notice and auto-purchase receipt tests: 16 passed.
+- Daily ledger descriptions: recurring debit and cabinet/miniapp resume use the existing Persian templates. Historical Russian debit and manual/automatic resume descriptions are localized on display. Ledger, charge and catalog checks: 26 passed.
+- Cabinet and Mini App daily pause/resume API responses now use Persian for Persian or unset account language, including insufficient funds and accounting conflicts. Verified both no-subscription responses under strict Persian lookup. Daily resume, bot pause and locale suites: 31 passed.
+- Mini App traffic top-up: localized the API response, validation errors and ledger descriptions. Older Russian traffic receipts render in Persian with their volume and discount. Verified the unpriced package response and unchanged balance.

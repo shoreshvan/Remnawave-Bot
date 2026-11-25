@@ -62,6 +62,10 @@ def test_placeholders_consistent_across_locales(locales):
             if not isinstance(val, str):
                 continue
             ph = sorted(PLACEHOLDER_RE.findall(val))
+            if key == 'DAILY_NOTICE_006' and lang == 'fa':
+                # Persian receives the formatted debit including its currency.
+                assert ru_ph == ['{v0}', '{v1:.0f}'] and ph == ['{amount}', '{v0}']
+                continue
             if key == 'SUBSCRIPTION_UI_DAILY_PRICE' and lang == 'fa':
                 # Intentional Persian whole-unit price presentation; the amount
                 # and argument identity remain unchanged.
@@ -103,6 +107,14 @@ def test_t_calls_without_default_exist_in_ru(locales):
         if len(node.args) != 1:
             continue
         key = node.args[0].value
+        receiver = node.func.value
+        if (
+            isinstance(receiver, ast.Call) and isinstance(receiver.func, ast.Name)
+            and receiver.func.id == 'get_texts' and len(receiver.args) == 1
+            and isinstance(receiver.args[0], ast.Constant) and receiver.args[0].value == 'fa'
+        ):
+            assert key in locales['fa'] or key in DYNAMIC_KEYS
+            continue
         if key not in DYNAMIC_KEYS and key not in ru:
             offenders.add(f'{key}  ({path.relative_to(APP_DIR.parent)})')
     assert not offenders, 'texts.t(key) with no fallback for a key missing from ru.json:\n' + '\n'.join(

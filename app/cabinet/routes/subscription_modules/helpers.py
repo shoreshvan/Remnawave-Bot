@@ -52,7 +52,7 @@ async def resolve_subscription(
     if subscription_id and settings.is_multi_tariff_enabled():
         subscription = await get_subscription_by_id_for_user(db, subscription_id, user.id)
         if not subscription:
-            raise HTTPException(status_code=404, detail=get_texts(user.language).t('CABINET_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'))
+            raise HTTPException(status_code=404, detail=get_texts(getattr(user, 'language', None) or 'fa').t('CABINET_SUBSCRIPTION_NOT_FOUND', 'Subscription not found'))
         return subscription
 
     if settings.is_multi_tariff_enabled() and not subscription_id:

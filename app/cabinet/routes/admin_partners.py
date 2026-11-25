@@ -505,7 +505,7 @@ async def upsert_referral_level(
     всего объекта ради одной галочки затирала бы правку, сделанную параллельно из
     бота — оба интерфейса ходят в одну таблицу.
     """
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     values = request.model_dump(exclude_unset=True)
 
     if 'reward_mode' in values and values['reward_mode'] not in {mode.value for mode in ReferralRewardMode}:
@@ -547,7 +547,7 @@ async def remove_referral_level(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Удалить правило уровня."""
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     if not await delete_reward_level(db, level):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -573,7 +573,7 @@ async def update_referral_depth(
     Верхняя граница — число заводимых уровней: глубже них обходить нечего, зато
     каждый лишний шаг это запрос пользователя на пустое звено при каждом пополнении.
     """
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     depth = int(request.max_level_depth)
     if depth < 1 or depth > MAX_SUPPORTED_LEVEL:
         raise HTTPException(
@@ -614,7 +614,7 @@ async def import_legacy_referral_settings(
     превратил бы оба разовых бонуса в регулярную выплату. Правило создаётся
     ВЫКЛЮЧЕННЫМ — включает его админ, прочитав.
     """
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     if await get_reward_level(db, 1) is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -656,7 +656,7 @@ async def update_referral_levels_mode(
     бы как 'chain' при чтении, и кабинет показывал бы «сохранено» на настройке,
     которая не применилась.
     """
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     mode = str(request.levels_mode or '').strip().lower()
     if mode not in (LEVELS_MODE_CHAIN, LEVELS_MODE_TIERS):
         raise HTTPException(
@@ -694,7 +694,7 @@ async def update_referral_scheme(
     Молча принять такую правку хуже, чем отказать — админ считал бы схему
     переключённой.
     """
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     scheme = (request.scheme or '').strip().lower()
     if scheme not in ('legacy', 'levels'):
         raise HTTPException(
@@ -729,7 +729,7 @@ async def get_partner_detail(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get detailed partner info."""
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(
@@ -796,7 +796,7 @@ async def update_commission(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Update partner commission percent."""
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(
@@ -851,7 +851,7 @@ async def assign_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Assign a campaign to a partner."""
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     campaign = await db.get(AdvertisingCampaign, campaign_id)
     if not campaign:
         raise HTTPException(
@@ -905,7 +905,7 @@ async def unassign_campaign(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Unassign a campaign from a partner."""
-    texts = get_texts(admin.language)
+    texts = get_texts(getattr(admin, 'language', None) or 'fa')
     # Atomic check-and-unset to prevent race conditions
     result = await db.execute(
         update(AdvertisingCampaign)

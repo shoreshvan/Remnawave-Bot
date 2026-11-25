@@ -65,6 +65,7 @@ from app.services.user_cart_service import user_cart_service
 from app.utils.pricing_utils import format_period_description
 from app.utils.subscription_utils import resolve_tariff_cart_traffic, resolve_tariff_purchase_device_limit
 from app.utils.timezone import format_local_datetime
+from app.utils.transaction_description import localize_transaction_description
 
 
 logger = structlog.get_logger(__name__)
@@ -408,19 +409,21 @@ async def _prepare_auto_extend_context(
         return None
 
     # Формируем описание с учётом тарифа
-    texts = get_texts(user.language or 'fa')
+    language = user.language or 'fa'
+    texts = get_texts(language)
+    saved_description = localize_transaction_description(cart_data.get('description'), language)
     if tariff_id:
         from app.database.crud.tariff import get_tariff_by_id
 
         tariff = await get_tariff_by_id(db, tariff_id)
         tariff_name = tariff.name if tariff else texts.t('MAIN_MENU_RICH_TABLE_TARIFF', 'Тариф')
         description = (
-            cart_data.get('description') or texts.t(
+            saved_description or texts.t(
                 'AUTO_RENEWAL_TARIFF_DESCRIPTION', 'Продление тарифа «{tariff}» на {days} дней'
             ).format(tariff=tariff_name, days=period_days)
         )
     else:
-        description = cart_data.get('description') or texts.t(
+        description = saved_description or texts.t(
             'CABINET_RENEWAL_TRANSACTION_DESCRIPTION', 'Продление подписки на {days} дней'
         ).format(days=period_days)
 

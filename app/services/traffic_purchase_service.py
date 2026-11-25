@@ -254,6 +254,16 @@ async def prepare_user_tariff_switch(db, subscription):
     return subscription, panel
 
 
+def daily_accounting_error_message(error, texts):
+    keys = {
+        'Daily subscription ownership changed': 'DAILY_SUBSCRIPTION_ACCESS_CHANGED',
+        'Daily resume is unavailable during grace': 'DAILY_SUBSCRIPTION_GRACE_ACTIVE',
+        'Daily resume awaits completed migration': 'DAILY_SUBSCRIPTION_MIGRATION_PENDING',
+        'Сначала отключите автоплатёж CisPay и дождитесь подтверждения отключения.': 'DAILY_SUBSCRIPTION_CISPAY_CONFLICT',
+    }
+    return texts.t(keys.get(str(error), 'DAILY_SUBSCRIPTION_STATE_ERROR'))
+
+
 async def lock_daily_accounting_subscription(db, subscription, user_id):
     """Serialize daily state decisions with migration and grace before charging."""
     from app.services.cispay_recurrent_guard import require_no_cispay

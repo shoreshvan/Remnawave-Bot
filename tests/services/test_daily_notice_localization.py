@@ -33,21 +33,21 @@ async def test_daily_notices_keep_financial_and_traffic_delivery_payload(monkeyp
     service = daily.DailySubscriptionService()
     service._bot = object()
     user = SimpleNamespace(language=language, balance_kopeks=12345)
-    subscription = SimpleNamespace(tariff=SimpleNamespace(name='Оператор'), traffic_limit_gb=150)
+    subscription = SimpleNamespace(tariff=SimpleNamespace(name='<Оператор>'), traffic_limit_gb=150)
     await service._notify_daily_charge(user, subscription, 123)
     payload = debit.await_args.kwargs
     assert payload['amount_kopeks'] == 123
     assert payload['new_balance_kopeks'] == 12345
     assert payload['user'] is user
     assert payload['bot'] is service._bot
-    assert '1.23 ₽' in payload['telegram_message']
-    assert '123.45 ₽' in payload['telegram_message']
-    assert 'Оператор' in payload['telegram_message']
+    assert '1.23 تومان' in payload['telegram_message']
+    assert '123.45 تومان' in payload['telegram_message']
+    assert '&lt;Оператор&gt;' in payload['telegram_message']
     _assert_language(payload['telegram_message'], language)
     await service._notify_insufficient_balance(user, subscription, 67890)
     payload = send.await_args.kwargs
     assert payload['notification_type'] == NotificationType.DAILY_INSUFFICIENT_FUNDS
-    assert payload['context'] == {'required_amount': '678.90 ₽', 'current_balance': '123.45 ₽'}
+    assert payload['context'] == {'required_amount': '678.90 تومان', 'current_balance': '123.45 تومان'}
     _assert_language(payload['telegram_message'], language)
     buttons = [b for row in payload['telegram_markup'].inline_keyboard for b in row]
     assert [b.callback_data for b in buttons] == ['menu_balance', 'menu_subscription']
@@ -67,7 +67,7 @@ def test_daily_activation_actual_template_keeps_rounded_price_and_escaped_tariff
 
     from app.services import subscription_auto_purchase_service as auto
 
-    tree = ast.parse(Path(auto.__file__).read_text())
+    tree = ast.parse(Path(auto.__file__).read_text(encoding='utf-8'))
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     calls = [
         n
@@ -83,6 +83,7 @@ def test_daily_activation_actual_template_keeps_rounded_price_and_escaped_tariff
     expression = parents[parents[calls[0]]]
     env = dict(
         vars(auto),
+        texts=get_texts(language),
         user=SimpleNamespace(language=language),
         tariff=SimpleNamespace(name='<Оператор>'),
         final_price=12345,
@@ -90,14 +91,15 @@ def test_daily_activation_actual_template_keeps_rounded_price_and_escaped_tariff
     )
     result = eval(compile(ast.Expression(expression), str(auto.__file__), 'eval'), env)
     assert '&lt;Оператор&gt;' in result
-    assert '123 ₽' in result
-    assert '123.45' not in result
+    assert ('123.45 تومان' if language == 'fa' else '123 تومان') in result
+    if language != 'fa':
+        assert '123.45' not in result
     _assert_language(result, language)
 
 
 @pytest.mark.asyncio
-async def test_daily_missing_account_language_uses_configured_default(monkeypatch):
-    monkeypatch.setattr(daily.settings, 'DEFAULT_LANGUAGE', 'fa')
+async def test_daily_missing_account_language_receives_persian(monkeypatch):
+    monkeypatch.setattr(daily.settings, 'DEFAULT_LANGUAGE', 'ru')
     debit = AsyncMock()
     monkeypatch.setattr(daily.notification_delivery_service, 'notify_daily_debit', debit)
     service = daily.DailySubscriptionService()

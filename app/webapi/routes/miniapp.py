@@ -4927,6 +4927,8 @@ def _get_period_hint_from_subscription(
 def _validate_subscription_id(
     requested_id: int | None,
     subscription: Subscription,
+    *,
+    language: str = 'en',
 ) -> None:
     if requested_id is None:
         return
@@ -4938,7 +4940,7 @@ def _validate_subscription_id(
             status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'invalid_subscription_id',
-                'message': 'Invalid subscription identifier',
+                'message': get_texts(language).t('MINIAPP_INVALID_SUBSCRIPTION_ID', 'Invalid subscription identifier'),
             },
         ) from None
 
@@ -4947,7 +4949,7 @@ def _validate_subscription_id(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'subscription_mismatch',
-                'message': 'Subscription does not belong to the authorized user',
+                'message': get_texts(language).t('MINIAPP_SUBSCRIPTION_MISMATCH', 'Subscription does not belong to the authorized user'),
             },
         )
 
@@ -5023,6 +5025,7 @@ def _ensure_paid_subscription(
     allowed_statuses: Collection[str] | None = None,
     subscription_id: int | None = None,
 ) -> Subscription:
+    texts = get_texts(getattr(user, 'language', None) or 'fa')
     subs = getattr(user, 'subscriptions', None) or []
     if subscription_id:
         subscription = next((s for s in subs if s.id == subscription_id), None)
@@ -5031,7 +5034,7 @@ def _ensure_paid_subscription(
     if not subscription:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            detail={'code': 'subscription_not_found', 'message': 'Subscription not found'},
+            detail={'code': 'subscription_not_found', 'message': texts.t('MINIAPP_SUBSCRIPTION_NOT_FOUND', 'Subscription not found')},
         )
 
     normalized_allowed_statuses = set(allowed_statuses or {'active'})
@@ -5041,7 +5044,7 @@ def _ensure_paid_subscription(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'paid_subscription_required',
-                'message': 'This action is available only for paid subscriptions',
+                'message': texts.t('MINIAPP_PAID_SUBSCRIPTION_ONLY', 'This action is available only for paid subscriptions'),
             },
         )
 
@@ -5051,22 +5054,22 @@ def _ensure_paid_subscription(
         if actual_status == 'trial':
             detail = {
                 'code': 'paid_subscription_required',
-                'message': 'This action is available only for paid subscriptions',
+                'message': texts.t('MINIAPP_PAID_SUBSCRIPTION_ONLY', 'This action is available only for paid subscriptions'),
             }
         elif actual_status == 'disabled':
             detail = {
                 'code': 'subscription_disabled',
-                'message': 'Subscription is disabled',
+                'message': texts.t('MINIAPP_SUBSCRIPTION_DISABLED', 'Subscription is disabled'),
             }
         elif actual_status == 'limited':
             detail = {
                 'code': 'traffic_exhausted',
-                'message': 'Traffic limit reached. Please purchase additional traffic.',
+                'message': texts.t('MINIAPP_TRAFFIC_LIMIT_REACHED', 'Traffic limit reached. Please purchase additional traffic.'),
             }
         else:
             detail = {
                 'code': 'subscription_inactive',
-                'message': 'Subscription must be active to manage settings',
+                'message': texts.t('MINIAPP_SUBSCRIPTION_ACTIVE_FOR_SETTINGS', 'Subscription must be active to manage settings'),
             }
 
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=detail)
@@ -5076,7 +5079,7 @@ def _ensure_paid_subscription(
             status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'subscription_inactive',
-                'message': 'Subscription must be active to manage settings',
+                'message': texts.t('MINIAPP_SUBSCRIPTION_ACTIVE_FOR_SETTINGS', 'Subscription must be active to manage settings'),
             },
         )
 
@@ -7570,8 +7573,10 @@ async def purchase_traffic_topup_endpoint(
     from app.webapi.schemas.miniapp import MiniAppTrafficTopupResponse
 
     user = await _authorize_miniapp_user(payload.init_data, db)
+    language = getattr(user, 'language', None) or 'fa'
+    texts = get_texts(language)
     subscription = _ensure_paid_subscription(user, subscription_id=payload.subscription_id)
-    _validate_subscription_id(payload.subscription_id, subscription)
+    _validate_subscription_id(payload.subscription_id, subscription, language=texts.language)
 
     # Проверяем режим тарифов
     if not settings.is_tariffs_mode():
@@ -7579,7 +7584,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'tariffs_mode_disabled',
-                'message': 'Traffic top-up is only available in tariffs mode',
+                'message': texts.t('MINIAPP_TRAFFIC_TOPUP_TARIFFS_MODE_ONLY', 'Traffic top-up is only available in tariffs mode'),
             },
         )
 
@@ -7590,7 +7595,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'no_tariff',
-                'message': 'Subscription has no tariff',
+                'message': texts.t('MINIAPP_SUBSCRIPTION_HAS_NO_TARIFF', 'Subscription has no tariff'),
             },
         )
 
@@ -7600,7 +7605,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
                 'code': 'tariff_not_found',
-                'message': 'Tariff not found',
+                'message': texts.t('MINIAPP_TARIFF_NOT_FOUND', 'Tariff not found'),
             },
         )
 
@@ -7610,7 +7615,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 'code': 'traffic_topup_disabled',
-                'message': 'Traffic top-up is disabled for this tariff',
+                'message': texts.t('MINIAPP_TRAFFIC_TOPUP_DISABLED_FOR_TARIFF', 'Traffic top-up is disabled for this tariff'),
             },
         )
 
@@ -7620,7 +7625,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'unlimited_traffic',
-                'message': 'Cannot add traffic to unlimited subscription',
+                'message': texts.t('MINIAPP_TRAFFIC_TOPUP_UNLIMITED', 'Cannot add traffic to unlimited subscription'),
             },
         )
 
@@ -7635,7 +7640,7 @@ async def purchase_traffic_topup_endpoint(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     'code': 'topup_limit_exceeded',
-                    'message': f'Traffic top-up limit exceeded. Maximum allowed: {max_topup_limit} GB, current: {current_traffic} GB, available: {available_gb} GB',
+                    'message': texts.t('MINIAPP_TRAFFIC_TOPUP_LIMIT_EXCEEDED', 'Traffic top-up limit exceeded. Maximum allowed: {max} GB, current: {current} GB, available: {available} GB').format(max=max_topup_limit, current=current_traffic, available=available_gb),
                     'max_limit_gb': max_topup_limit,
                     'current_gb': current_traffic,
                     'available_gb': available_gb,
@@ -7649,7 +7654,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'invalid_package',
-                'message': f'Traffic package {payload.gb}GB is not available',
+                'message': texts.t('MINIAPP_TRAFFIC_PACKAGE_NOT_AVAILABLE', 'Traffic package {gb}GB is not available').format(gb=payload.gb),
             },
         )
 
@@ -7663,7 +7668,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
                 'code': 'package_not_priced',
-                'message': f'Traffic package {payload.gb}GB has no price configured',
+                'message': texts.t('MINIAPP_TRAFFIC_PACKAGE_NOT_PRICED', 'Traffic package {gb}GB has no price configured').format(gb=payload.gb),
             },
         )
 
@@ -7679,7 +7684,7 @@ async def purchase_traffic_topup_endpoint(
         # ambiguous gateway outcome to a client deciding whether to retry.
         raise HTTPException(
             status_code=409,
-            detail=get_texts(user.language).t(
+            detail=texts.t(
                 'TRAFFIC_PURCHASE_NOT_APPLIED',
                 'Traffic purchase was not applied. No funds were charged. Please try again.',
             ),
@@ -7707,7 +7712,7 @@ async def purchase_traffic_topup_endpoint(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={
                 'code': 'insufficient_balance',
-                'message': 'Insufficient balance',
+                'message': texts.t('MINIAPP_INSUFFICIENT_BALANCE', 'Insufficient balance'),
                 'required': final_price,
                 'balance': user.balance_kopeks,
             },
@@ -7715,16 +7720,16 @@ async def purchase_traffic_topup_endpoint(
 
     # Списываем баланс
     if traffic_discount_percent > 0:
-        traffic_description = f'Докупка {payload.gb} ГБ трафика (скидка {traffic_discount_percent}%)'
+        traffic_description = texts.t('MINIAPP_TRANSACTION_TRAFFIC_TOPUP_DISCOUNT', 'Докупка {gb} ГБ трафика (скидка {percent}%)').format(gb=payload.gb, percent=traffic_discount_percent)
     else:
-        traffic_description = f'Докупка {payload.gb} ГБ трафика'
+        traffic_description = texts.t('MINIAPP_TRANSACTION_TRAFFIC_TOPUP', 'Докупка {gb} ГБ трафика').format(gb=payload.gb)
     success = await subtract_user_balance(db, user, final_price, traffic_description, commit=False)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 'code': 'balance_error',
-                'message': 'Failed to subtract balance',
+                'message': texts.t('MINIAPP_BALANCE_DEDUCTION_FAILED', 'Failed to subtract balance'),
             },
         )
 
@@ -7776,7 +7781,7 @@ async def purchase_traffic_topup_endpoint(
 
     return MiniAppTrafficTopupResponse(
         success=True,
-        message=f'Добавлено {payload.gb} ГБ трафика',
+        message=texts.t('MINIAPP_TRAFFIC_ADDED', 'Добавлено {gb} ГБ трафика').format(gb=payload.gb),
         new_traffic_limit_gb=subscription.traffic_limit_gb,
         new_balance_kopeks=user.balance_kopeks,
         charged_kopeks=final_price,
@@ -7793,6 +7798,8 @@ async def toggle_daily_subscription_pause_endpoint(
     from app.webapi.schemas.miniapp import MiniAppDailySubscriptionToggleResponse
 
     user = await _authorize_miniapp_user(payload.init_data, db)
+    language = getattr(user, 'language', None) or 'fa'
+    texts = get_texts(language)
     subs = getattr(user, 'subscriptions', None) or []
     if payload.subscription_id:
         subscription = next((s for s in subs if s.id == payload.subscription_id), None)
@@ -7802,7 +7809,7 @@ async def toggle_daily_subscription_pause_endpoint(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={'code': 'no_subscription', 'message': 'No subscription found'},
+            detail={'code': 'no_subscription', 'message': texts.t('CABINET_DAILY_SUBSCRIPTION_NOT_FOUND', 'No subscription found')},
         )
 
     # Проверяем наличие тарифа
@@ -7810,14 +7817,14 @@ async def toggle_daily_subscription_pause_endpoint(
     if not tariff_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'no_tariff', 'message': 'Subscription has no tariff'},
+            detail={'code': 'no_tariff', 'message': texts.t('CABINET_DAILY_SUBSCRIPTION_NO_TARIFF', 'Subscription has no tariff')},
         )
 
     tariff = await get_tariff_by_id(db, tariff_id)
     if not tariff or not getattr(tariff, 'is_daily', False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={'code': 'not_daily_tariff', 'message': 'Subscription is not on a daily tariff'},
+            detail={'code': 'not_daily_tariff', 'message': texts.t('MINIAPP_SUBSCRIPTION_NOT_DAILY', 'Subscription is not on a daily tariff')},
         )
 
     # Lock user BEFORE reading state and mutating to prevent TOCTOU on promo group
@@ -7831,18 +7838,18 @@ async def toggle_daily_subscription_pause_endpoint(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={'code': 'subscription_lost', 'message': 'Subscription not found after lock'},
+            detail={'code': 'subscription_lost', 'message': texts.t('CABINET_DAILY_SUBSCRIPTION_NOT_FOUND_AFTER_LOCK', 'Subscription not found after lock')},
         )
 
-    from app.services.traffic_purchase_service import lock_daily_accounting_subscription
+    from app.services.traffic_purchase_service import daily_accounting_error_message, lock_daily_accounting_subscription
 
     try:
         subscription = await lock_daily_accounting_subscription(db, subscription, user.id)
     except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        raise HTTPException(status_code=409, detail=daily_accounting_error_message(error, texts) if language == 'fa' else str(error)) from error
     tariff = await get_tariff_by_id(db, subscription.tariff_id)
     if not tariff or not tariff.is_daily or subscription.is_trial:
-        raise HTTPException(status_code=400, detail='Daily paid subscription required')
+        raise HTTPException(status_code=400, detail=texts.t('DAILY_PAID_PLAN_REQUIRED', 'Daily paid subscription required'))
 
     # Определяем состояние из LOCKED экземпляра
     from app.database.models import SubscriptionStatus
@@ -7861,7 +7868,7 @@ async def toggle_daily_subscription_pause_endpoint(
     else:
         new_paused_state = not is_currently_paused
     if not new_paused_state and user.restriction_subscription:
-        raise HTTPException(status_code=403, detail='Subscription renewal is restricted')
+        raise HTTPException(status_code=403, detail=texts.t('DAILY_SUBSCRIPTION_RESUME_RESTRICTED', 'Subscription renewal is restricted'))
     subscription.is_daily_paused = new_paused_state
 
     # Apply group discount to daily price (consistent with DailySubscriptionService and resume-after-topup)
@@ -7872,13 +7879,16 @@ async def toggle_daily_subscription_pause_endpoint(
     resume_transaction = None
 
     # Если снимаем с паузы, проверяем баланс и списываем оплату
+    resume_description = texts.t(
+        'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION', 'Суточная оплата тарифа «{tariff_name}» (возобновление)'
+    ).format(tariff_name=tariff.name)
     if not new_paused_state:
         if daily_price > 0 and user.balance_kopeks < daily_price:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_balance',
-                    'message': 'Insufficient balance to resume daily subscription',
+                    'message': texts.t('CABINET_DAILY_INSUFFICIENT_BALANCE_RESUME', 'Insufficient balance to resume daily subscription'),
                     'required': daily_price,
                     'balance': user.balance_kopeks,
                 },
@@ -7893,7 +7903,7 @@ async def toggle_daily_subscription_pause_endpoint(
                     db,
                     user,
                     daily_price,
-                    f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    resume_description,
                     mark_as_paid_subscription=True,
                     commit=False,
                 )
@@ -7902,7 +7912,7 @@ async def toggle_daily_subscription_pause_endpoint(
                         status_code=status.HTTP_402_PAYMENT_REQUIRED,
                         detail={
                             'code': 'insufficient_balance',
-                            'message': 'Balance deduction failed',
+                            'message': texts.t('CABINET_DAILY_BALANCE_DEDUCTION_FAILED', 'Balance deduction failed'),
                             'required': daily_price,
                             'balance': user.balance_kopeks,
                         },
@@ -7916,7 +7926,7 @@ async def toggle_daily_subscription_pause_endpoint(
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=daily_price,
-                    description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    description=resume_description,
                     commit=False,
                 )
 
@@ -7957,7 +7967,7 @@ async def toggle_daily_subscription_pause_endpoint(
                 amount_kopeks=daily_price,
                 user_id=user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
-                description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                description=resume_description,
             )
         except Exception as exc:
             logger.warning('Failed to emit resume transaction side effects (miniapp)', error=exc)
@@ -8081,11 +8091,11 @@ async def toggle_daily_subscription_pause_endpoint(
             except Exception as notif_err:
                 logger.error('Failed to send admin notification for daily resume (miniapp)', error=notif_err)
 
-    lang = getattr(user, 'language', settings.DEFAULT_LANGUAGE)
+
     if new_paused_state:
-        message = 'Суточная подписка приостановлена' if lang == 'ru' else 'Daily subscription paused'
+        message = texts.t('CABINET_DAILY_SUBSCRIPTION_PAUSED', 'Суточная подписка приостановлена' if language == 'ru' else 'Daily subscription paused')
     else:
-        message = 'Суточная подписка возобновлена' if lang == 'ru' else 'Daily subscription resumed'
+        message = texts.t('CABINET_DAILY_SUBSCRIPTION_RESUMED', 'Суточная подписка возобновлена' if language == 'ru' else 'Daily subscription resumed')
 
     return MiniAppDailySubscriptionToggleResponse(
         success=True,

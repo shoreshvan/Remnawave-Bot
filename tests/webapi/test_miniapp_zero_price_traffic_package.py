@@ -15,6 +15,7 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.database.models import Base, Subscription, SubscriptionStatus, Tariff, User
+from tests.fixtures.persian import persian  # noqa: F401
 from tests.fixtures.sqlite_memory import memory_session
 
 
@@ -93,7 +94,7 @@ async def test_zero_price_package_is_not_offered(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_zero_price_package_cannot_be_bought(monkeypatch):
+async def test_zero_price_package_cannot_be_bought(monkeypatch, persian):
     """Купить пакет без цены нельзя — иначе это бесплатный трафик."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -110,6 +111,7 @@ async def test_zero_price_package_cannot_be_bought(monkeypatch):
             .where(User.id == 1),
         )
         user = loaded.scalar_one()
+        user.language = 'fa'
 
         async def _fake_authorize(init_data, session):
             return user
@@ -125,4 +127,5 @@ async def test_zero_price_package_cannot_be_bought(monkeypatch):
         balance_after = (await db.get(User, 1)).balance_kopeks
 
     assert exc.value.status_code == 400
+    assert exc.value.detail == {'code': 'package_not_priced', 'message': f'برای بستهٔ ترافیک {FREE_GB} گیگ قیمتی تنظیم نشده است'}
     assert balance_after == 100_000

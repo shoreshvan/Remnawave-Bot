@@ -32,16 +32,18 @@ router = APIRouter()
 async def toggle_subscription_pause(
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
-    subscription_id: int | None = QueryParam(None, description='Subscription ID for multi-tariff'),
+    subscription_id: int | None = QueryParam(None, description=get_texts('fa').t('CABINET_DAILY_SUBSCRIPTION_ID_QUERY_DESCRIPTION')),
     paused: bool | None = None,
 ) -> dict[str, Any]:
     """Toggle pause/resume for daily subscription."""
+    language = getattr(user, 'language', None) or 'fa'
+    texts = get_texts(language)
     subscription = await resolve_subscription(db, user, subscription_id)
 
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No subscription found',
+            detail=texts.t('CABINET_DAILY_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
         )
 
     # Serialize money and state decisions, then read the current paid entitlement.
@@ -51,21 +53,21 @@ async def toggle_subscription_pause(
     user = await lock_user_for_pricing(db, user.id)
     subscription = await resolve_subscription(db, user, subscription_id)
     if not subscription:
-        raise HTTPException(status_code=404, detail='Subscription not found after lock')
-    from app.services.traffic_purchase_service import lock_daily_accounting_subscription
+        raise HTTPException(status_code=404, detail=texts.t('CABINET_DAILY_SUBSCRIPTION_NOT_FOUND_AFTER_LOCK', 'Subscription not found after lock'))
+    from app.services.traffic_purchase_service import daily_accounting_error_message, lock_daily_accounting_subscription
 
     try:
         subscription = await lock_daily_accounting_subscription(db, subscription, user.id)
     except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        raise HTTPException(status_code=409, detail=daily_accounting_error_message(error, texts) if language == 'fa' else str(error)) from error
 
     if subscription.is_trial:
-        raise HTTPException(status_code=400, detail='Trial subscriptions must be converted through tariff purchase')
+        raise HTTPException(status_code=400, detail=texts.t('DAILY_TRIAL_PURCHASE_REQUIRED', 'Trial subscriptions must be converted through tariff purchase'))
 
     tariff_id = getattr(subscription, 'tariff_id', None)
     tariff = await get_tariff_by_id(db, tariff_id) if tariff_id else None
     if not tariff or not getattr(tariff, 'is_daily', False):
-        raise HTTPException(status_code=400, detail='Pause is only available for daily tariffs')
+        raise HTTPException(status_code=400, detail=texts.t('CABINET_DAILY_PAUSE_ONLY_FOR_DAILY', 'Pause is only available for daily tariffs'))
 
     is_currently_paused = bool(subscription.is_daily_paused)
     actual_status = subscription.actual_status
@@ -74,7 +76,7 @@ async def toggle_subscription_pause(
     # Explicit target makes retries safe; old callers retain toggle behavior.
     new_paused_state = paused if paused is not None else (False if was_disabled else not is_currently_paused)
     if not new_paused_state and user.restriction_subscription:
-        raise HTTPException(status_code=403, detail='Subscription renewal is restricted for this account')
+        raise HTTPException(status_code=403, detail=texts.t('DAILY_SUBSCRIPTION_RESUME_RESTRICTED', 'Subscription renewal is restricted for this account'))
     transaction = None
 
     subscription.is_daily_paused = new_paused_state
@@ -85,13 +87,16 @@ async def toggle_subscription_pause(
     daily_price = PricingEngine.daily_subscription_price(subscription, tariff, user)
 
     # If resuming, check balance and charge
+    resume_description = texts.t(
+        'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION', 'Суточная оплата тарифа «{tariff_name}» (возобновление)'
+    ).format(tariff_name=tariff.name)
     if not new_paused_state:
         if was_disabled and daily_price > 0 and user.balance_kopeks < daily_price:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
                     'code': 'insufficient_balance',
-                    'message': 'Insufficient balance to resume daily subscription',
+                    'message': texts.t('CABINET_DAILY_INSUFFICIENT_BALANCE_RESUME', 'Insufficient balance to resume daily subscription'),
                     'required': daily_price,
                     'balance': user.balance_kopeks,
                 },
@@ -106,7 +111,7 @@ async def toggle_subscription_pause(
                     db,
                     user,
                     daily_price,
-                    f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    resume_description,
                     mark_as_paid_subscription=True,
                     commit=False,
                 )
@@ -115,7 +120,7 @@ async def toggle_subscription_pause(
                         status_code=status.HTTP_402_PAYMENT_REQUIRED,
                         detail={
                             'code': 'insufficient_balance',
-                            'message': 'Balance deduction failed',
+                            'message': texts.t('CABINET_DAILY_BALANCE_DEDUCTION_FAILED', 'Balance deduction failed'),
                             'required': daily_price,
                             'balance': user.balance_kopeks,
                         },
@@ -129,7 +134,7 @@ async def toggle_subscription_pause(
                     user_id=user.id,
                     type=TransactionType.SUBSCRIPTION_PAYMENT,
                     amount_kopeks=daily_price,
-                    description=f'Суточная оплата тарифа «{tariff.name}» (возобновление)',
+                    description=resume_description,
                     commit=False,
                 )
 
@@ -192,9 +197,9 @@ async def toggle_subscription_pause(
             )
 
     if new_paused_state:
-        message = 'Daily subscription paused'
+        message = texts.t('CABINET_DAILY_SUBSCRIPTION_PAUSED', 'Daily subscription paused')
     else:
-        message = 'Daily subscription resumed'
+        message = texts.t('CABINET_DAILY_SUBSCRIPTION_RESUMED', 'Daily subscription resumed')
 
     return {
         'success': True,

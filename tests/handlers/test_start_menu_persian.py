@@ -59,6 +59,20 @@ async def test_first_language_prompt_uses_telegram_language(persian, monkeypatch
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('state_data, telegram_language', [
+    ({'referral_code': 'invite'}, 'fa-IR'),
+    ({'referral_code': 'invite', 'language': None}, None),
+    ({'referral_code': 'invite'}, 'de'),
+    ({'referral_code': 'invite', 'language': 'fa'}, 'en'),
+])
+async def test_referral_code_error_uses_registration_language(persian, state_data, telegram_language):
+    message = SimpleNamespace(text=None, from_user=SimpleNamespace(language_code=telegram_language), answer=AsyncMock())
+    state = SimpleNamespace(get_data=AsyncMock(return_value=state_data))
+    await start.process_referral_code_input(message, state, None)
+    message.answer.assert_awaited_once_with(persian.t('REFERRAL_OR_PROMO_CODE_INVALID'))
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('registered', [True, False])
 async def test_unsupported_language_uses_existing_context(persian, monkeypatch, registered):
     monkeypatch.setattr(type(start.settings), 'is_language_selection_enabled', lambda self: True)

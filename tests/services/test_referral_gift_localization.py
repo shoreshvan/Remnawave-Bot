@@ -31,6 +31,11 @@ async def test_classic_rewards_and_recipient_locales(wired, language, branch, am
     wired.referral.has_made_first_topup = branch == 'repeat'
     assert await referral_service.process_referral_topup(AsyncMock(), 2, amount, bot=object()) is True
     assert [credit['amount'] for credit in wired.balance_credits] == expected
+    if language == 'fa':
+        key = 'REFERRAL_TRANSACTION_FIRST_TOPUP_BONUS_REFERRER' if branch == 'first' else 'REFERRAL_TRANSACTION_COMMISSION_TOPUP'
+        assert wired.balance_credits[-1]['description'] == get_texts('fa').t(key).format(percent=25, name='<name>&')
+    elif branch == 'first':
+        assert wired.balance_credits[0]['description'] == get_texts('fa').t('REFERRAL_TRANSACTION_FIRST_TOPUP_BONUS_REFEREE')
     calls = referral_service.send_referral_notification.await_args_list
     inviter_call = next(call for call in calls if call.kwargs['user'] is wired.referrer)
     text = inviter_call.args[2]

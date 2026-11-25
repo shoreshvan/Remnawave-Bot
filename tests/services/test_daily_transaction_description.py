@@ -45,3 +45,18 @@ def test_admin_tariff_history_preserves_plan_name(stored, expected, persian):
 
 def test_daily_price_has_grouping_without_decimal_zeros():
     assert get_texts('fa').t('SUBSCRIPTION_UI_DAILY_PRICE').format(price=20000.0) == 'قیمت: 20,000 تومان/روز'
+
+
+@pytest.mark.parametrize(('suffix', 'expected'), [
+    ('', 'پرداخت روزانهٔ تعرفهٔ «ویژه»'),
+    (' (возобновление)', 'پرداخت روزانهٔ تعرفهٔ «ویژه» (از سرگیری)'),
+    (' (авто-возобновление)', 'پرداخت روزانهٔ تعرفهٔ «ویژه» (ازسرگیری خودکار)'),
+])
+def test_daily_debit_history_in_persian(suffix, expected, persian):
+    assert localize_transaction_description('Суточная оплата тарифа «ویژه»' + suffix, 'fa') == expected
+
+
+def test_old_traffic_topup_receipts(persian):
+    stored = 'Докупка 10 ГБ трафика'
+    assert localize_transaction_description(stored, 'fa') == 'خرید 10 گیگابایت ترافیک'
+    assert localize_transaction_description(stored + ' (скидка 12.5%)', 'fa') == 'خرید 10 گیگابایت ترافیک (تخفیف 12.5٪)'

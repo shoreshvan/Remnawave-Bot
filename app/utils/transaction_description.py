@@ -18,6 +18,21 @@ def localize_transaction_description(description: str | None, language: str, pay
             'TARIFF_PURCHASE_ADMIN_TRANSACTION_DESCRIPTION', 'Покупка тарифа {tariff} на {days} дней (администратор)'
         ).format(tariff=purchase[1], days=purchase[2])
     if (language or 'fa') == 'fa':
+        legacy_receipts = (
+            (r'Докупка (?P<gb>[0-9]+) ГБ трафика', 'MINIAPP_TRANSACTION_TRAFFIC_TOPUP'),
+            (r'Докупка (?P<gb>[0-9]+) ГБ трафика \(скидка (?P<percent>[0-9]+(?:\.[0-9]+)?)%\)', 'MINIAPP_TRANSACTION_TRAFFIC_TOPUP_DISCOUNT'),
+            (r'Суточная оплата тарифа «(?P<tariff_name>.*)»', 'DAILY_CHARGE_TRANSACTION_DESCRIPTION'),
+            (r'Суточная оплата тарифа «(?P<tariff_name>.*)» \(возобновление\)', 'CABINET_DAILY_RESUME_TRANSACTION_DESCRIPTION'),
+            (r'Суточная оплата тарифа «(?P<tariff_name>.*)» \(авто-возобновление\)', 'DAILY_AUTO_RESUME_TRANSACTION_DESCRIPTION'),
+            (r'Продление подписки на (?P<days>[0-9]+) дней', 'CABINET_RENEWAL_TRANSACTION_DESCRIPTION'),
+            (r'Смена тарифа на (?P<tariff>.+) \((?P<days>[0-9]+) дней\)', 'TARIFF_SWITCH_RECEIPT_PERIOD'),
+            (r'Переключение на суточный тариф (?P<tariff>.+) \(первый день\)', 'TARIFF_SWITCH_RECEIPT_DAILY'),
+            (r'(?:Смена тарифа на|Переключение на тариф) (?P<tariff>.+)', 'TARIFF_SWITCH_RECEIPT'),
+        )
+        for pattern, key in legacy_receipts:
+            match = re.fullmatch(pattern, description, re.DOTALL)
+            if match:
+                return get_texts('fa').t(key).format(**match.groupdict())
         charge = re.fullmatch(
             r"(?:(Покупка|Продление) тарифа (.+) на ([0-9]+) дней|Активация суточного тарифа '(.+)')"
             r"(?: \(скидка ([0-9]+(?:\.[0-9]+)?)%\))?(?: \(промо -([0-9]+(?:\.[0-9]+)?)%\))?",
@@ -25,18 +40,17 @@ def localize_transaction_description(description: str | None, language: str, pay
         )
         if charge:
             operation, tariff, days, daily_tariff, discount, promo = charge.groups()
-            texts = get_texts('fa')
             if daily_tariff is not None:
-                result = texts.t('AUTO_PURCHASE_DAILY_ACTIVATION_DESCRIPTION').format(tariff=daily_tariff)
+                result = get_texts('fa').t('AUTO_PURCHASE_DAILY_ACTIVATION_DESCRIPTION').format(tariff=daily_tariff)
             else:
                 if tariff.startswith("'") and tariff.endswith("'") or tariff.startswith('«') and tariff.endswith('»'):
                     tariff = tariff[1:-1]
                 key = 'TARIFF_PURCHASE_TRANSACTION_DESCRIPTION' if operation == 'Покупка' else 'AUTO_RENEWAL_TARIFF_DESCRIPTION'
-                result = texts.t(key).format(tariff=tariff, days=days)
+                result = get_texts('fa').t(key).format(tariff=tariff, days=days)
             if discount:
-                result += texts.t('TARIFF_PURCHASE_DISCOUNT_SUFFIX').format(percent=discount)
+                result += get_texts('fa').t('TARIFF_PURCHASE_DISCOUNT_SUFFIX').format(percent=discount)
             if promo:
-                result += texts.t('TARIFF_PURCHASE_PROMO_SUFFIX').format(percent=promo)
+                result += get_texts('fa').t('TARIFF_PURCHASE_PROMO_SUFFIX').format(percent=promo)
             return result
     if payment_method in {'atlaspay', 'hooshpay', 'nowpayments', 'tonpays'}:
         prefix = 'Пополнение через '

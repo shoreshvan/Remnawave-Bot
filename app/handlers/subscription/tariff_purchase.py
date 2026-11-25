@@ -4093,7 +4093,7 @@ async def confirm_tariff_switch(
                 db,
                 db_user,
                 final_price,
-                f'Смена тарифа на {tariff.name} ({period} дней)',
+                texts.t('TARIFF_SWITCH_RECEIPT_PERIOD', 'Смена тарифа на {tariff} ({days} дней)').format(tariff=tariff.name, days=period),
                 consume_promo_offer=consume_promo,
                 mark_as_paid_subscription=True,
                 commit=False,
@@ -4137,7 +4137,7 @@ async def confirm_tariff_switch(
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=final_price,
-                description=f'Смена тарифа на {tariff.name}',
+                description=texts.t('TARIFF_SWITCH_RECEIPT', 'Смена тарифа на {tariff}').format(tariff=tariff.name),
                 commit=False,
             )
             await db.commit()
@@ -4162,7 +4162,7 @@ async def confirm_tariff_switch(
             user_id=db_user.id,
             type=TransactionType.SUBSCRIPTION_PAYMENT,
             amount_kopeks=final_price,
-            description=f'Смена тарифа на {tariff.name}',
+            description=texts.t('TARIFF_SWITCH_RECEIPT', 'Смена тарифа на {tariff}').format(tariff=tariff.name),
             payment_method=PaymentMethod.BALANCE,
         )
 
@@ -5575,7 +5575,7 @@ async def confirm_instant_switch(
                 db,
                 db_user,
                 upgrade_cost,
-                f'Переключение на тариф {new_tariff.name}',
+                texts.t('TARIFF_SWITCH_RECEIPT', 'Переключение на тариф {tariff}').format(tariff=new_tariff.name),
                 consume_promo_offer=consume_promo,
                 mark_as_paid_subscription=True,
             )
@@ -5640,7 +5640,7 @@ async def confirm_instant_switch(
                         db,
                         db_user,
                         daily_price,
-                        f'Переключение на суточный тариф {new_tariff.name} (первый день)',
+                        texts.t('TARIFF_SWITCH_RECEIPT_DAILY', 'Переключение на суточный тариф {tariff} (первый день)').format(tariff=new_tariff.name),
                         consume_promo_offer=consume_promo_for_daily,
                         mark_as_paid_subscription=True,
                     )
@@ -5657,7 +5657,7 @@ async def confirm_instant_switch(
                         user_id=db_user.id,
                         type=TransactionType.SUBSCRIPTION_PAYMENT,
                         amount_kopeks=daily_price,
-                        description=f'Переключение на суточный тариф {new_tariff.name} (первый день)',
+                        description=texts.t('TARIFF_SWITCH_RECEIPT_DAILY', 'Переключение на суточный тариф {tariff} (первый день)').format(tariff=new_tariff.name),
                     )
 
                     # Уведомление админу о списании за первый день суточного тарифа
@@ -5762,7 +5762,7 @@ async def confirm_instant_switch(
                 user_id=db_user.id,
                 type=TransactionType.SUBSCRIPTION_PAYMENT,
                 amount_kopeks=upgrade_cost,
-                description=f'Переключение на тариф {new_tariff.name}',
+                description=texts.t('TARIFF_SWITCH_RECEIPT', 'Переключение на тариф {tariff}').format(tariff=new_tariff.name),
             )
 
             # Отправляем уведомление админу
