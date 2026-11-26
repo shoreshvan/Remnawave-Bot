@@ -60,3 +60,36 @@ def test_old_traffic_topup_receipts(persian):
     stored = 'Докупка 10 ГБ трафика'
     assert localize_transaction_description(stored, 'fa') == 'خرید 10 گیگابایت ترافیک'
     assert localize_transaction_description(stored + ' (скидка 12.5%)', 'fa') == 'خرید 10 گیگابایت ترافیک (تخفیف 12.5٪)'
+
+
+@pytest.mark.parametrize(('stored', 'expected'), [
+    ("Переход на тариф 'ویژه'", 'تغییر به تعرفهٔ «ویژه»'),
+    ("Переход на тариф 'ویژه' (доплата за 3 дней)", 'تغییر به تعرفهٔ «ویژه» (پرداخت مابه‌التفاوت برای 3 روز)'),
+    ("Переход с суточного на тариф 'ویژه' (30 дней)", 'تغییر از تعرفهٔ روزانه به «ویژه» (30 روز)'),
+])
+def test_miniapp_switch_receipts(stored, expected, persian):
+    assert localize_transaction_description(stored, 'fa') == expected
+
+
+def test_first_day_miniapp_activation_receipt(persian):
+    assert localize_transaction_description("Активация суточного тарифа 'ویژه' (первый день)", 'fa') == (
+        'فعال‌سازی تعرفهٔ روزانهٔ «ویژه» (روز اول)'
+    )
+
+
+def test_miniapp_activation_response_uses_persian_catalog(persian):
+    import ast
+    import inspect
+    from types import SimpleNamespace
+
+    from app.webapi.routes.miniapp import purchase_tariff_endpoint
+
+    tree = ast.parse(inspect.getsource(purchase_tariff_endpoint))
+    response = next(node.value for node in ast.walk(tree) if isinstance(node, ast.Return))
+    message = next(arg.value for arg in response.keywords if arg.arg == 'message')
+    context = {'texts': persian, 'tariff': SimpleNamespace(name='ویژه')}
+    assert eval(compile(ast.Expression(message), '<activation>', 'eval'), context) == 'تعرفهٔ «ویژه» با موفقیت فعال شد'
+
+
+def test_promo_bonus_history_preserves_code(persian):
+    assert localize_transaction_description('Бонус по промокоду VIP-25', 'fa') == 'پاداش کد تخفیف VIP-25'

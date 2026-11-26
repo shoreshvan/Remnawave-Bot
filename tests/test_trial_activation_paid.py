@@ -4,6 +4,9 @@ import pytest
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.webapi.routes import miniapp
+from tests.fixtures.persian import persian  # noqa: F401
+
 from app.config import settings
 from app.database.models import User
 from app.handlers.subscription.purchase import activate_trial
@@ -161,3 +164,32 @@ async def test_activate_free_trial_insufficient_funds_redirects_to_topup(
     )
     trial_callback_query.message.edit_text.assert_called_once()
     trial_callback_query.answer.assert_called_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('charge', [0, 12345])
+async def test_miniapp_trial_confirmation_in_persian(monkeypatch, persian, charge):
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    from app.services import checkout_squad_validation
+
+
+    user = SimpleNamespace(id=1, language=None, subscription=None, balance_kopeks=20000)
+    start = datetime.now(UTC)
+    subscription = SimpleNamespace(id=2, start_date=start, end_date=start + timedelta(days=3))
+    monkeypatch.setattr(miniapp, '_authorize_miniapp_user', AsyncMock(return_value=user))
+    monkeypatch.setattr(miniapp, '_is_trial_available_for_user', lambda user: True)
+    monkeypatch.setattr(miniapp, 'preview_trial_activation_charge', lambda user: charge)
+    monkeypatch.setattr(type(settings), 'is_tariffs_mode', lambda self: False)
+    monkeypatch.setattr(checkout_squad_validation, 'validate_checkout_squads', AsyncMock())
+    monkeypatch.setattr(miniapp, 'create_trial_subscription', AsyncMock(return_value=subscription))
+    monkeypatch.setattr(miniapp, 'charge_trial_activation_if_required', AsyncMock(return_value=charge))
+    monkeypatch.setattr(miniapp, 'SubscriptionService', lambda: AsyncMock())
+    monkeypatch.setattr(miniapp, 'with_admin_notification_service', AsyncMock())
+    response = await miniapp.activate_subscription_trial_endpoint(SimpleNamespace(init_data='test'), AsyncMock())
+    expected = persian.t('MINIAPP_TRIAL_ACTIVATED_DAYS').format(days=3)
+    if charge:
+        expected += '\n\n💳 مبلغ 123.45 تومان از موجودی شما کسر شد.'
+    assert response.message == expected
+    assert response.charged_amount_kopeks == (charge or None)

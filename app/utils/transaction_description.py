@@ -18,7 +18,18 @@ def localize_transaction_description(description: str | None, language: str, pay
             'TARIFF_PURCHASE_ADMIN_TRANSACTION_DESCRIPTION', 'Покупка тарифа {tariff} на {days} дней (администратор)'
         ).format(tariff=purchase[1], days=purchase[2])
     if (language or 'fa') == 'fa':
+        devices = re.fullmatch(r'Изменение количества устройств с (\d+) до (\d+)(?: за (\d+) дн\.)?', description)
+        if devices:
+            result = get_texts('fa').t('MINIAPP_TRANSACTION_DEVICE_LIMIT_CHANGE').format(old=devices[1], new=devices[2])
+            if devices[3]:
+                return get_texts('fa').t('MINIAPP_TRANSACTION_DESCRIPTION_FOR_DAYS').format(description=result, days=devices[3])
+            return result
         legacy_receipts = (
+            (r'Бонус по промокоду (?P<code>.+)', 'PROMOCODE_BALANCE_LEDGER'),
+            (r"Активация суточного тарифа '(?P<tariff>.*)' \(первый день\)", 'MINIAPP_TRANSACTION_DAILY_TARIFF_ACTIVATION'),
+            (r"Переход с суточного на тариф '(?P<tariff>.*)' \((?P<days>[0-9]+) дней\)", 'MINIAPP_TRANSACTION_SWITCH_FROM_DAILY'),
+            (r"Переход на тариф '(?P<tariff>.*)' \(доплата за (?P<days>[0-9]+) дней\)", 'MINIAPP_TRANSACTION_SWITCH_TO_TARIFF_PRORATED'),
+            (r"Переход на тариф '(?P<tariff>.*)'", 'MINIAPP_TRANSACTION_SWITCH_TO_TARIFF'),
             (r'Докупка (?P<gb>[0-9]+) ГБ трафика', 'MINIAPP_TRANSACTION_TRAFFIC_TOPUP'),
             (r'Докупка (?P<gb>[0-9]+) ГБ трафика \(скидка (?P<percent>[0-9]+(?:\.[0-9]+)?)%\)', 'MINIAPP_TRANSACTION_TRAFFIC_TOPUP_DISCOUNT'),
             (r'Суточная оплата тарифа «(?P<tariff_name>.*)»', 'DAILY_CHARGE_TRANSACTION_DESCRIPTION'),

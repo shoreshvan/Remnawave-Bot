@@ -324,6 +324,7 @@ async def test_activate_promo_group_description_includes_group_name(
     Scenario:
     - When promo group is assigned, description should include group name
     """
+    sample_user.language = 'fa'
     sample_promocode_promo_group.is_valid = True
 
     # Mock CRUD functions
@@ -356,7 +357,7 @@ async def test_activate_promo_group_description_includes_group_name(
     result = await service.activate_promocode(mock_db_session, sample_user.id, 'VIPGROUP')
 
     # Verify description includes promo group name
-    assert 'Назначена промогруппа: Test VIP Group' in result['description']
+    assert 'گروه تخفیف اختصاص یافت: Test VIP Group' in result['description']
 
 
 async def test_promocode_data_includes_promo_group_id(

@@ -5,6 +5,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.localization.texts import get_texts
 from app.database.crud.promo_group import get_promo_group_by_id
 from app.database.crud.promocode import (
     check_user_promocode_usage,
@@ -332,7 +333,9 @@ class PromoCodeService:
                             )
 
                             # Add to result description
-                            result_description += f'\n🎁 Назначена промогруппа: {promo_group.name}'
+                            result_description += get_texts(getattr(user, 'language', None) or 'fa').t(
+                                'PROMOCODE_EFFECT_PROMO_GROUP_ASSIGNED', '\n🎁 Назначена промогруппа: {name}'
+                            ).format(name=promo_group.name)
                         else:
                             logger.warning(
                                 '⚠️ Промогруппа ID не найдена для промокода',
@@ -523,6 +526,7 @@ class PromoCodeService:
         Raises:
             ValueError: Если у пользователя уже есть активная скидка (для DISCOUNT типа)
         """
+        texts = get_texts(getattr(user, 'language', None) or 'fa')
         effects = []
 
         # Обработка DISCOUNT типа (одноразовая скидка)
@@ -555,11 +559,11 @@ class PromoCodeService:
             # Устанавливаем срок действия скидки
             if discount_hours > 0:
                 user.promo_offer_discount_expires_at = datetime.now(UTC) + timedelta(hours=discount_hours)
-                effects.append(f'💸 Получена скидка {discount_percent}% (действует {discount_hours} ч.)')
+                effects.append(texts.t('PROMOCODE_EFFECT_DISCOUNT_TIMED', '💸 Получена скидка {percent}% (действует {hours} ч.)').format(percent=discount_percent, hours=discount_hours))
             else:
                 # 0 часов = бессрочно до первой покупки
                 user.promo_offer_discount_expires_at = None
-                effects.append(f'💸 Получена скидка {discount_percent}% до первой покупки')
+                effects.append(texts.t('PROMOCODE_EFFECT_DISCOUNT_UNTIL_PURCHASE', '💸 Получена скидка {percent}% до первой покупки').format(percent=discount_percent))
 
             await db.flush()
 
@@ -604,7 +608,7 @@ class PromoCodeService:
             tariff_label = ''
             if settings.is_multi_tariff_enabled() and getattr(target_sub, 'tariff', None):
                 tariff_label = f' «{target_sub.tariff.name}»'
-            effects.append(f'⏰ Подписка{tariff_label} продлена на {promocode.subscription_days} дней')
+            effects.append(texts.t('PROMOCODE_EFFECT_SUBSCRIPTION_EXTENDED', '⏰ Подписка{tariff_label} продлена на {days} дней').format(tariff_label=tariff_label, days=promocode.subscription_days))
             logger.info(
                 '✅ Подписка пользователя продлена на дней в RemnaWave',
                 _format_user_log=self._format_user_log(user),
@@ -663,7 +667,7 @@ class PromoCodeService:
                     if panel_user_id and target_sub.status == SubscriptionStatus.ACTIVE.value:
                         await self.subscription_service.enable_remnawave_user(panel_user_id)
 
-                effects.append(f'📦 Трафик пополнен на {traffic_gb} ГБ')
+                effects.append(texts.t('PROMOCODE_EFFECT_TRAFFIC_ADDED', '📦 Трафик пополнен на {traffic_gb} ГБ').format(traffic_gb=traffic_gb))
                 logger.info(
                     '✅ Пользователю начислен трафик по промокоду',
                     _format_user_log=self._format_user_log(user),
@@ -680,7 +684,7 @@ class PromoCodeService:
                     db,
                     user,
                     promocode.balance_bonus_kopeks,
-                    f'Бонус по промокоду {promocode.code}',
+                    texts.t('PROMOCODE_BALANCE_LEDGER', 'Бонус по промокоду {code}').format(code=promocode.code),
                     create_transaction=False,
                     commit=False,
                 )
@@ -694,16 +698,16 @@ class PromoCodeService:
                     user_id=user.id,
                     type=TransactionType.DEPOSIT,
                     amount_kopeks=promocode.balance_bonus_kopeks,
-                    description=f'Бонус по промокоду {promocode.code}',
+                    description=texts.t('PROMOCODE_BALANCE_LEDGER', 'Бонус по промокоду {code}').format(code=promocode.code),
                     commit=False,
                 )
                 if deferred_transactions is not None:
                     deferred_transactions.append(transaction)
             else:
-                await add_user_balance(db, user, promocode.balance_bonus_kopeks, f'Бонус по промокоду {promocode.code}')
+                await add_user_balance(db, user, promocode.balance_bonus_kopeks, texts.t('PROMOCODE_BALANCE_LEDGER', 'Бонус по промокоду {code}').format(code=promocode.code))
 
             balance_bonus_rubles = promocode.balance_bonus_kopeks / 100
-            effects.append(f'💰 Баланс пополнен на {balance_bonus_rubles}₽')
+            effects.append(texts.t('PROMOCODE_EFFECT_BALANCE_ADDED', '💰 Баланс пополнен на {amount}₽').format(amount=balance_bonus_rubles))
 
         if promocode.type == PromoCodeType.TRIAL_SUBSCRIPTION.value:
             from app.database.crud.subscription import create_trial_subscription
@@ -793,7 +797,7 @@ class PromoCodeService:
                 await self._refresh_after_panel_call(db, user, promocode, existing_same_tariff_sub, panel_result)
 
                 effects.append(
-                    f'⏰ Подписка «{trial_tariff.name if trial_tariff else ""}» продлена на {trial_days} дней'
+                    texts.t('PROMOCODE_EFFECT_SUBSCRIPTION_EXTENDED', '⏰ Подписка{tariff_label} продлена на {days} дней').format(tariff_label=f' «{trial_tariff.name}»' if trial_tariff else '', days=trial_days)
                 )
                 logger.info(
                     '✅ Триал промокод: продлена существующая подписка',
@@ -845,7 +849,7 @@ class PromoCodeService:
                         subscription_id=trial_subscription.id, user_id=user.id, action='update'
                     )
 
-                effects.append(f'🎁 Активирована тестовая подписка на {trial_days} дней')
+                effects.append(texts.t('PROMOCODE_EFFECT_TRIAL_ACTIVATED', '🎁 Активирована тестовая подписка на {days} дней').format(days=trial_days))
                 logger.info(
                     '✅ Создана триал подписка для пользователя на дней',
                     _format_user_log=self._format_user_log(user),
@@ -867,7 +871,7 @@ class PromoCodeService:
             # trial_subscription_exists выше).
             raise ValueError('traffic_not_applicable')
 
-        return '\n'.join(effects) if effects else '✅ Промокод активирован'
+        return '\n'.join(effects) if effects else texts.t('PROMOCODE_EFFECT_DEFAULT_SUCCESS', '✅ Промокод активирован')
 
     async def deactivate_discount_promocode(
         self,

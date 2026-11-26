@@ -84,7 +84,7 @@ async def charge_trial_activation_if_required(
     if price_kopeks <= 0:
         return 0
 
-    charge_description = description or get_texts(user.language).t(
+    charge_description = description or get_texts(getattr(user, 'language', None) or 'fa').t(
         'TRIAL_ACTIVATION_CHARGE_DESCRIPTION', 'Активация триальной подписки'
     )
 
@@ -123,7 +123,7 @@ async def refund_trial_activation_charge(
     if amount_kopeks <= 0:
         return True
 
-    refund_description = description or get_texts(user.language).t(
+    refund_description = description or get_texts(getattr(user, 'language', None) or 'fa').t(
         'TRIAL_ACTIVATION_REFUND_DESCRIPTION', 'Возврат оплаты за активацию триальной подписки'
     )
 
