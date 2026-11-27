@@ -146,7 +146,7 @@ async def test_level_reward_helpers_use_actual_recipient(monkeypatch, language, 
     assert '&lt;plan&gt;&amp;' in call.args[2]
     texts = get_texts(language)
     assert texts.t('REFERRAL_GIFT_UI_005').split('{value1}')[0] in call.args[2]
-    assert settings.format_price(1234) in call.args[2]
+    assert settings.format_price(1234, round_kopeks=False) in call.args[2]
 
 
 @pytest.mark.parametrize('language', ['ru', 'en', 'ua', 'zh', 'fa'])

@@ -105,7 +105,7 @@ async def _create_tonpays_payment_and_respond(
     edit_message: bool = False,
 ):
     """Creates a TonPays invoice and shows the buyer the card details."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     if not db_user.telegram_id:
         error_text = texts.t(
@@ -131,7 +131,7 @@ async def _create_tonpays_payment_and_respond(
         amount_kopeks=amount_kopeks,
         buyer_chat_id=int(db_user.telegram_id),
         description=description,
-        language=db_user.language,
+        language=db_user.language or 'fa',
     )
 
     if not result or not result.get('invoice_id'):
@@ -180,7 +180,7 @@ async def process_tonpays_payment_amount(
     state: FSMContext,
 ):
     """Handles the amount entered by the user for TonPays."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
@@ -249,7 +249,7 @@ async def start_tonpays_topup(
     state: FSMContext,
 ):
     """Starts the amount-entry FSM for TonPays."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
@@ -273,7 +273,7 @@ async def start_tonpays_topup(
     max_amount = settings.TONPAYS_MAX_AMOUNT_KOPEKS // 100
 
     display_name = settings.get_tonpays_display_name()
-    keyboard = await get_topup_amount_keyboard('tonpays', db_user.language)
+    keyboard = await get_topup_amount_keyboard('tonpays', db_user.language or 'fa')
 
     await callback.message.edit_text(
         texts.t(
@@ -300,7 +300,7 @@ async def handle_tonpays_check(
     state: FSMContext,
 ):
     """«پرداخت کردم» — immediate status check via the TonPays API."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     order_id = (callback.data or '').removeprefix(_TONPAYS_CHECK_PREFIX)
 
     service = PaymentService(callback.bot)
@@ -367,7 +367,7 @@ async def handle_tonpays_new_card(
     state: FSMContext,
 ):
     """تعویض کارت — new card from TonPays with a local 60s cooldown."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     order_id = (callback.data or '').removeprefix(_TONPAYS_NEWCARD_PREFIX)
 
     service = PaymentService(callback.bot)
@@ -419,7 +419,7 @@ async def process_tonpays_receipt(
     state: FSMContext,
 ):
     """Receives the receipt photo and uploads it to TonPays."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     data = await state.get_data()
     order_id = data.get('tonpays_order_id')

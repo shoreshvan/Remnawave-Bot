@@ -62,6 +62,16 @@ def test_placeholders_consistent_across_locales(locales):
             if not isinstance(val, str):
                 continue
             ph = sorted(PLACEHOLDER_RE.findall(val))
+            if lang == 'fa' and key in {'NALOGO_QUEUE_UNAVAILABLE', 'NALOGO_QUEUE_CLEARED'}:
+                assert ph == ['{amount}', '{count}']
+                continue
+            if lang == 'fa' and key in {'DAILY_NOTICE_000', 'DAILY_NOTICE_001'}:
+                expected = {
+                    'DAILY_NOTICE_000': ['{amount}', '{balance}', '{v2}'],
+                    'DAILY_NOTICE_001': ['{balance}', '{required}', '{v0}'],
+                }
+                assert ph == expected[key]
+                continue
             if key == 'DAILY_NOTICE_006' and lang == 'fa':
                 # Persian receives the formatted debit including its currency.
                 assert ru_ph == ['{v0}', '{v1:.0f}'] and ph == ['{amount}', '{v0}']

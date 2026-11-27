@@ -135,3 +135,14 @@ async def test_simple_status_early_error_reuses_initial_locale(monkeypatch):
     )
     factory.assert_called_once_with('fa')
     callback.answer.assert_awaited_once_with(get_texts('fa').t('SUBSCRIPTION_UI_INVALID_PAYMENT_ID'), show_alert=True)
+
+
+async def test_empty_subscription_list_defaults_to_persian(monkeypatch):
+    monkeypatch.setattr(type(my_subscriptions.settings), 'is_multi_tariff_enabled', lambda self: True)
+    monkeypatch.setattr(my_subscriptions, 'get_all_subscriptions_by_user_id', AsyncMock(return_value=[]))
+    callback = SimpleNamespace(message=SimpleNamespace(edit_text=AsyncMock()), answer=AsyncMock())
+    await my_subscriptions.show_my_subscriptions(callback, SimpleNamespace(id=1, language=None), AsyncMock())
+    message = callback.message.edit_text.await_args
+    assert message.args[0] == get_texts('fa').t('SUBSCRIPTION_UI_LIST_EMPTY')
+    buttons = [button.text for row in message.kwargs['reply_markup'].inline_keyboard for button in row]
+    assert get_texts('fa').t('SUBSCRIPTION_UI_BUY') in buttons

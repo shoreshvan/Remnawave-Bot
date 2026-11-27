@@ -47,7 +47,7 @@ async def test_daily_notices_keep_financial_and_traffic_delivery_payload(monkeyp
     await service._notify_insufficient_balance(user, subscription, 67890)
     payload = send.await_args.kwargs
     assert payload['notification_type'] == NotificationType.DAILY_INSUFFICIENT_FUNDS
-    assert payload['context'] == {'required_amount': '678.90 تومان', 'current_balance': '123.45 تومان'}
+    assert payload['context'] == {'required_amount': '678.9 تومان', 'current_balance': '123.45 تومان'}
     _assert_language(payload['telegram_message'], language)
     buttons = [b for row in payload['telegram_markup'].inline_keyboard for b in row]
     assert [b.callback_data for b in buttons] == ['menu_balance', 'menu_subscription']
@@ -106,5 +106,5 @@ async def test_daily_missing_account_language_receives_persian(monkeypatch):
     user = SimpleNamespace(balance_kopeks=100)
     await service._notify_daily_charge(user, SimpleNamespace(tariff=None), 100)
     assert debit.await_args.kwargs['telegram_message'] == get_texts('fa').t('DAILY_NOTICE_000').format(
-        v0=1, v1=1, v2=''
+        v0=1, v1=1, v2='', amount='1 تومان', balance='1 تومان'
     )

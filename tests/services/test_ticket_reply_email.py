@@ -231,3 +231,112 @@ def test_template_mentions_photo_when_reply_has_one() -> None:
     )
 
     assert 'изображение' in template['body_html']
+
+
+async def test_ticket_email_without_language_is_persian(monkeypatch):
+    import importlib
+
+    service = notification_delivery_service
+    sent = []
+    monkeypatch.setattr(service.email_service, 'is_configured', lambda: True)
+    monkeypatch.setattr(service.email_service, 'send_email', lambda **kwargs: sent.append(kwargs) or True)
+    monkeypatch.setattr(importlib.import_module('app.cabinet.services.email_template_overrides'),
+                        'get_rendered_override', __import__('unittest.mock', fromlist=['AsyncMock']).AsyncMock(return_value=None))
+    monkeypatch.setattr(importlib.import_module('app.cabinet.services.email_type_switch'),
+                        'is_email_type_enabled', lambda _: True)
+    user = _user(language=None, first_name='کاربر')
+    assert await service._send_email_notification(
+        user, NotificationType.TICKET_REPLY, {'ticket_id': 42, 'reply_preview': '<config>', 'has_photo': True}
+    )
+    assert sent[0]['subject'] == 'پاسخ تیکت #42'
+    assert 'پشتیبانی به تیکت #42 پاسخ داد' in sent[0]['body_html']
+    assert '&lt;config&gt;' in sent[0]['body_html']
+    assert 'پاسخ شامل تصویر است' in sent[0]['body_html']
+
+
+@pytest.mark.parametrize('notification_type', [NotificationType.BALANCE_TOPUP, NotificationType.DAILY_DEBIT])
+async def test_financial_email_without_language_uses_exact_toman(monkeypatch, notification_type):
+    import importlib
+    from unittest.mock import AsyncMock
+
+    service = notification_delivery_service
+    sent = []
+    monkeypatch.setattr(service.email_service, 'is_configured', lambda: True)
+    monkeypatch.setattr(service.email_service, 'send_email', lambda **kwargs: sent.append(kwargs) or True)
+    monkeypatch.setattr(importlib.import_module('app.cabinet.services.email_template_overrides'),
+                        'get_rendered_override', AsyncMock(return_value=None))
+    monkeypatch.setattr(importlib.import_module('app.cabinet.services.email_type_switch'),
+                        'is_email_type_enabled', lambda _: True)
+    user = _user(language=None, first_name='کاربر')
+    method = service.notify_balance_topup if notification_type == NotificationType.BALANCE_TOPUP else service.notify_daily_debit
+    assert await method(user, 12345, 67890)
+    assert '123.45 تومان' in sent[0]['subject']
+    assert '678.9 تومان' in sent[0]['body_html']
+    assert '₽' not in sent[0]['body_html']
+
+
+@pytest.mark.parametrize(('notification_type', 'subject'), [
+    (NotificationType.SUBSCRIPTION_EXPIRING, 'اشتراک تا 3 روز دیگر منقضی می‌شود'),
+    (NotificationType.SUBSCRIPTION_EXPIRED, 'اشتراک منقضی شد'),
+    (NotificationType.AUTOPAY_SUCCESS, 'تمدید خودکار موفق بود'),
+    (NotificationType.AUTOPAY_FAILED, 'تمدید خودکار ناموفق بود'),
+])
+async def test_subscription_email_without_language_is_persian(monkeypatch, notification_type, subject):
+    import importlib
+    from unittest.mock import AsyncMock
+
+    service = notification_delivery_service
+    sent = []
+    monkeypatch.setattr(service.email_service, 'is_configured', lambda: True)
+    monkeypatch.setattr(service.email_service, 'send_email', lambda **kwargs: sent.append(kwargs) or True)
+    monkeypatch.setattr(importlib.import_module('app.cabinet.services.email_template_overrides'),
+                        'get_rendered_override', AsyncMock(return_value=None))
+    monkeypatch.setattr(importlib.import_module('app.cabinet.services.email_type_switch'),
+                        'is_email_type_enabled', lambda _: True)
+    user = _user(language=None, first_name='کاربر')
+    context = {'days_left': 3, 'expires_at': '2026-11-30', 'new_expires_at': '2026-12-30',
+               'formatted_amount': '123.45 تومان', 'reason': 'موجودی کافی نیست'}
+    assert await service._send_email_notification(user, notification_type, context)
+    assert sent[0]['subject'] == subject
+    assert 'lang="fa"' in sent[0]['body_html']
+    assert '₽' not in sent[0]['body_html']
+
+
+@pytest.mark.parametrize(('notification_type', 'subject'), [
+    (NotificationType.REFERRAL_BONUS, 'پاداش معرفی: +123.45 تومان + 2 روز اشتراک'),
+    (NotificationType.REFERRAL_REGISTERED, 'کاربر معرفی‌شده جدید ثبت‌نام کرد'),
+    (NotificationType.REFERRAL_WELCOME, 'خوش‌آمدگویی با دعوت'),
+])
+async def test_referral_email_without_language_is_persian(monkeypatch, notification_type, subject):
+    import importlib
+    from unittest.mock import AsyncMock
+
+    service = notification_delivery_service
+    sent = []
+    monkeypatch.setattr(service.email_service, 'is_configured', lambda: True)
+    monkeypatch.setattr(service.email_service, 'send_email', lambda **kwargs: sent.append(kwargs) or True)
+    monkeypatch.setattr(importlib.import_module('app.cabinet.services.email_template_overrides'),
+                        'get_rendered_override', AsyncMock(return_value=None))
+    monkeypatch.setattr(importlib.import_module('app.cabinet.services.email_type_switch'),
+                        'is_email_type_enabled', lambda _: True)
+    user = _user(language=None, first_name='کاربر')
+    context = {'formatted_reward': '123.45 تومان + 2 روز اشتراک', 'referral_name': '<دوست>',
+               'referrer_name': '<معرف>', 'bonus_promise': '۲ روز اشتراک'}
+    assert await service._send_email_notification(user, notification_type, context)
+    assert sent[0]['subject'] == subject
+    assert 'lang="fa"' in sent[0]['body_html']
+    assert '₽' not in sent[0]['body_html']
+
+
+@pytest.mark.parametrize('notification_type', [
+    NotificationType.BALANCE_CHANGE, NotificationType.WITHDRAWAL_APPROVED,
+    NotificationType.WITHDRAWAL_REJECTED, NotificationType.PAYMENT_RECEIVED,
+])
+@pytest.mark.parametrize(('amount', 'expected'), [(2000, '2,000 تومان'), (2000.25, '2,000.25 تومان')])
+def test_financial_email_fallback_formats_toman(notification_type, amount, expected):
+    result = EmailNotificationTemplates().get_template(
+        notification_type, 'fa', {'amount_rubles': amount, 'new_balance_rubles': 2000}
+    )
+    assert expected in result['body_html']
+    assert '2,000.00' not in result['body_html']
+    assert '₽' not in result['body_html']

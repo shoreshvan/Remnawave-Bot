@@ -169,7 +169,7 @@ def build_gift_result_presentation(
         ValueError: If neither bot_username nor cabinet_url can form a valid claim URL.
     """
     token = purchase_result.purchase.token
-    texts = get_texts(language)
+    texts = get_texts(language or 'fa')
     quote = purchase_result.quote
 
     # Localized share text for native Telegram chat-picker (NO financial details, NO standalone token)
@@ -280,7 +280,7 @@ def build_gift_history_detail_presentation(
     - Omits public code, claim links, and share/open buttons
     - Back button with callback 'gift_my_back'
     """
-    texts = get_texts(language)
+    texts = get_texts(language or 'fa')
     escaped_tariff_name = html.escape(item.tariff_name or texts.t('GIFT_TARIFF_DELETED', 'Архивный тариф'))
     traffic_str = (
         texts.format_traffic(item.traffic_limit_gb)

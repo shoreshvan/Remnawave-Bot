@@ -130,7 +130,7 @@ async def test_commission_accrues_before_minimum_first_topup(monkeypatch):
     assert add_call is not None
     assert add_call.args[1] is referrer
     assert add_call.args[2] == 3750
-    assert 'Комиссия' in add_call.args[3]
+    assert add_call.args[3] == referral_service.get_texts('fa').t('REFERRAL_TRANSACTION_COMMISSION_TOPUP').format(percent=25, name='Test User')
     assert add_call.kwargs.get('bot') is None
 
     create_referral_earning_mock.assert_awaited_once()
@@ -281,7 +281,7 @@ async def test_second_small_topup_uses_recurring_tier_not_first_payment_percent(
     add_call = add_user_balance_mock.await_args
     assert add_call is not None
     assert add_call.args[2] == 2250
-    assert 'Комиссия 15%' in add_call.args[3]
+    assert add_call.args[3] == referral_service.get_texts('fa').t('REFERRAL_TRANSACTION_COMMISSION_TOPUP').format(percent=15, name='Test User')
 
 
 @pytest.mark.parametrize(

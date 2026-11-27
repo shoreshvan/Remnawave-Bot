@@ -46,7 +46,7 @@ async def test_delete_delegates_to_shared_service(monkeypatch, handler_env):
     deleter.assert_awaited_once()
     assert deleter.await_args.args == (db, subscription)
     assert deleter.await_args.kwargs == {'deleted_by': 'user:7'}
-    callback.answer.assert_awaited_once_with('Подписка удалена', show_alert=True)
+    callback.answer.assert_awaited_once_with('اشتراک حذف شد', show_alert=True)
     my_subscriptions.show_my_subscriptions.assert_awaited_once()
 
 
@@ -62,5 +62,5 @@ async def test_open_grace_is_reported_not_swallowed(monkeypatch, handler_env):
     await my_subscriptions.handle_subscription_delete_execute(callback, SimpleNamespace(id=7), AsyncMock(), AsyncMock())
 
     callback.answer.assert_awaited_once()
-    assert 'временный доступ' in callback.answer.await_args.args[0]
+    assert 'دسترسی موقت' in callback.answer.await_args.args[0]
     my_subscriptions.show_my_subscriptions.assert_not_awaited()

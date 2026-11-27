@@ -131,7 +131,10 @@ class NalogoQueueService:
                             language = getattr(admin, 'language', None) or settings.DEFAULT_LANGUAGE
                     except Exception:
                         logger.debug('Не удалось определить язык получателя уведомления очереди чеков')
-                message = get_texts(language).t(localization_key, message).format(**(localization_values or {}))
+                values = dict(localization_values or {})
+                if language == 'fa' and 'amount' in values:
+                    values['amount'] = settings.format_price(round(values['amount'] * 100), round_kopeks=False)
+                message = get_texts(language).t(localization_key, message).format(**values)
             await self._bot.send_message(
                 chat_id=chat_id,
                 message_thread_id=topic_id,

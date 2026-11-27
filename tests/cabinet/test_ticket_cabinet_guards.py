@@ -106,7 +106,7 @@ async def test_create_ticket_rejects_blocked_user(monkeypatch, user, blocked_unt
         await tickets_route.create_ticket(request=_create_request(), user=user, db=AsyncMock())
 
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-    assert 'blocked' in str(exc_info.value.detail).lower()
+    assert 'مسدود' in exc_info.value.detail
 
 
 @pytest.mark.usefixtures('_tickets_enabled')
@@ -118,7 +118,7 @@ async def test_add_message_rejects_blocked_user(monkeypatch, user):
         await tickets_route.add_ticket_message(ticket_id=1, request=_message_request(), user=user, db=AsyncMock())
 
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-    assert 'blocked' in str(exc_info.value.detail).lower()
+    assert 'مسدود' in exc_info.value.detail
 
 
 @pytest.mark.usefixtures('_tickets_enabled')
@@ -141,7 +141,7 @@ async def test_create_ticket_rejects_second_open_ticket(monkeypatch, user):
         await tickets_route.create_ticket(request=_create_request(), user=user, db=AsyncMock())
 
     assert exc_info.value.status_code == status.HTTP_409_CONFLICT
-    assert 'open ticket' in str(exc_info.value.detail).lower()
+    assert exc_info.value.detail == 'شما در حال حاضر یک تیکت باز دارید'
 
 
 @pytest.mark.usefixtures('_tickets_enabled')
@@ -171,7 +171,7 @@ async def test_get_ticket_respects_disabled_mode(user):
         await tickets_route.get_ticket(ticket_id=1, user=user, db=AsyncMock())
 
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-    assert exc_info.value.detail == 'Support tickets are disabled'
+    assert exc_info.value.detail == 'پشتیبانی از طریق تیکت غیرفعال است.'
 
 
 @pytest.mark.usefixtures('_tickets_disabled')
@@ -182,7 +182,7 @@ async def test_add_message_respects_disabled_mode(user):
         await tickets_route.add_ticket_message(ticket_id=1, request=_message_request(), user=user, db=AsyncMock())
 
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-    assert exc_info.value.detail == 'Support tickets are disabled'
+    assert exc_info.value.detail == 'پشتیبانی از طریق تیکت غیرفعال است.'
 
 
 @pytest.mark.usefixtures('_tickets_disabled')
@@ -192,7 +192,7 @@ async def test_create_ticket_respects_disabled_mode(user):
         await tickets_route.create_ticket(request=_create_request(), user=user, db=AsyncMock())
 
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-    assert exc_info.value.detail == 'Support tickets are disabled'
+    assert exc_info.value.detail == 'پشتیبانی از طریق تیکت غیرفعال است.'
 
 
 @pytest.mark.usefixtures('_tickets_disabled')
@@ -202,4 +202,4 @@ async def test_get_tickets_respects_disabled_mode(user):
         await tickets_route.get_tickets(user=user, db=AsyncMock())
 
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
-    assert exc_info.value.detail == 'Support tickets are disabled'
+    assert exc_info.value.detail == 'پشتیبانی از طریق تیکت غیرفعال است.'

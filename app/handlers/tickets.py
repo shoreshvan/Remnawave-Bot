@@ -49,7 +49,7 @@ async def show_ticket_priority_selection(
     callback: types.CallbackQuery, state: FSMContext, db_user: User, db: AsyncSession, *, payment_support: bool = False
 ):
     """Начать создание тикета без выбора приоритета: сразу просим заголовок"""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # Глобальный блок и наличие активного тикета
     from app.database.crud.ticket import TicketCRUD
@@ -79,7 +79,7 @@ async def show_ticket_priority_selection(
         if payment_support
         else texts.t('TICKET_TITLE_INPUT', 'Введите заголовок тикета:')
     )
-    cancel_kb = get_ticket_cancel_keyboard(db_user.language)
+    cancel_kb = get_ticket_cancel_keyboard((db_user.language or 'fa'))
     prompt_msg = callback.message
     try:
         await callback.message.edit_text(prompt_text, reply_markup=cancel_kb)
@@ -132,19 +132,19 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
     # Удалим сообщение пользователя через 2 секунды, чтобы не засорять чат
     asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
     if len(title) < 5:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         text_val = texts.t(
             'TICKET_TITLE_TOO_SHORT', 'Заголовок должен содержать минимум 5 символов. Попробуйте еще раз:'
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, (db_user.language or 'fa'))
         return
 
     if len(title) > 255:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         text_val = texts.t(
             'TICKET_TITLE_TOO_LONG', 'Заголовок слишком длинный. Максимум 255 символов. Попробуйте еще раз:'
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+        await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, (db_user.language or 'fa'))
         return
 
     # Глобальный блок
@@ -152,7 +152,7 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
 
     blocked_until = await TicketCRUD.is_user_globally_blocked(db, db_user.id)
     if blocked_until:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         if blocked_until.year > 9999 - 1:
             await message.answer(texts.t('USER_BLOCKED_FOREVER', 'Вы заблокированы для обращений в поддержку.'))
         else:
@@ -166,11 +166,11 @@ async def handle_ticket_title_input(message: types.Message, state: FSMContext, d
 
     await state.update_data(title=title)
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     text_val = texts.t(
         'TICKET_MESSAGE_INPUT', 'Опишите проблему (до {limit} символов) или отправьте фото с подписью:'
     ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
-    await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, db_user.language)
+    await _edit_or_send(message, prompt_chat_id, prompt_message_id, text_val, (db_user.language or 'fa'))
 
     await state.set_state(TicketStates.waiting_for_message)
 
@@ -244,7 +244,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
 
     blocked_until = await TicketCRUD.is_user_globally_blocked(db, db_user.id)
     if blocked_until:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
         prompt_message_id = data_prompt.get('prompt_message_id')
@@ -269,20 +269,20 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
     asyncio.create_task(_try_delete_message_later(message.bot, message.chat.id, message.message_id, 2.0))
     # Вложение может описывать проблему без текстовой подписи.
     if len(message_text) < 10 and not media_file_id:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
         prompt_message_id = data_prompt.get('prompt_message_id')
         err_text = texts.t(
             'TICKET_MESSAGE_TOO_SHORT', 'Сообщение слишком короткое. Опишите проблему подробнее или отправьте фото:'
         )
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
+        await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, (db_user.language or 'fa'))
         return
 
     # Раньше текст молча резался до 500 символов — пользователь и поддержка
     # теряли остаток. Теперь просим сократить, ничего не отбрасывая втихую.
     if len(message_text) > TICKET_MESSAGE_MAX_LENGTH:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         data_prompt = await state.get_data()
         prompt_chat_id = data_prompt.get('prompt_chat_id')
         prompt_message_id = data_prompt.get('prompt_message_id')
@@ -290,7 +290,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
             'TICKET_MESSAGE_TOO_LONG',
             'Сообщение слишком длинное. Максимум {limit} символов. Сократите текст и отправьте еще раз:',
         ).format(limit=TICKET_MESSAGE_MAX_LENGTH)
-        await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, db_user.language)
+        await _edit_or_send(message, prompt_chat_id, prompt_message_id, err_text, (db_user.language or 'fa'))
         return
 
     data = await state.get_data()
@@ -314,7 +314,7 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
         except Exception:
             pass
 
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         # Ограничим длину подтверждения чтобы не упереться в лимиты
         safe_title = html.escape(title if len(title) <= 200 else (title[:197] + '...'))
         creation_text = (
@@ -364,14 +364,14 @@ async def handle_ticket_message_input(message: types.Message, state: FSMContext,
 
     except Exception as e:
         logger.error('Error creating ticket', error=e)
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         await message.answer(
             texts.t('TICKET_CREATE_ERROR', '❌ Произошла ошибка при создании тикета. Попробуйте позже.')
         )
 
 
 async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # Определяем текущую страницу
     current_page = 1
@@ -427,7 +427,7 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
         open_data,
         current_page=current_page,
         total_pages=total_pages,
-        language=db_user.language,
+        language=db_user.language or 'fa',
         page_prefix='my_tickets_page_',
     )
     # Добавим кнопку перехода к закрытым
@@ -450,7 +450,7 @@ async def show_my_tickets(callback: types.CallbackQuery, db_user: User, db: Asyn
 
 
 async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     # Пагинация закрытых
     current_page = 1
     data_str = callback.data
@@ -489,7 +489,7 @@ async def show_my_tickets_closed(callback: types.CallbackQuery, db_user: User, d
         data,
         current_page=current_page,
         total_pages=total_pages,
-        language=db_user.language,
+        language=db_user.language or 'fa',
         page_prefix='my_tickets_closed_page_',
     )
     kb.inline_keyboard.insert(
@@ -529,11 +529,11 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=True)
 
     if not ticket or ticket.user_id != db_user.id:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # Формируем текст тикета
     status_text = {
@@ -566,7 +566,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
     keyboard = get_ticket_view_keyboard(
         ticket_id,
         ticket.is_closed,
-        db_user.language,
+        (db_user.language or 'fa'),
     )
     # Если есть фото или видео — добавим кнопку для просмотра
     has_attachments = any(get_ticket_media(m) for m in ticket.messages or [])
@@ -604,7 +604,7 @@ async def view_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSes
 
 
 async def send_ticket_attachments(callback: types.CallbackQuery, db_user: User, db: AsyncSession):
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     try:
         await callback.answer(texts.t('SENDING_ATTACHMENTS', '📎 Отправляю вложения...'))
     except Exception:
@@ -723,12 +723,12 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
 
     await state.update_data(ticket_id=ticket_id)
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     try:
         await callback.message.edit_text(
             texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
-            reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
+            reply_markup=get_ticket_reply_cancel_keyboard((db_user.language or 'fa')),
         )
     except TelegramBadRequest:
         try:
@@ -737,7 +737,7 @@ async def reply_to_ticket(callback: types.CallbackQuery, state: FSMContext, db_u
             pass
         await callback.message.answer(
             texts.t('TICKET_REPLY_INPUT', 'Введите ваш ответ:'),
-            reply_markup=get_ticket_reply_cancel_keyboard(db_user.language),
+            reply_markup=get_ticket_reply_cancel_keyboard((db_user.language or 'fa')),
         )
 
     await state.set_state(TicketStates.waiting_for_reply)
@@ -794,7 +794,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         media_caption = message.caption
 
     if len(reply_text) < 5 and not media_file_id:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         await message.answer(
             texts.t('TICKET_REPLY_TOO_SHORT', 'Ответ должен содержать минимум 5 символов. Попробуйте еще раз:')
         )
@@ -802,7 +802,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
 
     # Раньше ответ молча резался до 400 символов, и поддержка видела огрызок.
     if len(reply_text) > TICKET_MESSAGE_MAX_LENGTH:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         await message.answer(
             texts.t(
                 'TICKET_REPLY_TOO_LONG',
@@ -815,7 +815,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
     ticket_id = data.get('ticket_id')
 
     if not ticket_id:
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         await message.answer(texts.t('TICKET_REPLY_ERROR', 'Ошибка: не найден ID тикета.'))
         await state.clear()
         return
@@ -824,12 +824,12 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
         # Проверяем, что тикет принадлежит пользователю и не закрыт
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
         if not ticket or ticket.user_id != db_user.id:
-            texts = get_texts(db_user.language)
+            texts = get_texts(db_user.language or 'fa')
             await message.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'))
             await state.clear()
             return
         if ticket.status == TicketStatus.CLOSED.value:
-            texts = get_texts(db_user.language)
+            texts = get_texts(db_user.language or 'fa')
             await message.answer(
                 texts.t('TICKET_CLOSED', '✅ Тикет закрыт.'),
                 reply_markup=types.InlineKeyboardMarkup(
@@ -848,7 +848,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
 
         # Блокируем добавление сообщения, если тикет закрыт или заблокирован админом
         if ticket.status == TicketStatus.CLOSED.value or ticket.is_user_reply_blocked:
-            texts = get_texts(db_user.language)
+            texts = get_texts(db_user.language or 'fa')
             await message.answer(
                 texts.t('TICKET_CLOSED_NO_REPLY', '❌ Тикет закрыт, ответить невозможно.'),
                 reply_markup=types.InlineKeyboardMarkup(
@@ -877,7 +877,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
             media_caption=media_caption,
         )
 
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
 
         await message.answer(
             texts.t('TICKET_REPLY_SENT', '✅ Ваш ответ отправлен!'),
@@ -907,7 +907,7 @@ async def handle_ticket_reply(message: types.Message, state: FSMContext, db_user
 
     except Exception as e:
         logger.error('Error adding ticket reply', error=e)
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         await message.answer(
             texts.t('TICKET_REPLY_ERROR', '❌ Произошла ошибка при отправке ответа. Попробуйте позже.')
         )
@@ -921,7 +921,7 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
         # Проверяем, что тикет принадлежит пользователю
         ticket = await TicketCRUD.get_ticket_by_id(db, ticket_id, load_messages=False)
         if not ticket or ticket.user_id != db_user.id:
-            texts = get_texts(db_user.language)
+            texts = get_texts(db_user.language or 'fa')
             await callback.answer(texts.t('TICKET_NOT_FOUND', 'Тикет не найден.'), show_alert=True)
             return
 
@@ -929,20 +929,20 @@ async def close_ticket(callback: types.CallbackQuery, db_user: User, db: AsyncSe
         success = await TicketCRUD.close_ticket(db, ticket_id)
 
         if success:
-            texts = get_texts(db_user.language)
+            texts = get_texts(db_user.language or 'fa')
             await callback.answer(texts.t('TICKET_CLOSED', '✅ Тикет закрыт.'), show_alert=True)
 
             # Обновляем inline-клавиатуру текущего сообщения (убираем кнопки)
             await callback.message.edit_reply_markup(
-                reply_markup=get_ticket_view_keyboard(ticket_id, True, db_user.language)
+                reply_markup=get_ticket_view_keyboard(ticket_id, True, (db_user.language or 'fa'))
             )
         else:
-            texts = get_texts(db_user.language)
+            texts = get_texts(db_user.language or 'fa')
             await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
 
     except Exception as e:
         logger.error('Error closing ticket', error=e)
-        texts = get_texts(db_user.language)
+        texts = get_texts(db_user.language or 'fa')
         await callback.answer(texts.t('TICKET_CLOSE_ERROR', '❌ Ошибка при закрытии тикета.'), show_alert=True)
 
 
@@ -950,7 +950,7 @@ async def cancel_ticket_creation(callback: types.CallbackQuery, state: FSMContex
     """Отменить создание тикета"""
     await state.clear()
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     await callback.message.edit_text(
         texts.t('TICKET_CREATION_CANCELLED', 'Создание тикета отменено.'),
@@ -971,7 +971,7 @@ async def cancel_ticket_reply(callback: types.CallbackQuery, state: FSMContext, 
     """Отменить ответ на тикет"""
     await state.clear()
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     await callback.message.edit_text(
         texts.t('TICKET_REPLY_CANCELLED', 'Ответ отменен.'),
@@ -986,7 +986,7 @@ async def cancel_ticket_reply(callback: types.CallbackQuery, state: FSMContext, 
 
 async def close_ticket_notification(callback: types.CallbackQuery, db_user: User):
     """Закрыть уведомление о тикете"""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     # Проверяем, доступно ли сообщение для удаления
     if isinstance(callback.message, InaccessibleMessage):
@@ -1020,7 +1020,7 @@ def build_ticket_card_keyboard(ticket: Ticket, user: User | None, *, role: str):
     # cabinet-режим / кабинет не настроен / в группе нет зарегистрированного Mini App.
     cabinet_button = build_admin_ticket_cabinet_button(
         ticket.id,
-        text=get_texts(settings.DEFAULT_LANGUAGE).t('OPEN_TICKET_IN_CABINET', '🗂 Открыть в кабинете'),
+        text=get_texts('fa').t('OPEN_TICKET_IN_CABINET', '🗂 Открыть в кабинете'),
         in_group=(role == 'group'),
     )
     return get_ticket_notification_keyboard(
@@ -1033,7 +1033,7 @@ def build_ticket_card_keyboard(ticket: Ticket, user: User | None, *, role: str):
         is_admin=(role == 'admin'),
         fsm_enabled=(role != 'group'),
         cabinet_button=cabinet_button,
-        language=settings.DEFAULT_LANGUAGE,
+        language='fa',
     )
 
 
@@ -1057,7 +1057,7 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
             )
             return
 
-        get_texts(settings.DEFAULT_LANGUAGE)
+        get_texts('fa')
         title = (ticket.title or '').strip()
         if len(title) > 60:
             title = title[:57] + '...'
@@ -1066,9 +1066,9 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
             user = await get_user_by_id(db, ticket.user_id)
         except Exception:
             user = None
-        full_name = html.escape(user.full_name or '') if user else 'Unknown'
+        full_name = html.escape(user.full_name or '') if user else get_texts('fa').t('TICKET_UNKNOWN_USER')
         telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = format_username_link(user.username if user else None, 'отсутствует')
+        username_display = format_username_link(user.username if user else None, get_texts('fa').t('TICKET_USERNAME_MISSING'))
 
         # Загружаем первое сообщение для получения медиа и превью текста
         first_message = await TicketMessageCRUD.get_first_message(db, ticket.id)
@@ -1084,20 +1084,15 @@ async def notify_admins_about_new_ticket(ticket: Ticket, db: AsyncSession):
 
         safe_title = html.escape(title) if title else '—'
 
-        notification_text = (
-            f'🎫 <b>НОВЫЙ ТИКЕТ</b>\n\n'
-            f'🆔 <b>ID:</b> <code>{ticket.id}</code>\n'
-            f'👤 <b>Пользователь:</b> {full_name}\n'
-            f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> {username_display}\n'
-            f'📝 <b>Заголовок:</b> {safe_title}\n'
+        notification_text = get_texts('fa').t('TICKET_ADMIN_NEW').format(
+            id=ticket.id, full_name=full_name, telegram_id=telegram_id_display,
+            username=username_display, title=safe_title,
         )
-
         if message_preview:
-            notification_text += f'\n📩 <b>Сообщение:</b>\n{html.escape(message_preview)}\n'
-
-        notification_text += f'\n📅 <b>Создан:</b> {format_local_datetime(ticket.created_at, "%d.%m.%Y %H:%M")}\n'
-
+            notification_text += get_texts('fa').t('TICKET_ADMIN_MESSAGE_PART').format(message=html.escape(message_preview))
+        notification_text += get_texts('fa').t('TICKET_ADMIN_CREATED_PART').format(
+            date=format_local_datetime(ticket.created_at, '%d.%m.%Y %H:%M')
+        )
         from app.services.maintenance_service import maintenance_service
 
         bot = maintenance_service._bot or None
@@ -1143,23 +1138,17 @@ async def notify_admins_about_ticket_reply(
             user = await get_user_by_id(db, ticket.user_id)
         except Exception:
             user = None
-        full_name = html.escape(user.full_name or '') if user else 'Unknown'
+        full_name = html.escape(user.full_name or '') if user else get_texts('fa').t('TICKET_UNKNOWN_USER')
         telegram_id_display = (user.telegram_id or user.email or f'#{user.id}') if user else '—'
-        username_display = format_username_link(user.username if user else None, 'отсутствует')
+        username_display = format_username_link(user.username if user else None, get_texts('fa').t('TICKET_USERNAME_MISSING'))
 
         reply_preview = preview_text(reply_text)
         safe_title = html.escape(title) if title else '—'
 
-        notification_text = (
-            f'💬 <b>ОТВЕТ НА ТИКЕТ</b>\n\n'
-            f'🆔 <b>ID тикета:</b> <code>{ticket.id}</code>\n'
-            f'📝 <b>Заголовок:</b> {safe_title}\n'
-            f'👤 <b>Пользователь:</b> {full_name}\n'
-            f'🆔 <b>ID:</b> <code>{telegram_id_display}</code>\n'
-            f'📱 <b>Username:</b> {username_display}\n\n'
-            f'📩 <b>Сообщение:</b>\n{html.escape(reply_preview)}\n'
+        notification_text = get_texts('fa').t('TICKET_ADMIN_REPLY').format(
+            id=ticket.id, title=safe_title, full_name=full_name, telegram_id=telegram_id_display,
+            username=username_display, message=html.escape(reply_preview),
         )
-
         from app.services.maintenance_service import maintenance_service
 
         bot = maintenance_service._bot or None

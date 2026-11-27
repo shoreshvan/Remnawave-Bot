@@ -143,14 +143,14 @@ async def get_connection_link(
     if not subscription:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='No subscription found',
+            detail=get_texts(user.language or 'fa').t('CABINET_DAILY_SUBSCRIPTION_NOT_FOUND', 'No subscription found'),
         )
 
     subscription_url = subscription.subscription_url
     if not subscription_url:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='Subscription link not yet generated',
+            detail=get_texts(user.language or 'fa').t('CABINET_SUBSCRIPTION_LINK_PENDING', 'Subscription link not yet generated'),
         )
 
     display_link = get_display_subscription_link(subscription)
@@ -462,7 +462,7 @@ async def get_app_config(
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail='App configuration not set up.',
+            detail=get_texts(user.language or 'fa').t('CABINET_SUBSCRIPTION_APP_CONFIG_MISSING', 'App configuration not set up.'),
         )
 
     config.pop('_isRemnawave', None)

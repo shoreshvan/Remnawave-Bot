@@ -18,13 +18,27 @@ def localize_transaction_description(description: str | None, language: str, pay
             'TARIFF_PURCHASE_ADMIN_TRANSACTION_DESCRIPTION', 'Покупка тарифа {tariff} на {days} дней (администратор)'
         ).format(tariff=purchase[1], days=purchase[2])
     if (language or 'fa') == 'fa':
+        traffic = re.fullmatch(r'Переключение трафика с (\d+)GB на (\d+)GB(?: за (\d+) дн\.)?', description)
+        if traffic:
+            result = get_texts('fa').t('MINIAPP_TRANSACTION_TRAFFIC_SWITCH').format(old=traffic[1], new=traffic[2])
+            if traffic[3]:
+                return get_texts('fa').t('MINIAPP_TRANSACTION_DESCRIPTION_FOR_DAYS').format(description=result, days=traffic[3])
+            return result
         devices = re.fullmatch(r'Изменение количества устройств с (\d+) до (\d+)(?: за (\d+) дн\.)?', description)
         if devices:
             result = get_texts('fa').t('MINIAPP_TRANSACTION_DEVICE_LIMIT_CHANGE').format(old=devices[1], new=devices[2])
             if devices[3]:
                 return get_texts('fa').t('MINIAPP_TRANSACTION_DESCRIPTION_FOR_DAYS').format(description=result, days=devices[3])
             return result
+        legacy_gift = re.fullmatch(r'Gift: (.+) \(([0-9]+)d\)(?: -> (.*))?', description, re.DOTALL)
+        if legacy_gift:
+            result = get_texts('fa').t('CABINET_GIFT_PAYMENT_DESCRIPTION').format(
+                tariff_name=legacy_gift[1], period_days=legacy_gift[2]
+            )
+            return result + (f' -> {legacy_gift[3]}' if legacy_gift[3] else '')
         legacy_receipts = (
+            (r'Добавление серверов: (?P<servers>.+) за (?P<days>[0-9]+) дн\.', 'MINIAPP_TRANSACTION_SERVERS_ADDED'),
+            (r'Изменение списка серверов', 'MINIAPP_TRANSACTION_SERVERS_CHANGED'),
             (r'Бонус по промокоду (?P<code>.+)', 'PROMOCODE_BALANCE_LEDGER'),
             (r"Активация суточного тарифа '(?P<tariff>.*)' \(первый день\)", 'MINIAPP_TRANSACTION_DAILY_TARIFF_ACTIVATION'),
             (r"Переход с суточного на тариф '(?P<tariff>.*)' \((?P<days>[0-9]+) дней\)", 'MINIAPP_TRANSACTION_SWITCH_FROM_DAILY'),

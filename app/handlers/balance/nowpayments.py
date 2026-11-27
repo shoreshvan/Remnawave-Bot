@@ -54,7 +54,7 @@ async def _create_nowpayments_payment_and_respond(
     edit_message: bool = False,
 ):
     """Creates a NOWPayments invoice and sends the buyer the hosted pay page link."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     payment_service = PaymentService()
     # The hosted page displays this description to the buyer.
@@ -68,7 +68,7 @@ async def _create_nowpayments_payment_and_respond(
         user_id=db_user.id,
         amount_kopeks=amount_kopeks,
         description=description,
-        language=db_user.language,
+        language=db_user.language or 'fa',
     )
 
     if not result or not result.get('payment_url'):
@@ -123,7 +123,7 @@ async def process_nowpayments_payment_amount(
     state: FSMContext,
 ):
     """Handles the amount entered by the user for NOWPayments."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
@@ -191,7 +191,7 @@ async def start_nowpayments_topup(
     state: FSMContext,
 ):
     """Starts the amount-entry FSM for NOWPayments."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
@@ -215,7 +215,7 @@ async def start_nowpayments_topup(
     max_amount = settings.NOWPAYMENTS_MAX_AMOUNT_KOPEKS // 100
 
     display_name = settings.get_nowpayments_display_name()
-    keyboard = await get_topup_amount_keyboard('nowpayments', db_user.language)
+    keyboard = await get_topup_amount_keyboard('nowpayments', db_user.language or 'fa')
 
     await callback.message.edit_text(
         texts.t(
@@ -242,7 +242,7 @@ async def handle_nowpayments_check(
     state: FSMContext,
 ):
     """«پرداخت کردم» — immediate status check via the NOWPayments API."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     order_id = (callback.data or '').removeprefix(_NOWPAYMENTS_CHECK_PREFIX)
 
     service = PaymentService(callback.bot)

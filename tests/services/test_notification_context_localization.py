@@ -33,3 +33,13 @@ async def test_custom_ban_reason_is_data():
     service.send_notification = AsyncMock(return_value=True)
     await service.notify_ban(SimpleNamespace(language='fa'), reason='Operator <reason>')
     assert service.send_notification.await_args.kwargs['context']['reason'] == 'Operator <reason>'
+
+
+@pytest.mark.asyncio
+async def test_referral_fractional_reward_is_exact_with_missing_language():
+    service = NotificationDeliveryService()
+    service.send_notification = AsyncMock(return_value=True)
+    await service.notify_referral_bonus(SimpleNamespace(language=None), 12345, 'دوست', bonus_days=2)
+    context = service.send_notification.await_args.kwargs['context']
+    assert context['formatted_bonus'] == '123.45 تومان'
+    assert context['formatted_reward'] == '123.45 تومان + 2 روز اشتراک'

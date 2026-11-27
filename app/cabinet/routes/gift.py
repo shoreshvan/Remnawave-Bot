@@ -121,7 +121,7 @@ async def get_gift_config(
                 GiftConfigTariffPeriod(
                     days=quote.period_days,
                     price_kopeks=quote.final_price_kopeks,
-                    price_label=settings.format_price(quote.final_price_kopeks),
+                    price_label=settings.format_price(quote.final_price_kopeks, round_kopeks=False),
                     original_price_kopeks=quote.original_price_kopeks if quote.discount_percent > 0 else None,
                     discount_percent=quote.discount_percent if quote.discount_percent > 0 else None,
                     is_highlighted=offer.highlight_period_days == quote.period_days,
@@ -187,7 +187,7 @@ async def create_gift_purchase(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a gift subscription purchase from the cabinet."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     if not await is_gift_enabled(db):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -374,7 +374,9 @@ async def create_gift_purchase(
                 **purchase_kwargs,
             )
         except GuestPurchaseError as exc:
-            raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+            raise HTTPException(status_code=exc.status_code, detail=texts.t(
+                'CABINET_GIFT_OPERATION_FAILED', 'The gift operation failed. Please try again.'
+            ) if (user.language or 'fa') == 'fa' else exc.message) from exc
 
         # Persist warning so it survives the gateway redirect
         if recipient_warning:
@@ -600,7 +602,7 @@ async def get_gift_purchase_status(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get the status of a cabinet gift purchase."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     clean_token = token.strip()
     if clean_token.upper().startswith(('GIFT_', 'GIFT-')):
         clean_token = clean_token[5:]
@@ -775,7 +777,7 @@ async def activate_gift_by_code(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Activate a gift subscription by its code (token)."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     # Bug 2 fix: rate limit activation attempts to prevent brute-force token enumeration
     is_limited = await RateLimitCache.is_rate_limited(user.id, 'gift_activate', limit=10, window=60)
     if is_limited:
@@ -818,7 +820,9 @@ async def activate_gift_by_code(
             detail=texts.t('CABINET_GIFT_NOT_ACTIVATABLE', 'This gift cannot be activated'),
         ) from exc
     except GuestPurchaseError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+        raise HTTPException(status_code=exc.status_code, detail=texts.t(
+                'CABINET_GIFT_OPERATION_FAILED', 'The gift operation failed. Please try again.'
+            ) if (user.language or 'fa') == 'fa' else exc.message) from exc
 
     return ActivateGiftResponse(
         status='activated',

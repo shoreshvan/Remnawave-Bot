@@ -1507,7 +1507,7 @@ async def nalogo_pending_callback(callback: CallbackQuery, db_user: User | None 
             created_at = receipt.get('created_at', '')[:16].replace('T', ' ')
             error = receipt.get('error', '')[:50]
 
-            text += f'<b>{i}. {amount:,.2f} ₽</b>\n'
+            text += f'<b>{i}. {settings.format_price(round(amount * 100), round_kopeks=False)}</b>\n'
             text += f'   📅 {created_at}\n'
             text += f'   🆔 <code>{payment_id[:20]}...</code>\n'
             if error:

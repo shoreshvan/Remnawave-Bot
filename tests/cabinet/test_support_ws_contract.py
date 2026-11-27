@@ -918,3 +918,16 @@ async def test_schedule_bridge_coerces_non_dict_payload_to_empty():
     support_ws._schedule_bridge(capture, {'payload': None})
     await asyncio.gather(*support_ws._bridge_tasks)
     assert seen['payload'] == {}
+
+
+@pytest.mark.parametrize(('error', 'expected'), [
+    (ValueError('body or attachmentMediaIds is required'), 'متن پیام یا پیوست لازم است.'),
+    (ValueError('limit must be >= 1'), 'مقدار limit باید حداقل 1 باشد.'),
+    (ValueError('limit must be <= 100'), 'مقدار limit باید حداکثر 100 باشد.'),
+    (ValueError('data must be valid base64'), 'دادهٔ فایل باید با قالب معتبر base64 ارسال شود.'),
+    (PermissionError('tickets:reply is required'), 'دسترسی پاسخ به تیکت لازم است.'),
+])
+def test_support_error_messages_are_persian(error, expected):
+    result = support_ws._map_exception('ticket.reply', error)
+    assert result['message'] == expected
+    assert result['code'] == ('FORBIDDEN' if isinstance(error, PermissionError) else 'VALIDATION_ERROR')

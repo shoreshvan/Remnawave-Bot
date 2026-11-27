@@ -597,7 +597,7 @@ class MonitoringService:
                 user, user.balance_kopeks, charge_amount, subscription=subscription, is_final=is_final
             )
         elif not user.telegram_id:
-            texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+            texts = get_texts(getattr(user, 'language', None) or 'fa')
             if is_final:
                 reason_text = texts.t('MONITOR_AUTOPAY_FINAL_REASON', '')
             elif cause == 'charge_error':

@@ -14,7 +14,8 @@ from tests.fixtures.persian import persian  # noqa: F401
 @pytest.mark.asyncio
 @pytest.mark.parametrize('provider', ['atlaspay', 'hooshpay', 'nowpayments', 'tonpays'])
 @pytest.mark.parametrize('succeeded', [False, True])
-async def test_invoice_creation_screen_and_failure(persian, monkeypatch, provider, succeeded):
+@pytest.mark.parametrize('language', ['fa', None])
+async def test_invoice_creation_screen_and_failure(persian, monkeypatch, provider, succeeded, language):
     module = {'atlaspay': atlaspay, 'hooshpay': hooshpay, 'nowpayments': nowpayments, 'tonpays': tonpays}[provider]
     result = dict(payment_url='https://pay.example/invoice', invoice_id='invoice', order_id='order-test',
                   tracking_code='tracking-test', card_number='1234567890123456', card_name='نام صاحب کارت',
@@ -22,7 +23,7 @@ async def test_invoice_creation_screen_and_failure(persian, monkeypatch, provide
     create = AsyncMock(return_value=result if succeeded else None)
     monkeypatch.setattr(module, 'PaymentService', lambda: SimpleNamespace(**{f'create_{provider}_payment': create}))
     monkeypatch.setattr(module.settings, 'PAYMENT_BALANCE_TEMPLATE', '{description}')
-    user = SimpleNamespace(id=7, telegram_id=77, language='fa')
+    user = SimpleNamespace(id=7, telegram_id=77, language=language)
     message = SimpleNamespace(answer=AsyncMock(), edit_text=AsyncMock())
     kwargs = dict(message_or_callback=message, db_user=user, db=AsyncMock(), amount_kopeks=250000)
     if provider == 'tonpays':

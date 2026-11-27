@@ -397,7 +397,16 @@ class NotificationDeliveryService:
 
         try:
             # Get email template (check DB override first, then fall back to hardcoded)
-            language = user.language or 'ru'
+            language = user.language or ('fa' if notification_type in {
+                NotificationType.TICKET_REPLY, NotificationType.BALANCE_TOPUP, NotificationType.DAILY_DEBIT,
+                NotificationType.SUBSCRIPTION_EXPIRING, NotificationType.SUBSCRIPTION_EXPIRED,
+                NotificationType.SUBSCRIPTION_RENEWED, NotificationType.AUTOPAY_SUCCESS,
+                NotificationType.AUTOPAY_FAILED, NotificationType.DAILY_INSUFFICIENT_FUNDS,
+                NotificationType.REFERRAL_BONUS, NotificationType.REFERRAL_REGISTERED,
+                NotificationType.REFERRAL_WELCOME, NotificationType.BALANCE_CHANGE,
+                NotificationType.WITHDRAWAL_APPROVED, NotificationType.WITHDRAWAL_REJECTED,
+                NotificationType.PAYMENT_RECEIVED,
+            } else 'ru')
 
             # Inject common context values used across all email templates
             context = {
@@ -513,8 +522,8 @@ class NotificationDeliveryService:
             'amount_rubles': amount_kopeks / 100,
             'new_balance_kopeks': new_balance_kopeks,
             'new_balance_rubles': new_balance_kopeks / 100,
-            'formatted_amount': settings.format_price(amount_kopeks),
-            'formatted_balance': settings.format_price(new_balance_kopeks),
+            'formatted_amount': settings.format_price(amount_kopeks, round_kopeks=False),
+            'formatted_balance': settings.format_price(new_balance_kopeks, round_kopeks=False),
         }
 
         return await self.send_notification(
@@ -583,7 +592,7 @@ class NotificationDeliveryService:
         context = {
             'amount_kopeks': amount_kopeks,
             'amount_rubles': amount_kopeks / 100,
-            'formatted_amount': settings.format_price(amount_kopeks),
+            'formatted_amount': settings.format_price(amount_kopeks, round_kopeks=False),
             # Localize + humanize (see expiring branch above).
             'new_expires_at': format_email_datetime(new_expires_at),
         }
@@ -680,9 +689,9 @@ class NotificationDeliveryService:
         """
         reward_parts = []
         if bonus_kopeks > 0:
-            reward_parts.append(settings.format_price(bonus_kopeks))
+            reward_parts.append(settings.format_price(bonus_kopeks, round_kopeks=False))
         if bonus_days > 0:
-            texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+            texts = get_texts(getattr(user, 'language', None) or 'fa')
             tariff_suffix = (
                 texts.t('NOTIFY_REFERRAL_TARIFF_SUFFIX', '').format(tariff_name=tariff_name) if tariff_name else ''
             )
@@ -693,12 +702,12 @@ class NotificationDeliveryService:
         context = {
             'bonus_kopeks': bonus_kopeks,
             'bonus_rubles': bonus_kopeks / 100,
-            'formatted_bonus': settings.format_price(bonus_kopeks),
+            'formatted_bonus': settings.format_price(bonus_kopeks, round_kopeks=False),
             'bonus_days': bonus_days,
             'tariff_name': tariff_name,
             'level': level,
             # Единственное поле, которое верно и для денег, и для дней, и для обоих.
-            'formatted_reward': ' + '.join(reward_parts) or settings.format_price(bonus_kopeks),
+            'formatted_reward': ' + '.join(reward_parts) or settings.format_price(bonus_kopeks, round_kopeks=False),
             'referral_name': referral_name,
         }
 
@@ -811,7 +820,7 @@ class NotificationDeliveryService:
         context = {
             'amount_kopeks': amount_kopeks,
             'amount_rubles': amount_kopeks / 100,
-            'formatted_amount': settings.format_price(amount_kopeks),
+            'formatted_amount': settings.format_price(amount_kopeks, round_kopeks=False),
             'comment': comment or '',
         }
 
@@ -835,7 +844,7 @@ class NotificationDeliveryService:
         context = {
             'amount_kopeks': amount_kopeks,
             'amount_rubles': amount_kopeks / 100,
-            'formatted_amount': settings.format_price(amount_kopeks),
+            'formatted_amount': settings.format_price(amount_kopeks, round_kopeks=False),
             'comment': comment or '',
         }
 
@@ -860,10 +869,10 @@ class NotificationDeliveryService:
         context = {
             'amount_kopeks': amount_kopeks,
             'amount_rubles': amount_kopeks / 100,
-            'formatted_amount': settings.format_price(amount_kopeks),
+            'formatted_amount': settings.format_price(amount_kopeks, round_kopeks=False),
             'new_balance_kopeks': new_balance_kopeks,
             'new_balance_rubles': new_balance_kopeks / 100,
-            'formatted_balance': settings.format_price(new_balance_kopeks),
+            'formatted_balance': settings.format_price(new_balance_kopeks, round_kopeks=False),
         }
 
         return await self.send_notification(

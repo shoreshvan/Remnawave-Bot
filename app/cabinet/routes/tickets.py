@@ -39,7 +39,7 @@ router = APIRouter(prefix='/tickets', tags=['Cabinet Tickets'])
 _PERMANENT_BLOCK_YEAR = 9999
 
 
-def _ensure_tickets_enabled() -> None:
+def _ensure_tickets_enabled(language: str = 'fa') -> None:
     """Отказать, если тикеты выключены (режим поддержки ``contact``).
 
     Режим спрашиваем у сервиса, а не у ``settings``: persisted-значение живёт в
@@ -50,7 +50,7 @@ def _ensure_tickets_enabled() -> None:
     if not SupportSettingsService.is_tickets_enabled():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail='Support tickets are disabled',
+            detail=get_texts(language or 'fa').t('CABINET_TICKETS_DISABLED', 'Support tickets are disabled'),
         )
 
 
@@ -63,7 +63,7 @@ async def _ensure_not_blocked(db: AsyncSession, user: User) -> None:
     blocked_until = await TicketCRUD.is_user_globally_blocked(db, user.id)
     if not blocked_until:
         return
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     if blocked_until.year >= _PERMANENT_BLOCK_YEAR:
         detail = texts.t('CABINET_TICKETS_BLOCKED', 'You are blocked from contacting support')
     else:
@@ -100,7 +100,7 @@ def _message_to_response(message: TicketMessage) -> TicketMessageResponse:
     )
 
 
-def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> TicketResponse:
+def _ticket_to_response(ticket: Ticket, include_last_message: bool = True, language: str = 'fa') -> TicketResponse:
     """Convert Ticket to response."""
     last_message = None
     messages_count = len(ticket.messages) if ticket.messages else 0
@@ -111,7 +111,7 @@ def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> Ti
 
     return TicketResponse(
         id=ticket.id,
-        title=ticket.title or f'Ticket #{ticket.id}',
+        title=ticket.title or get_texts(language or 'fa').t('CABINET_TICKETS_DEFAULT_TITLE', 'Ticket #{ticket_id}').format(ticket_id=ticket.id),
         status=ticket.status,
         priority=ticket.priority or 'normal',
         created_at=ticket.created_at,
@@ -124,23 +124,23 @@ def _ticket_to_response(ticket: Ticket, include_last_message: bool = True) -> Ti
 
 @router.get('', response_model=TicketListResponse)
 async def get_tickets(
-    page: int = Query(1, ge=1, description=get_texts().t('CABINET_TICKETS_PARAM_PAGE', 'Page number')),
+    page: int = Query(1, ge=1, description=get_texts('fa').t('CABINET_TICKETS_PARAM_PAGE', 'Page number')),
     per_page: int = Query(
         20,
         ge=1,
         le=100,
-        description=get_texts().t('CABINET_TICKETS_PARAM_PER_PAGE', 'Items per page'),
+        description=get_texts('fa').t('CABINET_TICKETS_PARAM_PER_PAGE', 'Items per page'),
     ),
     status_filter: str | None = Query(
         None,
         alias='status',
-        description=get_texts().t('CABINET_TICKETS_PARAM_STATUS', 'Filter by status'),
+        description=get_texts('fa').t('CABINET_TICKETS_PARAM_STATUS', 'Filter by status'),
     ),
     user: User = Depends(get_current_cabinet_user),
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's support tickets."""
-    _ensure_tickets_enabled()
+    _ensure_tickets_enabled(user.language or 'fa')
 
     # Base query
     query = select(Ticket).where(Ticket.user_id == user.id).options(selectinload(Ticket.messages))
@@ -164,7 +164,7 @@ async def get_tickets(
     result = await db.execute(query)
     tickets = result.scalars().all()
 
-    items = [_ticket_to_response(t) for t in tickets]
+    items = [_ticket_to_response(t, language=user.language or 'fa') for t in tickets]
     pages = math.ceil(total / per_page) if total > 0 else 1
 
     return TicketListResponse(
@@ -183,8 +183,8 @@ async def create_ticket(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create a new support ticket."""
-    texts = get_texts(user.language)
-    _ensure_tickets_enabled()
+    texts = get_texts(user.language or 'fa')
+    _ensure_tickets_enabled(user.language or 'fa')
     await _ensure_not_blocked(db, user)
 
     # Один незакрытый тикет на пользователя — паритет с бот-путём
@@ -294,8 +294,8 @@ async def get_ticket(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get ticket with all messages."""
-    texts = get_texts(user.language)
-    _ensure_tickets_enabled()
+    texts = get_texts(user.language or 'fa')
+    _ensure_tickets_enabled(user.language or 'fa')
 
     query = (
         select(Ticket).where(Ticket.id == ticket_id, Ticket.user_id == user.id).options(selectinload(Ticket.messages))
@@ -337,8 +337,8 @@ async def add_ticket_message(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Add message to existing ticket."""
-    texts = get_texts(user.language)
-    _ensure_tickets_enabled()
+    texts = get_texts(user.language or 'fa')
+    _ensure_tickets_enabled(user.language or 'fa')
     await _ensure_not_blocked(db, user)
 
     # Get ticket

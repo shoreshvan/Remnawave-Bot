@@ -29,11 +29,12 @@ def test_cabinet_invoice_amount_description(persian, monkeypatch, provider, tele
                         custom_label if custom_label is not None
                         else type(settings).model_fields['PAYMENT_BALANCE_DESCRIPTION'].default)
     context = dict(settings=settings, user=SimpleNamespace(language='fa', telegram_id=telegram_id, id=456),
-                   request=SimpleNamespace(amount_kopeks=250000))
+                   request=SimpleNamespace(amount_kopeks=250045))
     rendered = eval(compile(ast.Expression(expression), str(path), 'eval'), context)
     label = custom_label if custom_label is not None else 'شارژ موجودی'
-    assert rendered == f'سرویس آزمایشی | {label} به مبلغ {settings.format_price(250000)}{suffix}'
+    assert rendered == f'سرویس آزمایشی | {label} به مبلغ {settings.format_price(250045, round_kopeks=False)}{suffix}'
     assert 'تومان' in rendered and '₽' not in rendered
+    assert '2,500.45' in rendered
 
 
 def test_cabinet_nowpayments_invoice_description(persian, monkeypatch):

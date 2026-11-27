@@ -24,6 +24,7 @@ from app.database.models import (
     TransactionType,
     User,
 )
+from app.localization.texts import get_texts
 from app.services.guest_purchase_service import create_purchase
 from app.services.pricing_engine import RenewalPricing, pricing_engine
 
@@ -422,7 +423,9 @@ async def purchase_gift_from_balance(
     gift_recipient_value = recipient.recipient_value if recipient else None
     gift_message = recipient.gift_message if recipient else None
 
-    tx_description = f'Gift: {tariff.name} ({period_days}d)'
+    tx_description = get_texts(getattr(buyer, 'language', None) or 'fa').t(
+        'CABINET_GIFT_PAYMENT_DESCRIPTION', 'Gift: {tariff_name} ({period_days}d)'
+    ).format(tariff_name=tariff.name, period_days=period_days)
     if gift_recipient_value:
         tx_description += f' -> {gift_recipient_value}'
 

@@ -92,3 +92,12 @@ async def test_subscription_owner_error(persian, monkeypatch):
         await helpers.resolve_subscription(db, SimpleNamespace(id=123, language='fa'), 456)
     assert error.value.status_code == 404 and error.value.detail == persian.t('CABINET_SUBSCRIPTION_NOT_FOUND')
     lookup.assert_awaited_once_with(db, 456, 123)
+
+
+@pytest.mark.asyncio
+async def test_device_price_without_language_uses_persian(persian, monkeypatch):
+    monkeypatch.setattr(devices, 'resolve_subscription', AsyncMock(return_value=None))
+    result = await devices.get_device_price(devices=1, subscription_id=None,
+        user=SimpleNamespace(language=None), db=AsyncMock())
+    assert result['reason'] == 'اشتراک فعالی وجود ندارد'
+    assert result['reason_code'] == 'no_active_subscription'

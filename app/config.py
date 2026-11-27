@@ -4152,7 +4152,7 @@ class Settings(BaseSettings):
             if label == type(self).model_fields['PAYMENT_BALANCE_DESCRIPTION'].default:
                 label = texts.t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'شارژ موجودی')
             description = texts.t('PAYMENT_BALANCE_DESCRIPTION_AMOUNT', '{description} به مبلغ {amount}').format(
-                description=label, amount=self.format_price(amount_kopeks),
+                description=label, amount=self.format_price(amount_kopeks, round_kopeks=False),
             )
 
         # Добавляем идентификатор пользователя (TG ID приоритет, fallback на DB ID)

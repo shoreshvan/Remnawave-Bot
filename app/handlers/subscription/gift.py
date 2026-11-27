@@ -105,7 +105,7 @@ GIFT_HISTORY_PAGE_SIZE = 5
 
 def _render_tariff_catalog(db_user: User, offers: list[GiftTariffOffer]) -> tuple[str, InlineKeyboardMarkup]:
     """Render gift tariff catalog message and keyboard."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     text = texts.t(
         'GIFT_CATALOG_TITLE',
         '🎁 <b>Подарить подписку</b>\n\nВыберите тариф для подарка:',
@@ -144,7 +144,7 @@ def _render_history_list(
     total_count: int,
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Render localized paginated gift history list and keyboard."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     if not items or total_count == 0:
         text = texts.t(
             'GIFT_MY_EMPTY_TEXT',
@@ -224,7 +224,7 @@ def _render_history_list(
 
 def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str, InlineKeyboardMarkup]:
     """Render gift period selection message and keyboard with HTML escaping."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     escaped_name = html.escape(offer.tariff_name)
     escaped_desc = html.escape(offer.tariff_description) + '\n\n' if offer.tariff_description else ''
     traffic_str = (
@@ -246,7 +246,7 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
 
     buttons: list[list[InlineKeyboardButton]] = []
     for quote in offer.quotes:
-        price_str = texts.format_price(quote.final_price_kopeks)
+        price_str = texts.format_price(quote.final_price_kopeks, round_kopeks=False)
         if quote.discount_percent > 0:
             btn_text = texts.t('GIFT_PERIOD_DISCOUNT_BUTTON', '{days} дн. — {price} (-{discount}%)').format(
                 days=quote.period_days, price=price_str, discount=quote.discount_percent
@@ -277,7 +277,7 @@ def _render_period_selection(db_user: User, offer: GiftTariffOffer) -> tuple[str
 
 def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, InlineKeyboardMarkup]:
     """Render gift purchase confirmation summary message and keyboard with HTML escaping."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     escaped_name = html.escape(quote.tariff_name)
     traffic_str = (
         texts.format_traffic(quote.traffic_limit_gb)
@@ -285,13 +285,13 @@ def _render_confirmation_summary(db_user: User, quote: GiftQuote) -> tuple[str, 
         else texts.t('GIFT_TRAFFIC_UNLIMITED', '∞ (безлимит)')
     )
     devices_str = texts.format_device_limit(quote.device_limit)
-    balance_str = texts.format_price(db_user.balance_kopeks)
-    final_price_str = texts.format_price(quote.final_price_kopeks)
+    balance_str = texts.format_price(db_user.balance_kopeks, round_kopeks=False)
+    final_price_str = texts.format_price(quote.final_price_kopeks, round_kopeks=False)
 
     price_details = ''
     if quote.total_discount_kopeks > 0:
-        orig_price_str = texts.format_price(quote.original_price_kopeks)
-        disc_str = texts.format_price(quote.total_discount_kopeks)
+        orig_price_str = texts.format_price(quote.original_price_kopeks, round_kopeks=False)
+        disc_str = texts.format_price(quote.total_discount_kopeks, round_kopeks=False)
         price_details += texts.t('GIFT_PRICE_ORIGINAL_LINE', '💵 Исходная цена: <s>{original_price}</s>\n').format(
             original_price=orig_price_str
         )
@@ -351,7 +351,7 @@ async def handle_gift_catalog(
         await callback.answer()
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     entry_data = await state.get_data() if expected_data is None else expected_data
     entry_state = await state.get_state() if expected_data is None else expected_state
     sales_enabled = await is_gift_enabled(db)
@@ -492,7 +492,7 @@ async def _render_and_show_periods(
         await callback.answer()
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     entry_data = await state.get_data() if expected_data is None else expected_data
     entry_state = await state.get_state() if expected_data is None else expected_state
     if not await is_gift_enabled(db):
@@ -555,7 +555,7 @@ async def handle_gift_tariff_select(
         await callback.answer()
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     if not callback.data or not callback.data.startswith('gift_tariff:'):
         await callback.answer(texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'), show_alert=True)
         return
@@ -585,7 +585,7 @@ async def handle_gift_period_select(
         await callback.answer()
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     if not callback.data or not callback.data.startswith('gift_period:'):
         await callback.answer(texts.t('GIFT_INVALID_SELECTION', 'Некорректные параметры выбора.'), show_alert=True)
         return
@@ -779,7 +779,7 @@ async def handle_gift_cancel(
     selection_state = await state.get_state()
     if callback.data != _gift_action_callback('gift_cancel', data, selection_state):
         await callback.answer(
-            get_texts(db_user.language).t('GIFT_SELECTION_EXPIRED', '❌ Этот выбор устарел. Откройте подарок заново.'),
+            get_texts(db_user.language or 'fa').t('GIFT_SELECTION_EXPIRED', '❌ Этот выбор устарел. Откройте подарок заново.'),
             show_alert=True,
         )
         return
@@ -816,7 +816,7 @@ async def handle_gift_confirm(
         await callback.answer()
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     data = await state.get_data()
     selection_state = await state.get_state()
     if callback.data != _gift_action_callback('gift_confirm', data, selection_state):
@@ -918,8 +918,8 @@ async def handle_gift_confirm(
             return
         saved = await user_cart_service.save_gift_cart_if_current(db_user.id, cart_data, original_cart)
         if not saved:
-            req_str = texts.format_price(err.required_kopeks)
-            avail_str = texts.format_price(err.available_kopeks)
+            req_str = texts.format_price(err.required_kopeks, round_kopeks=False)
+            avail_str = texts.format_price(err.available_kopeks, round_kopeks=False)
             msg = texts.t(
                 'GIFT_INSUFFICIENT_BALANCE_ERROR',
                 '❌ Недостаточно средств на балансе. Требуется: {required}, доступно: {available}.',
@@ -927,9 +927,9 @@ async def handle_gift_confirm(
             await callback.answer(msg, show_alert=True)
             return
 
-        req_str = texts.format_price(err.required_kopeks)
-        avail_str = texts.format_price(err.available_kopeks)
-        missing_str = texts.format_price(missing_amount)
+        req_str = texts.format_price(err.required_kopeks, round_kopeks=False)
+        avail_str = texts.format_price(err.available_kopeks, round_kopeks=False)
+        missing_str = texts.format_price(missing_amount, round_kopeks=False)
 
         text = texts.t(
             'GIFT_INSUFFICIENT_BALANCE_TITLE',
@@ -1058,7 +1058,7 @@ async def handle_return_to_gift_cart(
         await callback.answer()
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     selection_before_quote = await state.get_data()
     state_before_quote = await state.get_state()
     cart_data = await user_cart_service.get_user_cart(db_user.id)
@@ -1267,9 +1267,9 @@ async def handle_return_to_gift_cart(
                 await callback.answer()
             return
 
-        req_str = texts.format_price(quote.final_price_kopeks)
-        bal_str = texts.format_price(db_user.balance_kopeks)
-        missing_str = texts.format_price(new_missing)
+        req_str = texts.format_price(quote.final_price_kopeks, round_kopeks=False)
+        bal_str = texts.format_price(db_user.balance_kopeks, round_kopeks=False)
+        missing_str = texts.format_price(new_missing, round_kopeks=False)
 
         text = texts.t(
             'GIFT_INSUFFICIENT_BALANCE_TITLE',
@@ -1356,7 +1356,7 @@ async def handle_gift_enter_code(
         await callback.answer()
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     await state.set_state(GiftActivationStates.waiting_for_code)
 
     text = texts.t(
@@ -1402,7 +1402,7 @@ async def handle_gift_code_input(
     state: FSMContext,
 ) -> None:
     """Handle manual gift code or link input in GiftActivationStates.waiting_for_code."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     cancel_kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -1620,7 +1620,7 @@ async def handle_gift_my_open(
         await callback.answer()
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     if not callback.data or not callback.data.startswith('gift_my_open:'):
         await callback.answer(texts.t('GIFT_MY_ITEM_NOT_FOUND', 'Подарок не найден или недоступен.'), show_alert=True)
         return
@@ -1673,7 +1673,7 @@ async def _load_shareable_gift(callback: types.CallbackQuery, db_user: User, db:
     же — своём подарке, который ещё не активирован, и в его ссылке. Дублировать
     проверку владельца в двух местах значило бы однажды забыть её в одном.
     """
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     not_found = texts.t('GIFT_MY_ITEM_NOT_FOUND', 'Подарок не найден или недоступен.')
 
     raw = (callback.data or '').split(':', 1)
@@ -1747,7 +1747,7 @@ async def handle_gift_my_qr(
         return
 
     item, artifacts, claim_link = loaded
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
     await callback.answer()
 
     qr_dir = Path('data') / 'gift_qr'
@@ -1799,7 +1799,7 @@ async def handle_gift_my_text(
         return
 
     item, artifacts, claim_link = loaded
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     body = texts.t(
         'GIFT_COPY_TEXT_BODY',

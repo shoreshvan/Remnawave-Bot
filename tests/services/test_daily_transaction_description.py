@@ -1,5 +1,6 @@
 import pytest
 
+from app.webapi.routes.miniapp import purchase_tariff_endpoint
 from app.localization.texts import get_texts
 from app.utils.transaction_description import localize_transaction_description
 from tests.fixtures.persian import persian  # noqa: F401
@@ -82,7 +83,6 @@ def test_miniapp_activation_response_uses_persian_catalog(persian):
     import inspect
     from types import SimpleNamespace
 
-    from app.webapi.routes.miniapp import purchase_tariff_endpoint
 
     tree = ast.parse(inspect.getsource(purchase_tariff_endpoint))
     response = next(node.value for node in ast.walk(tree) if isinstance(node, ast.Return))
@@ -93,3 +93,11 @@ def test_miniapp_activation_response_uses_persian_catalog(persian):
 
 def test_promo_bonus_history_preserves_code(persian):
     assert localize_transaction_description('Бонус по промокоду VIP-25', 'fa') == 'پاداش کد تخفیف VIP-25'
+
+
+@pytest.mark.parametrize(('stored', 'expected'), [
+    ('Gift: طرح ویژه (30d)', 'هدیه: طرح ویژه (30 روز)'),
+    ('Gift: طرح (آزمایشی) (7d) -> @friend', 'هدیه: طرح (آزمایشی) (7 روز) -> @friend'),
+])
+def test_gift_receipt_history_is_persian(stored, expected, persian):
+    assert localize_transaction_description(stored, 'fa') == expected

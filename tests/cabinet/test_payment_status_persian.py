@@ -207,3 +207,10 @@ async def test_latest_payment_with_real_query(persian, payment_functions, provid
             assert error.value.detail == persian.t('CABINET_PAYMENT_NO_RECENT')
     finally:
         engine.dispose()
+
+
+@pytest.mark.parametrize('provider', ['atlaspay', 'hooshpay', 'tonpays', 'nowpayments'])
+def test_payment_status_defaults_to_persian_when_language_missing(persian, payment_functions, provider):
+    item = record(provider, 'pending')
+    item.user.language = None
+    assert payment_functions['_get_status_info'](item) == ('⏳', 'در انتظار پرداخت')

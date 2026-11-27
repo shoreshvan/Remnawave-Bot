@@ -122,7 +122,7 @@ class NowpaymentsPaymentMixin:
 
         payment_module = import_module('app.services.payment_service')
         if description is None:
-            description = get_texts(language).t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'Balance top-up')
+            description = get_texts(language or 'fa').t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'Balance top-up')
         if user_id is not None:
             user = await payment_module.get_user_by_id(db, user_id)
             tg_id = user.telegram_id if user else user_id
@@ -369,7 +369,7 @@ class NowpaymentsPaymentMixin:
                         payment_module = import_module('app.services.payment_service')
                         user = await payment_module.get_user_by_id(db, payment.user_id)
                         if user and getattr(user, 'telegram_id', None):
-                            texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+                            texts = get_texts(getattr(user, 'language', None) or 'fa')
                             await self.bot.send_message(
                                 user.telegram_id,
                                 texts.t(
@@ -521,7 +521,7 @@ class NowpaymentsPaymentMixin:
             )
 
         display_name = settings.get_nowpayments_display_name()
-        texts = get_texts(getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE)
+        texts = get_texts(getattr(user, 'language', None) or 'fa')
         description = texts.t(
             'NOWPAYMENTS_TRANSACTION_DESCRIPTION', 'Пополнение через {display_name}'
         ).format(display_name=display_name)
@@ -632,7 +632,7 @@ class NowpaymentsPaymentMixin:
                         '\U0001f194 Транзакция: {transaction_id}\n\n'
                         'Баланс пополнен автоматически!',
                     ).format(
-                        amount=settings.format_price(payment.amount_kopeks),
+                        amount=settings.format_price(payment.amount_kopeks, round_kopeks=False),
                         method=display_name,
                         transaction_id=transaction.id,
                     ),

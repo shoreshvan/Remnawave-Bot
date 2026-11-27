@@ -38,13 +38,13 @@ async def test_daily_notifications_localized(monkeypatch, language, multi_tariff
     if language == 'fa':
         label = '\n📦 طرح: «Test»' if multi_tariff else ''
         expected_charge = (
-            '💳 <b>برداشت روزانه</b>\n\nبرداشت‌شده: 12.50 تومان\n'
+            '💳 <b>برداشت روزانه</b>\n\nبرداشت‌شده: 12.5 تومان\n'
             f'موجودی باقی‌مانده: 123.45 تومان{label}\n\nبرداشت بعدی ۲۴ ساعت دیگر انجام می‌شود.'
         )
         expected_insufficient = (
             f'⚠️ <b>اشتراک{name} متوقف شد</b>\n\n'
             'موجودی برای پرداخت روزانه کافی نیست.\n\n'
-            'مبلغ لازم: 150.00 تومان\nموجودی: 123.45 تومان\n\n'
+            'مبلغ لازم: 150 تومان\nموجودی: 123.45 تومان\n\n'
             'برای ازسرگیری اشتراک، موجودی خود را شارژ کنید.'
         )
         expected_reset = (
@@ -83,7 +83,7 @@ async def test_daily_notifications_localized(monkeypatch, language, multi_tariff
     assert [row[0].callback_data for row in keyboard] == ['menu_balance', 'menu_subscription']
     assert charge['amount_kopeks'] == 1250
     assert charge['new_balance_kopeks'] == 12345
-    assert insufficient['context'] == {'required_amount': '150.00 تومان', 'current_balance': '123.45 تومان'}
+    assert insufficient['context'] == {'required_amount': '150 تومان', 'current_balance': '123.45 تومان'}
     assert reset['context'] == {'reset_gb': 50, 'current_limit_gb': 100}
     assert insufficient['notification_type'] == module.NotificationType.DAILY_INSUFFICIENT_FUNDS
     assert reset['notification_type'] == module.NotificationType.TRAFFIC_RESET

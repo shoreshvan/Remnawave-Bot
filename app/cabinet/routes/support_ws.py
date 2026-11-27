@@ -9,6 +9,7 @@ import contextlib
 import hashlib
 import json
 import mimetypes
+import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -23,6 +24,7 @@ from sqlalchemy.orm import selectinload
 from starlette.websockets import WebSocketState
 
 from app.bot_factory import create_bot
+from app.localization.texts import get_texts
 from app.cabinet.auth.jwt_handler import get_token_payload
 from app.cabinet.auth.registration_access import evaluate_public_registration
 from app.cabinet.auth.telegram_auth import validate_telegram_init_data
@@ -180,6 +182,40 @@ def _shared_error(
 ) -> dict[str, Any]:
     if code not in ERROR_CODES:
         code = 'INTERNAL_ERROR'
+    messages = {
+        'User is blacklisted': 'حساب شما مسدود شده است.',
+        'Account is deleted and must be restored through the bot': 'حساب حذف شده است. ابتدا از طریق ربات آن را بازیابی کنید.',
+        'User account is not active': 'حساب کاربری فعال نیست.',
+        'Service is under maintenance': 'سرویس در حال تعمیر و نگهداری است.',
+        'Required channel subscription is missing': 'برای ادامه، ابتدا در کانال‌های موردنیاز عضو شوید.',
+        'Bearer access token is required': 'برای ورود، توکن دسترسی لازم است.',
+        'Access token is invalid or expired': 'نشست نامعتبر یا منقضی شده است. دوباره وارد شوید.',
+        'Access token expired': 'نشست منقضی شده است. دوباره وارد شوید.',
+        'Access token payload is invalid': 'اطلاعات نشست نامعتبر است. دوباره وارد شوید.',
+        'User was not found': 'کاربر یافت نشد.',
+        'Session belongs to a different Telegram account': 'این نشست متعلق به حساب تلگرام دیگری است.',
+        'Replies to this ticket are blocked': 'پاسخ به این تیکت مسدود شده است.',
+        'Support tickets are disabled': 'پشتیبانی از طریق تیکت غیرفعال است.',
+        'You are blocked from contacting support': 'شما از تماس با پشتیبانی مسدود شده‌اید.',
+        'Resource not found': 'مورد درخواستی یافت نشد.',
+        'Internal support websocket error': 'ارتباط با پشتیبانی دچار خطا شد. دوباره تلاش کنید.',
+        'message exceeds maximum frame size': 'حجم پیام از حد مجاز بیشتر است.',
+        'message must be valid JSON': 'ساختار داده‌های ارسالی معتبر نیست.',
+    }
+    code_messages = {
+        'TICKET_CLOSED': 'این تیکت بسته شده است.',
+        'IDEMPOTENCY_CONFLICT': 'این درخواست با درخواست قبلی متفاوت است. دوباره تلاش کنید.',
+        'RATE_LIMITED': 'تعداد درخواست‌ها زیاد است. کمی بعد دوباره تلاش کنید.',
+        'UNSUPPORTED_MEDIA_TYPE': 'نوع فایل پشتیبانی نمی‌شود.',
+        'UPLOAD_NOT_FOUND': 'بارگذاری فایل یافت نشد.',
+        'UPLOAD_EXPIRED': 'مهلت بارگذاری فایل تمام شده است.',
+        'UPLOAD_CANCELLED': 'بارگذاری فایل لغو شده است.',
+        'UPLOAD_CHECKSUM_MISMATCH': 'فایل بارگذاری‌شده با فایل اصلی مطابقت ندارد.',
+        'DOWNLOAD_NOT_FOUND': 'فایل درخواستی یافت نشد.',
+        'DOWNLOAD_EXPIRED': 'مهلت دریافت فایل تمام شده است.',
+        'PAYLOAD_TOO_LARGE': 'حجم دادهٔ ارسالی بیش از حد مجاز است.',
+    }
+    message = messages.get(message, code_messages.get(code, message))
     return {
         'code': code,
         'message': message,
@@ -1412,11 +1448,55 @@ async def _dispatch_command(
 def _map_exception(command: str, exc: Exception) -> dict[str, Any]:
     message = str(exc) or 'Command failed'
     if isinstance(exc, PermissionError):
+        permission_keys = {
+            'tickets:read is required': 'SUPPORT_WS_READ_PERMISSION',
+            'tickets:reply is required': 'SUPPORT_WS_REPLY_PERMISSION',
+            'tickets:close is required': 'SUPPORT_WS_CLOSE_PERMISSION',
+        }
+        if message in permission_keys:
+            message = get_texts('fa').t(permission_keys[message])
+        elif message.startswith('Permission denied: '):
+            message = get_texts('fa').t('SUPPORT_WS_PERMISSION_DENIED')
         return _shared_error('FORBIDDEN', message, resource_type='ticket')
     if isinstance(exc, LookupError):
         resource_type = 'media' if command.startswith('media.') else 'ticket'
         return _shared_error('NOT_FOUND', 'Resource not found', resource_type=resource_type, resource_id=message)
     if isinstance(exc, ValueError):
+        validation_keys = {
+            'updatedAfter must be an RFC3339 UTC string': 'SUPPORT_WS_DATE_INVALID',
+            'status contains unsupported value': 'SUPPORT_WS_STATUS_INVALID',
+            'priority contains unsupported value': 'SUPPORT_WS_PRIORITY_INVALID',
+            'idempotencyKey must be a string': 'SUPPORT_WS_IDEMPOTENCY_INVALID',
+            'body must be a string up to 4000 characters': 'SUPPORT_WS_BODY_INVALID',
+            'attachmentMediaIds must be an array of strings': 'SUPPORT_WS_ATTACHMENTS_INVALID',
+            'body or attachmentMediaIds is required': 'SUPPORT_WS_CONTENT_REQUIRED',
+            'tickets must be an array': 'SUPPORT_WS_TICKETS_INVALID',
+            'tickets entries must be objects': 'SUPPORT_WS_TICKET_ENTRY_INVALID',
+            'offset does not match current upload position': 'SUPPORT_WS_OFFSET_INVALID',
+            'data must be a base64 string': 'SUPPORT_WS_DATA_INVALID',
+            'data must be valid base64': 'SUPPORT_WS_DATA_INVALID',
+            'uploaded byte count does not match declared sizeBytes': 'SUPPORT_WS_SIZE_MISMATCH',
+            'mediaId is required': 'SUPPORT_WS_MEDIA_REQUIRED',
+            'accessToken is required': 'SUPPORT_WS_TOKEN_REQUIRED',
+            'command envelope must be a JSON object': 'SUPPORT_WS_ENVELOPE_INVALID',
+            'type must be command': 'SUPPORT_WS_COMMAND_TYPE_INVALID',
+            'command is required': 'SUPPORT_WS_COMMAND_REQUIRED',
+            'requestId is required': 'SUPPORT_WS_REQUEST_ID_REQUIRED',
+            'payload must be an object': 'SUPPORT_WS_PAYLOAD_INVALID',
+        }
+        if message in validation_keys:
+            message = get_texts('fa').t(validation_keys[message])
+        elif match := re.fullmatch(r'(.+) must be an integer', message):
+            message = get_texts('fa').t('SUPPORT_WS_INTEGER_REQUIRED').format(field=match[1])
+        elif match := re.fullmatch(r'(.+) must be (>=|<=) (.+)', message):
+            key = 'SUPPORT_WS_MINIMUM' if match[2] == '>=' else 'SUPPORT_WS_MAXIMUM'
+            message = get_texts('fa').t(key).format(field=match[1], value=match[3])
+        elif match := re.fullmatch(r'(.+) must be an array of strings', message):
+            message = get_texts('fa').t('SUPPORT_WS_STRING_LIST').format(field=match[1])
+        elif match := re.fullmatch(r'(.+) must be one of: (.+)', message):
+            message = get_texts('fa').t('SUPPORT_WS_ALLOWED_VALUES').format(field=match[1], values=match[2])
+        elif message.startswith('Unsupported command: '):
+            message = get_texts('fa').t('SUPPORT_WS_UNSUPPORTED_COMMAND').format(command=message.partition(': ')[2])
         return _shared_error('VALIDATION_ERROR', message, resource_type=None)
     if isinstance(exc, RuntimeError) and message in ERROR_CODES:
         resource_type = (

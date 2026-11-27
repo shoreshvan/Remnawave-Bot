@@ -54,7 +54,7 @@ class UnreadCountResponse(BaseModel):
 async def get_user_notifications(
     unread_only: bool = Query(
         False,
-        description=get_texts().t(
+        description=get_texts('fa').t(
             'CABINET_TICKET_NOTIFICATIONS_UNREAD_ONLY_DESC', 'Only return unread notifications'
         ),
     ),
@@ -92,7 +92,7 @@ async def mark_notification_as_read(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Mark a notification as read."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     # Security: Verify notification belongs to current user and is not an admin notification
     notification = await TicketNotificationCRUD.get_by_id(db, notification_id)
     if not notification:
@@ -141,7 +141,7 @@ async def mark_ticket_notifications_as_read(
 async def get_admin_notifications(
     unread_only: bool = Query(
         False,
-        description=get_texts().t(
+        description=get_texts('fa').t(
             'CABINET_TICKET_NOTIFICATIONS_UNREAD_ONLY_DESC', 'Only return unread notifications'
         ),
     ),
@@ -179,7 +179,7 @@ async def mark_admin_notification_as_read(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Mark an admin notification as read."""
-    texts = get_texts(admin.language)
+    texts = get_texts(admin.language or 'fa')
     # Security: Verify notification exists and is an admin notification
     notification = await TicketNotificationCRUD.get_by_id(db, notification_id)
     if not notification:

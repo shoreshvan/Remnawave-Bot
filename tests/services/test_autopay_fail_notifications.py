@@ -341,7 +341,7 @@ async def test_email_only_path_uses_cause_specific_reason(monkeypatch):
         user, 50000, SimpleNamespace(id=8, end_date=now + timedelta(hours=40)), now, cause='insufficient_balance'
     )
 
-    assert reasons == ['Ошибка списания средств', 'Недостаточно средств на балансе']
+    assert reasons == ['برداشت مبلغ انجام نشد', 'موجودی کافی نیست']
 
 
 async def test_email_only_final_reminder_reason(monkeypatch):
@@ -366,5 +366,5 @@ async def test_email_only_final_reminder_reason(monkeypatch):
     # Same cycle (end_date unchanged) but the tick now lands inside the 3h window → 'final'.
     await svc._maybe_notify_autopay_failure(user, 50000, sub, now + timedelta(hours=38))
 
-    assert reasons[0] == 'Недостаточно средств на балансе'
-    assert reasons[1].startswith('Последнее напоминание')
+    assert reasons[0] == 'موجودی کافی نیست'
+    assert reasons[1].startswith('آخرین یادآوری')

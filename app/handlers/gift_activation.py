@@ -27,7 +27,7 @@ _GIFT_NOT_FOUND = 'Подарок не найден или недоступен.
 
 async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | None = None) -> None:
     """Handle gift_activate:{purchase_id} callback from Telegram notification."""
-    texts = get_texts(db_user.language if db_user else callback.from_user.language_code)
+    texts = get_texts((db_user.language if db_user else callback.from_user.language_code) or 'fa')
     if isinstance(callback.message, InaccessibleMessage):
         await callback.answer(texts.t('GIFT_ACTIVATION_OBSOLETE_MESSAGE'), show_alert=True)
         return
@@ -55,7 +55,7 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
             await callback.message.edit_text(texts.t('GIFT_ACTIVATION_NOT_FOUND'), parse_mode=None)
             return
 
-        texts = get_texts(user.language)
+        texts = get_texts(user.language or 'fa')
 
         try:
             purchase = await claim_bound_gift_for_user(
@@ -91,7 +91,7 @@ async def handle_gift_activate(callback: types.CallbackQuery, db_user: User | No
                 telegram_id=callback.from_user.id,
                 error=exc.message,
             )
-            if exc.status_code >= 500:
+            if exc.status_code >= 500 or (getattr(user, 'language', None) or 'fa') == 'fa':
                 await callback.message.edit_text(
                     texts.t(
                         'GIFT_ACTIVATION_GENERIC_ERROR',

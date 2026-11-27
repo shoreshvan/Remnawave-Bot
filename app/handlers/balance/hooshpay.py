@@ -50,7 +50,7 @@ async def _create_hooshpay_payment_and_respond(
     edit_message: bool = False,
 ):
     """Creates a HooshPay invoice and sends the buyer the hosted payment link."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     payment_service = PaymentService()
     description = settings.PAYMENT_BALANCE_TEMPLATE.format(
@@ -63,7 +63,7 @@ async def _create_hooshpay_payment_and_respond(
         user_id=db_user.id,
         amount_kopeks=amount_kopeks,
         description=description,
-        language=db_user.language,
+        language=db_user.language or 'fa',
     )
 
     if not result or not result.get('payment_url'):
@@ -124,7 +124,7 @@ async def process_hooshpay_payment_amount(
     state: FSMContext,
 ):
     """Handles the amount entered by the user for HooshPay."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
@@ -192,7 +192,7 @@ async def start_hooshpay_topup(
     state: FSMContext,
 ):
     """Starts the amount-entry FSM for HooshPay."""
-    texts = get_texts(db_user.language)
+    texts = get_texts(db_user.language or 'fa')
 
     restriction_kb = _check_topup_restriction(db_user, texts)
     if restriction_kb:
@@ -216,7 +216,7 @@ async def start_hooshpay_topup(
     max_amount = settings.HOOSHPAY_MAX_AMOUNT_KOPEKS // 100
 
     display_name = settings.get_hooshpay_display_name()
-    keyboard = await get_topup_amount_keyboard('hooshpay', db_user.language)
+    keyboard = await get_topup_amount_keyboard('hooshpay', db_user.language or 'fa')
 
     await callback.message.edit_text(
         texts.t(

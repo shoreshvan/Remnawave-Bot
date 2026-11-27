@@ -404,7 +404,11 @@ class DailySubscriptionService:
                 'DAILY_NOTICE_000',
                 '💳 <b>Суточное списание</b>\n\nСписано: {v0:.2f} ₽\nОстаток баланса: {v1:.2f} ₽{v2}\n\nСледующее списание через 24 часа.',
             )
-            .format(v0=amount_rubles, v1=balance_rubles, v2=tariff_label)
+            .format(
+                v0=amount_rubles, v1=balance_rubles, v2=tariff_label,
+                amount=texts.format_price(amount_kopeks, round_kopeks=False),
+                balance=texts.format_price(user.balance_kopeks, round_kopeks=False),
+            )
         )
 
         # Use unified notification delivery service
@@ -436,7 +440,11 @@ class DailySubscriptionService:
                 'DAILY_NOTICE_001',
                 '⚠️ <b>Подписка{v0} приостановлена</b>\n\nНедостаточно средств для суточной оплаты.\n\nТребуется: {v1:.2f} ₽\nБаланс: {v2:.2f} ₽\n\nПополните баланс, чтобы возобновить подписку.',
             )
-            .format(v0=tariff_label, v1=required_rubles, v2=balance_rubles)
+            .format(
+                v0=tariff_label, v1=required_rubles, v2=balance_rubles,
+                required=texts.format_price(required_amount, round_kopeks=False),
+                balance=texts.format_price(user.balance_kopeks, round_kopeks=False),
+            )
         )
 
         keyboard = InlineKeyboardMarkup(
@@ -462,8 +470,8 @@ class DailySubscriptionService:
 
         # Use unified notification delivery service
         context = {
-            'required_amount': f'{required_rubles:.2f} تومان',
-            'current_balance': f'{balance_rubles:.2f} تومان',
+            'required_amount': settings.format_price(required_amount, round_kopeks=False),
+            'current_balance': settings.format_price(user.balance_kopeks, round_kopeks=False),
         }
 
         try:

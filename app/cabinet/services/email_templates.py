@@ -311,8 +311,8 @@ class EmailNotificationTemplates:
 
     def _balance_topup_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for balance top-up notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
+        amount = context.get('formatted_amount', settings.format_price(round(context.get("amount_rubles", 0) * 100), round_kopeks=False))
+        balance = context.get('formatted_balance', settings.format_price(round(context.get("new_balance_rubles", 0) * 100), round_kopeks=False))
 
         subjects = {
             'ru': f'Баланс пополнен на {amount}',
@@ -369,8 +369,8 @@ class EmailNotificationTemplates:
 
     def _balance_change_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for balance change notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
+        amount = context.get('formatted_amount', settings.format_price(round(context.get("amount_rubles", 0) * 100), round_kopeks=False))
+        balance = context.get('formatted_balance', settings.format_price(round(context.get("new_balance_rubles", 0) * 100), round_kopeks=False))
 
         subjects = {
             'ru': 'Изменение баланса',
@@ -1120,7 +1120,7 @@ class EmailNotificationTemplates:
 
     def _autopay_success_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for successful autopay notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
+        amount = context.get('formatted_amount', settings.format_price(round(context.get("amount_rubles", 0) * 100), round_kopeks=False))
         new_expires_at = context.get('new_expires_at', '')
 
         subjects = {
@@ -1251,8 +1251,8 @@ class EmailNotificationTemplates:
 
     def _daily_debit_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for daily subscription debit notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
-        balance = context.get('formatted_balance', f'{context.get("new_balance_rubles", 0):.2f} ₽')
+        amount = context.get('formatted_amount', settings.format_price(round(context.get("amount_rubles", 0) * 100), round_kopeks=False))
+        balance = context.get('formatted_balance', settings.format_price(round(context.get("new_balance_rubles", 0) * 100), round_kopeks=False))
 
         subjects = {
             'ru': f'Списание за подписку: {amount}',
@@ -1491,7 +1491,7 @@ class EmailNotificationTemplates:
         Без него письмо о выданных семи днях уходит как «Реферальный бонус: +0.00 ₽».
         """
         bonus = context.get('formatted_reward') or context.get(
-            'formatted_bonus', f'{context.get("bonus_rubles", 0):.2f} ₽'
+            'formatted_bonus', settings.format_price(round(context.get("bonus_rubles", 0) * 100), round_kopeks=False)
         )
         referral_name = html.escape(context.get('referral_name', ''))
         raw_level = context.get('level', 1)
@@ -1859,7 +1859,7 @@ class EmailNotificationTemplates:
 
     def _withdrawal_approved_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for withdrawal approved notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
+        amount = context.get('formatted_amount', settings.format_price(round(context.get("amount_rubles", 0) * 100), round_kopeks=False))
         comment = html.escape(context.get('comment', ''))
 
         subjects = {
@@ -1921,7 +1921,7 @@ class EmailNotificationTemplates:
 
     def _withdrawal_rejected_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for withdrawal rejected notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
+        amount = context.get('formatted_amount', settings.format_price(round(context.get("amount_rubles", 0) * 100), round_kopeks=False))
         comment = html.escape(context.get('comment', ''))
 
         subjects = {
@@ -1987,7 +1987,7 @@ class EmailNotificationTemplates:
 
     def _payment_received_template(self, language: str, context: dict[str, Any]) -> dict[str, str]:
         """Template for payment received notification."""
-        amount = context.get('formatted_amount', f'{context.get("amount_rubles", 0):.2f} ₽')
+        amount = context.get('formatted_amount', settings.format_price(round(context.get("amount_rubles", 0) * 100), round_kopeks=False))
         payment_method = context.get('payment_method', '')
 
         subjects = {

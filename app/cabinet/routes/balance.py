@@ -234,7 +234,7 @@ async def create_stars_invoice(
     Создать Telegram Stars invoice для пополнения баланса.
     Используется в Telegram Mini App для прямой оплаты Stars.
     """
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     if not settings.TELEGRAM_STARS_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -320,7 +320,7 @@ async def create_topup(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Create payment for balance top-up."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     if getattr(user, 'restriction_topup', False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1286,9 +1286,9 @@ async def create_topup(
                 amount_kopeks=request.amount_kopeks,
                 description=settings.get_balance_payment_description(
                     request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id,
-                    language=user.language,
+                    language=user.language or 'fa',
                 ),
-                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                language=getattr(user, 'language', None) or 'fa',
                 return_url=cabinet_success_url,
             )
 
@@ -1328,9 +1328,9 @@ async def create_topup(
                 customer_telegram_id=getattr(user, 'telegram_id', None),
                 description=settings.get_balance_payment_description(
                     request.amount_kopeks, telegram_user_id=user.telegram_id, user_db_id=user.id,
-                    language=user.language,
+                    language=user.language or 'fa',
                 ),
-                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                language=getattr(user, 'language', None) or 'fa',
             )
 
             if result and result.get('payment_url'):
@@ -1358,7 +1358,7 @@ async def create_topup(
                     service_name=settings.PAYMENT_SERVICE_NAME,
                     description=texts.t('PAYMENT_DESCRIPTION_BALANCE_TOPUP', 'شارژ موجودی'),
                 ),
-                language=getattr(user, 'language', None) or settings.DEFAULT_LANGUAGE,
+                language=getattr(user, 'language', None) or 'fa',
             )
 
             if result and result.get('payment_url'):
@@ -1408,7 +1408,7 @@ async def create_topup(
 
 def _get_status_info(record: PendingPayment) -> tuple[str, str]:
     emoji, label = _get_status_info_legacy(record)
-    language = getattr(record.user, 'language', None)
+    language = getattr(record.user, 'language', None) or 'fa'
     if language != 'fa' or record.method not in {
         PaymentMethod.ATLASPAY, PaymentMethod.HOOSHPAY, PaymentMethod.TONPAYS, PaymentMethod.NOWPAYMENTS,
     }:
@@ -1887,7 +1887,7 @@ async def get_latest_payment_by_method(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get user's most recent payment for a given method (any status, not just pending)."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
@@ -2007,7 +2007,7 @@ async def get_pending_payment_details(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Get details of a specific pending payment."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     try:
         payment_method = PaymentMethod(method)
     except ValueError:
@@ -2043,7 +2043,7 @@ async def check_payment_status(
     db: AsyncSession = Depends(get_cabinet_db),
 ):
     """Manually check and update payment status."""
-    texts = get_texts(user.language)
+    texts = get_texts(user.language or 'fa')
     try:
         payment_method = PaymentMethod(method)
     except ValueError:

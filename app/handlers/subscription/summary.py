@@ -26,7 +26,7 @@ async def present_subscription_summary(
     """
 
     if texts is None:
-        texts = get_texts(db_user.language)
+        texts = get_texts((db_user.language or 'fa'))
 
     data = await state.get_data()
 
@@ -37,7 +37,7 @@ async def present_subscription_summary(
     except ValueError as exc:
         logger.error('Ошибка в расчете цены подписки для пользователя', telegram_id=db_user.telegram_id, exc=exc)
         await callback.answer(
-            get_texts(getattr(db_user, 'language', None)).t(
+            get_texts(getattr(db_user, 'language', None) or 'fa').t(
                 'SUBSCRIPTION_UI_PRICE_ERROR_SUPPORT', 'Ошибка расчета цены. Обратитесь в поддержку.'
             ),
             show_alert=True,
@@ -49,7 +49,7 @@ async def present_subscription_summary(
 
     await callback.message.edit_text(
         summary_text,
-        reply_markup=get_subscription_confirm_keyboard(db_user.language),
+        reply_markup=get_subscription_confirm_keyboard((db_user.language or 'fa')),
         parse_mode='HTML',
     )
 

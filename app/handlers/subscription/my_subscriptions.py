@@ -44,7 +44,7 @@ def _status_emoji(sub) -> str:
 
 def _status_label(sub, language: str | None = None) -> str:
     """Return a short human-readable status label for non-active subscriptions."""
-    texts = get_texts(language)
+    texts = get_texts(language or 'fa')
     actual = sub.actual_status
     if actual == 'expired':
         return texts.t('SUBSCRIPTION_UI_SUFFIX_EXPIRED', ' (Истекла)')
@@ -57,7 +57,7 @@ def _status_label(sub, language: str | None = None) -> str:
 
 def _format_subscription_line(sub, idx: int, language: str | None = None) -> str:
     """Format a single subscription for the list view."""
-    texts = get_texts(language)
+    texts = get_texts(language or 'fa')
     tariff_name = sub.tariff.name if sub.tariff else texts.t('SUBSCRIPTION_UI_NAME', 'Подписка')
     emoji = _status_emoji(sub)
     label = _status_label(sub, language)
@@ -96,7 +96,7 @@ def _build_subscriptions_keyboard(
     subscriptions: list, language: str, gift_enabled: bool = False
 ) -> types.InlineKeyboardMarkup:
     """Build inline keyboard with per-subscription management buttons."""
-    texts = get_texts(language)
+    texts = get_texts(language or 'fa')
     buttons = []
     for idx, sub in enumerate(subscriptions, 1):
         tariff_name = (
@@ -114,7 +114,7 @@ def _build_subscriptions_keyboard(
     # "Buy another tariff" button. Пока у человека есть старая подписка (без
     # тарифа при включённых тарифах), не предлагаем: сперва переход на тариф —
     # иначе покупка заведёт вторую подписку рядом с непродлеваемой старой.
-    texts = get_texts(language)
+    texts = get_texts(language or 'fa')
     if not any(is_legacy_subscription(sub) for sub in subscriptions):
         buy_text = getattr(texts, 'MENU_BUY_SUBSCRIPTION', 'Купить ещё тариф')
         buttons.append(
@@ -149,7 +149,7 @@ def _build_subscription_detail_keyboard(
     For expired/disabled subscriptions, only 'Renew' and 'Back' are shown —
     connection link and traffic/device management are irrelevant.
     """
-    texts = get_texts(language)
+    texts = get_texts(language or 'fa')
     is_inactive = sub is not None and sub.actual_status in ('expired', 'disabled')
 
     buttons = []
@@ -237,7 +237,7 @@ async def show_my_subscriptions(
         # Fallback to legacy single subscription view
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts((db_user.language or 'fa'))
     gift_enabled = True
     subscriptions = await get_all_subscriptions_by_user_id(db, db_user.id)
     subscriptions = [sub for sub in subscriptions if not sub.is_pending_trial]
@@ -273,10 +273,10 @@ async def show_my_subscriptions(
     else:
         lines = [texts.t('SUBSCRIPTION_UI_LIST_TITLE', '📋 <b>Мои подписки</b>\n')]
         for idx, sub in enumerate(subscriptions, 1):
-            lines.append(_format_subscription_line(sub, idx, db_user.language))
+            lines.append(_format_subscription_line(sub, idx, (db_user.language or 'fa')))
             lines.append('')  # empty line between subscriptions
         text = '\n'.join(lines)
-        keyboard = _build_subscriptions_keyboard(subscriptions, db_user.language, gift_enabled=gift_enabled)
+        keyboard = _build_subscriptions_keyboard(subscriptions, (db_user.language or 'fa'), gift_enabled=gift_enabled)
 
     if callback.message:
         await callback.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -293,7 +293,7 @@ async def show_subscription_detail(
     parts = callback.data.split(':')
     if len(parts) < 2:
         await callback.answer(
-            get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_INVALID_FORMAT', 'Неверный формат'),
+            get_texts(getattr(db_user, 'language', None) or 'fa').t('SUBSCRIPTION_UI_INVALID_FORMAT', 'Неверный формат'),
             show_alert=True,
         )
         return
@@ -303,7 +303,7 @@ async def show_subscription_detail(
 
     if not subscription or subscription.is_pending_trial:
         await callback.answer(
-            get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_NOT_FOUND', 'Подписка не найдена'),
+            get_texts(getattr(db_user, 'language', None) or 'fa').t('SUBSCRIPTION_UI_NOT_FOUND', 'Подписка не найдена'),
             show_alert=True,
         )
         return
@@ -312,7 +312,7 @@ async def show_subscription_detail(
     # (e.g. 'subscription_autopay') can resolve the right subscription via FSM.
     await state.update_data(active_subscription_id=sub_id)
 
-    texts = get_texts(db_user.language)
+    texts = get_texts((db_user.language or 'fa'))
     tariff_name = subscription.tariff.name if subscription.tariff else texts.t('SUBSCRIPTION_UI_NAME', 'Подписка')
 
     # Traffic
@@ -354,9 +354,9 @@ async def show_subscription_detail(
         text += f'\n🔗 <code>{html.escape(subscription_link)}</code>'
 
     keyboard = add_subscription_mirror_selector(
-        _build_subscription_detail_keyboard(sub_id, sub=subscription, language=db_user.language),
+        _build_subscription_detail_keyboard(sub_id, sub=subscription, language=(db_user.language or 'fa')),
         subscription,
-        db_user.language,
+        (db_user.language or 'fa'),
     )
 
     if callback.message:
@@ -371,7 +371,7 @@ async def _resolve_and_store_sub(
     state: FSMContext,
 ) -> Subscription | None:
     """Extract sub_id from callback, validate ownership, store in FSM state."""
-    texts = get_texts(getattr(db_user, 'language', None))
+    texts = get_texts(getattr(db_user, 'language', None) or 'fa')
     sub_id = _extract_sub_id(callback)
     if sub_id is None:
         await callback.answer(
@@ -467,7 +467,7 @@ async def handle_subscription_devices(
 
     current_devices = Texts.format_device_limit(subscription.device_limit)
     text = (
-        get_texts(db_user.language)
+        get_texts((db_user.language or 'fa'))
         .t(
             'SUBSCRIPTION_UI_DEVICES_MENU',
             '📱 <b>Устройства</b>\n\nТекущий лимит: {devices} устройств\n\nВыберите действие:',
@@ -480,7 +480,7 @@ async def handle_subscription_devices(
         keyboard.append(
             [
                 types.InlineKeyboardButton(
-                    text=get_texts(getattr(db_user, 'language', None)).t(
+                    text=get_texts(getattr(db_user, 'language', None) or 'fa').t(
                         'SUBSCRIPTION_UI_BUY_DEVICES', '➕ Докупить устройства'
                     ),
                     callback_data=f'change_devices_menu:{sub_id}',
@@ -490,7 +490,7 @@ async def handle_subscription_devices(
     keyboard.append(
         [
             types.InlineKeyboardButton(
-                text=get_texts(getattr(db_user, 'language', None)).t(
+                text=get_texts(getattr(db_user, 'language', None) or 'fa').t(
                     'SUBSCRIPTION_UI_MANAGE_DEVICES', '📱 Управление устройствами'
                 ),
                 callback_data=f'device_management:{sub_id}',
@@ -500,7 +500,7 @@ async def handle_subscription_devices(
     keyboard.append(
         [
             types.InlineKeyboardButton(
-                text=get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_BACK', '◀️ Назад'),
+                text=get_texts(getattr(db_user, 'language', None) or 'fa').t('SUBSCRIPTION_UI_BACK', '◀️ Назад'),
                 callback_data=f'sm:{sub_id}',
             )
         ]
@@ -555,7 +555,7 @@ async def handle_subscription_delete_confirm(
     sub_id = _extract_sub_id(callback)
     if sub_id is None:
         await callback.answer(
-            get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_INVALID_FORMAT', 'Неверный формат'),
+            get_texts(getattr(db_user, 'language', None) or 'fa').t('SUBSCRIPTION_UI_INVALID_FORMAT', 'Неверный формат'),
             show_alert=True,
         )
         return
@@ -563,21 +563,21 @@ async def handle_subscription_delete_confirm(
     subscription = await get_subscription_by_id_for_user(db, sub_id, db_user.id)
     if not subscription:
         await callback.answer(
-            get_texts(getattr(db_user, 'language', None)).t('SUBSCRIPTION_UI_NOT_FOUND', 'Подписка не найдена'),
+            get_texts(getattr(db_user, 'language', None) or 'fa').t('SUBSCRIPTION_UI_NOT_FOUND', 'Подписка не найдена'),
             show_alert=True,
         )
         return
 
     if subscription.actual_status not in ('expired', 'disabled'):
         await callback.answer(
-            get_texts(getattr(db_user, 'language', None)).t(
+            get_texts(getattr(db_user, 'language', None) or 'fa').t(
                 'SUBSCRIPTION_UI_DELETE_EXPIRED_ONLY', 'Можно удалить только истекшую или отключённую подписку'
             ),
             show_alert=True,
         )
         return
 
-    texts = get_texts(db_user.language)
+    texts = get_texts((db_user.language or 'fa'))
     tariff_name = subscription.tariff.name if subscription.tariff else texts.t('SUBSCRIPTION_UI_NAME', 'Подписка')
 
     text = texts.t(
@@ -614,7 +614,7 @@ async def handle_subscription_delete_execute(
     state: FSMContext,
 ) -> None:
     """Actually delete an expired/disabled subscription."""
-    texts = get_texts(getattr(db_user, 'language', None))
+    texts = get_texts(getattr(db_user, 'language', None) or 'fa')
     sub_id = _extract_sub_id(callback)
     if sub_id is None:
         await callback.answer(
